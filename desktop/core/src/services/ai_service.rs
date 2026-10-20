@@ -39,7 +39,7 @@ use std::time::{Duration, Instant};
 use rusqlite::Connection;
 
 use crate::domain::ids::new_uuid;
-use crate::domain::{AppError, AppResult};
+use crate::domain::{AppError, AppResult, ErrorClass};
 use crate::models::ai::{
     AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiSettings,
     AiSettingsInput, AiTestResult, AiTokenUsageSummary, AI_PROVIDERS,
@@ -79,6 +79,53 @@ fn truncate(s: &str, max: usize) -> String {
     } else {
         format!("{}...", &s[..max])
     }
+}
+
+/// ADR-0009 §2: a provider's HTTP failure as a classified error. 429 and
+/// 5xx are transient (429 carries `Retry-After`), a rejected key is
+/// configuration, an unknown model is configuration, any other 4xx is a
+/// validation error in the request.
+pub(crate) fn provider_status_error(
+    status: u16,
+    retry_after_ms: Option<u64>,
+    message: String,
+) -> AppError {
+    let (class, code) = match status {
+        429 => (ErrorClass::Transient, "provider.rate_limited"),
+        500..=599 => (ErrorClass::Transient, "provider.unavailable"),
+        401 | 403 => (ErrorClass::Configuration, "config.missing_key"),
+        404 => (ErrorClass::Configuration, "config.model_not_found"),
+        _ => (ErrorClass::Validation, "validation.arguments"),
+    };
+    AppError::Classified {
+        class,
+        code,
+        message,
+        retry_after_ms: if status == 429 { retry_after_ms } else { None },
+        http_status: Some(status),
+    }
+}
+
+/// ADR-0009 §2: a request that never got an HTTP answer is transient.
+pub(crate) fn provider_request_error(error: &reqwest::Error, message: String) -> AppError {
+    let code = if error.is_timeout() {
+        "provider.timeout"
+    } else {
+        "provider.network"
+    };
+    AppError::classified(ErrorClass::Transient, code, message)
+}
+
+/// `Retry-After` in whole seconds (the form providers send), as ms.
+pub(crate) fn retry_after_ms(headers: &reqwest::header::HeaderMap) -> Option<u64> {
+    headers
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse::<u64>()
+        .ok()
+        .map(|secs| secs.saturating_mul(1000))
 }
 
 /// Read-only - lazily creates the default (`unconfigured`) row on first
@@ -386,14 +433,19 @@ async fn complete_anthropic(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| provider_request_error(&e, format!("Could not reach {base}: {e}")))?;
     let status = response.status();
+    let retry_after = retry_after_ms(response.headers());
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )));
+        return Err(provider_status_error(
+            status.as_u16(),
+            retry_after,
+            format!(
+                "{base} responded with HTTP {status}: {}",
+                truncate(&text, 200)
+            ),
+        ));
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -441,14 +493,19 @@ async fn complete_openai_compatible(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| provider_request_error(&e, format!("Could not reach {base}: {e}")))?;
     let status = response.status();
+    let retry_after = retry_after_ms(response.headers());
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )));
+        return Err(provider_status_error(
+            status.as_u16(),
+            retry_after,
+            format!(
+                "{base} responded with HTTP {status}: {}",
+                truncate(&text, 200)
+            ),
+        ));
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -544,14 +601,21 @@ pub async fn complete_with_tools(
         .ok_or_else(|| AppError::Validation("Stored key not found - reconfigure it".into()))?;
     let api_key = super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?;
 
-    dispatch_with_tools(
-        &settings.provider,
-        settings.base_url.as_deref(),
-        &settings.model,
-        &api_key,
-        system_prompt,
-        tools,
-        history,
+    // Transient failures retry with backoff (WP-0124, ADR-0009 §1).
+    super::retry::retry(
+        &super::retry::RetryPolicy::default(),
+        &super::retry::TokioClock,
+        || {
+            dispatch_with_tools(
+                &settings.provider,
+                settings.base_url.as_deref(),
+                &settings.model,
+                &api_key,
+                system_prompt,
+                tools,
+                history,
+            )
+        },
     )
     .await
 }
@@ -669,14 +733,19 @@ async fn complete_anthropic_with_tools(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| provider_request_error(&e, format!("Could not reach {base}: {e}")))?;
     let status = response.status();
+    let retry_after = retry_after_ms(response.headers());
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )));
+        return Err(provider_status_error(
+            status.as_u16(),
+            retry_after,
+            format!(
+                "{base} responded with HTTP {status}: {}",
+                truncate(&text, 200)
+            ),
+        ));
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -786,14 +855,19 @@ async fn complete_openai_with_tools(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| provider_request_error(&e, format!("Could not reach {base}: {e}")))?;
     let status = response.status();
+    let retry_after = retry_after_ms(response.headers());
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )));
+        return Err(provider_status_error(
+            status.as_u16(),
+            retry_after,
+            format!(
+                "{base} responded with HTTP {status}: {}",
+                truncate(&text, 200)
+            ),
+        ));
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -990,14 +1064,19 @@ async fn complete_gemini_with_tools(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| provider_request_error(&e, format!("Could not reach {base}: {e}")))?;
     let status = response.status();
+    let retry_after = retry_after_ms(response.headers());
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )));
+        return Err(provider_status_error(
+            status.as_u16(),
+            retry_after,
+            format!(
+                "{base} responded with HTTP {status}: {}",
+                truncate(&text, 200)
+            ),
+        ));
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -1180,14 +1259,19 @@ async fn complete_gemini(
         .json(&body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base}: {e}")))?;
+        .map_err(|e| provider_request_error(&e, format!("Could not reach {base}: {e}")))?;
     let status = response.status();
+    let retry_after = retry_after_ms(response.headers());
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(AppError::Validation(format!(
-            "{base} responded with HTTP {status}: {}",
-            truncate(&text, 200)
-        )));
+        return Err(provider_status_error(
+            status.as_u16(),
+            retry_after,
+            format!(
+                "{base} responded with HTTP {status}: {}",
+                truncate(&text, 200)
+            ),
+        ));
     }
     let value: serde_json::Value = serde_json::from_str(&text)
         .map_err(|e| AppError::Validation(format!("Could not parse {base}'s response: {e}")))?;
@@ -1442,4 +1526,75 @@ pub async fn dispatch_with_tools_test(
         history,
     )
     .await
+}
+
+#[cfg(test)]
+mod provider_error_tests {
+    use super::*;
+
+    fn classify(
+        status: u16,
+        retry_after: Option<u64>,
+    ) -> (ErrorClass, Option<&'static str>, Option<u64>) {
+        let e = provider_status_error(status, retry_after, format!("HTTP {status}"));
+        let retry_after_ms = match &e {
+            AppError::Classified { retry_after_ms, .. } => *retry_after_ms,
+            _ => None,
+        };
+        (e.class(), e.code(), retry_after_ms)
+    }
+
+    #[test]
+    fn provider_http_failures_are_classified_per_adr_0009() {
+        use ErrorClass::*;
+        assert_eq!(
+            classify(429, Some(2000)),
+            (Transient, Some("provider.rate_limited"), Some(2000))
+        );
+        assert_eq!(
+            classify(500, None),
+            (Transient, Some("provider.unavailable"), None)
+        );
+        assert_eq!(
+            classify(503, Some(9000)),
+            (Transient, Some("provider.unavailable"), None)
+        );
+        assert_eq!(
+            classify(529, None),
+            (Transient, Some("provider.unavailable"), None)
+        );
+        assert_eq!(
+            classify(401, None),
+            (Configuration, Some("config.missing_key"), None)
+        );
+        assert_eq!(
+            classify(403, None),
+            (Configuration, Some("config.missing_key"), None)
+        );
+        assert_eq!(
+            classify(404, None),
+            (Configuration, Some("config.model_not_found"), None)
+        );
+        assert_eq!(
+            classify(400, None),
+            (Validation, Some("validation.arguments"), None)
+        );
+        assert_eq!(
+            classify(422, None),
+            (Validation, Some("validation.arguments"), None)
+        );
+    }
+
+    #[test]
+    fn retry_after_is_read_in_seconds() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        assert_eq!(retry_after_ms(&headers), None);
+        headers.insert(reqwest::header::RETRY_AFTER, "3".parse().unwrap());
+        assert_eq!(retry_after_ms(&headers), Some(3000));
+        headers.insert(
+            reqwest::header::RETRY_AFTER,
+            "Wed, 21 Oct 2026 07:28:00 GMT".parse().unwrap(),
+        );
+        assert_eq!(retry_after_ms(&headers), None);
+    }
 }
