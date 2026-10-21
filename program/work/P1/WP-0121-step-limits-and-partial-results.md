@@ -3,17 +3,18 @@ id: WP-0121
 title: Step limits and partial results
 phase: 1
 epic: E1.3 Agent loop
-status: proposed
+status: ready
 owner: unassigned
 depends_on: [WP-0110, WP-0005]
 requirements: [REQ-LOOP-001, REQ-LOOP-008, REQ-LOOP-009, REQ-LOOP-010]
+threats: [T-06]
 estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [agent-limits-and-partial-results]
 branch: 
 pr: 
-updated: 2026-10-16
+updated: 2026-10-19
 ---
 
 # WP-0121 — Step limits and partial results
@@ -51,3 +52,4 @@ Every limit ends gracefully: round limit (default 8, max 25) and token limit ask
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+- 2026-10-19 muse: Refined proposed → ready. Added threats: [T-06] (threat model names WP-0121 as a cost-exhaustion mitigation). AC-1/AC-2 already testable; scope already carries the gap-audit findings (completed_partial, temperature/max_tokens). Verified: REQ-LOOP-001/008/009/010 exist; ADR-0007/0008/0009/0010/0011/0012 Accepted; depends_on WP-0005 done, WP-0110 still proposed (listed per Definition of Ready). No code changed.
