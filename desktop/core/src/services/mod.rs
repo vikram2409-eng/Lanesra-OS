@@ -6,6 +6,7 @@ pub mod admin_home_service;
 pub mod admin_nav_service;
 pub mod admin_search_service;
 pub mod agent_access_inspector_service;
+pub mod agent_identity_service;
 pub mod agent_service;
 pub mod agent_version_service;
 pub mod ai_agent_hierarchy_service;
@@ -78,6 +79,7 @@ pub mod quote_service;
 pub mod reference_packages;
 pub mod relationship_service;
 pub mod report_service;
+pub mod retry;
 pub mod saved_view_service;
 pub mod screen_layout_service;
 #[cfg(any(test, feature = "test-support"))]

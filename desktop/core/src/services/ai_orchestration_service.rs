@@ -8,15 +8,14 @@
 //! admin-action route and the admin chat assistant's own
 //! `run_ai_agent`/`run_ai_agent_pipeline` tools) all require
 //! Administrator up front - Orchestration itself is an admin-only
-//! capability. The underlying `run_internal` execution has **no gate of
-//! its own** beyond what each step's own agent already enforces
-//! (`chat_service::agent_requires_admin`) - deliberately, since a
-//! drained schedule/webhook/workflow-triggered run has no human actor at
-//! all. In practice this means an admin-scoped agent or pipeline step
-//! simply can't run unattended unless `actor` genuinely resolves to a
-//! real Administrator (e.g. a webhook call authenticated by an API
-//! client whose `owner_user_id` is one) - record-scoped-only automation
-//! is the safe default, not an oversight.
+//! capability. The underlying `run_internal` execution has no blanket
+//! Administrator gate, since a drained schedule/webhook/workflow-triggered
+//! run has no human actor at all; it gates per step instead
+//! (`chat_service::agent_requires_admin`). Every run carries an `EffectiveIdentity` (WP-0107): an
+//! admin-scoped agent or pipeline step runs only when every principal in
+//! the run holds Administrator. An unattended run needs an Agent Identity
+//! that holds it itself; it never borrows an Administrator's rights, not
+//! even from the owner of the API client that triggered a webhook.
 
 use rusqlite::Connection;
 
@@ -26,6 +25,7 @@ use crate::models::ai_agent_pipeline::{
     AiAgentPipeline, AiAgentPipelineInput, AiAgentRun, AiAgentTrigger, AiAgentTriggerInput,
     PIPELINE_TOPOLOGIES, TRIGGER_TARGET_TYPES, TRIGGER_TYPES,
 };
+use crate::principals::EffectiveIdentity;
 use crate::repositories::{
     ai_agent_pending_run_repo, ai_agent_pipeline_repo, ai_agent_repo, ai_agent_run_repo, audit_repo,
 };
@@ -681,7 +681,7 @@ pub async fn run_manual(
         master_key,
         target_type,
         target_id,
-        actor_user_id,
+        &EffectiveIdentity::from_actor(actor_user_id),
         input_text,
         Some("manual"),
         None,
@@ -705,7 +705,7 @@ pub async fn run_triggered(
     master_key: &[u8; 32],
     target_type: &str,
     target_id: &str,
-    actor: Option<&str>,
+    identity: &EffectiveIdentity,
     trigger_input: &str,
     triggered_by: Option<&str>,
     source_entity_type: Option<&str>,
@@ -717,7 +717,7 @@ pub async fn run_triggered(
         master_key,
         target_type,
         target_id,
-        actor,
+        identity,
         trigger_input,
         triggered_by,
         source_entity_type,
@@ -729,7 +729,7 @@ pub async fn run_triggered(
 /// The execution engine itself - runs a lone Agent (a 1-step run) or a
 /// Pipeline in order, writing one `ai_agent_runs` row plus one
 /// `ai_agent_run_steps` row per step. See this module's own doc comment
-/// for why this has no admin gate of its own.
+/// for why it gates per step rather than up front.
 #[allow(clippy::too_many_arguments)]
 async fn run_internal(
     conn: &Connection,
@@ -737,7 +737,7 @@ async fn run_internal(
     master_key: &[u8; 32],
     target_type: &str,
     target_id: &str,
-    actor: Option<&str>,
+    identity: &EffectiveIdentity,
     trigger_input: &str,
     triggered_by: Option<&str>,
     source_entity_type: Option<&str>,
@@ -787,6 +787,13 @@ async fn run_internal(
         trigger_input,
     )?;
 
+    // WP-0107: an admin-scoped step runs only when every principal in the
+    // run holds Administrator. Checked after `start_run` so a refused run
+    // is recorded as failed, like any other failed run.
+    if let Err(e) = require_admin_for_steps(conn, workspace_id, identity, &steps) {
+        return finalize_run(conn, &run_id, Err(e));
+    }
+    let actor = identity.record_actor();
     let result = match topology.as_str() {
         "consensus" => {
             run_consensus(
@@ -830,6 +837,24 @@ async fn run_internal(
         }
     };
     finalize_run(conn, &run_id, result)
+}
+
+/// Refuses the run when any step's agent needs Administrator and the
+/// run's effective identity does not hold it (WP-0107 AC-1).
+fn require_admin_for_steps(
+    conn: &Connection,
+    workspace_id: &str,
+    identity: &EffectiveIdentity,
+    steps: &[(String, String, bool)],
+) -> AppResult<()> {
+    for (agent_id, _, _) in steps {
+        let agent = ai_agent_repo::get(conn, agent_id)?
+            .ok_or_else(|| AppError::NotFound("Agent".into()))?;
+        if chat_service::agent_requires_admin(&agent.action_names) {
+            identity.require_admin(conn, workspace_id)?;
+        }
+    }
+    Ok(())
 }
 
 /// Shared by a fresh run (`run_internal`) and a resumed one
@@ -1052,7 +1077,7 @@ pub async fn drain_pending_runs(
             master_key,
             &item.target_type,
             &item.target_id,
-            None,
+            &EffectiveIdentity::unattended(None),
             &item.resolved_input_text,
             item.triggered_by.as_deref(),
             item.source_entity_type.as_deref(),
