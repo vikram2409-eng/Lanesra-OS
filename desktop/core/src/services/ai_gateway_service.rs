@@ -36,7 +36,7 @@
 
 use rusqlite::Connection;
 
-use crate::domain::{AppError, AppResult};
+use crate::domain::{AppError, AppResult, ErrorClass};
 use crate::models::ai::AiGatewayFailoverEvent;
 use crate::models::ai_agent::AiAgentDefinition;
 use crate::models::chat::ChatMessage;
@@ -47,6 +47,7 @@ use crate::repositories::{
 
 use super::ai_service::{self, CompletionOutcome, TokenUsage, ToolSpec};
 use super::dlp_service;
+use super::retry::{self, RetryPolicy, TokioClock};
 
 /// What `dispatch` actually did, beyond the raw model outcome - the
 /// caller (`chat_service::run_agent_once`) doesn't need `served_by` today,
@@ -77,22 +78,32 @@ pub(crate) fn resolve_tier(
     match provider_id {
         Some(pid) => {
             let provider = ai_provider_repo::get(conn, pid)?.ok_or_else(|| {
-                AppError::Validation(format!("Configured AI provider '{pid}' no longer exists"))
+                AppError::classified(
+                    ErrorClass::Configuration,
+                    "config.provider_disabled",
+                    format!("Configured AI provider '{pid}' no longer exists"),
+                )
             })?;
             if !provider.is_active {
-                return Err(AppError::Validation(format!(
-                    "AI provider '{}' is deactivated",
-                    provider.name
-                )));
+                return Err(AppError::classified(
+                    ErrorClass::Configuration,
+                    "config.provider_disabled",
+                    format!("AI provider '{}' is deactivated", provider.name),
+                ));
             }
             let secret_id = ai_provider_repo::get_secret_id(conn, pid)?.ok_or_else(|| {
-                AppError::Validation(format!(
-                    "AI provider '{}' has no key configured",
-                    provider.name
-                ))
+                AppError::classified(
+                    ErrorClass::Configuration,
+                    "config.missing_key",
+                    format!("AI provider '{}' has no key configured", provider.name),
+                )
             })?;
             let stored = integration_secret_repo::get(conn, &secret_id)?.ok_or_else(|| {
-                AppError::Validation("Stored key not found - reconfigure it".into())
+                AppError::classified(
+                    ErrorClass::Configuration,
+                    "config.missing_key",
+                    "Stored key not found - reconfigure it",
+                )
             })?;
             let api_key =
                 super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?;
@@ -107,12 +118,18 @@ pub(crate) fn resolve_tier(
             let settings = ai_settings_repo::ensure_default(conn, workspace_id)?;
             let secret_id =
                 ai_settings_repo::get_secret_id(conn, workspace_id)?.ok_or_else(|| {
-                    AppError::Validation(
-                        "Configure an AI provider key first (Admin -> LLM & MCP -> LLM)".into(),
+                    AppError::classified(
+                        ErrorClass::Configuration,
+                        "config.missing_key",
+                        "Configure an AI provider key first (Admin -> LLM & MCP -> LLM)",
                     )
                 })?;
             let stored = integration_secret_repo::get(conn, &secret_id)?.ok_or_else(|| {
-                AppError::Validation("Stored key not found - reconfigure it".into())
+                AppError::classified(
+                    ErrorClass::Configuration,
+                    "config.missing_key",
+                    "Stored key not found - reconfigure it",
+                )
             })?;
             let api_key =
                 super::secret_service::decrypt(master_key, &stored.ciphertext, &stored.nonce)?;
@@ -232,25 +249,34 @@ pub async fn dispatch(
     };
 
     let mut last_err: Option<AppError> = None;
+    let retry_policy = RetryPolicy::default();
+
     for (idx, (tier_name, provider_id)) in tiers.iter().enumerate() {
         let resolved = match resolve_tier(conn, workspace_id, master_key, *provider_id) {
             Ok(r) => r,
             Err(e) => {
+                // A tier that cannot even be resolved (no provider, no key) is
+                // a configuration problem: try the next tier (ADR-0009 §4).
                 last_err = Some(e);
                 continue;
             }
         };
-        match ai_service::dispatch_with_tools(
-            &resolved.provider,
-            resolved.base_url.as_deref(),
-            &resolved.model,
-            &resolved.api_key,
-            system_prompt,
-            tools,
-            history,
-        )
-        .await
-        {
+
+        // Transient failures retry on this tier first (ADR-0009 §1).
+        let dispatch_result = retry::retry(&retry_policy, &TokioClock, || {
+            ai_service::dispatch_with_tools(
+                &resolved.provider,
+                resolved.base_url.as_deref(),
+                &resolved.model,
+                &resolved.api_key,
+                system_prompt,
+                tools,
+                history,
+            )
+        })
+        .await;
+
+        match dispatch_result {
             Ok((outcome, usage)) => {
                 ai_token_usage_repo::increment(
                     conn,
@@ -291,7 +317,33 @@ pub async fn dispatch(
                     served_by: tier_name,
                 });
             }
-            Err(e) => last_err = Some(e),
+            Err(e) => {
+                // ADR-0009 §4: transient (after its retries) and
+                // configuration move to the next tier; under a forced
+                // air-gap a configuration error fails closed instead.
+                // Policy, validation and internal errors stop at once.
+                let error_class = e.class();
+                match error_class {
+                    ErrorClass::Transient | ErrorClass::Configuration => {
+                        if forced_air_gap && error_class == ErrorClass::Configuration {
+                            // Under forced air-gap, configuration errors fail closed
+                            // with config.not_local (never fall back to cloud)
+                            return Err(AppError::classified(
+                                ErrorClass::Configuration,
+                                "config.not_local",
+                                "Forced air-gap is enabled but no local provider is available",
+                            ));
+                        }
+                        // Move to next tier
+                        last_err = Some(e);
+                        continue;
+                    }
+                    ErrorClass::Policy | ErrorClass::Validation | ErrorClass::Internal => {
+                        // Stop immediately, no failover
+                        return Err(e);
+                    }
+                }
+            }
         }
     }
 

@@ -79,6 +79,7 @@ pub mod quote_service;
 pub mod reference_packages;
 pub mod relationship_service;
 pub mod report_service;
+pub mod retry;
 pub mod saved_view_service;
 pub mod screen_layout_service;
 #[cfg(any(test, feature = "test-support"))]

@@ -34,6 +34,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0107](work/P1/WP-0107-principal-model-and-effective-identity.md) | Principal model and effective-identity rules | in_review | claude | `wp/WP-0107-principal-model` | https://github.com/vikram2409-eng/Lanesra-OS/pull/682 |
 | [WP-0108](work/P1/WP-0108-agent-identities-and-credentials.md) | Agent Identities and credentials | in_review | claude | `wp/WP-0108-agent-identities` | https://github.com/vikram2409-eng/Lanesra-OS/pull/683 |
 | [WP-0122](work/P1/WP-0122-native-function-calling-and-strict-json-tool-format.md) | Native function calling and strict JSON tool format | in_progress | muse | `wp/WP-0122-tool-calling` | - |
+| [WP-0124](work/P1/WP-0124-retry-with-backoff-and-error-taxonomy.md) | Retry with backoff and error taxonomy | in_review | claude | `wp/WP-0124-retry-backoff-v2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/678 |
 | [WP-0130](work/P1/WP-0130-prompt-catalog-written-fresh.md) | Prompt catalog, written fresh | in_progress | muse | `wp/WP-0130-prompt-catalog` | - |
 
 ## Ready to start (all dependencies done)
@@ -42,7 +43,6 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 
 | WP | Title | Phase | Estimate |
 |---|---|---|---|
-| [WP-0124](work/P1/WP-0124-retry-with-backoff-and-error-taxonomy.md) | Retry with backoff and error taxonomy | 1 | M |
 | [WP-0143](work/P1/WP-0143-tool-catalog-credentials-and-delegation-guard-audit.md) | Tool catalog, credentials and delegation guard audit | 1 | S |
 
 ## Requirement coverage
@@ -98,7 +98,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0121](work/P1/WP-0121-step-limits-and-partial-results.md) | Step limits and partial results | E1.3 Agent loop | 🟢 ready | L | ○Desktop ○Team Workspace ○Online demo | WP-0110, WP-0005 |
 | [WP-0122](work/P1/WP-0122-native-function-calling-and-strict-json-tool-format.md) | Native function calling and strict JSON tool format | E1.3 Agent loop | 🔨 in progress | L | ○Desktop ○Team Workspace | WP-0005 |
 | [WP-0123](work/P1/WP-0123-per-step-model-routing-and-data-boundaries.md) | Per-step model routing and data boundaries | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0121 |
-| [WP-0124](work/P1/WP-0124-retry-with-backoff-and-error-taxonomy.md) | Retry with backoff and error taxonomy | E1.3 Agent loop | 🟢 ready | M | ○Desktop ○Team Workspace ○Online demo | WP-0009, WP-0005 |
+| [WP-0124](work/P1/WP-0124-retry-with-backoff-and-error-taxonomy.md) | Retry with backoff and error taxonomy | E1.3 Agent loop | 👀 in review | M | ○Desktop ○Team Workspace ○Online demo | WP-0009, WP-0005 |
 | [WP-0125](work/P1/WP-0125-context-window-handling-and-compaction-policies.md) | Context window handling and compaction policies | E1.3 Agent loop | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0121 |
 | [WP-0126](work/P1/WP-0126-budget-awareness-in-agent-turns.md) | Budget awareness in agent turns | E1.3 Agent loop | ⚪ proposed | S | ○Desktop ○Team Workspace ○Online demo | WP-0121 |
 | [WP-0127](work/P1/WP-0127-do-not-persist-state-fields.md) | Do-not-persist state fields | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0111 |
