@@ -292,6 +292,15 @@ plan adds so the build can be done to enterprise standard by several AI agents i
 - **REQ-API-012** [Pv2] Teams exportable as declarative YAML inside a Solution
 - **REQ-API-013** [P3] Workspace gallery over Solutions: reuse approved agents, tools, stop rules and Teams with owner, version and score
 
+## INT — Integration Hub and API surface (added 2026-10-21, owner decision on RAID Q-18 to Q-20; design in ADR-0018)
+
+- **REQ-INT-001** [P1] Record events (`record.created`, `record.updated`, `record.archived`) that an active webhook subscribes to are delivered signed, with bounded retries and a delivery history, by Team Workspace and by the desktop app, with nobody pressing Test (RAID I-29)
+- **REQ-INT-002** [P1] A webhook receiver can verify signatures: the signing secret is shown once when the webhook is created and again only when an admin rotates it, is never readable afterwards, and every rotation is audited without the value (RAID I-30)
+- **REQ-INT-003** [P1] The webhook event types `field.changed`, `workflow.completed` and `workflow.failed` are emitted to subscribed webhooks; no event type is offered that nothing emits (RAID I-29, Q-20)
+- **REQ-INT-004** [P1] An API client can be restricted to one or more networks (CIDR); the caller's address is the connection address unless the request arrives through an operator-configured trusted proxy (ADR-0018), and a restricted client is refused outside its range on REST, MCP and the event stream (RAID I-31)
+- **REQ-INT-005** [P1] Every scope that can be granted to an API client is enforced by at least one endpoint, with an allow test and a deny test per scope, and the scope vocabulary and its endpoints are documented (RAID I-31)
+- **REQ-INT-006** [P1] The REST API offers record search, bulk export and bulk write, webhook management and integration administration (read and operate, never secrets), each behind its own scope (ADR-0018, Q-20)
+
 ## NFR — Success metrics and quality bars
 
 - **REQ-NFR-001** [P4] New admin builds a first working multi-agent team in under 15 minutes (measured in usability tests before GA) (phase: plan)
