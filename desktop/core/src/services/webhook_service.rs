@@ -329,22 +329,40 @@ fn resolve_webhook_secret(
     }
 }
 
+/// What one drain pass did. `failed` lists events whose fan-out returned an
+/// error (not a failed HTTP delivery, which is recorded in the webhook's
+/// delivery history and counts as handled): those stay queued and are tried
+/// again on the next pass.
+#[derive(Debug, Default)]
+pub struct DrainReport {
+    pub delivered: usize,
+    pub failed: Vec<(String, String)>,
+}
+
 /// Delivers every queued `integration_pending_events` row (oldest first,
 /// bounded batch) and clears each one once its webhook fan-out is done -
-/// what a periodic caller (the server's real background interval, or
-/// desktop's client poll - see `integration_job_service`'s own comment)
-/// runs. A queued event with no payload_key mismatch always resolves
-/// cleanly since `event_hooks::emit` already confirmed at least one
-/// subscriber existed at enqueue time; a webhook deleted/paused since
-/// then is simply skipped by `fire_event`'s own subscriber lookup.
-pub async fn drain_pending_events(conn: &Connection, master_key: &[u8; 32]) -> AppResult<usize> {
+/// what a periodic caller (the Team Workspace scheduler tick, or desktop's
+/// client poll) runs. A queued event with no payload_key mismatch always
+/// resolves cleanly since `event_hooks::emit` already confirmed at least one
+/// subscriber existed at enqueue time; a webhook deleted/paused since then
+/// is simply skipped by `fire_event`'s own subscriber lookup.
+///
+/// One event that errors (for example a webhook secret that can no longer
+/// be decrypted) never stops the events behind it: it is reported in
+/// `DrainReport::failed`, left queued, and the pass carries on. The only
+/// error returned is the queue itself being unreadable.
+pub async fn drain_pending_events_report(
+    conn: &Connection,
+    master_key: &[u8; 32],
+) -> AppResult<DrainReport> {
     let batch = integration_pending_event_repo::list_batch(conn, 100)?;
-    let count = batch.len();
+    let mut report = DrainReport::default();
     for pending in batch {
+        let id = pending.id.clone();
         let payload: serde_json::Value =
             serde_json::from_str(&pending.payload_json).unwrap_or(json!({}));
         let event = IntegrationEvent {
-            event_id: pending.id.clone(),
+            event_id: pending.id,
             event_type: pending.event_type,
             workspace_id: pending.workspace_id,
             object_key: pending.object_key,
@@ -353,10 +371,23 @@ pub async fn drain_pending_events(conn: &Connection, master_key: &[u8; 32]) -> A
             correlation_id: pending.correlation_id,
             payload,
         };
-        fire_event(conn, master_key, &event).await?;
-        integration_pending_event_repo::delete(conn, &pending.id)?;
+        match fire_event(conn, master_key, &event).await {
+            Ok(()) => {
+                integration_pending_event_repo::delete(conn, &id)?;
+                report.delivered += 1;
+            }
+            Err(e) => report.failed.push((id, e.to_string())),
+        }
     }
-    Ok(count)
+    Ok(report)
+}
+
+/// `drain_pending_events_report` for a caller that only needs the number of
+/// events delivered and cleared.
+pub async fn drain_pending_events(conn: &Connection, master_key: &[u8; 32]) -> AppResult<usize> {
+    Ok(drain_pending_events_report(conn, master_key)
+        .await?
+        .delivered)
 }
 
 /// Spec §10.2's "Test delivery button" - a synthetic event, delivered

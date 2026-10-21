@@ -35,6 +35,9 @@ futures-core = "0.3"
 reqwest = { version = "0.12", features = ["json", "cookies", "stream"] }
 futures-util = "0.3"
 tempfile = "3"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
 
 [lints]
 workspace = true

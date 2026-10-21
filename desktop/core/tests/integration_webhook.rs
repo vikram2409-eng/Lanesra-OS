@@ -609,3 +609,109 @@ fn delete_removes_the_subscription() {
         .unwrap()
         .is_empty());
 }
+
+// Covers: REQ-PRE-008 (WP-0182 AC-4)
+#[tokio::test]
+async fn one_pending_event_that_errors_does_not_block_the_events_behind_it() {
+    use lanesra_core::repositories::integration_pending_event_repo;
+
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    let (broken_port, broken_calls) = spawn_scripted_server(vec![200]);
+    let (healthy_port, healthy_calls) = spawn_scripted_server(vec![200]);
+
+    let make = |port: u16, name: &str, event: &str| {
+        let connection_id = make_webhook_connection(
+            &conn,
+            &workspace_id,
+            &admin_id,
+            &format!("http://127.0.0.1:{port}"),
+        );
+        webhook_service::create(
+            &conn,
+            &workspace_id,
+            &master_key(),
+            &WebhookInput {
+                name: name.into(),
+                connection_id,
+                event_types: vec![event.into()],
+                object_scope: None,
+                filter_json: None,
+                payload_version: None,
+                retry_policy_json: None,
+            },
+            Some(&admin_id),
+        )
+        .unwrap()
+    };
+    let broken = make(broken_port, "Broken secret", "record.created");
+    let _healthy = make(healthy_port, "Healthy", "record.updated");
+
+    // Corrupt the first webhook's stored secret so resolving it errors:
+    // that is an infrastructure failure (not a failed HTTP delivery), the
+    // kind of error that used to abort the whole drain pass.
+    let secret_id: String = conn
+        .query_row(
+            "SELECT secret_id FROM integration_webhooks WHERE id = ?1",
+            [&broken.id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    conn.execute(
+        "UPDATE integration_secrets SET ciphertext = x'00' WHERE id = ?1",
+        [&secret_id],
+    )
+    .unwrap();
+
+    // Two queued events, the failing one first (oldest).
+    integration_pending_event_repo::insert(
+        &conn,
+        "evt-a",
+        &workspace_id,
+        "record.created",
+        "Company",
+        "rec-a",
+        r#"{"display_name":"A","status":"Prospect"}"#,
+        None,
+    )
+    .unwrap();
+    integration_pending_event_repo::insert(
+        &conn,
+        "evt-b",
+        &workspace_id,
+        "record.updated",
+        "Company",
+        "rec-b",
+        r#"{"display_name":"B","status":"Prospect"}"#,
+        None,
+    )
+    .unwrap();
+    conn.execute(
+        "UPDATE integration_pending_events SET created_at = '2026-01-01T00:00:00Z' WHERE id = 'evt-a'",
+        [],
+    )
+    .unwrap();
+
+    webhook_service::drain_pending_events(&conn, &master_key())
+        .await
+        .expect("one failing event must not fail the whole pass");
+
+    assert_eq!(
+        healthy_calls.lock().unwrap().len(),
+        1,
+        "the event behind the failing one must still be delivered"
+    );
+    assert!(broken_calls.lock().unwrap().is_empty());
+
+    let remaining: Vec<String> = conn
+        .prepare("SELECT id FROM integration_pending_events ORDER BY id")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect();
+    assert_eq!(
+        remaining,
+        vec!["evt-a".to_string()],
+        "the delivered event is cleared; the failed one stays queued for the next pass"
+    );
+}
