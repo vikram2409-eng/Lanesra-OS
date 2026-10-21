@@ -218,3 +218,27 @@
 .modern-site .doc-article-link span{font-size:13px;color:var(--muted);display:block;line-height:1.45}
 .modern-site .doc-article-link .arrow{color:var(--brand);font-weight:700;margin-top:6px;font-size:13px}
 @media(max-width:620px){.modern-site .docs-cat-topics{grid-template-columns:1fr}}
+
+/* Developers pages: spec tables, callouts, FAQ, inline code */
+.modern-site .dev-view :not(pre)>code{font:500 .86em DM Mono,monospace;background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:var(--text);overflow-wrap:anywhere}
+.modern-site .dev-view .spec-wrap{border:1px solid var(--line);border-radius:14px;background:var(--surface);overflow-x:auto}
+.modern-site .dev-view .spec-table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.5}
+.modern-site .dev-view .spec-table th{position:static;text-align:left;padding:12px 16px;background:var(--surface-2);color:var(--faint);font:600 11px DM Mono,monospace;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--line);white-space:nowrap}
+.modern-site .dev-view .spec-table td{padding:13px 16px;border-top:1px solid var(--line);vertical-align:top;color:var(--muted)}
+.modern-site .dev-view .spec-table tr:first-child td{border-top:0}
+.modern-site .dev-view .spec-table td:first-child{color:var(--text);font-weight:600}
+.modern-site .dev-view .spec-table td a{color:var(--accent-ink);font-weight:600}
+.modern-site .dev-view .callout{margin-top:22px;padding:16px 18px;border:1px solid var(--line);border-left:4px solid var(--accent);background:var(--accent-soft);border-radius:12px;color:var(--muted);line-height:1.6;font-size:14.5px}
+.modern-site .dev-view .callout strong{display:block;margin-bottom:4px;color:var(--text)}
+.modern-site .dev-view .callout.warn{border-left-color:var(--amber);background:var(--amber-soft)}
+.modern-site .dev-view .faq{border-bottom:1px solid var(--line)}
+.modern-site .dev-view .faq details{border-top:1px solid var(--line);padding:16px 4px}
+.modern-site .dev-view .faq summary{cursor:pointer;font-weight:700;color:var(--text);list-style-position:outside}
+.modern-site .dev-view .faq summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:4px}
+.modern-site .dev-view .faq details p{margin:10px 0 0;color:var(--muted);line-height:1.65;max-width:78ch}
+.modern-site .dev-view .plain-list{margin:12px 0 0;padding-left:18px;color:var(--muted);line-height:1.75;font-size:14.5px}
+.modern-site .dev-view .plain-list li{margin:2px 0}
+.modern-site .dev-view .fine{margin:14px 0 0;color:var(--faint);font-size:13px;line-height:1.6;max-width:84ch}
+@media(max-width:620px){.modern-site .dev-view .spec-table{font-size:13px}.modern-site .dev-view .spec-table th,.modern-site .dev-view .spec-table td{padding:11px 12px}.modern-site .dev-view .spec-table{min-width:520px}}
+.modern-site .dev-view .spec-table code{white-space:nowrap;overflow-wrap:normal}
+.modern-site .dev-view .spec-table td:last-child{min-width:240px}
