@@ -119,6 +119,38 @@ enum NodeOutcome {
     },
 }
 
+thread_local! {
+    // The graphs whose "Run Agent Team" node is currently waiting on a
+    // nested run, outermost first (WP-0143).
+    static NESTED_TEAM_CHAIN: std::cell::RefCell<Vec<String>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Marks `graph_id` as waiting on a nested team run. Refuses when the
+/// target is already somewhere up the chain.
+struct NestedTeamGuard;
+
+impl NestedTeamGuard {
+    fn enter(graph_id: &str, target_graph_id: &str) -> Option<NestedTeamGuard> {
+        NESTED_TEAM_CHAIN.with(|chain| {
+            let mut chain = chain.borrow_mut();
+            if chain.iter().any(|g| g == target_graph_id) {
+                return None;
+            }
+            chain.push(graph_id.to_string());
+            Some(NestedTeamGuard)
+        })
+    }
+}
+
+impl Drop for NestedTeamGuard {
+    fn drop(&mut self) {
+        NESTED_TEAM_CHAIN.with(|chain| {
+            chain.borrow_mut().pop();
+        });
+    }
+}
+
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
 }
@@ -752,6 +784,19 @@ async fn execute_node(
                     record!("failed", None, None, Some(&msg));
                     return Err(AppError::Validation(msg));
                 }
+                // WP-0143: an A→B→A chain of nested teams is refused before
+                // it starts, not left to each run's step limit.
+                let Some(_team_guard) = NestedTeamGuard::enter(&graph.id, target_graph_id) else {
+                    let msg = "this nested Agent Team would run a graph that is already running \
+                               further up the chain (a cycle) - refused"
+                        .to_string();
+                    record!("failed", None, None, Some(&msg));
+                    return Err(AppError::classified(
+                        crate::domain::ErrorClass::Policy,
+                        "policy.denied",
+                        msg,
+                    ));
+                };
                 let mapping = config
                     .get("variable_mapping")
                     .and_then(|v| v.as_object())
