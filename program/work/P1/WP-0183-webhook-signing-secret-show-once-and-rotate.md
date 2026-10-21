@@ -3,8 +3,8 @@ id: WP-0183
 title: "Webhook signing secret: show once and rotate"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: ready
-owner: unassigned
+status: in_progress
+owner: claude
 depends_on: [WP-0182]
 requirements: [REQ-INT-002]
 threats: []
@@ -12,7 +12,7 @@ estimate: M
 editions: [workspace, desktop, demo]
 delivered: []
 docs: [api-access-and-webhooks]
-branch:
+branch: wp/WP-0183-webhook-signing-secret
 pr:
 updated: 2026-10-21
 ---
@@ -67,3 +67,4 @@ Every webhook delivery is signed with HMAC-SHA256, but the signing secret is gen
 
 <!-- Append dated entries, newest last. -->
 - 2026-10-21 claude: Written as `ready` (goal, scope, testable ACs, test files, dependency and requirements listed). Not started.
+- 2026-10-21 claude: Claimed. Stacked on the WP-0182 branch because the planning files (this WP, ADR-0018, REQ-INT) are in that PR. Design: `create` keeps returning `Webhook` (the AI `create_webhook` tool uses it, so a secret never enters an agent transcript); new `create_with_secret` and `rotate_secret` return the value once; `integration_secret_repo::rotate` already exists. Next: failing tests first.
