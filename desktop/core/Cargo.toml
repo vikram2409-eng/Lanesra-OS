@@ -38,7 +38,7 @@ regex = "1"
 # services/secret_service.rs / connection_service.rs for how these are used;
 # only the small set of functions that genuinely make a network call are
 # `async fn` - everything else in this crate stays plain sync, as before.
-tokio = { version = "1", features = ["rt", "macros", "time"] }
+tokio = { version = "1", features = ["rt", "macros", "time", "net"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 aes-gcm = "0.10"
 hmac = "0.12"

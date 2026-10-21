@@ -75,8 +75,9 @@ pub async fn test_connection(
         expected: config.host_key_sha256.clone(),
         seen: seen.clone(),
     };
-    let connected =
-        russh::client::connect(ssh_config, (config.host.as_str(), config.port), handler).await;
+    // WP-0143: connect to the addresses the outbound guard allows.
+    let addrs = super::ssrf_guard::allowed_addrs(&config.host, config.port).await?;
+    let connected = russh::client::connect(ssh_config, addrs.as_slice(), handler).await;
     let mut session = match connected {
         Ok(session) => session,
         Err(e) => {

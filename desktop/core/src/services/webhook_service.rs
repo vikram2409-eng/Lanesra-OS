@@ -180,7 +180,10 @@ async fn attempt_delivery(
     payload_json: &str,
 ) -> (bool, Option<u16>, u64, String) {
     let started = Instant::now();
-    let client = reqwest::Client::builder()
+    if let Err(e) = super::ssrf_guard::check_url(endpoint_url) {
+        return (false, None, 0, e.to_string());
+    }
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_secs(15))
         .build()
         .expect("HTTP client always builds");
@@ -210,7 +213,11 @@ async fn attempt_delivery(
             false,
             None,
             elapsed,
-            e.to_string().chars().take(200).collect(),
+            super::ssrf_guard::blocked_in(&e)
+                .map_or_else(|| e.to_string(), |b| b.to_string())
+                .chars()
+                .take(200)
+                .collect(),
         ),
     }
 }

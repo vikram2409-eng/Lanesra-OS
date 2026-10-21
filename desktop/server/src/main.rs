@@ -7,6 +7,21 @@ use lanesra_server::{build_router, SecurityConfig, ServerState};
 async fn main() {
     tracing_subscriber::fmt::init();
 
+    // Team Workspace: internal addresses are reachable only when the
+    // operator allow-lists them (WP-0143, threat T-13). A malformed entry
+    // stops the server rather than being guessed at.
+    let network = lanesra_core::services::ssrf_guard::NetworkPolicy::workspace_from_env()
+        .unwrap_or_else(|e| {
+            panic!(
+                "{}: {e}",
+                lanesra_core::services::ssrf_guard::ALLOW_LIST_ENV
+            )
+        });
+    for entry in &network.allow {
+        tracing::warn!(%entry, "outbound allow-list: internal addresses in this block are reachable");
+    }
+    lanesra_core::services::ssrf_guard::install(network).expect("outbound network policy");
+
     let data_dir = std::env::var("LANESRA_DATA_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from("./data"));

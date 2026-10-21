@@ -7,6 +7,12 @@ use state::AppState;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // The desktop app runs on the user's own machine: local and private
+    // addresses (Ollama, on-premises tools) are reachable (WP-0143).
+    lanesra_core::services::ssrf_guard::install(
+        lanesra_core::services::ssrf_guard::NetworkPolicy::desktop(),
+    )
+    .expect("outbound network policy");
     tauri::Builder::default()
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
