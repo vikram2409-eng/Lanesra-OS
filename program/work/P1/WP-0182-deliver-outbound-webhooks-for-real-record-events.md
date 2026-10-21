@@ -6,7 +6,7 @@ epic: E1.9 Team Workspace platform
 status: in_progress
 owner: claude
 depends_on: []
-requirements: [REQ-PRE-008, REQ-PRE-015]
+requirements: [REQ-INT-001, REQ-PRE-015]
 threats: []
 estimate: S
 editions: [workspace, desktop]
@@ -33,7 +33,7 @@ A webhook an admin creates in the Integration Hub must actually fire when a subs
 
 ## Out of scope
 
-- Event types that are accepted as subscriptions but never emitted (`field.changed`, `workflow.completed`, `workflow.failed`): emit them or stop offering them is an owner decision (RAID Q-19).
+- Event types that are accepted as subscriptions but never emitted (`field.changed`, `workflow.completed`, `workflow.failed`): owner decided to build them (RAID Q-20, ADR-0018); that is WP-0185.
 - Showing or rotating the signing secret so a receiver can verify signatures: WP-0183 (RAID I-30).
 - Per-event attempt counts and dead-lettering of an event that can never be delivered (a possible follow-up; see Notes).
 - Honoring the stored but unused `retry_policy_json` and `filter_json` columns.
@@ -53,7 +53,7 @@ A webhook an admin creates in the Integration Hub must actually fire when a subs
 - `desktop/core/tests/integration_webhook.rs`: a new test queues two events, makes the first one's fan-out error, and asserts the second is still delivered and the first stays queued (AC-4)
 - AC-5 has no automated test: `src-tauri` has no test harness and needs a window system to build. The `tauri (desktop shell)` CI job compiles the change, and the code is a line-for-line mirror of the server call. Recorded as a known limit, not a skipped test
 - AC-6: `node --check app.js`, `python3 program/tools/check_binary_assets.py`, the website render check for the Integrations page
-- Tag every new test with `Covers: REQ-PRE-008 (WP-0182 AC-n)` so `programctl trace` finds it
+- Tag every new test with `Covers: REQ-INT-001 (WP-0182 AC-n)` so `programctl trace` finds it
 - Full regression suite green in CI; test count not lower than before (see testing/REGRESSION.md)
 
 ## Notes
@@ -62,7 +62,7 @@ A webhook an admin creates in the Integration Hub must actually fire when a subs
 - No migration: `integration_pending_events` already exists (migration 0032).
 - Follow ADR-0009 (error taxonomy) for any new error. The Team Workspace SSRF guard (WP-0143 AC-4) already applies to webhook endpoint URLs.
 - Known limit to record, not fix here: `list_batch` returns the oldest 100 rows, so more than 100 permanently failing rows could starve newer events. Dead-lettering needs an attempts column and so a migration; propose it as a follow-up WP if it ever matters.
-- Requirement IDs: no requirement names outbound webhook delivery. `REQ-PRE-008` (discrepancies between documented and actual behavior are resolved) and `REQ-PRE-015` (edition parity) are the closest. A proper requirement is proposed in RAID Q-18.
+- Requirement: `REQ-INT-001` (added 2026-10-21, owner decision on RAID Q-18). `REQ-PRE-015` (edition parity) also applies.
 
 ## Progress log
 

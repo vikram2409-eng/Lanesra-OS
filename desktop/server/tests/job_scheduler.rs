@@ -364,7 +364,7 @@ async fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
     }
 }
 
-// Covers: REQ-PRE-008 (WP-0182 AC-1, AC-2)
+// Covers: REQ-INT-001 (WP-0182 AC-1, AC-2)
 #[tokio::test]
 async fn the_background_scheduler_delivers_signed_webhooks_for_real_record_changes() {
     let f = webhook_fixture();
@@ -470,7 +470,7 @@ async fn the_background_scheduler_delivers_signed_webhooks_for_real_record_chang
     drop(f.dir);
 }
 
-// Covers: REQ-PRE-008 (WP-0182 AC-3)
+// Covers: REQ-INT-001 (WP-0182 AC-3)
 #[tokio::test]
 async fn a_paused_or_other_object_webhook_receives_nothing_and_the_queue_is_cleared() {
     let f = webhook_fixture();

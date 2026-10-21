@@ -6,7 +6,7 @@ epic: E1.9 Team Workspace platform
 status: ready
 owner: unassigned
 depends_on: [WP-0182]
-requirements: [REQ-PRE-008, REQ-PRE-015]
+requirements: [REQ-INT-002]
 threats: []
 estimate: M
 editions: [workspace, desktop, demo]
@@ -34,7 +34,7 @@ Every webhook delivery is signed with HMAC-SHA256, but the signing secret is gen
 
 ## Out of scope
 
-- Delivering record events at all: WP-0182
+- Delivering record events at all: WP-0182. Managing webhooks over the REST API (including rotate): WP-0188, which reuses this WP's rotate operation
 - A grace period where both old and new secrets verify
 - Showing the secret again to an admin after creation (by design it is not retrievable)
 - Secret rotation for API client secrets (already exists) or connection secrets
@@ -53,7 +53,7 @@ Every webhook delivery is signed with HMAC-SHA256, but the signing secret is gen
 - `desktop/core/tests/integration_webhook.rs`: create returns the secret and a receiver verifies a delivery with it (AC-1); rotation invalidates the old secret (AC-2); non-admin and unknown-id negatives (AC-3); audit row exists and does not contain the value (AC-4)
 - `desktop/server/tests/admin_actions.rs` or the dispatch test file: the rotate command is reachable and admin-gated over HTTP
 - `desktop/src/` Vitest component test for the show-once panel (AC-5); online demo checked in the browser
-- Tag every new test with `Covers: REQ-PRE-008 (WP-0183 AC-n)`
+- Tag every new test with `Covers: REQ-INT-002 (WP-0183 AC-n)`
 - Full regression suite green in CI; test count not lower than before
 
 ## Notes

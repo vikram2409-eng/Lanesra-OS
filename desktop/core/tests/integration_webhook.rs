@@ -610,7 +610,7 @@ fn delete_removes_the_subscription() {
         .is_empty());
 }
 
-// Covers: REQ-PRE-008 (WP-0182 AC-4)
+// Covers: REQ-INT-001 (WP-0182 AC-4)
 #[tokio::test]
 async fn one_pending_event_that_errors_does_not_block_the_events_behind_it() {
     use lanesra_core::repositories::integration_pending_event_repo;
