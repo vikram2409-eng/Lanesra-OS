@@ -3,7 +3,7 @@ id: WP-0182
 title: "Deliver outbound webhooks for real record events"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: in_progress
+status: in_review
 owner: claude
 depends_on: []
 requirements: [REQ-INT-001, REQ-PRE-015]
@@ -14,7 +14,7 @@ editions_reason: Outbound webhooks are an Integration Hub feature of the Team Wo
 delivered: []
 docs: [api-access-and-webhooks]
 branch: wp/WP-0182-deliver-outbound-webhooks
-pr:
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/689
 updated: 2026-10-21
 ---
 
@@ -76,3 +76,4 @@ A webhook an admin creates in the Integration Hub must actually fire when a subs
   Gotchas: `COMPANY_STATUSES` is `Prospect`, `Active Customer`, `Inactive`, `Archived`. Server tests need a webhook created with the key the scheduler will resolve (`secret_service::resolve_master_key(&key_file_path)`). `list_batch` returns the oldest 100 rows, so more than 100 permanently failing events could starve newer ones (recorded in Notes).
   Commands: `cargo test -p lanesra-core --features lanesra-core/test-support --test integration_webhook`; `cargo test -p lanesra-server --features lanesra-core/test-support --test job_scheduler`
 - 2026-10-21 claude: AC-6 done after PR #688 merged (it edits the same Help article line): `api-access-and-webhooks` article now states when events are delivered and that `field.changed` and `workflow.*` are not emitted yet (and carries `wps:'WP-0182'`); Integrations page note; `llms.txt` and `llms-full.txt`; Releases entry `v0.97.0` (version number is a placeholder for the owner to confirm at release). `REGRESSION.md` updated, session log written. `programctl docs --check`, `validate`, binary-asset, feature-flag and vocabulary checks clean. Roadmap page: no entry for outbound webhook delivery exists, so nothing to move. AC-5 stays unticked: no automated test is possible for the `src-tauri` call; the `tauri (desktop shell)` CI job compiles it. Next: wait for CI, then `in_review`.
+- 2026-10-21 claude: Docs, REGRESSION totals and session log done; CI green on PR #689 (all 26 checks). Moved to in_review. AC-5 (desktop poll) is compiled by the `tauri (desktop shell)` job but has no automated test; left for owner acceptance.
