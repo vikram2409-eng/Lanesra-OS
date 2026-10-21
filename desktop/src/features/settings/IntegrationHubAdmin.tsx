@@ -25,6 +25,7 @@ import type {
   MappingInput,
   OpenApiImportPreview,
   Webhook,
+  WebhookCreated,
   WebhookInput,
 } from "../../lib/types";
 
@@ -818,6 +819,25 @@ function IssuedSecretModal({ issued, onClose }: { issued: IssuedApiClient; onClo
   );
 }
 
+function WebhookSecretModal({ name, secret, onClose }: { name: string; secret: string; onClose: () => void }) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ marginTop: 0 }}>Signing secret for {name}</h3>
+        <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+          Copy this now - it is never shown again. Use it to verify the <code>X-Lanesra-Signature</code> header on
+          each delivery. Lost it? Rotate the secret to get a new one.
+        </p>
+        <pre style={{ fontSize: 13, wordBreak: "break-all", whiteSpace: "pre-wrap", background: "var(--bg-subtle, rgba(0,0,0,0.03))", padding: 10 }}>{secret}</pre>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+          <button className="btn btn-secondary" onClick={() => { void navigator.clipboard?.writeText(secret); }}>Copy</button>
+          <button className="btn btn-primary" onClick={onClose}>Done</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- Webhooks & Events (spec §10) ----------------------------------------------
 
 function WebhooksTab() {
@@ -827,8 +847,14 @@ function WebhooksTab() {
   const [creating, setCreating] = useState(false);
   const [deliveriesOpenFor, setDeliveriesOpenFor] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, string>>({});
+  const [issuedSecret, setIssuedSecret] = useState<{ name: string; secret: string } | null>(null);
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["webhooks"] });
+  const rotate = useMutation({
+    mutationFn: (w: Webhook) => api.rotateWebhookSecret(w.id).then((secret) => ({ name: w.name, secret })),
+    onSuccess: setIssuedSecret,
+    onError: (err, w) => setTestResults((r) => ({ ...r, [w.id]: apiErrorMessage(err, "Could not rotate the secret") })),
+  });
   const pause = useMutation({ mutationFn: (id: string) => api.pauseWebhook(id), onSuccess: invalidate });
   const reactivate = useMutation({ mutationFn: (id: string) => api.reactivateWebhook(id), onSuccess: invalidate });
   const del = useMutation({ mutationFn: (id: string) => api.deleteWebhook(id), onSuccess: invalidate });
@@ -855,10 +881,12 @@ function WebhooksTab() {
       {creating && (
         <WebhookForm
           connections={connections.data ?? []}
-          onDone={() => { setCreating(false); invalidate(); }}
+          onDone={(created) => { setCreating(false); invalidate(); setIssuedSecret({ name: created.name, secret: created.signing_secret }); }}
           onCancel={() => setCreating(false)}
         />
       )}
+
+      {issuedSecret && <WebhookSecretModal name={issuedSecret.name} secret={issuedSecret.secret} onClose={() => setIssuedSecret(null)} />}
 
       {webhooks.isLoading && <p>Loading...</p>}
       {!webhooks.isLoading && rows.length === 0 && !creating && <p className="empty-state">No webhooks yet.</p>}
@@ -882,6 +910,7 @@ function WebhooksTab() {
                       ) : (
                         <button className="btn btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => reactivate.mutate(w.id)}>Reactivate</button>
                       )}
+                      <button className="btn btn-secondary" style={{ fontSize: 12, padding: "4px 8px" }} disabled={rotate.isPending} onClick={() => { if (confirm(`Rotate the signing secret of "${w.name}"? The old secret stops working immediately.`)) rotate.mutate(w); }}>Rotate secret</button>
                       <button className="btn btn-danger" style={{ fontSize: 12, padding: "4px 8px" }} onClick={() => { if (confirm(`Delete webhook "${w.name}"?`)) del.mutate(w.id); }}>Delete</button>
                     </td>
                   </tr>
@@ -905,7 +934,7 @@ function WebhooksTab() {
   );
 }
 
-function WebhookForm({ connections, onDone, onCancel }: { connections: Connection[]; onDone: () => void; onCancel: () => void }) {
+function WebhookForm({ connections, onDone, onCancel }: { connections: Connection[]; onDone: (created: WebhookCreated) => void; onCancel: () => void }) {
   const [input, setInput] = useState<WebhookInput>({
     name: "", connection_id: connections[0]?.id ?? "", event_types: [], object_scope: null, filter_json: null, payload_version: "v1", retry_policy_json: null,
   });

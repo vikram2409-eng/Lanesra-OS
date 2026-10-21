@@ -90,6 +90,16 @@ pub fn list_active_for_event(
         .collect())
 }
 
+/// Points a webhook at a (new) signing secret row. Used only when a
+/// webhook that never had one is rotated.
+pub fn set_secret_id(conn: &Connection, id: &str, secret_id: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE integration_webhooks SET secret_id = ?2, updated_at = ?3 WHERE id = ?1",
+        rusqlite::params![id, secret_id, now_iso()],
+    )?;
+    Ok(())
+}
+
 pub fn set_status(conn: &Connection, id: &str, status: &str) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE integration_webhooks SET status = ?1, updated_at = ?2 WHERE id = ?3",
