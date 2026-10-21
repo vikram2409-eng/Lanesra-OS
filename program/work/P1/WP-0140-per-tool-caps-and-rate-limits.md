@@ -3,7 +3,7 @@ id: WP-0140
 title: Per-tool caps and rate limits
 phase: 1
 epic: E1.5 Tools and firewall
-status: proposed
+status: ready
 owner: unassigned
 depends_on: [WP-0122]
 requirements: [REQ-LOOP-014, REQ-TOOL-008]
@@ -14,7 +14,7 @@ delivered: []
 docs: [policy-engine-tool-call-firewall]
 branch: 
 pr: 
-updated: 2026-10-16
+updated: 2026-10-19
 ---
 
 # WP-0140 — Per-tool caps and rate limits
@@ -31,7 +31,7 @@ Each tool binding caps calls per step, failures before disable, and result size 
 
 ## Acceptance criteria
 
-- [ ] AC-1: Exceeding each cap behaves as specified and is traced
+- [ ] AC-1: Exceeding the calls-per-step cap blocks the call with a classified error (ADR-0009); exceeding the failures-before-disable threshold disables the tool binding; exceeding the result-size cap stores the result and passes a reference instead of keeping it in context; each enforcement is traced per ADR-0008
 - [ ] AC-2: Rate-limited call never reaches the tool
 
 ## Test plan
@@ -48,3 +48,4 @@ Each tool binding caps calls per step, failures before disable, and result size 
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+- 2026-10-19 muse: Refined proposed → ready. Made AC-1 precise: calls-per-step cap → classified error block (ADR-0009); failures-before-disable → binding disabled; result-size cap → store + reference; each traced per ADR-0008. AC-2 unchanged (rate-limited call never reaches tool). Verified: REQ-LOOP-014, REQ-TOOL-008 exist; ADR-0009/0010/0012 Accepted; depends_on WP-0122 merged. No code changed.
