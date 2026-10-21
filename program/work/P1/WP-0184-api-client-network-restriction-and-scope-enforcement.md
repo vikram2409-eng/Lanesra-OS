@@ -3,7 +3,7 @@ id: WP-0184
 title: "API clients: enforce the allowed network with a trusted-proxy rule"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: in_progress
+status: in_review
 owner: claude
 depends_on: []
 requirements: [REQ-INT-004, REQ-PRE-019]
@@ -14,7 +14,7 @@ editions_reason: The REST API and MCP endpoint exist only on the Team Workspace 
 delivered: []
 docs: [api-access-and-webhooks, set-up-team-workspace]
 branch: wp/WP-0184-api-client-network-restriction
-pr:
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/691
 updated: 2026-10-21
 ---
 
