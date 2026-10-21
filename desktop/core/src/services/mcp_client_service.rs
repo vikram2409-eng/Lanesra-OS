@@ -210,17 +210,18 @@ async fn rpc_call(
     method: &str,
     params: Value,
 ) -> AppResult<Value> {
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(base_url)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_millis(REQUEST_TIMEOUT_MS))
         .build()
         .map_err(|e| AppError::Validation(format!("Could not build HTTP client: {e}")))?;
     let body = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
     let mut builder = client.post(base_url).json(&body);
     builder = connection_service::apply_auth(builder, auth_mode, secret);
-    let response = builder
-        .send()
-        .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {base_url}: {e}")))?;
+    let response = builder.send().await.map_err(|e| {
+        super::ssrf_guard::blocked_in(&e)
+            .unwrap_or_else(|| AppError::Validation(format!("Could not reach {base_url}: {e}")))
+    })?;
     let status = response.status();
     let parsed: Value = response.json().await.map_err(|e| {
         AppError::Validation(format!(

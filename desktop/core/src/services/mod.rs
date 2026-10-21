@@ -91,6 +91,7 @@ pub mod sftp_service;
 pub mod smtp_service;
 pub mod solution_component_service;
 pub mod solution_service;
+pub mod ssrf_guard;
 pub mod status_transition_service;
 pub mod system_graph_service;
 pub mod task_service;

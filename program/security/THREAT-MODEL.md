@@ -49,7 +49,7 @@ Ratings: **L**ikelihood and **I**mpact, each High / Medium / Low, for the produc
 | T-10 | **SQL injection** | Tampering | L | H | Parameterised queries only (`rusqlite` params); SQL kept in `repositories/` (ADR-0014) | Mitigated by convention; covered by review |
 | T-11 | **Account takeover on Team Workspace**: password guessing, session theft, cross-site request forgery | Spoofing | H | H | First-run and sign-in hardening (rate limit, lockout, cookie flags, CSRF) WP-0106; OIDC/SAML WP-0102/WP-0103 | Partial |
 | T-12 | **Cross-workspace data access** on a server hosting several workspaces | Information disclosure / Elevation | M | H | One database and one data key per workspace (ADR-0014); isolation tests in WP-0181 | Open (single workspace today) |
-| T-13 | **Server-side request forgery**: a user-configured URL (OpenAI-compatible base URL, connector, webhook, MCP endpoint) makes the server call internal addresses or cloud metadata | Information disclosure / Elevation | M | H | Admin-only configuration (existing); address allow-list and metadata-IP block to add in WP-0143 | Open (RAID R-27) |
+| T-13 | **Server-side request forgery**: a user-configured URL (OpenAI-compatible base URL, connector, webhook, MCP endpoint) makes the server call internal addresses or cloud metadata | Information disclosure / Elevation | M | H | `services/ssrf_guard.rs` (WP-0143): every outbound HTTP client is built by the guard; metadata, link-local, unspecified and multicast addresses are always refused (also as IPv4-mapped or NAT64 IPv6); loopback and private addresses are refused on Team Workspace unless the server operator lists them in `LANESRA_OUTBOUND_ALLOW`; names are checked when resolved at connect time (DNS rebinding) and every redirect target is checked (`core/tests/ssrf_guard.rs`). SFTP and SMTP connect only to addresses the guard allows | Mitigated |
 | T-14 | **Malicious or compromised MCP server**: poisoned tool descriptions, or server-initiated sampling and elicitation requests | Tampering / LLM03 | M | H | Gate on server-initiated MCP requests WP-0142; tool catalog audit WP-0143; tool results treated as untrusted WP-0145 | Open |
 | T-15 | **Unsafe rendering of model output**: script or HTML in a model reply or record runs in the UI | Tampering / LLM05 | M | M | React escapes text by default; any Markdown or HTML renderer must sanitise (review rule for WP-0203 and the online demo) | Partial |
 | T-16 | **SFTP host-key not verified**: `sftp_service::QuietHandler::check_server_key` accepts any server key, so a network attacker can impersonate the SFTP host and capture the credential | Spoofing | M | H | The connection must carry the server's `host_key_sha256` fingerprint; an unknown key is refused with the fingerprint shown for the Administrator to confirm, a changed key is refused (`core/tests/sftp_host_key.rs`) | Mitigated |
@@ -60,7 +60,7 @@ Ratings: **L**ikelihood and **I**mpact, each High / Medium / Low, for the produc
 ## Gaps tracked in RAID
 
 - **R-26** (T-02): indirect prompt injection has no defence until WP-0145 ships.
-- **R-27** (T-13): user-configured URLs are not checked against internal addresses.
+- **R-27** (T-13): closed; outbound HTTP, SFTP and SMTP connections are checked by `ssrf_guard.rs`.
 - **R-28** (T-16): closed; SFTP now requires a pinned host-key fingerprint.
 - **R-20 to R-25** (T-08): dated dependency-advisory exceptions in `desktop/deny.toml`.
 

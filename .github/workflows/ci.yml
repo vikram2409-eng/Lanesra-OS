@@ -85,9 +85,9 @@ jobs:
       - name: Doc tests
         if: matrix.partition == 1
         run: cargo test --locked --doc -p lanesra-core -p lanesra-server -p lanesra-cli
-      - name: Scripted provider is unreachable without test-support (WP-0005 AC-3)
+      - name: Release-build gates without test-support (WP-0005 AC-3, WP-0143)
         if: matrix.partition == 1
-        run: cargo test --locked -p lanesra-core --test scripted_provider_gate
+        run: cargo test --locked -p lanesra-core --test scripted_provider_gate --test ssrf_guard_gate
 
   rust-tests-result:
     # One stable required check for branch protection, whatever the shard count.

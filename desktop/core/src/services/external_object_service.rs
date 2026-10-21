@@ -154,7 +154,8 @@ async fn fetch_records(
         url = format!("{url}{sep}since={since}");
     }
 
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(&url)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
@@ -163,10 +164,10 @@ async fn fetch_records(
         &connection.auth_mode,
         secret.as_deref(),
     );
-    let response = builder
-        .send()
-        .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {url}: {e}")))?;
+    let response = builder.send().await.map_err(|e| {
+        super::ssrf_guard::blocked_in(&e)
+            .unwrap_or_else(|| AppError::Validation(format!("Could not reach {url}: {e}")))
+    })?;
     let status = response.status();
     if !status.is_success() {
         return Err(AppError::Validation(format!(

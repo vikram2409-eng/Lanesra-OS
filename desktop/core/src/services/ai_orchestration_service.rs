@@ -1233,7 +1233,8 @@ pub async fn push_run_trace_to_otlp(
     let body = serde_json::to_string(&payload)
         .map_err(|e| AppError::Validation(format!("could not serialize trace: {e}")))?;
 
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(&endpoint)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(std::time::Duration::from_secs(15))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
@@ -1243,7 +1244,11 @@ pub async fn push_run_trace_to_otlp(
         .body(body)
         .send()
         .await
-        .map_err(|e| AppError::Validation(format!("could not reach the collector: {e}")))?;
+        .map_err(|e| {
+            super::ssrf_guard::blocked_in(&e).unwrap_or_else(|| {
+                AppError::Validation(format!("could not reach the collector: {e}"))
+            })
+        })?;
 
     let status = response.status();
     if status.is_success() {

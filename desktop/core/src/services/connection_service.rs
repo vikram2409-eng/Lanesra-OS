@@ -401,7 +401,8 @@ async fn test_http(
         Some(path) => format!("{}{}", base_url.trim_end_matches('/'), path),
         None => base_url.to_string(),
     };
-    let client = reqwest::Client::builder()
+    super::ssrf_guard::check_url(&url)?;
+    let client = super::ssrf_guard::client_builder()
         .timeout(Duration::from_millis(config.timeout_ms))
         .danger_accept_invalid_certs(!config.tls_verify)
         .build()
@@ -411,10 +412,10 @@ async fn test_http(
         builder = builder.header(name, value);
     }
     builder = apply_auth(builder, &connection.auth_mode, secret);
-    let response = builder
-        .send()
-        .await
-        .map_err(|e| AppError::Validation(format!("Could not reach {url}: {e}")))?;
+    let response = builder.send().await.map_err(|e| {
+        super::ssrf_guard::blocked_in(&e)
+            .unwrap_or_else(|| AppError::Validation(format!("Could not reach {url}: {e}")))
+    })?;
     let status = response.status();
     // A response - any response - means the endpoint is reachable; a
     // 4xx/5xx is a real, structured "failed" result (real status code

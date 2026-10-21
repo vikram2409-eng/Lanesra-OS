@@ -17,6 +17,8 @@ services:
     # environment:
     #   LANESRA_TRUST_PROXY_HTTPS: "1"
     #   LANESRA_ALLOWED_ORIGINS: "https://lanesra.example.com"
+    #   # Internal services the server may call (e.g. an Ollama host); see README.
+    #   LANESRA_OUTBOUND_ALLOW: "10.0.4.0/24"
 
 volumes:
   lanesra-data:

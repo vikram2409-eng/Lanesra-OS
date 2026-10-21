@@ -32,7 +32,13 @@ pub async fn test_connection(
 ) -> AppResult<(Option<u16>, String)> {
     let config: SmtpConfig = serde_json::from_str(&connection.config_json)
         .map_err(|e| AppError::Validation(format!("Invalid SMTP connection config: {e}")))?;
-    let mut builder = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&config.host)
+    // WP-0143: connect to an address the outbound guard allows, not the name.
+    let addr = super::ssrf_guard::allowed_addrs(&config.host, config.port)
+        .await?
+        .first()
+        .map(|a| a.ip().to_string())
+        .ok_or_else(|| AppError::Validation(format!("Could not resolve {}", config.host)))?;
+    let mut builder = AsyncSmtpTransport::<Tokio1Executor>::builder_dangerous(&addr)
         .port(config.port)
         .tls(Tls::None);
     if let (Some(username), Some(password)) = (&config.username, secret) {
