@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 18 | 1 | 0 | 0 | 1 | 32 / 36 | `████████░░` 89% |
-| 1 · Foundations | 43 | 0 | 8 | 5 | 0 | 30 | 0 / 137 | `░░░░░░░░░░` 0% |
+| 1 · Foundations | 45 | 0 | 8 | 6 | 0 | 31 | 0 / 141 | `░░░░░░░░░░` 0% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -19,9 +19,9 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 111 | 4 | 8 / 389 |
-| Team Workspace | 117 | 3 | 6 / 427 |
-| Online demo | 85 | 1 | 2 / 302 |
+| Desktop | 112 | 4 | 8 / 391 |
+| Team Workspace | 119 | 3 | 6 / 431 |
+| Online demo | 86 | 1 | 2 / 304 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -121,6 +121,8 @@ None.
 | [WP-0180](work/P1/WP-0180-team-workspace-operations-backups-upgrades-health.md) | Team Workspace operations: backups, key recovery, upgrades and health | E1.9 Team Workspace platform | ⚪ proposed | L | ○Team Workspace ○Desktop | WP-0020, WP-0007 |
 | [WP-0181](work/P1/WP-0181-several-workspaces-on-one-team-workspace-server.md) | Several workspaces on one Team Workspace server | E1.9 Team Workspace platform | ⚪ proposed | XL | ○Team Workspace | WP-0100, WP-0020, WP-0007 |
 | [WP-0182](work/P1/WP-0182-deliver-outbound-webhooks-for-real-record-events.md) | Deliver outbound webhooks for real record events | E1.9 Team Workspace platform | 🔨 in progress | S | ○Team Workspace ○Desktop | - |
+| [WP-0183](work/P1/WP-0183-webhook-signing-secret-show-once-and-rotate.md) | Webhook signing secret: show once and rotate | E1.9 Team Workspace platform | 🟢 ready | M | ○Team Workspace ○Desktop ○Online demo | WP-0182 |
+| [WP-0184](work/P1/WP-0184-api-client-network-restriction-and-scope-enforcement.md) | API clients: enforce the allowed network and make every scope mean something | E1.9 Team Workspace platform | ⚪ proposed | M | ○Team Workspace | - |
 
 ## Phase 2 · Playground
 
