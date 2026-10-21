@@ -18,6 +18,7 @@ use lanesra_core::domain::{AppError, AppResult, ErrorClass};
 use lanesra_core::models::ai::AiSettingsInput;
 use lanesra_core::models::ai_agent::AiAgentInput;
 use lanesra_core::models::workspace::WorkspaceSetup;
+use lanesra_core::principals::EffectiveIdentity;
 use lanesra_core::services::retry::{self, RetryClock, RetryPolicy};
 use lanesra_core::services::{
     ai_agent_service, ai_orchestration_service, ai_service, workspace_service,
@@ -274,7 +275,7 @@ async fn run_against(
         &key,
         "agent",
         &agent.id,
-        Some(&admin.id),
+        &EffectiveIdentity::interactive(&admin.id),
         "hello",
         Some("manual"),
         None,
