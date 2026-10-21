@@ -1,6 +1,7 @@
 pub mod admin_actions;
 pub mod agent_v1;
 pub mod api_v1;
+pub mod caller;
 pub mod dispatch;
 pub mod events_stream;
 pub mod job_scheduler;

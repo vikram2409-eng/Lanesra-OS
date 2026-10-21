@@ -17,6 +17,7 @@ package completes. Linux, Rust 1.97.0, Node 22.22.0.
 **Added since this baseline (recorded when each work package completes):**
 
 - WP-0182 (2026-10-21): +3 Rust tests: 1 in `core/tests/integration_webhook.rs` (a failing pending event does not block the next), 2 in `server/tests/job_scheduler.rs` (the scheduler delivers signed record webhooks; paused and other-object webhooks receive nothing). Run locally: `integration_webhook` 9 passed, `job_scheduler` 3 passed. Full totals come from the CI run on the pull request.
+- WP-0184 (2026-10-21): +17 Rust tests: 9 in `core/tests/network_trust.rs` (resolver truth table, list matching, validation), 1 in `core/tests/integration_api_client.rs` (malformed allowed network rejected at creation), 7 in `server/tests/api_network.rs` (allowed and refused on records, MCP and the event stream; forged headers; trusted proxy; 401 unchanged and refusal logged; unknown peer fails closed). Run locally: `network_trust` 9, `integration_api_client` 8, full `lanesra-server` suite green. Full totals come from the CI run on the pull request.
 
 ## CI duration (WP-0003 AC-4)
 

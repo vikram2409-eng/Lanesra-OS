@@ -436,6 +436,7 @@ async fn session_cookie_is_secure_when_trusting_a_proxy_for_https() {
     let addr = spawn_server_with_security(SecurityConfig {
         trust_proxy_https: true,
         allowed_origins: vec![],
+        ..SecurityConfig::default()
     })
     .await;
     let response = first_run_raw(&raw_client(), addr).await;
@@ -466,6 +467,7 @@ async fn strict_transport_security_is_only_sent_when_trusting_a_proxy_for_https(
     let addr_https = spawn_server_with_security(SecurityConfig {
         trust_proxy_https: true,
         allowed_origins: vec![],
+        ..SecurityConfig::default()
     })
     .await;
     let https_response = reqwest::get(format!("http://{addr_https}/api/health"))
@@ -516,6 +518,7 @@ async fn cors_header_is_absent_by_default_and_present_for_an_allowed_origin() {
     let addr_cors = spawn_server_with_security(SecurityConfig {
         trust_proxy_https: false,
         allowed_origins: vec!["https://example.com".into()],
+        ..SecurityConfig::default()
     })
     .await;
     let cors_response = client

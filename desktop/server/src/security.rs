@@ -27,6 +27,11 @@ pub struct SecurityConfig {
     /// is served from a different origin than this API (e.g. a separate
     /// static-hosting deployment).
     pub allowed_origins: Vec<String>,
+    /// Reverse proxies whose `X-Forwarded-For` is believed, for the API
+    /// client network restriction (ADR-0018). Empty means none: the
+    /// connection's own address is always the caller. Independent of
+    /// `trust_proxy_https`, which only concerns cookies and HSTS.
+    pub trusted_proxies: Vec<lanesra_core::services::ssrf_guard::AllowEntry>,
 }
 
 impl SecurityConfig {
@@ -47,9 +52,19 @@ impl SecurityConfig {
                     .collect()
             })
             .unwrap_or_default();
+        // A malformed entry stops the server naming it, like the outbound
+        // allow-list: guessing here would silently widen or narrow trust.
+        let trusted_proxies = lanesra_core::services::network_trust::trusted_proxies_from_env()
+            .unwrap_or_else(|e| {
+                panic!(
+                    "{}: {e}",
+                    lanesra_core::services::network_trust::TRUSTED_PROXIES_ENV
+                )
+            });
         SecurityConfig {
             trust_proxy_https,
             allowed_origins,
+            trusted_proxies,
         }
     }
 }

@@ -196,6 +196,20 @@ Team Workspace beyond a trusted LAN:
    desktop app does not need this: it can reach the user's own machine
    and network.
 
+5. **`LANESRA_TRUSTED_PROXIES`** (optional, comma- or space-separated IP
+   addresses or CIDR blocks, e.g. `10.0.0.5` or `172.16.0.0/12`) - the
+   reverse proxies in front of the server. An API client can be limited
+   to an **Allowed network** (Integration Hub -> API Access); the
+   address checked is the one the connection came from, which behind a
+   proxy is always the proxy. List the proxy here and the server reads
+   `X-Forwarded-For` from it, taking the right-most address that is not
+   itself a listed proxy, so addresses a caller prepends are ignored.
+   From any peer not listed, forwarding headers are ignored entirely
+   (`Forwarded` and `X-Real-IP` are never read). Unset means no proxy is
+   trusted, so a client restricted to a network behind a proxy is refused
+   until you set this. It is independent of `LANESRA_TRUST_PROXY_HTTPS`.
+   A malformed entry stops the server at startup, naming it.
+
 Every response also now carries a conservative, always-on header set
 (`X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
 `Referrer-Policy: strict-origin-when-cross-origin`) regardless of any of

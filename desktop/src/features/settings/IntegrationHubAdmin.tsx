@@ -792,7 +792,13 @@ function ApiClientForm({ onDone, onCancel }: { onDone: (result: IssuedApiClient)
           ))}
         </div>
       </div>
-      <div className="form-field full"><label>Allowed CIDR (optional)</label><input value={input.allowed_cidr ?? ""} onChange={(e) => setInput({ ...input, allowed_cidr: e.target.value || null })} placeholder="10.0.0.0/8" /></div>
+      <div className="form-field full">
+        <label>Allowed networks (optional)</label>
+        <input value={input.allowed_cidr ?? ""} onChange={(e) => setInput({ ...input, allowed_cidr: e.target.value || null })} placeholder="10.0.0.0/8, 203.0.113.7" />
+        <small style={{ color: "var(--text-muted)" }}>
+          Comma-separated addresses and CIDR blocks; empty means any address. Behind a reverse proxy the server must list it in <code>LANESRA_TRUSTED_PROXIES</code>, otherwise every call looks like it comes from the proxy.
+        </small>
+      </div>
       <div className="form-field full" style={{ display: "flex", gap: 8 }}>
         <button className="btn btn-primary" type="submit" disabled={create.isPending || input.scopes.length === 0}>{create.isPending ? "Creating..." : "Create client"}</button>
         <button className="btn btn-secondary" type="button" onClick={onCancel}>Cancel</button>

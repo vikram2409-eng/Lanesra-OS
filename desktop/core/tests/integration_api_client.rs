@@ -200,3 +200,39 @@ fn delete_removes_the_client_and_list_reflects_it() {
         .unwrap()
         .is_empty());
 }
+
+// Covers: REQ-INT-004 (WP-0184 AC-6)
+#[test]
+fn a_malformed_allowed_network_is_rejected_at_creation_and_a_good_list_is_kept() {
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    let input = |cidr: &str| ApiClientInput {
+        name: "Restricted".into(),
+        scopes: vec!["objects.read".into()],
+        allowed_cidr: Some(cidr.into()),
+        owner_user_id: None,
+    };
+    for bad in ["10.0.0.0/33", "banana", "10.0.0.0/8, nope"] {
+        let err = api_client_service::create(&conn, &workspace_id, &input(bad), Some(&admin_id))
+            .expect_err(bad)
+            .to_string();
+        assert!(err.contains("Allowed CIDR"), "{err}");
+    }
+    assert!(
+        api_client_service::list_for_workspace(&conn, &workspace_id)
+            .unwrap()
+            .is_empty(),
+        "a rejected client must not be created"
+    );
+
+    let issued = api_client_service::create(
+        &conn,
+        &workspace_id,
+        &input("10.0.0.0/8, 203.0.113.7"),
+        Some(&admin_id),
+    )
+    .unwrap();
+    assert_eq!(
+        issued.client.allowed_cidr.as_deref(),
+        Some("10.0.0.0/8, 203.0.113.7")
+    );
+}
