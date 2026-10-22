@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: [desktop, workspace]
 docs: [access-roles-and-record-scopes]
 branch: claude/enterprise-build-planning-jxy2kq
-pr: TBD
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/700
 updated: 2026-10-22
 ---
 
