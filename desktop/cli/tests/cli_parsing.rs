@@ -3,6 +3,7 @@
 
 use clap::Parser;
 use lanesra_cli::cli::{Cli, Command, ObjectsCommand, RecordsCommand};
+use lanesra_cli::WebhookRequest;
 
 #[test]
 fn base_url_and_api_key_are_required_globals() {
@@ -164,4 +165,58 @@ fn bulk_data_can_come_from_a_file_and_must_be_an_array() {
     assert_eq!(body["operations"][0]["data"]["name"], "Acme");
     std::fs::remove_file(&path).unwrap();
     assert_eq!(lanesra_cli::bulk_body(r#"{"op":"create"}"#), Err(2));
+}
+
+fn webhooks(args: &[&str]) -> WebhookRequest {
+    let mut argv = vec![
+        "lanesra",
+        "--base-url",
+        "http://h",
+        "--api-key",
+        "k",
+        "webhooks",
+    ];
+    argv.extend_from_slice(args);
+    match Cli::try_parse_from(argv).unwrap().command {
+        Command::Webhooks { command } => lanesra_cli::webhook_request(command).unwrap(),
+        other => panic!("unexpected command: {other:?}"),
+    }
+}
+
+#[test]
+fn webhook_commands_map_to_the_webhook_endpoints() {
+    // Covers: REQ-INT-006 (WP-0188 AC-6)
+    assert_eq!(
+        webhooks(&["list"]),
+        WebhookRequest::Get("/api/v1/webhooks".into(), vec![])
+    );
+    assert_eq!(
+        webhooks(&["rotate-secret", "w1"]),
+        WebhookRequest::Post(
+            "/api/v1/webhooks/w1/rotate-secret".into(),
+            serde_json::Value::Null
+        )
+    );
+    assert_eq!(
+        webhooks(&["deliveries", "w1", "--page", "2", "--page-size", "20"]),
+        WebhookRequest::Get(
+            "/api/v1/webhooks/w1/deliveries".into(),
+            vec![("page", "2".to_string()), ("page_size", "20".to_string())]
+        )
+    );
+    assert_eq!(
+        webhooks(&["delete", "w1"]),
+        WebhookRequest::Delete("/api/v1/webhooks/w1".into())
+    );
+    match webhooks(&[
+        "create",
+        "--data",
+        r#"{"name":"Feed","connection_id":"c1","event_types":[]}"#,
+    ]) {
+        WebhookRequest::Post(path, body) => {
+            assert_eq!(path, "/api/v1/webhooks");
+            assert_eq!(body["name"], "Feed");
+        }
+        other => panic!("{other:?}"),
+    }
 }

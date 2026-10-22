@@ -11,7 +11,7 @@ pub mod client;
 
 use serde_json::Value;
 
-use cli::{Cli, Command, ObjectsCommand, RecordsCommand};
+use cli::{Cli, Command, ObjectsCommand, RecordsCommand, WebhooksCommand};
 use client::{ApiClient, ApiResponse};
 
 /// Runs one CLI invocation, printing its result and returning the
@@ -82,6 +82,13 @@ pub fn run(cli: Cli) -> i32 {
                 Err(code) => return code,
             },
         },
+        Command::Webhooks { command } => match webhook_request(command) {
+            Ok(WebhookRequest::Get(path, query)) => client.get_with_query(&path, &query),
+            Ok(WebhookRequest::Post(path, body)) => client.post(&path, &body),
+            Ok(WebhookRequest::Patch(path, body)) => client.patch(&path, &body),
+            Ok(WebhookRequest::Delete(path)) => client.delete(&path),
+            Err(code) => return code,
+        },
         Command::Search {
             text,
             object,
@@ -149,6 +156,51 @@ fn print_text(result: Result<client::TextResponse, String>) -> i32 {
             1
         }
     }
+}
+
+/// The HTTP call one `lanesra webhooks` command makes (WP-0188).
+#[derive(Debug, PartialEq)]
+pub enum WebhookRequest {
+    Get(String, Vec<(&'static str, String)>),
+    Post(String, Value),
+    Patch(String, Value),
+    Delete(String),
+}
+
+pub fn webhook_request(command: WebhooksCommand) -> Result<WebhookRequest, i32> {
+    let one = |id: &str| format!("/api/v1/webhooks/{id}");
+    let action = |id: &str, verb: &str| format!("/api/v1/webhooks/{id}/{verb}");
+    Ok(match command {
+        WebhooksCommand::List => WebhookRequest::Get("/api/v1/webhooks".into(), vec![]),
+        WebhooksCommand::Get { id } => WebhookRequest::Get(one(&id), vec![]),
+        WebhooksCommand::Create { data } => {
+            WebhookRequest::Post("/api/v1/webhooks".into(), parse_data(&data)?)
+        }
+        WebhooksCommand::Update { id, data } => WebhookRequest::Patch(one(&id), parse_data(&data)?),
+        WebhooksCommand::Delete { id } => WebhookRequest::Delete(one(&id)),
+        WebhooksCommand::Pause { id } => WebhookRequest::Post(action(&id, "pause"), Value::Null),
+        WebhooksCommand::Reactivate { id } => {
+            WebhookRequest::Post(action(&id, "reactivate"), Value::Null)
+        }
+        WebhooksCommand::RotateSecret { id } => {
+            WebhookRequest::Post(action(&id, "rotate-secret"), Value::Null)
+        }
+        WebhooksCommand::Test { id } => WebhookRequest::Post(action(&id, "test"), Value::Null),
+        WebhooksCommand::Deliveries {
+            id,
+            page,
+            page_size,
+        } => {
+            let mut query = Vec::new();
+            if let Some(p) = page {
+                query.push(("page", p.to_string()));
+            }
+            if let Some(ps) = page_size {
+                query.push(("page_size", ps.to_string()));
+            }
+            WebhookRequest::Get(action(&id, "deliveries"), query)
+        }
+    })
 }
 
 fn parse_data(data: &str) -> Result<Value, i32> {
