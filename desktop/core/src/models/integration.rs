@@ -628,6 +628,31 @@ pub struct ApiSearchPage {
     pub page_size: i64,
 }
 
+/// One operation in `POST /api/v1/objects/{key}/bulk` (WP-0187).
+#[derive(Debug, Clone, Deserialize)]
+pub struct ApiBulkOperation {
+    /// `create`, `update` or `archive`.
+    pub op: String,
+    pub id: Option<String>,
+    pub data: Option<serde_json::Value>,
+}
+
+/// The outcome of one bulk operation, in request order.
+#[derive(Debug, Clone, Serialize)]
+pub struct ApiBulkItemResult {
+    pub index: usize,
+    pub ok: bool,
+    pub id: Option<String>,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ApiBulkResult {
+    pub results: Vec<ApiBulkItemResult>,
+    pub succeeded: usize,
+    pub failed: usize,
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ApiListQuery {
     pub select: Option<Vec<String>>,

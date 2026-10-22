@@ -29,17 +29,18 @@ use crate::models::company::CompanyInput;
 use crate::models::contact::ContactInput;
 use crate::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
 use crate::models::integration::{
-    ApiFieldMetadata, ApiListQuery, ApiObjectMetadata, ApiRecordPage, ApiRelationshipMetadata,
-    ApiSearchPage, ApiSearchResult,
+    ApiBulkItemResult, ApiBulkOperation, ApiBulkResult, ApiFieldMetadata, ApiListQuery,
+    ApiObjectMetadata, ApiRecordPage, ApiRelationshipMetadata, ApiSearchPage, ApiSearchResult,
 };
 use crate::models::product::ProductInput;
 use crate::models::relationship::RelatedRecord;
 use crate::models::task::TaskInput;
+use crate::repositories::custom_field_repo;
 use crate::services::{
-    company_service, contact_service, contract_service, custom_field_service,
-    custom_object_service, custom_record_service, invoice_service, opportunity_service,
-    order_service, product_service, quote_service, relationship_service, search_service,
-    task_service,
+    builtin_field_service, business_rule_service, company_service, contact_service,
+    contract_service, custom_field_service, custom_object_service, custom_record_service,
+    invoice_service, opportunity_service, order_service, product_service, quote_service,
+    relationship_service, search_service, task_service,
 };
 
 /// Built-ins this dispatcher can read - a superset of the ones it can
@@ -270,7 +271,21 @@ pub fn list_records(
     object_key: &str,
     query: &ApiListQuery,
 ) -> AppResult<ApiRecordPage> {
-    let mut records: Vec<Value> = if is_custom(conn, workspace_id, object_key)? {
+    let mut records = all_records(conn, workspace_id, object_key)?;
+    if let Some(filter) = &query.filter {
+        records.retain(|r| matches_filter(r, filter));
+    }
+    Ok(paginate(records, query))
+}
+
+/// Every non-archived record of one readable object, unpaged - what
+/// `list_records` pages over and what a bulk export (WP-0187) writes out.
+pub fn all_records(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+) -> AppResult<Vec<Value>> {
+    let records: Vec<Value> = if is_custom(conn, workspace_id, object_key)? {
         custom_record_service::list(conn, workspace_id, object_key)?
             .into_iter()
             .map(|r| serde_json::to_value(r).unwrap_or(Value::Null))
@@ -316,10 +331,117 @@ pub fn list_records(
             other => return Err(AppError::NotFound(format!("Object '{other}'"))),
         }
     };
-    if let Some(filter) = &query.filter {
-        records.retain(|r| matches_filter(r, filter));
+    Ok(records)
+}
+
+/// The most operations one bulk write may carry (WP-0187).
+pub const MAX_BULK_OPERATIONS: usize = 1000;
+
+/// `POST /api/v1/objects/{key}/bulk` (WP-0187): applies each operation
+/// through the same validated path as a single create, update or archive
+/// (validation, Business Rules, the writable-object rule), in order. Each
+/// item runs in its own savepoint, so a failing item leaves nothing behind
+/// and never stops the others; there is no all-or-nothing mode.
+pub fn bulk_write(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    operations: &[ApiBulkOperation],
+    actor_user_id: Option<&str>,
+) -> AppResult<ApiBulkResult> {
+    if operations.len() > MAX_BULK_OPERATIONS {
+        return Err(AppError::Validation(format!(
+            "A bulk write carries at most {MAX_BULK_OPERATIONS} operations; this one has {}",
+            operations.len()
+        )));
     }
-    Ok(paginate(records, query))
+    if !READABLE_BUILTINS.contains(&object_key) && !is_custom(conn, workspace_id, object_key)? {
+        return Err(AppError::NotFound(format!("Object '{object_key}'")));
+    }
+    let mut results = Vec::with_capacity(operations.len());
+    for (index, operation) in operations.iter().enumerate() {
+        conn.execute_batch("SAVEPOINT bulk_item")?;
+        let outcome =
+            apply_bulk_operation(conn, workspace_id, object_key, operation, actor_user_id);
+        match &outcome {
+            Ok(_) => conn.execute_batch("RELEASE bulk_item")?,
+            Err(_) => conn.execute_batch("ROLLBACK TO bulk_item; RELEASE bulk_item")?,
+        }
+        results.push(match outcome {
+            Ok(id) => ApiBulkItemResult {
+                index,
+                ok: true,
+                id: Some(id),
+                error: None,
+            },
+            Err(e) => ApiBulkItemResult {
+                index,
+                ok: false,
+                id: operation.id.clone(),
+                error: Some(e.to_string()),
+            },
+        });
+    }
+    let succeeded = results.iter().filter(|r| r.ok).count();
+    Ok(ApiBulkResult {
+        failed: results.len() - succeeded,
+        succeeded,
+        results,
+    })
+}
+
+/// One bulk operation; returns the id of the record it wrote.
+fn apply_bulk_operation(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    operation: &ApiBulkOperation,
+    actor_user_id: Option<&str>,
+) -> AppResult<String> {
+    let need_id = || {
+        operation
+            .id
+            .as_deref()
+            .filter(|id| !id.trim().is_empty())
+            .ok_or_else(|| AppError::Validation(format!("'{}' needs an id", operation.op)))
+    };
+    let need_data = || {
+        operation
+            .data
+            .as_ref()
+            .ok_or_else(|| AppError::Validation(format!("'{}' needs data", operation.op)))
+    };
+    match operation.op.as_str() {
+        "create" => {
+            let record =
+                create_record(conn, workspace_id, object_key, need_data()?, actor_user_id)?;
+            record
+                .get("id")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .ok_or_else(|| AppError::Validation("created record has no id".into()))
+        }
+        "update" => {
+            let id = need_id()?;
+            update_record(
+                conn,
+                workspace_id,
+                object_key,
+                id,
+                need_data()?,
+                actor_user_id,
+            )?;
+            Ok(id.to_string())
+        }
+        "archive" => {
+            let id = need_id()?;
+            archive_record(conn, workspace_id, object_key, id, actor_user_id)?;
+            Ok(id.to_string())
+        }
+        other => Err(AppError::Validation(format!(
+            "Unknown operation '{other}'; use create, update or archive"
+        ))),
+    }
 }
 
 pub fn get_record(
@@ -368,13 +490,69 @@ pub fn related_records(
     relationship_service::related_records_for(conn, workspace_id, object_key, id)
 }
 
+/// Runs a write in its own savepoint and refuses it, leaving nothing
+/// behind, when a Business Rule blocks saving the record it produced.
+/// The desktop editor applies rules through
+/// `custom_field_service::set_entity_values` after its save; every
+/// API-shaped write (REST, MCP, CSV import, bulk) comes through here, so it
+/// is held to the same `block_save` rules (WP-0187 AC-6).
+fn rule_checked_write(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    write: impl FnOnce() -> AppResult<Value>,
+) -> AppResult<Value> {
+    conn.execute_batch("SAVEPOINT api_write")?;
+    let outcome = write().and_then(|record| {
+        let id = record.get("id").and_then(Value::as_str).unwrap_or_default();
+        let mut context = custom_field_repo::get_values(conn, id)?;
+        context.extend(builtin_field_service::field_values(conn, object_key, id)?);
+        let evaluation =
+            business_rule_service::evaluate(conn, workspace_id, object_key, id, &context)?;
+        match evaluation.blocked {
+            Some(reason) => Err(AppError::Validation(reason)),
+            None => Ok(record),
+        }
+    });
+    match &outcome {
+        Ok(_) => conn.execute_batch("RELEASE api_write")?,
+        Err(_) => conn.execute_batch("ROLLBACK TO api_write; RELEASE api_write")?,
+    }
+    outcome
+}
+
+pub fn create_record(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    body: &Value,
+    actor_user_id: Option<&str>,
+) -> AppResult<Value> {
+    rule_checked_write(conn, workspace_id, object_key, || {
+        create_record_unchecked(conn, workspace_id, object_key, body, actor_user_id)
+    })
+}
+
+pub fn update_record(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    id: &str,
+    body: &Value,
+    actor_user_id: Option<&str>,
+) -> AppResult<Value> {
+    rule_checked_write(conn, workspace_id, object_key, || {
+        update_record_unchecked(conn, workspace_id, object_key, id, body, actor_user_id)
+    })
+}
+
 fn not_writable(object_key: &str) -> AppError {
     AppError::Validation(format!(
         "'{object_key}' is read-only through the generic API for now - it's a compound document with its own conversion workflow, not a plain field-level create/update. See api_object_service's own doc comment."
     ))
 }
 
-pub fn create_record(
+fn create_record_unchecked(
     conn: &Connection,
     workspace_id: &str,
     object_key: &str,
@@ -435,7 +613,7 @@ pub fn create_record(
     value.map_err(|e| AppError::Validation(format!("could not serialize record: {e}")))
 }
 
-pub fn update_record(
+fn update_record_unchecked(
     conn: &Connection,
     workspace_id: &str,
     object_key: &str,
