@@ -37,6 +37,15 @@ fn validate(input: &AiProviderInput) -> AppResult<()> {
             "An OpenAI-compatible provider needs a base URL".into(),
         ));
     }
+    // WP-0191: refuse an address the outbound guard would refuse, now.
+    if let Some(url) = input
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+    {
+        super::ssrf_guard::check_configured_url(url)?;
+    }
     Ok(())
 }
 

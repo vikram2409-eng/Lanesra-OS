@@ -53,6 +53,18 @@ const AUTH_MODES: &[&str] = &[
     "oauth2_authorization_code",
 ];
 
+/// An HTTP connection's URL must be one the outbound guard allows, checked
+/// when it is saved so the admin sees a refusal where they typed it
+/// (WP-0191). Non-HTTP types (SFTP, SMTP, PostgreSQL) are checked on connect.
+fn check_outbound_url(connection_type: &str, base_url: Option<&str>) -> AppResult<()> {
+    match base_url.map(str::trim).filter(|u| !u.is_empty()) {
+        Some(url) if matches!(connection_type, "rest" | "webhook" | "odata" | "mcp") => {
+            super::ssrf_guard::check_configured_url(url)
+        }
+        _ => Ok(()),
+    }
+}
+
 fn validate_types(connection_type: &str, auth_mode: &str) -> AppResult<()> {
     if !CONNECTION_TYPES.contains(&connection_type) {
         return Err(AppError::Validation(format!(
@@ -109,6 +121,7 @@ pub fn create(
         return Err(AppError::Validation("Connection name is required".into()));
     }
     validate_types(&input.connection_type, &input.auth_mode)?;
+    check_outbound_url(&input.connection_type, input.base_url.as_deref())?;
     let id = new_uuid();
     let secret_id = store_secret(
         conn,
@@ -181,6 +194,7 @@ pub fn update(
         return Err(AppError::Validation("Connection name is required".into()));
     }
     validate_types(&existing.connection_type, &input.auth_mode)?;
+    check_outbound_url(&existing.connection_type, input.base_url.as_deref())?;
     // `secret_value: Some(v)` rotates the secret in place (same
     // `secret_id`, new ciphertext) so nothing pointing at this connection
     // needs updating - spec §20's "secret rotation without editing
