@@ -30,6 +30,7 @@ use crate::models::contact::ContactInput;
 use crate::models::custom_record::{CustomRecordInput, CustomRecordUpdate};
 use crate::models::integration::{
     ApiFieldMetadata, ApiListQuery, ApiObjectMetadata, ApiRecordPage, ApiRelationshipMetadata,
+    ApiSearchPage, ApiSearchResult,
 };
 use crate::models::product::ProductInput;
 use crate::models::relationship::RelatedRecord;
@@ -37,7 +38,8 @@ use crate::models::task::TaskInput;
 use crate::services::{
     company_service, contact_service, contract_service, custom_field_service,
     custom_object_service, custom_record_service, invoice_service, opportunity_service,
-    order_service, product_service, quote_service, relationship_service, task_service,
+    order_service, product_service, quote_service, relationship_service, search_service,
+    task_service,
 };
 
 /// Built-ins this dispatcher can read - a superset of the ones it can
@@ -154,6 +156,64 @@ pub fn get_metadata(
         is_custom: is_custom_obj,
         fields,
         relationships,
+    })
+}
+
+/// The most matches `search_records` collects; `total` never exceeds it.
+pub const SEARCH_RESULT_CAP: usize = 10_000;
+
+/// `GET /api/v1/search` (WP-0186): the product's global search over every
+/// object this API can read (the readable built-ins and active custom
+/// objects), optionally narrowed to one, paged like the records endpoint.
+/// Archived records are never returned.
+pub fn search_records(
+    conn: &Connection,
+    workspace_id: &str,
+    q: &str,
+    object_key: Option<&str>,
+    page: Option<i64>,
+    page_size: Option<i64>,
+) -> AppResult<ApiSearchPage> {
+    let q = q.trim();
+    if q.is_empty() {
+        return Err(AppError::Validation("q is required".into()));
+    }
+    let object_key = object_key.map(str::trim).filter(|k| !k.is_empty());
+    let readable: Vec<String> = list_object_keys(conn, workspace_id)?
+        .into_iter()
+        .map(|o| o.object_key)
+        .collect();
+    if let Some(key) = object_key {
+        if !readable.iter().any(|k| k == key) {
+            return Err(AppError::NotFound(format!("Object '{key}'")));
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    let hits: Vec<ApiSearchResult> =
+        search_service::search_records(conn, workspace_id, q, object_key, SEARCH_RESULT_CAP)?
+            .into_iter()
+            .filter(|r| readable.contains(&r.entity_type))
+            .filter(|r| seen.insert((r.entity_type.clone(), r.entity_id.clone())))
+            .map(|r| ApiSearchResult {
+                object_key: r.entity_type,
+                id: r.entity_id,
+                title: r.title,
+                snippet: r.subtitle,
+            })
+            .collect();
+    let total = hits.len() as i64;
+    let page = page.unwrap_or(1).max(1);
+    let page_size = page_size.unwrap_or(50).clamp(1, 500);
+    let results = hits
+        .into_iter()
+        .skip(usize::try_from((page - 1).saturating_mul(page_size)).unwrap_or(usize::MAX))
+        .take(page_size as usize)
+        .collect();
+    Ok(ApiSearchPage {
+        results,
+        total,
+        page,
+        page_size,
     })
 }
 

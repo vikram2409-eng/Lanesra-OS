@@ -322,3 +322,198 @@ async fn rate_limit_is_enforced_per_client() {
         "expected at least one 429 once the per-minute limit (2) was exceeded"
     );
 }
+
+/// Creates a record through the REST API itself and returns its id.
+async fn create_via_api(addr: SocketAddr, api_key: &str, object: &str, body: Value) -> String {
+    let created: Value = reqwest::Client::new()
+        .post(format!("http://{addr}/api/v1/objects/{object}/records"))
+        .bearer_auth(api_key)
+        .json(&body)
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(created["ok"], true, "{created:?}");
+    created["data"]["id"].as_str().unwrap().to_string()
+}
+
+async fn search(addr: SocketAddr, api_key: &str, query: &str) -> reqwest::Response {
+    reqwest::Client::new()
+        .get(format!("http://{addr}/api/v1/search?{query}"))
+        .bearer_auth(api_key)
+        .send()
+        .await
+        .unwrap()
+}
+
+/// A workspace with two companies and a contact that mention "Zephyr", one
+/// unrelated company, and a key that may search and write.
+async fn searchable_workspace() -> (SocketAddr, String) {
+    let (addr, _state, api_key) =
+        setup_workspace_and_key(&["search.read", "objects.write", "objects.read"]).await;
+    create_via_api(
+        addr,
+        &api_key,
+        "Company",
+        json!({"name": "Zephyr Industries", "status": "Prospect"}),
+    )
+    .await;
+    create_via_api(
+        addr,
+        &api_key,
+        "Company",
+        json!({"name": "Zephyr Labs", "status": "Prospect"}),
+    )
+    .await;
+    let acme = create_via_api(
+        addr,
+        &api_key,
+        "Company",
+        json!({"name": "Acme Corp", "status": "Prospect"}),
+    )
+    .await;
+    create_via_api(
+        addr,
+        &api_key,
+        "Contact",
+        json!({"first_name": "Zephyr", "last_name": "Jones",
+            "company_id": acme, "status": "Active"}),
+    )
+    .await;
+    (addr, api_key)
+}
+
+#[tokio::test]
+async fn search_finds_records_across_objects_and_the_object_filter_narrows_it() {
+    // Covers: REQ-INT-006 (WP-0186 AC-1), REQ-INT-005
+    let (addr, api_key) = searchable_workspace().await;
+    let body: Value = search(addr, &api_key, "q=zephyr")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["ok"], true, "{body:?}");
+    assert_eq!(body["data"]["total"], 3, "{body:?}");
+    let objects: Vec<&str> = body["data"]["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["object_key"].as_str().unwrap())
+        .collect();
+    assert!(
+        objects.contains(&"Company") && objects.contains(&"Contact"),
+        "{objects:?}"
+    );
+    let first = &body["data"]["results"][0];
+    assert!(
+        first["id"].is_string() && first["title"].is_string(),
+        "{first:?}"
+    );
+
+    let only: Value = search(addr, &api_key, "q=zephyr&object=Contact")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(only["data"]["total"], 1, "{only:?}");
+    assert_eq!(only["data"]["results"][0]["object_key"], "Contact");
+    assert_eq!(only["data"]["results"][0]["title"], "Zephyr Jones");
+
+    let unknown = search(addr, &api_key, "q=zephyr&object=NoSuchObject").await;
+    assert_eq!(unknown.status(), 404);
+}
+
+#[tokio::test]
+async fn search_without_the_search_read_scope_is_forbidden() {
+    // Covers: REQ-INT-006 (WP-0186 AC-2), REQ-INT-005
+    let (addr, _state, api_key) = setup_workspace_and_key(&["objects.read", "metadata.read"]).await;
+    let response = search(addr, &api_key, "q=zephyr").await;
+    assert_eq!(response.status(), 403);
+    let body: Value = response.json().await.unwrap();
+    assert!(
+        body["error"].as_str().unwrap().contains("search.read"),
+        "{body:?}"
+    );
+}
+
+#[tokio::test]
+async fn search_never_returns_archived_records() {
+    // Covers: REQ-INT-006 (WP-0186 AC-3)
+    let (addr, api_key) = searchable_workspace().await;
+    let id = create_via_api(
+        addr,
+        &api_key,
+        "Company",
+        json!({"name": "Zephyr Archived", "status": "Prospect"}),
+    )
+    .await;
+    let archived = reqwest::Client::new()
+        .delete(format!("http://{addr}/api/v1/objects/Company/records/{id}"))
+        .bearer_auth(&api_key)
+        .send()
+        .await
+        .unwrap();
+    assert!(archived.status().is_success());
+    let body: Value = search(addr, &api_key, "q=zephyr")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(body["data"]["total"], 3, "{body:?}");
+    assert!(body["data"]["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|r| r["id"] != id.as_str()));
+}
+
+#[tokio::test]
+async fn search_pages_clamps_page_size_and_requires_a_query() {
+    // Covers: REQ-INT-006 (WP-0186 AC-4)
+    let (addr, api_key) = searchable_workspace().await;
+    let first: Value = search(addr, &api_key, "q=zephyr&page_size=2")
+        .await
+        .json()
+        .await
+        .unwrap();
+    let second: Value = search(addr, &api_key, "q=zephyr&page_size=2&page=2")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(first["data"]["results"].as_array().unwrap().len(), 2);
+    assert_eq!(second["data"]["results"].as_array().unwrap().len(), 1);
+    assert_eq!(second["data"]["total"], 3);
+    assert_ne!(
+        first["data"]["results"][0]["id"],
+        second["data"]["results"][0]["id"]
+    );
+
+    let big: Value = search(addr, &api_key, "q=zephyr&page_size=9999")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(big["data"]["page_size"], 500);
+    let small: Value = search(addr, &api_key, "q=zephyr&page_size=0")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(small["data"]["page_size"], 1);
+    let far: Value = search(addr, &api_key, "q=zephyr&page=9223372036854775807")
+        .await
+        .json()
+        .await
+        .unwrap();
+    assert_eq!(
+        far["data"]["results"].as_array().unwrap().len(),
+        0,
+        "{far:?}"
+    );
+
+    assert_eq!(search(addr, &api_key, "q=%20%20").await.status(), 400);
+    assert_eq!(search(addr, &api_key, "object=Company").await.status(), 400);
+}

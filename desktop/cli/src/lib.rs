@@ -72,9 +72,38 @@ pub fn run(cli: Cli) -> i32 {
                 client.delete(&format!("/api/v1/objects/{object_key}/records/{id}"))
             }
         },
+        Command::Search {
+            text,
+            object,
+            page,
+            page_size,
+        } => client.get_with_query(
+            "/api/v1/search",
+            &search_query(text, object, page, page_size),
+        ),
     };
 
     print_result(result)
+}
+
+/// The query string `lanesra search` sends (WP-0186).
+pub fn search_query(
+    text: String,
+    object: Option<String>,
+    page: Option<i64>,
+    page_size: Option<i64>,
+) -> Vec<(&'static str, String)> {
+    let mut query = vec![("q", text)];
+    if let Some(o) = object {
+        query.push(("object", o));
+    }
+    if let Some(p) = page {
+        query.push(("page", p.to_string()));
+    }
+    if let Some(ps) = page_size {
+        query.push(("page_size", ps.to_string()));
+    }
+    query
 }
 
 fn parse_data(data: &str) -> Result<Value, i32> {

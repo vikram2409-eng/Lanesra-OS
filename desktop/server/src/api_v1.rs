@@ -41,6 +41,7 @@ pub fn router() -> Router<SharedState> {
     Router::new()
         .route("/api/v1/limits", get(limits))
         .route("/api/v1/objects", get(list_object_keys))
+        .route("/api/v1/search", get(search))
         .route("/api/v1/objects/:key/metadata", get(get_metadata))
         .route(
             "/api/v1/objects/:key/records",
@@ -246,6 +247,39 @@ async fn list_object_keys(
         &conn,
         &workspace_id,
         api_object_service::list_object_keys(&conn, &workspace_id),
+    )
+    .map_err(app_err)?;
+    Ok(Json(json!({"ok": true, "data": data})))
+}
+
+#[derive(Debug, Deserialize)]
+struct SearchParams {
+    q: Option<String>,
+    object: Option<String>,
+    page: Option<i64>,
+    page_size: Option<i64>,
+}
+
+/// WP-0186: finds records by text across every object this API can read.
+async fn search(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    caller: Caller,
+    Query(params): Query<SearchParams>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (_client, workspace_id) = authorize(&state, &headers, caller, "search.read")?;
+    let conn = state.conn.lock().unwrap();
+    let data = logged(
+        &conn,
+        &workspace_id,
+        api_object_service::search_records(
+            &conn,
+            &workspace_id,
+            params.q.as_deref().unwrap_or_default(),
+            params.object.as_deref(),
+            params.page,
+            params.page_size,
+        ),
     )
     .map_err(app_err)?;
     Ok(Json(json!({"ok": true, "data": data})))
