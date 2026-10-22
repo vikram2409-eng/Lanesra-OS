@@ -84,9 +84,17 @@ pub fn list_active_for_event(
     event_type: &str,
 ) -> rusqlite::Result<Vec<Webhook>> {
     let all = list_for_workspace(conn, workspace_id)?;
+    // A paused connection sends nothing (WP-0189).
+    let mut stmt = conn.prepare(
+        "SELECT id FROM integration_connections WHERE workspace_id = ?1 AND status = 'paused'",
+    )?;
+    let paused: Vec<String> = stmt
+        .query_map([workspace_id], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
     Ok(all
         .into_iter()
         .filter(|w| w.status == "active" && w.event_types.iter().any(|e| e == event_type))
+        .filter(|w| !paused.contains(&w.connection_id))
         .collect())
 }
 

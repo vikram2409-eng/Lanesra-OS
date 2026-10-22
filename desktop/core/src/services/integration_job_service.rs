@@ -244,6 +244,19 @@ pub async fn run_now(
     run_one(conn, workspace_id, master_key, &job, actor_user_id).await
 }
 
+/// `run_now` for an API client holding `admin.integration.manage` (WP-0189),
+/// whose scope the server has already checked. The run is recorded in the
+/// integration log like any other.
+pub async fn run_now_for_api_client(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    job_id: &str,
+) -> AppResult<IntegrationJobRun> {
+    let job = get_owned(conn, workspace_id, job_id)?;
+    run_one(conn, workspace_id, master_key, &job, None).await
+}
+
 async fn run_one(
     conn: &Connection,
     workspace_id: &str,

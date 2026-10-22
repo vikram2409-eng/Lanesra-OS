@@ -978,3 +978,67 @@ fn rotation_is_audited_without_the_secret_value() {
         }
     }
 }
+
+#[tokio::test]
+async fn a_paused_connection_receives_no_delivery_until_reactivated() {
+    // Covers: REQ-INT-005 (WP-0189 AC-2)
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    let (port, captured) = spawn_scripted_server(vec![200]);
+    let connection_id = make_webhook_connection(
+        &conn,
+        &workspace_id,
+        &admin_id,
+        &format!("http://127.0.0.1:{port}"),
+    );
+    let webhook = webhook_service::create(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &WebhookInput {
+            name: "On create".into(),
+            connection_id: connection_id.clone(),
+            event_types: vec!["record.created".into()],
+            object_scope: None,
+            filter_json: None,
+            payload_version: None,
+            retry_policy_json: None,
+        },
+        Some(&admin_id),
+    )
+    .unwrap();
+    let pause = |status: &str| {
+        lanesra_core::repositories::integration_connection_repo::set_status(
+            &conn,
+            &connection_id,
+            status,
+        )
+        .unwrap()
+    };
+
+    pause("paused");
+    webhook_service::test_delivery(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &webhook.id,
+        Some(&admin_id),
+    )
+    .await
+    .unwrap();
+    assert!(
+        captured.lock().unwrap().is_empty(),
+        "a paused connection sends nothing"
+    );
+
+    pause("active");
+    webhook_service::test_delivery(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &webhook.id,
+        Some(&admin_id),
+    )
+    .await
+    .unwrap();
+    assert_eq!(captured.lock().unwrap().len(), 1);
+}

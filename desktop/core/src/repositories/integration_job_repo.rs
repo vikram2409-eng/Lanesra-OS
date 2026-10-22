@@ -113,6 +113,15 @@ pub fn list_due(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<I
     rows.collect()
 }
 
+/// Sets only a job's status, `active` or `paused` (WP-0189).
+pub fn set_status(conn: &Connection, id: &str, status: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE integration_jobs SET status = ?2, updated_at = ?3 WHERE id = ?1",
+        rusqlite::params![id, status, now_iso()],
+    )?;
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn update(
     conn: &Connection,

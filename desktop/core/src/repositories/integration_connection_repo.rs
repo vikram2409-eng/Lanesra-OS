@@ -122,6 +122,15 @@ pub fn update(
     get(conn, id).map(|c| c.expect("just updated"))
 }
 
+/// Sets only a connection's status (WP-0189 pause and reactivate).
+pub fn set_status(conn: &Connection, id: &str, status: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE integration_connections SET status = ?2, updated_at = ?3 WHERE id = ?1",
+        rusqlite::params![id, status, now_iso()],
+    )?;
+    Ok(())
+}
+
 pub fn set_test_result(
     conn: &Connection,
     id: &str,

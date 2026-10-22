@@ -1,5 +1,6 @@
 pub mod admin_actions;
 pub mod agent_v1;
+pub mod api_integration_admin;
 pub mod api_v1;
 pub mod api_webhooks;
 pub mod caller;

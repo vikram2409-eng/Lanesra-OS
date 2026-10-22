@@ -32,6 +32,10 @@ use crate::models::integration::{
 };
 use crate::repositories::{audit_repo, integration_connection_repo, integration_secret_repo};
 
+/// A paused connection makes no outbound call until it is reactivated
+/// (WP-0189). `active` and `disabled` keep their earlier meaning.
+pub const CONNECTION_PAUSED: &str = "paused";
+
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
 }
@@ -262,6 +266,18 @@ pub(crate) fn resolve_secret(
     master_key: &[u8; 32],
     connection_id: &str,
 ) -> AppResult<Option<String>> {
+    // Every outbound use of a connection (connector actions, external
+    // objects and their jobs, MCP servers) resolves its secret here, so a
+    // paused connection (WP-0189) is refused here, before any call.
+    if let Some(connection) = integration_connection_repo::get(conn, connection_id)? {
+        if connection.status == CONNECTION_PAUSED {
+            return Err(AppError::classified(
+                crate::domain::ErrorClass::Policy,
+                "policy.denied",
+                format!("Connection '{}' is paused", connection.name),
+            ));
+        }
+    }
     match integration_connection_repo::secret_id_for(conn, connection_id)? {
         None => Ok(None),
         Some(secret_id) => {
