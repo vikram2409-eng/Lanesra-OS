@@ -3,7 +3,7 @@ id: WP-0108
 title: Agent Identities and credentials
 phase: 1
 epic: E1.0 Identity foundation
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0107]
 requirements: [REQ-GOV-002, REQ-GOV-029]
@@ -75,3 +75,4 @@ Implement Agent Identity management (CRUD) and Lanesra-issued agent credentials 
 - 2026-10-22 claude: PR #683 merged. Backend in the shared core (desktop and Team Workspace); management screens arrive with WP-0109 behind a flag; help article `agent-identities` written (PR #700). Stays `in_review` only for the online demo edition: see RAID Q-21.
 - 2026-10-22 claude: Online demo edition built (RAID Q-21). Agent Identities and their credentials in the demo: tokens are generated in the browser, shown once and stored only as a SHA-256 hash; unknown, revoked and expired tokens are refused at once; lifetime 1 hour to one week; anything shaped like an agent token is stored as `[REDACTED]` in chat history, run inputs and the audit trail. The screen sits behind `agents.identities_ui` like desktop (not in `DEMO_RELEASED_FEATURES`). Verified in headless Chromium.
 - 2026-10-22 claude: In review in #704.
+- 2026-10-22 claude: Merged in #704; done.

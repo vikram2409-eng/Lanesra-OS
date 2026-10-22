@@ -3,7 +3,7 @@ id: WP-0109
 title: Trigger migration and Agent Identity UI
 phase: 1
 epic: E1.0 Identity foundation
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0107, WP-0108]
 requirements: [REQ-GOV-003]
@@ -82,3 +82,4 @@ Migrate existing unattended triggers to use Agent Identities, and build the Agen
 - 2026-10-22 claude: PR #700 merged by the owner (cfc4a38). Delivered on desktop and Team Workspace. Stays `in_review` only for the online demo edition, which ships with the flag in WP-0160 (RAID Q-21).
 - 2026-10-22 claude: Online demo edition built (RAID Q-21). The demo's unattended run is the Workflow Automation "Run AI agent" action (it has no schedule or webhook triggers, so there is nothing to migrate): the action carries an Agent Identity, chosen with a picker shown only while `agents.identities_ui` is on and kept when the picker is hidden. Every simulated tool call writes an `ai_agent_tool_call` entry naming the agent, the tool and the effective principal, shown in a new Agent audit trail under AI Agents. Verified in headless Chromium.
 - 2026-10-22 claude: In review in #704.
+- 2026-10-22 claude: Merged in #704; done.

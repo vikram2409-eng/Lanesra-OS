@@ -3,7 +3,7 @@ id: WP-0124
 title: Retry with backoff and error taxonomy
 phase: 1
 epic: E1.3 Agent loop
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0009, WP-0005]
 requirements: [REQ-ORCH-033]
@@ -57,3 +57,4 @@ Transient failures (rate limits, timeouts, 5xx) retry with exponential backoff a
 - 2026-10-22 claude: PR #678 merged. Retry and error classification run in the shared core (desktop and Team Workspace). Still open before `done`: the help article `agent-limits-and-partial-results` (shared with WP-0121, WP-0125, WP-0126) and the online demo edition (RAID Q-21).
 - 2026-10-22 claude: Online demo edition built (RAID Q-21): Admin → LLM & MCP → Gateway → Retries and failure handling simulates a provider failure with the same policy as `retry.rs` (3 attempts, 500 ms window doubling to a 20 s cap, Retry-After capped at 20 s, only transient errors retried, configuration errors fail over), on a simulated clock. Help article `agent-limits-and-partial-results` written (error classes, retries, failover; step limits, compaction and budgets named as still being built for WP-0121, WP-0125 and WP-0126) and added to the sitemap, llms files and Releases. Verified in headless Chromium, including the backoff windows against the Rust unit test values.
 - 2026-10-22 claude: In review in #704.
+- 2026-10-22 claude: Merged in #704; done.
