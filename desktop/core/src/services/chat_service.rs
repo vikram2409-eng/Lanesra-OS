@@ -45,7 +45,7 @@ use std::cell::Cell;
 use rusqlite::Connection;
 use serde_json::{json, Value};
 
-use crate::domain::{AppError, AppResult};
+use crate::domain::{AppError, AppResult, ErrorClass};
 use crate::models::ai_agent::{validate_output_schema, AiAgentDefinition};
 use crate::models::ai_agent_policy::PolicyDecision;
 use crate::models::ai_memory::{AgentMemoryContext, MemoryItemInput};
@@ -1517,6 +1517,19 @@ fn execute_agent_tool<'a>(
     memory_context: &'a AgentMemoryContext,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AppResult<Value>> + 'a>> {
     Box::pin(async move {
+        // WP-0143 (RAID I-16): an agent may call only the tools it was
+        // offered (`agent_tools`). Checked before the policy firewall, so an
+        // unlisted call never even queues an approval.
+        if !agent_tools(conn, agent)?
+            .iter()
+            .any(|t| t.name == call.name)
+        {
+            return Err(AppError::classified(
+                ErrorClass::Validation,
+                "validation.unknown_tool",
+                format!("'{}' isn't one of this agent's tools", call.name),
+            ));
+        }
         // Agent Access Governance (issue #245): checked once, here, for
         // every tool name this agent can call - including the Foundry-
         // internal ones matched directly below, which used to dispatch

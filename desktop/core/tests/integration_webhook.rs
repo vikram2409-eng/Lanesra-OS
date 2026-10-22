@@ -715,3 +715,266 @@ async fn one_pending_event_that_errors_does_not_block_the_events_behind_it() {
         "the delivered event is cleared; the failed one stays queued for the next pass"
     );
 }
+
+// ---------------------------------------------------------------------
+// WP-0183: the signing secret is shown once and can be rotated
+// ---------------------------------------------------------------------
+
+fn webhook_input(connection_id: String) -> WebhookInput {
+    WebhookInput {
+        name: "Signed".into(),
+        connection_id,
+        event_types: vec!["record.created".into()],
+        object_scope: None,
+        filter_json: None,
+        payload_version: None,
+        retry_policy_json: None,
+    }
+}
+
+// Covers: REQ-INT-002 (WP-0183 AC-1)
+#[tokio::test]
+async fn create_returns_the_signing_secret_once_and_no_read_ever_does() {
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    let (port, captured) = spawn_scripted_server(vec![200]);
+    let connection_id = make_webhook_connection(
+        &conn,
+        &workspace_id,
+        &admin_id,
+        &format!("http://127.0.0.1:{port}"),
+    );
+
+    let created = webhook_service::create_with_secret(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &webhook_input(connection_id),
+        Some(&admin_id),
+    )
+    .unwrap();
+    let secret = created.signing_secret.clone();
+    assert!(
+        secret.len() >= 32,
+        "a real random secret, not a placeholder"
+    );
+    assert_eq!(
+        read_webhook_secret(&conn, &master_key(), &created.webhook.id),
+        secret,
+        "the value shown is the value that signs"
+    );
+
+    // The created JSON carries the secret exactly once, next to the webhook's own fields.
+    let json = serde_json::to_value(&created).unwrap();
+    assert_eq!(json["signing_secret"], secret.as_str());
+    assert_eq!(json["id"], created.webhook.id.as_str());
+    assert_eq!(json["has_secret"], true);
+
+    // No read returns it.
+    let listed = webhook_service::list_for_workspace(&conn, &workspace_id).unwrap();
+    let listed_json = serde_json::to_string(&listed).unwrap();
+    assert!(
+        !listed_json.contains(&secret),
+        "list must never contain the secret"
+    );
+    assert!(!serde_json::to_string(&created.webhook)
+        .unwrap()
+        .contains(&secret));
+
+    // The plain `create` (used by the AI tool, whose output enters a transcript) returns no secret.
+    let (port2, _c2) = spawn_scripted_server(vec![200]);
+    let connection2 = make_webhook_connection(
+        &conn,
+        &workspace_id,
+        &admin_id,
+        &format!("http://127.0.0.1:{port2}"),
+    );
+    let plain = webhook_service::create(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &webhook_input(connection2),
+        Some(&admin_id),
+    )
+    .unwrap();
+    assert!(!serde_json::to_string(&plain)
+        .unwrap()
+        .contains("signing_secret"));
+
+    // A receiver holding the shown secret can verify a delivery.
+    webhook_service::test_delivery(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &created.webhook.id,
+        Some(&admin_id),
+    )
+    .await
+    .unwrap();
+    let calls = captured.lock().unwrap().clone();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(
+        calls[0].signature,
+        expected_signature(&secret, &calls[0].body)
+    );
+}
+
+// Covers: REQ-INT-002 (WP-0183 AC-2)
+#[tokio::test]
+async fn rotating_returns_a_new_secret_and_only_the_new_one_verifies() {
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    let (port, captured) = spawn_scripted_server(vec![200]);
+    let connection_id = make_webhook_connection(
+        &conn,
+        &workspace_id,
+        &admin_id,
+        &format!("http://127.0.0.1:{port}"),
+    );
+    let created = webhook_service::create_with_secret(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &webhook_input(connection_id),
+        Some(&admin_id),
+    )
+    .unwrap();
+    let old = created.signing_secret.clone();
+
+    let new = webhook_service::rotate_secret(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &created.webhook.id,
+        Some(&admin_id),
+    )
+    .unwrap();
+    assert_ne!(new, old);
+    assert!(new.len() >= 32);
+    assert_eq!(
+        read_webhook_secret(&conn, &master_key(), &created.webhook.id),
+        new
+    );
+
+    webhook_service::test_delivery(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &created.webhook.id,
+        Some(&admin_id),
+    )
+    .await
+    .unwrap();
+    let calls = captured.lock().unwrap().clone();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].signature, expected_signature(&new, &calls[0].body));
+    assert_ne!(
+        calls[0].signature,
+        expected_signature(&old, &calls[0].body),
+        "the old secret must no longer verify"
+    );
+
+    // Still only has_secret on reads after a rotation.
+    let listed =
+        serde_json::to_string(&webhook_service::list_for_workspace(&conn, &workspace_id).unwrap())
+            .unwrap();
+    assert!(!listed.contains(&new) && !listed.contains(&old));
+}
+
+// Covers: REQ-INT-002 (WP-0183 AC-3)
+#[test]
+fn only_an_admin_can_rotate_and_an_unknown_webhook_is_not_found() {
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    let connection_id =
+        make_webhook_connection(&conn, &workspace_id, &admin_id, "http://127.0.0.1:9");
+    let created = webhook_service::create_with_secret(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &webhook_input(connection_id),
+        Some(&admin_id),
+    )
+    .unwrap();
+    let before = read_webhook_secret(&conn, &master_key(), &created.webhook.id);
+
+    // No actor (not an admin session): rejected, nothing changes.
+    assert!(webhook_service::rotate_secret(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &created.webhook.id,
+        None
+    )
+    .is_err());
+    assert_eq!(
+        read_webhook_secret(&conn, &master_key(), &created.webhook.id),
+        before
+    );
+
+    // An unknown webhook id is not found.
+    let err = webhook_service::rotate_secret(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        "does-not-exist",
+        Some(&admin_id),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(err, lanesra_core::domain::AppError::NotFound(_)),
+        "{err:?}"
+    );
+}
+
+// Covers: REQ-INT-002 (WP-0183 AC-4)
+#[test]
+fn rotation_is_audited_without_the_secret_value() {
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    let connection_id =
+        make_webhook_connection(&conn, &workspace_id, &admin_id, "http://127.0.0.1:9");
+    let created = webhook_service::create_with_secret(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &webhook_input(connection_id),
+        Some(&admin_id),
+    )
+    .unwrap();
+    let new = webhook_service::rotate_secret(
+        &conn,
+        &workspace_id,
+        &master_key(),
+        &created.webhook.id,
+        Some(&admin_id),
+    )
+    .unwrap();
+
+    let rows: Vec<(String, String, Option<String>, Option<String>)> = conn
+        .prepare(
+            "SELECT event_type, summary, details_json, user_id FROM audit_events WHERE entity_id = ?1",
+        )
+        .unwrap()
+        .query_map([&created.webhook.id], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+        })
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect();
+    let rotated: Vec<_> = rows
+        .iter()
+        .filter(|r| r.0 == "webhook.secret_rotated")
+        .collect();
+    assert_eq!(rotated.len(), 1, "exactly one rotation row: {rows:?}");
+    assert_eq!(
+        rotated[0].3.as_deref(),
+        Some(admin_id.as_str()),
+        "who rotated it"
+    );
+    for (_, summary, details, _) in &rows {
+        for secret in [&created.signing_secret, &new] {
+            assert!(!summary.contains(secret.as_str()));
+            assert!(!details
+                .clone()
+                .unwrap_or_default()
+                .contains(secret.as_str()));
+        }
+    }
+}

@@ -3,8 +3,8 @@ id: WP-0183
 title: "Webhook signing secret: show once and rotate"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: ready
-owner: unassigned
+status: in_review
+owner: claude
 depends_on: [WP-0182]
 requirements: [REQ-INT-002]
 threats: []
@@ -12,8 +12,8 @@ estimate: M
 editions: [workspace, desktop, demo]
 delivered: []
 docs: [api-access-and-webhooks]
-branch:
-pr:
+branch: wp/WP-0183-webhook-signing-secret
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/690
 updated: 2026-10-21
 ---
 
@@ -41,12 +41,12 @@ Every webhook delivery is signed with HMAC-SHA256, but the signing secret is gen
 
 ## Acceptance criteria
 
-- [ ] AC-1: Creating a webhook returns its signing secret once; reading or listing it afterwards never returns the value, only `has_secret`
-- [ ] AC-2: Rotating returns a new secret once; deliveries after rotation verify with the new secret and no longer verify with the old one
-- [ ] AC-3: A non-admin cannot rotate (rejected, nothing changes); an unknown webhook id returns not-found
-- [ ] AC-4: Rotation is recorded in the audit log without the secret value
-- [ ] AC-5: The Webhooks screen (desktop UI and online demo) shows the secret once with Copy and a cannot-be-shown-again warning, and offers Rotate secret
-- [ ] AC-6: The `api-access-and-webhooks` help article and the Integrations page show the verification steps against this flow
+- [x] AC-1: Creating a webhook returns its signing secret once; reading or listing it afterwards never returns the value, only `has_secret`
+- [x] AC-2: Rotating returns a new secret once; deliveries after rotation verify with the new secret and no longer verify with the old one
+- [x] AC-3: A non-admin cannot rotate (rejected, nothing changes); an unknown webhook id returns not-found
+- [x] AC-4: Rotation is recorded in the audit log without the secret value
+- [x] AC-5: The Webhooks screen (desktop UI and online demo) shows the secret once with Copy and a cannot-be-shown-again warning, and offers Rotate secret
+- [x] AC-6: The `api-access-and-webhooks` help article and the Integrations page show the verification steps against this flow
 
 ## Test plan
 
@@ -67,3 +67,5 @@ Every webhook delivery is signed with HMAC-SHA256, but the signing secret is gen
 
 <!-- Append dated entries, newest last. -->
 - 2026-10-21 claude: Written as `ready` (goal, scope, testable ACs, test files, dependency and requirements listed). Not started.
+- 2026-10-21 claude: Claimed. Stacked on the WP-0182 branch because the planning files (this WP, ADR-0018, REQ-INT) are in that PR. Design: `create` keeps returning `Webhook` (the AI `create_webhook` tool uses it, so a secret never enters an agent transcript); new `create_with_secret` and `rotate_secret` return the value once; `integration_secret_repo::rotate` already exists. Next: failing tests first.
+- 2026-10-21 claude: Built. Core `create_with_secret` and `rotate_secret` (admin-only, audited as `webhook.secret_rotated` without the value), server dispatch `rotate_webhook_secret`, Tauri command, `WebhookSecretModal` plus **Rotate secret** on the desktop Webhooks tab (Copy and Done), demo mirror in `app.js`, help article, Integrations page, llms files and Releases entry. Tests: 4 core (`integration_webhook`: 13 pass with `--features test-support`, which CI gets from the workspace build), 1 server HTTP (`webhook_secret`), 2 Vitest (`webhookSecret.test.tsx`). Clippy `-D warnings` clean; `tsc` clean. Demo checked in headless Chromium (create and rotate show the dialog, names are escaped). Server test was confirmed red with the dispatch change reverted.
