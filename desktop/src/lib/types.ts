@@ -3114,6 +3114,10 @@ export interface Webhook {
   updated_by: string | null;
 }
 
+/** Returned exactly once, at creation - the signing secret is never
+ * readable again (rotate it to get a new one). */
+export type WebhookCreated = Webhook & { signing_secret: string };
+
 export interface WebhookInput {
   name: string;
   connection_id: string;

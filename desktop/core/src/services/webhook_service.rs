@@ -24,7 +24,9 @@ use sha2::Sha256;
 
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
-use crate::models::integration::{IntegrationEvent, Webhook, WebhookDelivery, WebhookInput};
+use crate::models::integration::{
+    IntegrationEvent, Webhook, WebhookDelivery, WebhookInput, WebhookWithSecret,
+};
 use crate::repositories::{
     integration_pending_event_repo, integration_secret_repo, integration_webhook_repo,
 };
@@ -51,6 +53,10 @@ fn get_owned(conn: &Connection, workspace_id: &str, id: &str) -> AppResult<Webho
     Ok(webhook)
 }
 
+/// Creates a webhook and returns it WITHOUT its signing secret. This is
+/// the one the AI `create_webhook` tool uses: a tool result enters an agent
+/// transcript, so it must never carry a credential. Anything that shows the
+/// secret to a person calls `create_with_secret`.
 pub fn create(
     conn: &Connection,
     workspace_id: &str,
@@ -58,6 +64,19 @@ pub fn create(
     input: &WebhookInput,
     actor_user_id: Option<&str>,
 ) -> AppResult<Webhook> {
+    Ok(create_with_secret(conn, workspace_id, master_key, input, actor_user_id)?.webhook)
+}
+
+/// Creates a webhook and returns it with its signing secret, the only time
+/// the value is ever shown (WP-0183). The receiver needs it to verify
+/// `X-Lanesra-Signature`; an admin who loses it rotates it.
+pub fn create_with_secret(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    input: &WebhookInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<WebhookWithSecret> {
     require_admin(conn, actor_user_id)?;
     if input.name.trim().is_empty() {
         return Err(AppError::Validation("Webhook name is required".into()));
@@ -103,7 +122,60 @@ pub fn create(
         input.retry_policy_json.as_deref().unwrap_or("{}"),
         actor_user_id,
     )
+    .map(|webhook| WebhookWithSecret {
+        webhook,
+        signing_secret: secret_value,
+    })
     .map_err(AppError::from)
+}
+
+/// Replaces a webhook's signing secret and returns the new one, once.
+/// Deliveries after this call are signed with the new secret, so a receiver
+/// must be updated at the same time (there is no grace period). Admin only;
+/// the rotation is audited with who did it and never the value.
+pub fn rotate_secret(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<String> {
+    require_admin(conn, actor_user_id)?;
+    let webhook = get_owned(conn, workspace_id, id)?;
+    let secret_value = super::secret_service::generate_random_secret(32);
+    let (ciphertext, nonce) = super::secret_service::encrypt(master_key, &secret_value)?;
+    let secret_id: Option<String> = conn.query_row(
+        "SELECT secret_id FROM integration_webhooks WHERE id = ?1",
+        [id],
+        |r| r.get(0),
+    )?;
+    match secret_id {
+        Some(existing) => integration_secret_repo::rotate(conn, &existing, &ciphertext, &nonce)?,
+        None => {
+            let new_id = new_uuid();
+            integration_secret_repo::insert(
+                conn,
+                &new_id,
+                workspace_id,
+                &format!("{} HMAC signing secret", webhook.name),
+                &ciphertext,
+                &nonce,
+                actor_user_id,
+            )?;
+            integration_webhook_repo::set_secret_id(conn, id, &new_id)?;
+        }
+    }
+    crate::repositories::audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "webhook.secret_rotated",
+        Some("Webhook"),
+        Some(id),
+        &format!("Rotated the signing secret of webhook '{}'", webhook.name),
+        None,
+    )?;
+    Ok(secret_value)
 }
 
 pub fn list_for_workspace(conn: &Connection, workspace_id: &str) -> AppResult<Vec<Webhook>> {

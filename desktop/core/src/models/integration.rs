@@ -160,6 +160,28 @@ pub struct Webhook {
     pub updated_by: Option<String>,
 }
 
+/// A webhook together with its signing secret: returned by
+/// `webhook_service::create_with_secret` and nothing else, so the secret is
+/// shown exactly once (when the webhook is created; rotating returns a new
+/// one the same way). Every read returns a plain `Webhook` with only
+/// `has_secret`. `Debug` is written by hand so the secret can never reach a
+/// log line by accident.
+#[derive(Clone, Serialize)]
+pub struct WebhookWithSecret {
+    #[serde(flatten)]
+    pub webhook: Webhook,
+    pub signing_secret: String,
+}
+
+impl std::fmt::Debug for WebhookWithSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WebhookWithSecret")
+            .field("webhook", &self.webhook)
+            .field("signing_secret", &"<redacted>")
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct WebhookInput {
     pub name: String,

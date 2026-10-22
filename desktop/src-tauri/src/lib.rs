@@ -472,6 +472,7 @@ pub fn run() {
             commands::integration_commands::list_webhooks,
             commands::integration_commands::create_webhook,
             commands::integration_commands::list_webhook_deliveries,
+            commands::integration_commands::rotate_webhook_secret,
             commands::integration_commands::pause_webhook,
             commands::integration_commands::reactivate_webhook,
             commands::integration_commands::delete_webhook,

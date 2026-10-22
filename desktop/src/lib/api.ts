@@ -203,6 +203,7 @@ import type {
   ApiClientInput,
   IssuedApiClient,
   Webhook,
+  WebhookCreated,
   WebhookInput,
   WebhookDelivery,
   Mapping,
@@ -1087,7 +1088,8 @@ export const api = {
   deleteApiClient: (id: string) => call<void>("delete_api_client", { id }),
 
   listWebhooks: () => call<Webhook[]>("list_webhooks"),
-  createWebhook: (input: WebhookInput) => call<Webhook>("create_webhook", { input }),
+  createWebhook: (input: WebhookInput) => call<WebhookCreated>("create_webhook", { input }),
+  rotateWebhookSecret: (id: string) => call<string>("rotate_webhook_secret", { id }),
   listWebhookDeliveries: (webhookId: string) => call<WebhookDelivery[]>("list_webhook_deliveries", { webhookId }),
   pauseWebhook: (id: string) => call<void>("pause_webhook", { id }),
   reactivateWebhook: (id: string) => call<void>("reactivate_webhook", { id }),

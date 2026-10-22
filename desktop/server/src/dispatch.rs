@@ -2400,11 +2400,22 @@ pub fn dispatch(
         )?),
         "create_webhook" => {
             let input: WebhookInput = arg(args, "input")?;
-            to_value(webhook_service::create(
+            // The signing secret is returned here, once, for the admin UI.
+            to_value(webhook_service::create_with_secret(
                 conn,
                 &require_workspace_id(conn)?,
                 master_key,
                 &input,
+                actor,
+            )?)
+        }
+        "rotate_webhook_secret" => {
+            // Returns the new secret as a plain string, once.
+            to_value(webhook_service::rotate_secret(
+                conn,
+                &require_workspace_id(conn)?,
+                master_key,
+                &arg::<String>(args, "id")?,
                 actor,
             )?)
         }

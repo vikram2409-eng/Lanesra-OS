@@ -387,11 +387,11 @@ pub fn list_webhooks(
 pub fn create_webhook(
     state: State<AppState>,
     input: WebhookInput,
-) -> AppResult<lanesra_core::models::integration::Webhook> {
+) -> AppResult<lanesra_core::models::integration::WebhookWithSecret> {
     let master_key = resolve_master_key(&state)?;
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
-    webhook_service::create(
+    webhook_service::create_with_secret(
         &conn,
         &workspace_id,
         &master_key,
@@ -407,6 +407,21 @@ pub fn list_webhook_deliveries(
 ) -> AppResult<Vec<lanesra_core::models::integration::WebhookDelivery>> {
     let conn = state.conn.lock().unwrap();
     webhook_service::list_deliveries(&conn, &require_workspace_id(&conn)?, &webhook_id)
+}
+
+/// Replaces a webhook's signing secret and returns the new one, once.
+#[tauri::command]
+pub fn rotate_webhook_secret(state: State<AppState>, id: String) -> AppResult<String> {
+    let master_key = resolve_master_key(&state)?;
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    webhook_service::rotate_secret(
+        &conn,
+        &workspace_id,
+        &master_key,
+        &id,
+        current_actor(&state).as_deref(),
+    )
 }
 
 #[tauri::command]
