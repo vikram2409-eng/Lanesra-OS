@@ -3,8 +3,8 @@ id: WP-0188
 title: "API: webhook management behind the webhooks.manage scope"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: ready
-owner: unassigned
+status: in_progress
+owner: claude
 depends_on: [WP-0183, WP-0184]
 requirements: [REQ-INT-006, REQ-INT-005]
 threats: []
@@ -13,9 +13,9 @@ editions: [workspace]
 editions_reason: The REST API exists only on the Team Workspace server; desktop opens no network port and the demo has no real API
 delivered: []
 docs: [api-access-and-webhooks]
-branch:
+branch: claude/enterprise-build-planning-jxy2kq
 pr:
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 # WP-0188 — API: webhook management behind the webhooks.manage scope
@@ -56,3 +56,4 @@ updated: 2026-10-21
 
 <!-- Append dated entries, newest last. -->
 - 2026-10-21 claude: Written as `ready`. Not started. Starts after WP-0183 and WP-0184.
+- 2026-10-22 claude: Claimed. WP-0183 (dependency) is merged but still `in_review` pending WP-0182 AC-5; its show-once and rotate code is on main, which is all this needs.

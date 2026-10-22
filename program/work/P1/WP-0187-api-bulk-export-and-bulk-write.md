@@ -3,7 +3,7 @@ id: WP-0187
 title: "API: bulk export and bulk write behind bulk.read and bulk.write"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0184]
 requirements: [REQ-INT-006, REQ-INT-005]
@@ -68,3 +68,4 @@ updated: 2026-10-22
   - CLI: `lanesra records export <object> [--format]` and `lanesra records bulk <object> --data <json|@file>`.
   - Docs: APIs page rows, help section "Bulk export and bulk write" (and the Business Rules note), llms files, Releases entry.
   - Tests: `server/tests/api_v1_bulk.rs` 7 (3,000-record export as NDJSON and CSV without the archived record, export scope, mixed write in order, failing items alone, 413 with nothing applied, scope separation both ways, Business Rule blocks the item and the single write); `cli/tests/cli_parsing.rs` +2. All suites on the API write path pass unchanged.
+- 2026-10-22 claude: PR #701 merged by the owner (3cd8838), which also accepts the Business Rules behaviour change (RAID I-32). Delivered on Team Workspace. Done.
