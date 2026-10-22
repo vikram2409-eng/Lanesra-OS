@@ -35,6 +35,11 @@ pub enum Command {
         #[command(subcommand)]
         command: RecordsCommand,
     },
+    /// Manage webhooks (needs the webhooks.manage scope)
+    Webhooks {
+        #[command(subcommand)]
+        command: WebhooksCommand,
+    },
     /// Find records by text across every readable object (GET /api/v1/search; needs the search.read scope)
     Search {
         /// The text to look for, e.g. a name, number, email or phone
@@ -103,5 +108,43 @@ pub enum RecordsCommand {
         object_key: String,
         #[arg(long)]
         data: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum WebhooksCommand {
+    /// List this workspace's webhooks (never shows a signing secret)
+    List,
+    /// Get one webhook
+    Get { id: String },
+    /// Create a webhook; prints its signing secret, the only time it is shown.
+    /// --data is {"name","connection_id","event_types",...}
+    Create {
+        #[arg(long)]
+        data: String,
+    },
+    /// Replace a webhook's settings; --data as for create
+    Update {
+        id: String,
+        #[arg(long)]
+        data: String,
+    },
+    /// Delete a webhook
+    Delete { id: String },
+    /// Stop deliveries without deleting the webhook
+    Pause { id: String },
+    /// Resume deliveries
+    Reactivate { id: String },
+    /// Replace the signing secret; prints the new one, once
+    RotateSecret { id: String },
+    /// Send a signed test delivery
+    Test { id: String },
+    /// Page through delivery attempts, newest first
+    Deliveries {
+        id: String,
+        #[arg(long)]
+        page: Option<i64>,
+        #[arg(long = "page-size")]
+        page_size: Option<i64>,
     },
 }

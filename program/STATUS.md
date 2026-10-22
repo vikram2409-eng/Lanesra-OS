@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 18 | 1 | 0 | 0 | 1 | 32 / 36 | `████████░░` 89% |
-| 1 · Foundations | 50 | 3 | 10 | 7 | 0 | 30 | 4 / 150 | `░░░░░░░░░░` 3% |
+| 1 · Foundations | 50 | 4 | 10 | 6 | 0 | 30 | 6 / 150 | `░░░░░░░░░░` 4% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -20,7 +20,7 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
 | Desktop | 113 | 9 | 18 / 393 |
-| Team Workspace | 124 | 12 | 22 / 440 |
+| Team Workspace | 124 | 13 | 24 / 440 |
 | Online demo | 86 | 2 | 4 / 304 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
@@ -39,7 +39,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0130](work/P1/WP-0130-prompt-catalog-written-fresh.md) | Prompt catalog, written fresh | in_progress | muse | `wp/WP-0130-prompt-catalog` | - |
 | [WP-0182](work/P1/WP-0182-deliver-outbound-webhooks-for-real-record-events.md) | Deliver outbound webhooks for real record events | in_review | claude | `wp/WP-0182-deliver-outbound-webhooks` | https://github.com/vikram2409-eng/Lanesra-OS/pull/689 |
 | [WP-0183](work/P1/WP-0183-webhook-signing-secret-show-once-and-rotate.md) | Webhook signing secret: show once and rotate | in_review | claude | `wp/WP-0183-webhook-signing-secret` | https://github.com/vikram2409-eng/Lanesra-OS/pull/690 |
-| [WP-0187](work/P1/WP-0187-api-bulk-export-and-bulk-write.md) | API: bulk export and bulk write behind bulk.read and bulk.write | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/701 |
+| [WP-0188](work/P1/WP-0188-api-webhook-management.md) | API: webhook management behind the webhooks.manage scope | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/702 |
 
 ## Ready to start (all dependencies done)
 
@@ -127,8 +127,8 @@ None.
 | [WP-0184](work/P1/WP-0184-api-client-network-restriction-and-scope-enforcement.md) | API clients: enforce the allowed network with a trusted-proxy rule | E1.9 Team Workspace platform | ✅ done | M | ✓Team Workspace | - |
 | [WP-0185](work/P1/WP-0185-emit-field-changed-and-workflow-webhook-events.md) | Emit the field.changed, workflow.completed and workflow.failed webhook events | E1.9 Team Workspace platform | 🟢 ready | M | ○Team Workspace ○Desktop | WP-0182 |
 | [WP-0186](work/P1/WP-0186-api-record-search.md) | API: record search behind the search.read scope | E1.9 Team Workspace platform | ✅ done | S | ✓Team Workspace | WP-0184 |
-| [WP-0187](work/P1/WP-0187-api-bulk-export-and-bulk-write.md) | API: bulk export and bulk write behind bulk.read and bulk.write | E1.9 Team Workspace platform | 👀 in review | M | ✓Team Workspace | WP-0184 |
-| [WP-0188](work/P1/WP-0188-api-webhook-management.md) | API: webhook management behind the webhooks.manage scope | E1.9 Team Workspace platform | 🟢 ready | M | ○Team Workspace | WP-0183, WP-0184 |
+| [WP-0187](work/P1/WP-0187-api-bulk-export-and-bulk-write.md) | API: bulk export and bulk write behind bulk.read and bulk.write | E1.9 Team Workspace platform | ✅ done | M | ✓Team Workspace | WP-0184 |
+| [WP-0188](work/P1/WP-0188-api-webhook-management.md) | API: webhook management behind the webhooks.manage scope | E1.9 Team Workspace platform | 👀 in review | M | ✓Team Workspace | WP-0183, WP-0184 |
 | [WP-0189](work/P1/WP-0189-api-integration-administration-and-scope-vocabulary-test.md) | API: integration administration and the scope-vocabulary test | E1.9 Team Workspace platform | 🟢 ready | M | ○Team Workspace | WP-0186, WP-0187, WP-0188 |
 
 ## Phase 2 · Playground

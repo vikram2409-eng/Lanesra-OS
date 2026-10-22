@@ -25,14 +25,100 @@ use sha2::Sha256;
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult};
 use crate::models::integration::{
-    IntegrationEvent, Webhook, WebhookDelivery, WebhookInput, WebhookWithSecret,
+    IntegrationEvent, Webhook, WebhookDelivery, WebhookDeliveryPage, WebhookInput,
+    WebhookWithSecret,
 };
 use crate::repositories::{
     integration_pending_event_repo, integration_secret_repo, integration_webhook_repo,
 };
 
-fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
-    super::user_service::require_admin(conn, actor_user_id)
+/// Who is managing webhooks (WP-0188): a signed-in person, who must hold
+/// Administrator, or an API client, whose `webhooks.manage` scope the
+/// server has already checked. An API client never borrows an
+/// Administrator's rights; its changes are audited under its own id.
+#[derive(Debug, Clone, Copy)]
+pub enum WebhookManager<'a> {
+    User(Option<&'a str>),
+    ApiClient { id: &'a str, name: &'a str },
+}
+
+impl WebhookManager<'_> {
+    fn authorize(&self, conn: &Connection) -> AppResult<()> {
+        match self {
+            Self::User(actor) => super::user_service::require_admin(conn, *actor),
+            Self::ApiClient { .. } => Ok(()),
+        }
+    }
+
+    /// The user recorded as creator, updater and audit actor, if any.
+    fn user_id(&self) -> Option<&str> {
+        match self {
+            Self::User(actor) => *actor,
+            Self::ApiClient { .. } => None,
+        }
+    }
+
+    /// Audit details naming the API client; never a secret.
+    fn audit_details(&self) -> Option<String> {
+        match self {
+            Self::User(_) => None,
+            Self::ApiClient { id, name } => {
+                Some(json!({"api_client_id": id, "api_client_name": name}).to_string())
+            }
+        }
+    }
+
+    fn audit(
+        &self,
+        conn: &Connection,
+        workspace_id: &str,
+        event_type: &str,
+        webhook_id: &str,
+        summary: &str,
+    ) -> AppResult<()> {
+        let summary = match self {
+            Self::User(_) => summary.to_string(),
+            Self::ApiClient { name, .. } => format!("{summary} (API client '{name}')"),
+        };
+        crate::repositories::audit_repo::record(
+            conn,
+            workspace_id,
+            self.user_id(),
+            event_type,
+            Some("Webhook"),
+            Some(webhook_id),
+            &summary,
+            self.audit_details().as_deref(),
+        )?;
+        Ok(())
+    }
+}
+
+/// Checks what a webhook may be pointed at: a `webhook` connection in this
+/// workspace whose URL the outbound guard allows (WP-0188 AC-3).
+fn validate_input(conn: &Connection, workspace_id: &str, input: &WebhookInput) -> AppResult<()> {
+    if input.name.trim().is_empty() {
+        return Err(AppError::Validation("Webhook name is required".into()));
+    }
+    for event_type in &input.event_types {
+        if !EVENT_TYPES.contains(&event_type.as_str()) {
+            return Err(AppError::Validation(format!(
+                "Unknown event type '{event_type}'"
+            )));
+        }
+    }
+    let connection = super::connection_service::get(conn, workspace_id, &input.connection_id)?;
+    if connection.connection_type != "webhook" {
+        return Err(AppError::Validation(
+            "A webhook subscription must use a 'webhook' connection (its endpoint URL)".into(),
+        ));
+    }
+    let url = connection
+        .base_url
+        .as_deref()
+        .filter(|u| !u.trim().is_empty())
+        .ok_or_else(|| AppError::Validation("This webhook connection has no URL".into()))?;
+    super::ssrf_guard::check_url(url)
 }
 
 pub const EVENT_TYPES: &[&str] = &[
@@ -77,23 +163,26 @@ pub fn create_with_secret(
     input: &WebhookInput,
     actor_user_id: Option<&str>,
 ) -> AppResult<WebhookWithSecret> {
-    require_admin(conn, actor_user_id)?;
-    if input.name.trim().is_empty() {
-        return Err(AppError::Validation("Webhook name is required".into()));
-    }
-    for event_type in &input.event_types {
-        if !EVENT_TYPES.contains(&event_type.as_str()) {
-            return Err(AppError::Validation(format!(
-                "Unknown event type '{event_type}'"
-            )));
-        }
-    }
-    let connection = super::connection_service::get(conn, workspace_id, &input.connection_id)?;
-    if connection.connection_type != "webhook" {
-        return Err(AppError::Validation(
-            "A webhook subscription must use a 'webhook' connection (its endpoint URL)".into(),
-        ));
-    }
+    create_with_secret_by(
+        conn,
+        workspace_id,
+        master_key,
+        input,
+        WebhookManager::User(actor_user_id),
+    )
+}
+
+/// `create_with_secret` for any manager, including an API client.
+pub fn create_with_secret_by(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    input: &WebhookInput,
+    manager: WebhookManager,
+) -> AppResult<WebhookWithSecret> {
+    manager.authorize(conn)?;
+    validate_input(conn, workspace_id, input)?;
+    let actor_user_id = manager.user_id();
     let secret_value = super::secret_service::generate_random_secret(32);
     let (ciphertext, nonce) = super::secret_service::encrypt(master_key, &secret_value)?;
     let secret_id = new_uuid();
@@ -108,7 +197,7 @@ pub fn create_with_secret(
     )?;
     let event_types_json =
         serde_json::to_string(&input.event_types).unwrap_or_else(|_| "[]".into());
-    integration_webhook_repo::insert(
+    let webhook = integration_webhook_repo::insert(
         conn,
         &new_uuid(),
         workspace_id,
@@ -121,12 +210,18 @@ pub fn create_with_secret(
         Some(&secret_id),
         input.retry_policy_json.as_deref().unwrap_or("{}"),
         actor_user_id,
-    )
-    .map(|webhook| WebhookWithSecret {
+    )?;
+    manager.audit(
+        conn,
+        workspace_id,
+        "webhook.created",
+        &webhook.id,
+        &format!("Created webhook '{}'", webhook.name),
+    )?;
+    Ok(WebhookWithSecret {
         webhook,
         signing_secret: secret_value,
     })
-    .map_err(AppError::from)
 }
 
 /// Replaces a webhook's signing secret and returns the new one, once.
@@ -140,7 +235,25 @@ pub fn rotate_secret(
     id: &str,
     actor_user_id: Option<&str>,
 ) -> AppResult<String> {
-    require_admin(conn, actor_user_id)?;
+    rotate_secret_by(
+        conn,
+        workspace_id,
+        master_key,
+        id,
+        WebhookManager::User(actor_user_id),
+    )
+}
+
+/// `rotate_secret` for any manager, including an API client.
+pub fn rotate_secret_by(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    id: &str,
+    manager: WebhookManager,
+) -> AppResult<String> {
+    manager.authorize(conn)?;
+    let actor_user_id = manager.user_id();
     let webhook = get_owned(conn, workspace_id, id)?;
     let secret_value = super::secret_service::generate_random_secret(32);
     let (ciphertext, nonce) = super::secret_service::encrypt(master_key, &secret_value)?;
@@ -165,15 +278,12 @@ pub fn rotate_secret(
             integration_webhook_repo::set_secret_id(conn, id, &new_id)?;
         }
     }
-    crate::repositories::audit_repo::record(
+    manager.audit(
         conn,
         workspace_id,
-        actor_user_id,
         "webhook.secret_rotated",
-        Some("Webhook"),
-        Some(id),
+        id,
         &format!("Rotated the signing secret of webhook '{}'", webhook.name),
-        None,
     )?;
     Ok(secret_value)
 }
@@ -196,15 +306,87 @@ pub fn list_deliveries(
     )?)
 }
 
+/// One webhook, without its secret (WP-0188).
+pub fn get(conn: &Connection, workspace_id: &str, id: &str) -> AppResult<Webhook> {
+    get_owned(conn, workspace_id, id)
+}
+
+/// A page of delivery attempts, newest first (WP-0188 AC-5). A delivery
+/// row never carries the signing secret.
+pub fn list_deliveries_page(
+    conn: &Connection,
+    workspace_id: &str,
+    webhook_id: &str,
+    page: Option<i64>,
+    page_size: Option<i64>,
+) -> AppResult<WebhookDeliveryPage> {
+    get_owned(conn, workspace_id, webhook_id)?;
+    let page = page.unwrap_or(1).max(1);
+    let page_size = page_size.unwrap_or(50).clamp(1, 500);
+    let (deliveries, total) = integration_webhook_repo::list_deliveries_page(
+        conn,
+        webhook_id,
+        page_size,
+        (page - 1).saturating_mul(page_size),
+    )?;
+    Ok(WebhookDeliveryPage {
+        deliveries,
+        total,
+        page,
+        page_size,
+    })
+}
+
+/// Replaces a webhook's settings (WP-0188). The connection is checked as on
+/// create; the status and secret keep their own operations.
+pub fn update_by(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    input: &WebhookInput,
+    manager: WebhookManager,
+) -> AppResult<Webhook> {
+    manager.authorize(conn)?;
+    get_owned(conn, workspace_id, id)?;
+    validate_input(conn, workspace_id, input)?;
+    let event_types_json =
+        serde_json::to_string(&input.event_types).unwrap_or_else(|_| "[]".into());
+    let webhook = integration_webhook_repo::update(
+        conn,
+        id,
+        input.name.trim(),
+        &input.connection_id,
+        &event_types_json,
+        input.object_scope.as_deref(),
+        input.filter_json.as_deref(),
+        input.payload_version.as_deref().unwrap_or("1"),
+        input.retry_policy_json.as_deref().unwrap_or("{}"),
+        manager.user_id(),
+    )?
+    .ok_or_else(|| AppError::NotFound("Webhook".into()))?;
+    manager.audit(
+        conn,
+        workspace_id,
+        "webhook.updated",
+        id,
+        &format!("Updated webhook '{}'", webhook.name),
+    )?;
+    Ok(webhook)
+}
+
 pub fn pause(
     conn: &Connection,
     workspace_id: &str,
     id: &str,
     actor_user_id: Option<&str>,
 ) -> AppResult<()> {
-    require_admin(conn, actor_user_id)?;
-    get_owned(conn, workspace_id, id)?;
-    Ok(integration_webhook_repo::set_status(conn, id, "paused")?)
+    set_status_by(
+        conn,
+        workspace_id,
+        id,
+        "paused",
+        WebhookManager::User(actor_user_id),
+    )
 }
 
 pub fn reactivate(
@@ -213,9 +395,26 @@ pub fn reactivate(
     id: &str,
     actor_user_id: Option<&str>,
 ) -> AppResult<()> {
-    require_admin(conn, actor_user_id)?;
+    set_status_by(
+        conn,
+        workspace_id,
+        id,
+        "active",
+        WebhookManager::User(actor_user_id),
+    )
+}
+
+/// Pauses (`paused`) or reactivates (`active`) a webhook.
+pub fn set_status_by(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    status: &str,
+    manager: WebhookManager,
+) -> AppResult<()> {
+    manager.authorize(conn)?;
     get_owned(conn, workspace_id, id)?;
-    Ok(integration_webhook_repo::set_status(conn, id, "active")?)
+    Ok(integration_webhook_repo::set_status(conn, id, status)?)
 }
 
 pub fn delete(
@@ -224,9 +423,25 @@ pub fn delete(
     id: &str,
     actor_user_id: Option<&str>,
 ) -> AppResult<()> {
-    require_admin(conn, actor_user_id)?;
-    get_owned(conn, workspace_id, id)?;
-    Ok(integration_webhook_repo::delete(conn, id)?)
+    delete_by(conn, workspace_id, id, WebhookManager::User(actor_user_id))
+}
+
+pub fn delete_by(
+    conn: &Connection,
+    workspace_id: &str,
+    id: &str,
+    manager: WebhookManager,
+) -> AppResult<()> {
+    manager.authorize(conn)?;
+    let webhook = get_owned(conn, workspace_id, id)?;
+    integration_webhook_repo::delete(conn, id)?;
+    manager.audit(
+        conn,
+        workspace_id,
+        "webhook.deleted",
+        id,
+        &format!("Deleted webhook '{}'", webhook.name),
+    )
 }
 
 fn sign(secret: &str, body: &str) -> String {
@@ -471,7 +686,25 @@ pub async fn test_delivery(
     webhook_id: &str,
     actor_user_id: Option<&str>,
 ) -> AppResult<()> {
-    require_admin(conn, actor_user_id)?;
+    test_delivery_by(
+        conn,
+        workspace_id,
+        master_key,
+        webhook_id,
+        WebhookManager::User(actor_user_id),
+    )
+    .await
+}
+
+/// `test_delivery` for any manager, including an API client.
+pub async fn test_delivery_by(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    webhook_id: &str,
+    manager: WebhookManager<'_>,
+) -> AppResult<()> {
+    manager.authorize(conn)?;
     let webhook = get_owned(conn, workspace_id, webhook_id)?;
     let event = IntegrationEvent {
         event_id: new_uuid(),

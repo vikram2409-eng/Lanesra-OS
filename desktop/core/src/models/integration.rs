@@ -193,6 +193,15 @@ pub struct WebhookInput {
     pub retry_policy_json: Option<String>,
 }
 
+/// A page of a webhook's delivery attempts (WP-0188).
+#[derive(Debug, Clone, Serialize)]
+pub struct WebhookDeliveryPage {
+    pub deliveries: Vec<WebhookDelivery>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct WebhookDelivery {
     pub id: String,

@@ -108,6 +108,28 @@ pub fn set_status(conn: &Connection, id: &str, status: &str) -> rusqlite::Result
     Ok(())
 }
 
+/// Replaces a webhook's editable settings (WP-0188); its status and
+/// signing secret are changed by their own operations.
+#[allow(clippy::too_many_arguments)]
+pub fn update(
+    conn: &Connection,
+    id: &str,
+    name: &str,
+    connection_id: &str,
+    event_types_json: &str,
+    object_scope: Option<&str>,
+    filter_json: Option<&str>,
+    payload_version: &str,
+    retry_policy_json: &str,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<Option<Webhook>> {
+    conn.execute(
+        "UPDATE integration_webhooks SET name = ?2, connection_id = ?3, event_types_json = ?4, object_scope = ?5, filter_json = ?6, payload_version = ?7, retry_policy_json = ?8, updated_at = ?9, updated_by = ?10 WHERE id = ?1",
+        rusqlite::params![id, name, connection_id, event_types_json, object_scope, filter_json, payload_version, retry_policy_json, now_iso(), actor_user_id],
+    )?;
+    get(conn, id)
+}
+
 pub fn delete(conn: &Connection, id: &str) -> rusqlite::Result<()> {
     conn.execute("DELETE FROM integration_webhooks WHERE id = ?1", [id])?;
     Ok(())
@@ -158,6 +180,27 @@ pub fn list_deliveries(
     let mut stmt = conn.prepare("SELECT * FROM integration_webhook_deliveries WHERE webhook_id = ?1 ORDER BY created_at DESC LIMIT ?2")?;
     let rows = stmt.query_map(rusqlite::params![webhook_id, limit], map_delivery)?;
     rows.collect()
+}
+
+/// One page of a webhook's delivery attempts, newest first, and the total.
+pub fn list_deliveries_page(
+    conn: &Connection,
+    webhook_id: &str,
+    limit: i64,
+    offset: i64,
+) -> rusqlite::Result<(Vec<WebhookDelivery>, i64)> {
+    let total: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM integration_webhook_deliveries WHERE webhook_id = ?1",
+        [webhook_id],
+        |r| r.get(0),
+    )?;
+    let mut stmt = conn.prepare(
+        "SELECT * FROM integration_webhook_deliveries WHERE webhook_id = ?1 ORDER BY created_at DESC, id LIMIT ?2 OFFSET ?3",
+    )?;
+    let rows = stmt
+        .query_map(rusqlite::params![webhook_id, limit, offset], map_delivery)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok((rows, total))
 }
 
 /// Consecutive failures since the last success - used to decide when a
