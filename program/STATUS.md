@@ -21,7 +21,7 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 |---|---|---|---|
 | Desktop | 113 | 11 | 21 / 393 |
 | Team Workspace | 124 | 15 | 28 / 440 |
-| Online demo | 86 | 2 | 4 / 304 |
+| Online demo | 86 | 6 | 12 / 304 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -84,9 +84,9 @@ None.
 | [WP-0104](work/P1/WP-0104-directory-mapping-groups-to-roles-approvers-and-provisioning.md) | Directory mapping: groups to roles, approvers and provisioning | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace | WP-0102, WP-0103 |
 | [WP-0105](work/P1/WP-0105-enterprise-sign-in-on-the-desktop-edition.md) | Enterprise sign-in on the desktop edition | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Desktop | WP-0102, WP-0103 |
 | [WP-0106](work/P1/WP-0106-team-workspace-first-run-and-sign-in-hardening.md) | Team Workspace first-run and sign-in hardening | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace ○Desktop | WP-0107, WP-0108, WP-0020 |
-| [WP-0107](work/P1/WP-0107-principal-model-and-effective-identity.md) | Principal model and effective-identity rules | E1.0 Identity foundation | 👀 in review | M | ✓Desktop ✓Team Workspace ○Online demo | WP-0009 |
-| [WP-0108](work/P1/WP-0108-agent-identities-and-credentials.md) | Agent Identities and credentials | E1.0 Identity foundation | 👀 in review | M | ✓Desktop ✓Team Workspace ○Online demo | WP-0107 |
-| [WP-0109](work/P1/WP-0109-trigger-migration-and-ui.md) | Trigger migration and Agent Identity UI | E1.0 Identity foundation | 👀 in review | M | ✓Desktop ✓Team Workspace ○Online demo | WP-0107, WP-0108 |
+| [WP-0107](work/P1/WP-0107-principal-model-and-effective-identity.md) | Principal model and effective-identity rules | E1.0 Identity foundation | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0009 |
+| [WP-0108](work/P1/WP-0108-agent-identities-and-credentials.md) | Agent Identities and credentials | E1.0 Identity foundation | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0107 |
+| [WP-0109](work/P1/WP-0109-trigger-migration-and-ui.md) | Trigger migration and Agent Identity UI | E1.0 Identity foundation | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0107, WP-0108 |
 | [WP-0110](work/P1/WP-0110-run-and-step-schema-extensions.md) | Run and step schema extensions | E1.2 Run model and trace | ⚪ proposed | M | ○Desktop ○Team Workspace | WP-0009, WP-0007, WP-0107 |
 | [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | E1.2 Run model and trace | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0110 |
 | [WP-0112](work/P1/WP-0112-run-events-over-sse-with-stable-schemas.md) | Run events over SSE with stable schemas | E1.2 Run model and trace | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0111 |
@@ -95,7 +95,7 @@ None.
 | [WP-0121](work/P1/WP-0121-step-limits-and-partial-results.md) | Step limits and partial results | E1.3 Agent loop | 🟢 ready | L | ○Desktop ○Team Workspace ○Online demo | WP-0110, WP-0005 |
 | [WP-0122](work/P1/WP-0122-native-function-calling-and-strict-json-tool-format.md) | Native function calling and strict JSON tool format | E1.3 Agent loop | 🔨 in progress | L | ○Desktop ○Team Workspace | WP-0005 |
 | [WP-0123](work/P1/WP-0123-per-step-model-routing-and-data-boundaries.md) | Per-step model routing and data boundaries | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0121 |
-| [WP-0124](work/P1/WP-0124-retry-with-backoff-and-error-taxonomy.md) | Retry with backoff and error taxonomy | E1.3 Agent loop | 👀 in review | M | ✓Desktop ✓Team Workspace ○Online demo | WP-0009, WP-0005 |
+| [WP-0124](work/P1/WP-0124-retry-with-backoff-and-error-taxonomy.md) | Retry with backoff and error taxonomy | E1.3 Agent loop | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0009, WP-0005 |
 | [WP-0125](work/P1/WP-0125-context-window-handling-and-compaction-policies.md) | Context window handling and compaction policies | E1.3 Agent loop | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0121 |
 | [WP-0126](work/P1/WP-0126-budget-awareness-in-agent-turns.md) | Budget awareness in agent turns | E1.3 Agent loop | ⚪ proposed | S | ○Desktop ○Team Workspace ○Online demo | WP-0121 |
 | [WP-0127](work/P1/WP-0127-do-not-persist-state-fields.md) | Do-not-persist state fields | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0111 |

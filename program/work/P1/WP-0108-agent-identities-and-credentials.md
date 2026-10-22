@@ -10,7 +10,7 @@ requirements: [REQ-GOV-002, REQ-GOV-029]
 threats: [T-03, T-09]
 estimate: M
 editions: [desktop, workspace, demo]
-delivered: [desktop, workspace]
+delivered: [desktop, workspace, demo]
 docs: [agent-identities]
 branch: wp/WP-0108-agent-identities
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/683
@@ -73,3 +73,4 @@ Implement Agent Identity management (CRUD) and Lanesra-issued agent credentials 
 - 2026-10-18 claude: Owner decision 2026-10-18: Muse builds this work package following ADR-0016 (Accepted); Claude reviews the PR before the owner merges it. Refine to ready first (Muse batch 5).
 - 2026-10-20 claude: Rebuilt after review, on the reworked WP-0107. Migration 0081 stores `agent_identities` with Access Control v1 rights (linked Access Roles plus an Administrator flag, not free-text roles) and `agent_identity_credentials` holding only `sha256(token)`; no recoverable token copy. `agent_identity_service`: Administrator-only, audited create/update/enable/disable/delete; issue, rotate and revoke credentials (tokens from the OS random source, 1 to 168 hours); `authenticate` refuses revoked, expired, disabled or other-workspace credentials with `policy.access_denied`; `grant_for_run` feeds `EffectiveIdentity`. SQL lives in `agent_identity_repo`. AC-1 scan test covers every stored text column, the audit log, API models and the prompts sent to the provider; AC-2 tests revoke, rotate, expiry and disable. Not in this WP: running an admin-scoped agent unattended as an admin identity end to end (the inner `chat_service` gate still checks the record actor), API routes, UI and trigger assignment: WP-0109.
 - 2026-10-22 claude: PR #683 merged. Backend in the shared core (desktop and Team Workspace); management screens arrive with WP-0109 behind a flag; help article `agent-identities` written (PR #700). Stays `in_review` only for the online demo edition: see RAID Q-21.
+- 2026-10-22 claude: Online demo edition built (RAID Q-21). Agent Identities and their credentials in the demo: tokens are generated in the browser, shown once and stored only as a SHA-256 hash; unknown, revoked and expired tokens are refused at once; lifetime 1 hour to one week; anything shaped like an agent token is stored as `[REDACTED]` in chat history, run inputs and the audit trail. The screen sits behind `agents.identities_ui` like desktop (not in `DEMO_RELEASED_FEATURES`). Verified in headless Chromium.
