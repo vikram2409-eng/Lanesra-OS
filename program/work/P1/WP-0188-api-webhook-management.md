@@ -14,7 +14,7 @@ editions_reason: The REST API exists only on the Team Workspace server; desktop 
 delivered: [workspace]
 docs: [api-access-and-webhooks]
 branch: claude/enterprise-build-planning-jxy2kq
-pr: TBD
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/702
 updated: 2026-10-22
 ---
 
