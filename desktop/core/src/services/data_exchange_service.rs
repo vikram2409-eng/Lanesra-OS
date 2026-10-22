@@ -284,6 +284,84 @@ pub fn export_csv(
         .map_err(|e| AppError::Validation(format!("CSV output was not valid UTF-8: {e}")))
 }
 
+/// The formats a bulk export (WP-0187) can write.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportFormat {
+    Ndjson,
+    Csv,
+}
+
+impl ExportFormat {
+    pub fn parse(format: Option<&str>) -> AppResult<Self> {
+        match format.unwrap_or("ndjson") {
+            "ndjson" => Ok(Self::Ndjson),
+            "csv" => Ok(Self::Csv),
+            other => Err(AppError::Validation(format!(
+                "Unknown export format '{other}'; use ndjson or csv"
+            ))),
+        }
+    }
+
+    pub fn content_type(self) -> &'static str {
+        match self {
+            Self::Ndjson => "application/x-ndjson",
+            Self::Csv => "text/csv; charset=utf-8",
+        }
+    }
+}
+
+/// The CSV columns for an export: every key of the first record, in order,
+/// the same rule as `export_csv`.
+pub fn export_columns(records: &[Value]) -> Vec<String> {
+    records
+        .first()
+        .and_then(|r| r.as_object())
+        .map(|o| o.keys().cloned().collect())
+        .unwrap_or_default()
+}
+
+/// Encodes one chunk of an export. A CSV chunk starts with the header row
+/// when `with_header` is set; an NDJSON chunk is one JSON object per line.
+pub fn encode_export_chunk(
+    format: ExportFormat,
+    columns: &[String],
+    records: &[Value],
+    with_header: bool,
+) -> AppResult<String> {
+    match format {
+        ExportFormat::Ndjson => {
+            let mut out = String::new();
+            for record in records {
+                out.push_str(&record.to_string());
+                out.push('\n');
+            }
+            Ok(out)
+        }
+        ExportFormat::Csv => {
+            let mut writer = csv::WriterBuilder::new().from_writer(vec![]);
+            if with_header && !columns.is_empty() {
+                writer.write_record(columns).map_err(|e| {
+                    AppError::Validation(format!("could not write CSV header: {e}"))
+                })?;
+            }
+            for record in records {
+                let row: Vec<String> = columns
+                    .iter()
+                    .map(|c| record.get(c).map(value_to_csv_cell).unwrap_or_default())
+                    .collect();
+                writer
+                    .write_record(&row)
+                    .map_err(|e| AppError::Validation(format!("could not write CSV row: {e}")))?;
+            }
+            let bytes = writer
+                .into_inner()
+                .map_err(|e| AppError::Validation(format!("could not finalize CSV: {e}")))?;
+            String::from_utf8(bytes)
+                .map_err(|e| AppError::Validation(format!("CSV output was not valid UTF-8: {e}")))
+        }
+    }
+}
+
 fn value_to_csv_cell(v: &Value) -> String {
     match v {
         Value::String(s) => s.clone(),

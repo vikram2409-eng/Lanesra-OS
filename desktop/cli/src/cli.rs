@@ -90,4 +90,18 @@ pub enum RecordsCommand {
     },
     /// Archive (soft-delete) a record by id
     Archive { object_key: String, id: String },
+    /// Export every record of an object (needs bulk.read); prints NDJSON or CSV
+    Export {
+        object_key: String,
+        /// ndjson (default) or csv
+        #[arg(long, default_value = "ndjson")]
+        format: String,
+    },
+    /// Apply up to 1000 create/update/archive operations at once (needs bulk.write).
+    /// --data is a JSON array of {"op","id"?,"data"?}, or @path to read it from a file
+    Bulk {
+        object_key: String,
+        #[arg(long)]
+        data: String,
+    },
 }

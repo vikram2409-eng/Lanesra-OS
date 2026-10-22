@@ -25,6 +25,12 @@ pub struct ApiResponse {
     pub body: Value,
 }
 
+/// A response whose body is plain text, returned as-is.
+pub struct TextResponse {
+    pub status: StatusCode,
+    pub body: String,
+}
+
 impl ApiClient {
     pub fn new(base_url: impl Into<String>, api_key: impl Into<String>) -> Self {
         Self {
@@ -69,6 +75,21 @@ impl ApiClient {
             .send()
             .map_err(|e| e.to_string())?;
         self.to_response(resp)
+    }
+
+    /// A GET whose success body is not JSON (a bulk export's NDJSON or
+    /// CSV). A failure body is still the usual JSON error.
+    pub fn get_text(&self, path: &str, query: &[(&str, String)]) -> Result<TextResponse, String> {
+        let resp = self
+            .http
+            .get(self.url(path))
+            .bearer_auth(&self.api_key)
+            .query(query)
+            .send()
+            .map_err(|e| e.to_string())?;
+        let status = resp.status();
+        let body = resp.text().map_err(|e| e.to_string())?;
+        Ok(TextResponse { status, body })
     }
 
     pub fn post(&self, path: &str, body: &Value) -> Result<ApiResponse, String> {

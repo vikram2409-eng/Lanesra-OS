@@ -71,6 +71,16 @@ pub fn run(cli: Cli) -> i32 {
             RecordsCommand::Archive { object_key, id } => {
                 client.delete(&format!("/api/v1/objects/{object_key}/records/{id}"))
             }
+            RecordsCommand::Export { object_key, format } => {
+                return print_text(client.get_text(
+                    &format!("/api/v1/objects/{object_key}/export"),
+                    &[("format", format)],
+                ));
+            }
+            RecordsCommand::Bulk { object_key, data } => match bulk_body(&data) {
+                Ok(body) => client.post(&format!("/api/v1/objects/{object_key}/bulk"), &body),
+                Err(code) => return code,
+            },
         },
         Command::Search {
             text,
@@ -104,6 +114,41 @@ pub fn search_query(
         query.push(("page_size", ps.to_string()));
     }
     query
+}
+
+/// The request body for `lanesra records bulk`: `--data` is a JSON array of
+/// operations, or `@path` to a file holding one (WP-0187).
+pub fn bulk_body(data: &str) -> Result<Value, i32> {
+    let text = match data.strip_prefix('@') {
+        Some(path) => std::fs::read_to_string(path).map_err(|e| {
+            eprintln!("Could not read {path}: {e}");
+            2
+        })?,
+        None => data.to_string(),
+    };
+    let operations = parse_data(&text)?;
+    if !operations.is_array() {
+        eprintln!("--data must be a JSON array of operations");
+        return Err(2);
+    }
+    Ok(serde_json::json!({ "operations": operations }))
+}
+
+fn print_text(result: Result<client::TextResponse, String>) -> i32 {
+    match result {
+        Ok(response) if response.status.is_success() => {
+            print!("{}", response.body);
+            0
+        }
+        Ok(response) => {
+            eprintln!("{}", response.body);
+            1
+        }
+        Err(message) => {
+            eprintln!("Request failed: {message}");
+            1
+        }
+    }
 }
 
 fn parse_data(data: &str) -> Result<Value, i32> {

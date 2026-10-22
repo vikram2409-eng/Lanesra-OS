@@ -21,15 +21,18 @@
 //! `api_object_service`, so a locked-out or misconfigured integration is
 //! visible in the same unified log as everything else.
 
-use axum::extract::{Path, Query, State};
-use axum::http::{HeaderMap, StatusCode};
-use axum::routing::get;
+use axum::body::Body;
+use axum::extract::{DefaultBodyLimit, Path, Query, State};
+use axum::http::{header, HeaderMap, StatusCode};
+use axum::response::Response;
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
 use lanesra_core::domain::{AppError, ErrorClass};
-use lanesra_core::models::integration::{ApiClient, ApiListQuery};
+use lanesra_core::models::integration::{ApiBulkOperation, ApiClient, ApiListQuery};
+use lanesra_core::services::data_exchange_service::{self, ExportFormat};
 use lanesra_core::services::integration_log_service::{self, FinishOutcome};
 use lanesra_core::services::{api_client_service, api_object_service, network_trust};
 
@@ -51,7 +54,18 @@ pub fn router() -> Router<SharedState> {
             "/api/v1/objects/:key/records/:id",
             get(get_record).patch(update_record).delete(archive_record),
         )
+        .route("/api/v1/objects/:key/export", get(export_records))
+        .route(
+            "/api/v1/objects/:key/bulk",
+            // A full 1000-operation batch is larger than axum's 2 MB default.
+            post(bulk_write).layer(DefaultBodyLimit::max(BULK_BODY_LIMIT)),
+        )
 }
+
+/// The largest bulk-write request body accepted (WP-0187).
+const BULK_BODY_LIMIT: usize = 32 * 1024 * 1024;
+/// Records encoded per chunk of a streamed export.
+const EXPORT_CHUNK: usize = 500;
 
 pub(crate) fn error_status(e: &AppError) -> StatusCode {
     match e {
@@ -412,4 +426,95 @@ async fn archive_record(
     )
     .map_err(app_err)?;
     Ok(Json(json!({"ok": true})))
+}
+
+#[derive(Debug, Deserialize)]
+struct ExportParams {
+    format: Option<String>,
+}
+
+/// WP-0187: every non-archived record of an object as NDJSON (default) or
+/// CSV. The body is encoded and sent in chunks, so the encoded export is
+/// never held in memory whole.
+async fn export_records(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    caller: Caller,
+    Path(key): Path<String>,
+    Query(params): Query<ExportParams>,
+) -> Result<Response, (StatusCode, Json<Value>)> {
+    let (_client, workspace_id) = authorize(&state, &headers, caller, "bulk.read")?;
+    let format = ExportFormat::parse(params.format.as_deref()).map_err(app_err)?;
+    let records = {
+        let conn = state.conn.lock().unwrap();
+        logged(
+            &conn,
+            &workspace_id,
+            api_object_service::all_records(&conn, &workspace_id, &key),
+        )
+        .map_err(app_err)?
+    };
+    let columns = data_exchange_service::export_columns(&records);
+    let stream = async_stream::stream! {
+        let mut chunks = records.chunks(EXPORT_CHUNK).peekable();
+        if chunks.peek().is_none() && format == ExportFormat::Csv {
+            yield data_exchange_service::encode_export_chunk(format, &columns, &[], true)
+                .map_err(|e| std::io::Error::other(e.to_string()));
+        }
+        let mut first = true;
+        for chunk in chunks {
+            yield data_exchange_service::encode_export_chunk(format, &columns, chunk, first)
+                .map_err(|e| std::io::Error::other(e.to_string()));
+            first = false;
+        }
+    };
+    let extension = if format == ExportFormat::Csv {
+        "csv"
+    } else {
+        "ndjson"
+    };
+    Response::builder()
+        .header(header::CONTENT_TYPE, format.content_type())
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{key}.{extension}\""),
+        )
+        .body(Body::from_stream(stream))
+        .map_err(|e| err_json(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))
+}
+
+#[derive(Debug, Deserialize)]
+struct BulkBody {
+    operations: Vec<ApiBulkOperation>,
+}
+
+/// WP-0187: up to 1000 create, update or archive operations on one object,
+/// each applied on its own through the validated write path. 200 with a
+/// result per item; 413 (nothing applied) above the operation cap.
+async fn bulk_write(
+    State(state): State<SharedState>,
+    headers: HeaderMap,
+    caller: Caller,
+    Path(key): Path<String>,
+    Json(body): Json<BulkBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (_client, workspace_id) = authorize(&state, &headers, caller, "bulk.write")?;
+    if body.operations.len() > api_object_service::MAX_BULK_OPERATIONS {
+        return Err(err_json(
+            StatusCode::PAYLOAD_TOO_LARGE,
+            &format!(
+                "A bulk write carries at most {} operations; this one has {}",
+                api_object_service::MAX_BULK_OPERATIONS,
+                body.operations.len()
+            ),
+        ));
+    }
+    let conn = state.conn.lock().unwrap();
+    let data = logged(
+        &conn,
+        &workspace_id,
+        api_object_service::bulk_write(&conn, &workspace_id, &key, &body.operations, None),
+    )
+    .map_err(app_err)?;
+    Ok(Json(json!({"ok": true, "data": data})))
 }
