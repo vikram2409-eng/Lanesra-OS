@@ -3,7 +3,7 @@ id: WP-0183
 title: "Webhook signing secret: show once and rotate"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0182]
 requirements: [REQ-INT-002]
@@ -70,3 +70,4 @@ Every webhook delivery is signed with HMAC-SHA256, but the signing secret is gen
 - 2026-10-21 claude: Claimed. Stacked on the WP-0182 branch because the planning files (this WP, ADR-0018, REQ-INT) are in that PR. Design: `create` keeps returning `Webhook` (the AI `create_webhook` tool uses it, so a secret never enters an agent transcript); new `create_with_secret` and `rotate_secret` return the value once; `integration_secret_repo::rotate` already exists. Next: failing tests first.
 - 2026-10-21 claude: Built. Core `create_with_secret` and `rotate_secret` (admin-only, audited as `webhook.secret_rotated` without the value), server dispatch `rotate_webhook_secret`, Tauri command, `WebhookSecretModal` plus **Rotate secret** on the desktop Webhooks tab (Copy and Done), demo mirror in `app.js`, help article, Integrations page, llms files and Releases entry. Tests: 4 core (`integration_webhook`: 13 pass with `--features test-support`, which CI gets from the workspace build), 1 server HTTP (`webhook_secret`), 2 Vitest (`webhookSecret.test.tsx`). Clippy `-D warnings` clean; `tsc` clean. Demo checked in headless Chromium (create and rotate show the dialog, names are escaped). Server test was confirmed red with the dispatch change reverted.
 - 2026-10-22 claude: PR #690 merged by the owner (6fd1980). Delivered in Team Workspace, desktop and the online demo (dialogs mirrored in `app.js`); help article `api-access-and-webhooks` updated. Moves to `done` with WP-0182, which it depends on (WP-0182 waits on the owner accepting its AC-5).
+- 2026-10-22 claude: Dependency WP-0182 is done (owner accepted its AC-5). Done.

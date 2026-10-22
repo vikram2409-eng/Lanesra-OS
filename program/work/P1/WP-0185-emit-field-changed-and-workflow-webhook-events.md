@@ -3,8 +3,8 @@ id: WP-0185
 title: "Emit the field.changed, workflow.completed and workflow.failed webhook events"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: ready
-owner: unassigned
+status: in_progress
+owner: claude
 depends_on: [WP-0182]
 requirements: [REQ-INT-003, REQ-INT-001]
 threats: []
@@ -13,9 +13,9 @@ editions: [workspace, desktop]
 editions_reason: The REST API exists only on the Team Workspace server; desktop opens no network port and the demo has no real API
 delivered: []
 docs: [api-access-and-webhooks]
-branch:
+branch: claude/enterprise-build-planning-jxy2kq
 pr:
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 # WP-0185 — Emit the field.changed, workflow.completed and workflow.failed webhook events
@@ -64,3 +64,4 @@ Three webhook event types can be subscribed to today and nothing emits them, so 
 
 <!-- Append dated entries, newest last. -->
 - 2026-10-21 claude: Written as `ready`. Not started. Starts after WP-0182 merges.
+- 2026-10-22 claude: Claimed; WP-0182 is done.

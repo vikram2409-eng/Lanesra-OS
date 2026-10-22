@@ -3,7 +3,7 @@ id: WP-0188
 title: "API: webhook management behind the webhooks.manage scope"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0183, WP-0184]
 requirements: [REQ-INT-006, REQ-INT-005]
@@ -66,3 +66,4 @@ updated: 2026-10-22
   - Docs: APIs page rows, help section "Managing webhooks over the API", llms files, Releases entry.
   - Tests: `server/tests/api_v1_webhooks.rs` 4 (full lifecycle with a local receiver verifying the created secret, then only the rotated one; paged deliveries without secrets; 403 on all ten endpoints with `objects.write` and `admin.integration.manage`; non-webhook connection 400 and metadata-address URL 403; audit rows carry the client id and no secret); `cli/tests/cli_parsing.rs` +1. All webhook suites pass unchanged (integration_webhook, webhook_secret, job_scheduler, integration_connection, integration_api_client, agent_v1, trigger_identities, principals, ai_agent_orchestration).
 - 2026-10-22 claude: PR #702 merged by the owner (dae4176), accepting the save-time outbound check on webhooks. Delivered on Team Workspace. Stays `in_review` only because its dependency WP-0183 does (WP-0182 AC-5 awaits the owner).
+- 2026-10-22 claude: Dependency WP-0183 is done. Done.
