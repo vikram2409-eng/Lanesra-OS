@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 18 | 1 | 0 | 0 | 1 | 32 / 36 | `████████░░` 89% |
-| 1 · Foundations | 50 | 9 | 7 | 4 | 0 | 30 | 15 / 150 | `█░░░░░░░░░` 10% |
+| 1 · Foundations | 50 | 9 | 8 | 4 | 0 | 29 | 15 / 150 | `█░░░░░░░░░` 10% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -19,8 +19,8 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 113 | 11 | 21 / 393 |
-| Team Workspace | 124 | 15 | 28 / 440 |
+| Desktop | 113 | 12 | 23 / 393 |
+| Team Workspace | 124 | 16 | 30 / 440 |
 | Online demo | 86 | 6 | 12 / 304 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
@@ -34,6 +34,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0107](work/P1/WP-0107-principal-model-and-effective-identity.md) | Principal model and effective-identity rules | in_review | claude | `wp/WP-0107-principal-model` | https://github.com/vikram2409-eng/Lanesra-OS/pull/682 |
 | [WP-0108](work/P1/WP-0108-agent-identities-and-credentials.md) | Agent Identities and credentials | in_review | claude | `wp/WP-0108-agent-identities` | https://github.com/vikram2409-eng/Lanesra-OS/pull/683 |
 | [WP-0109](work/P1/WP-0109-trigger-migration-and-ui.md) | Trigger migration and Agent Identity UI | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/700 |
+| [WP-0110](work/P1/WP-0110-run-and-step-schema-extensions.md) | Run and step schema extensions | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
 | [WP-0122](work/P1/WP-0122-native-function-calling-and-strict-json-tool-format.md) | Native function calling and strict JSON tool format | in_progress | muse | `wp/WP-0122-tool-calling` | - |
 | [WP-0124](work/P1/WP-0124-retry-with-backoff-and-error-taxonomy.md) | Retry with backoff and error taxonomy | in_review | claude | `wp/WP-0124-retry-backoff-v2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/678 |
 | [WP-0130](work/P1/WP-0130-prompt-catalog-written-fresh.md) | Prompt catalog, written fresh | in_progress | muse | `wp/WP-0130-prompt-catalog` | - |
@@ -87,7 +88,7 @@ None.
 | [WP-0107](work/P1/WP-0107-principal-model-and-effective-identity.md) | Principal model and effective-identity rules | E1.0 Identity foundation | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0009 |
 | [WP-0108](work/P1/WP-0108-agent-identities-and-credentials.md) | Agent Identities and credentials | E1.0 Identity foundation | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0107 |
 | [WP-0109](work/P1/WP-0109-trigger-migration-and-ui.md) | Trigger migration and Agent Identity UI | E1.0 Identity foundation | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0107, WP-0108 |
-| [WP-0110](work/P1/WP-0110-run-and-step-schema-extensions.md) | Run and step schema extensions | E1.2 Run model and trace | ⚪ proposed | M | ○Desktop ○Team Workspace | WP-0009, WP-0007, WP-0107 |
+| [WP-0110](work/P1/WP-0110-run-and-step-schema-extensions.md) | Run and step schema extensions | E1.2 Run model and trace | 🔨 in progress | M | ✓Desktop ✓Team Workspace | WP-0009, WP-0007, WP-0107 |
 | [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | E1.2 Run model and trace | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0110 |
 | [WP-0112](work/P1/WP-0112-run-events-over-sse-with-stable-schemas.md) | Run events over SSE with stable schemas | E1.2 Run model and trace | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0111 |
 | [WP-0113](work/P1/WP-0113-full-trace-conformance-suite-phase-1-gate-test.md) | Full-trace conformance suite (Phase 1 gate test) | E1.2 Run model and trace | ⚪ proposed | M | — | WP-0112, WP-0122, WP-0150, WP-0100 |

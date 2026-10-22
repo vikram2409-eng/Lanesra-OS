@@ -73,7 +73,7 @@ const PALETTE = FULL_PALETTE;
 // `graph_runtime_service.rs` already writes as a real run actually
 // executes, so every highlight here reflects a real in-progress agent
 // run, not a simulation.
-const TERMINAL_RUN_STATUSES = new Set<GraphRunStatus>(["completed", "failed", "cancelled"]);
+const TERMINAL_RUN_STATUSES = new Set<GraphRunStatus>(["completed", "completed_partial", "failed", "cancelled"]);
 const RUN_NODE_COLOR: Record<string, string> = {
   running: "#2563eb",
   waiting_approval: "#b45309",

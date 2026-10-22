@@ -91,7 +91,52 @@ def seed_triggers(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def gen(out_dir: Path, version: int, label: str, triggers: bool = False) -> Path:
+def seed_runs(conn: sqlite3.Connection) -> None:
+    """A published graph and runs in every state the 0062 schema allowed (WP-0110 AC-1, AC-3).
+
+    Two runs sit in the retired waiting_tool and waiting_agent statuses, which
+    the upgrade must turn into paused/interrupted. A waiting_scheduled run is
+    due, so the upgraded runtime can finish it through the new guard.
+    """
+    ts = "2026-10-17T00:00:00Z"
+    conn.execute(
+        "INSERT INTO ai_execution_graphs (id, workspace_id, name, status, created_at, updated_at)"
+        " VALUES ('g_fixture', 'ws_fixture', 'Fixture graph', 'published', ?, ?)",
+        (ts, ts),
+    )
+    conn.executemany(
+        "INSERT INTO ai_graph_nodes (id, graph_id, node_key, node_type, sort_order) VALUES (?, 'g_fixture', ?, ?, ?)",
+        [("n_trigger", "trigger", "trigger", 0), ("n_end", "end", "end", 1)],
+    )
+    conn.execute(
+        "INSERT INTO ai_graph_edges (id, graph_id, from_node_id, to_node_id) VALUES ('e_1', 'g_fixture', 'n_trigger', 'n_end')"
+    )
+    runs = [
+        ("r_completed", "completed", "n_end", None, None, ts),
+        ("r_failed", "failed", "n_trigger", None, "provider unavailable", ts),
+        ("r_waiting_tool", "waiting_tool", "n_trigger", None, None, None),
+        ("r_waiting_agent", "waiting_agent", "n_trigger", None, None, None),
+        ("r_scheduled", "waiting_scheduled", "n_end", "2026-10-17T01:00:00Z", None, None),
+    ]
+    for rid, status, node, resume_at, error, finished in runs:
+        conn.execute(
+            "INSERT INTO ai_runs (id, workspace_id, graph_id, status, trigger_input, context_json,"
+            " current_node_id, resume_at, error_message, steps_executed, started_at, finished_at)"
+            " VALUES (?, 'ws_fixture', 'g_fixture', ?, '{\"topic\":\"fixture\"}', '{\"trigger\":{\"ok\":true}}',"
+            " ?, ?, ?, 1, ?, ?)",
+            (rid, status, node, resume_at, error, ts, finished),
+        )
+    conn.execute(
+        "INSERT INTO ai_run_nodes (id, run_id, node_id, node_key, node_type, attempt, status,"
+        " input_json, output_json, started_at, finished_at)"
+        " VALUES ('rn_1', 'r_completed', 'n_trigger', 'trigger', 'trigger', 1, 'completed',"
+        " '{}', '{\"ok\":true}', ?, ?)",
+        (ts, ts),
+    )
+    conn.commit()
+
+
+def gen(out_dir: Path, version: int, label: str, triggers: bool = False, runs: bool = False) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{version:04d}_{label}.db"
     if path.exists():
@@ -110,6 +155,8 @@ def gen(out_dir: Path, version: int, label: str, triggers: bool = False) -> Path
         seed(conn)
         if triggers:
             seed_triggers(conn)
+        if runs:
+            seed_runs(conn)
     finally:
         conn.close()
     return path
@@ -125,8 +172,13 @@ def main(argv=None) -> int:
         action="store_true",
         help="also seed users, an agent and unattended triggers (WP-0109)",
     )
+    ap.add_argument(
+        "--with-runs",
+        action="store_true",
+        help="also seed a published graph and runs in every 0062 status (WP-0110)",
+    )
     args = ap.parse_args(argv)
-    path = gen(Path(args.out), args.version, args.label, args.with_triggers)
+    path = gen(Path(args.out), args.version, args.label, args.with_triggers, args.with_runs)
     print(f"wrote {path}")
     return 0
 
