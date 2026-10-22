@@ -462,7 +462,15 @@ async fn the_background_scheduler_delivers_signed_webhooks_for_real_record_chang
     );
 
     // Delivery history records each one, and the queue is empty afterwards.
+    // The receiver answers before the scheduler writes the history row, so
+    // wait for the rows instead of reading them the moment the third call
+    // has arrived.
     let conn = open_workspace_db(&f.db_path).unwrap();
+    wait_until("three delivery records", || {
+        webhook_service::list_deliveries(&conn, &f.workspace_id, &webhook_id)
+            .is_ok_and(|d| d.len() >= 3)
+    })
+    .await;
     let deliveries = webhook_service::list_deliveries(&conn, &f.workspace_id, &webhook_id).unwrap();
     assert_eq!(deliveries.len(), 3);
     assert!(deliveries.iter().all(|d| d.status == "succeeded"));
