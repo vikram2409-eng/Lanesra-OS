@@ -288,7 +288,7 @@ async fn run_target(
 /// Desktop's own poll for everything the server's `job_scheduler.rs`
 /// tick drains - a schedule Trigger, a `run_ai_agent` workflow action,
 /// (the incidental fix) `call_connector_action`'s own long-unwired
-/// queue, and (Phase 7g) a Custom Object record's own pending vector
+/// queue, queued outbound webhook events (WP-0182), and (Phase 7g) a Custom Object record's own pending vector
 /// search reindex. Called from `App.tsx`'s existing 5-minute `runScheduledWorkflows`
 /// interval, not a separate one - `runScheduledWorkflows` itself stays
 /// sync (scheduled workflow triggers make no network calls); this is the
@@ -309,6 +309,9 @@ pub async fn drain_pending_async_work(state: State<'_, AppState>) -> AppResult<(
             50,
         )
         .await;
+        // Outbound webhooks (WP-0182): the same drain the server tick runs.
+        let _ =
+            lanesra_core::services::webhook_service::drain_pending_events(&conn, &master_key).await;
         let _ = ai_orchestration_service::enqueue_due_schedules(&conn, &workspace_id);
         let _ = ai_orchestration_service::drain_pending_runs(&conn, &workspace_id, &master_key, 50)
             .await;

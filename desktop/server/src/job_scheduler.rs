@@ -7,6 +7,10 @@
 //! instead (see `workflow_service::run_scheduled`'s own doc comment for
 //! why Personal Workspace never gets an OS-level scheduler).
 //!
+//! Also drains the outbound-webhook queue (`webhook_service::
+//! drain_pending_events_report`, WP-0182): without it a webhook only ever
+//! fired from the admin Test button.
+//!
 //! Also the one place two other queues get drained, both following the
 //! same "enqueue now, run for real later" shape Integration Jobs itself
 //! doesn't need but two *workflow actions* do (a record save must never
@@ -48,7 +52,7 @@ use std::time::Duration;
 
 use lanesra_core::services::{
     ai_orchestration_service, connector_execution_service, graph_runtime_service,
-    integration_job_service, secret_service, vector_search_service,
+    integration_job_service, secret_service, vector_search_service, webhook_service,
 };
 
 /// Spawns the scheduler loop on its own OS thread and returns
@@ -112,6 +116,17 @@ async fn tick(conn: &rusqlite::Connection, key_file_path: &std::path::Path) -> R
             .await
     {
         tracing::error!(error = %e, "drain_pending_actions (call_connector_action) failed");
+    }
+    // Outbound webhooks (WP-0182): every create/update/archive queues an
+    // event in `integration_pending_events`; this is the only place the
+    // server signs, sends and clears them.
+    match webhook_service::drain_pending_events_report(conn, &master_key).await {
+        Ok(report) => {
+            for (event_id, error) in &report.failed {
+                tracing::error!(%event_id, %error, "webhook event fan-out failed; it stays queued for the next tick");
+            }
+        }
+        Err(e) => tracing::error!(error = %e, "drain_pending_events (outbound webhooks) failed"),
     }
     if let Err(e) = ai_orchestration_service::enqueue_due_schedules(conn, &workspace.id) {
         tracing::error!(error = %e, "enqueue_due_schedules (AI Agent Foundry schedule triggers) failed");

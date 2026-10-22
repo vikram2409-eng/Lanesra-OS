@@ -14,6 +14,10 @@ package completes. Linux, Rust 1.97.0, Node 22.22.0.
 | Program tools (`unittest discover program/tools`) | 52 | 52 | 0 | +7 migration-order, +5 binary-asset self-tests (WP-0003); +5 toolchain-pin self-tests (WP-0020); +7 feature-flag self-tests (WP-0010) |
 | Team Workspace server image (`server image` CI job) | 1 smoke test (7 checks) | — | — | health, empty-volume status, first run, sign-in, create a record, restart, sign-in and record still present (WP-0020) |
 
+**Added since this baseline (recorded when each work package completes):**
+
+- WP-0182 (2026-10-21): +3 Rust tests: 1 in `core/tests/integration_webhook.rs` (a failing pending event does not block the next), 2 in `server/tests/job_scheduler.rs` (the scheduler delivers signed record webhooks; paused and other-object webhooks receive nothing). Run locally: `integration_webhook` 9 passed, `job_scheduler` 3 passed. Full totals come from the CI run on the pull request.
+
 ## CI duration (WP-0003 AC-4)
 
 The full suite runs in CI on every pull request and every push to `main` (`.github/workflows/ci.yml`),
