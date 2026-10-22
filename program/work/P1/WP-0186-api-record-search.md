@@ -3,7 +3,7 @@ id: WP-0186
 title: "API: record search behind the search.read scope"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0184]
 requirements: [REQ-INT-006, REQ-INT-005]
@@ -62,3 +62,4 @@ updated: 2026-10-22
   - Docs: APIs page table row, help article `api-access-and-webhooks` section "Searching records" (`wps` names WP-0186), llms files, Releases v0.97.0 entry.
   - Tests: `server/tests/api_v1.rs` +4 (AC-1 across Company and Contact with the object filter and an unknown object, AC-2 403 with `objects.read`, AC-3 archived, AC-4 paging, clamping, huge page and empty `q`); `core/tests/integration_api_object.rs` +1 (AC-1 and AC-3: a Custom Object's records are found until the object is deactivated); `cli/tests/cli_parsing.rs` +1 (AC-5). The existing search suites (`search`, `admin_search`, `ai_context_layer`, `ai_vector_search`, `voice_mode_v4`) pass unchanged; clippy `-D warnings` clean.
   - Shipped in PR #700 together with WP-0109, at the owner's choice (2026-10-22).
+- 2026-10-22 claude: PR #700 merged by the owner (cfc4a38). Delivered on Team Workspace, its only edition; help article updated. Done.

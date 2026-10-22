@@ -3,8 +3,8 @@ id: WP-0187
 title: "API: bulk export and bulk write behind bulk.read and bulk.write"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: ready
-owner: unassigned
+status: in_progress
+owner: claude
 depends_on: [WP-0184]
 requirements: [REQ-INT-006, REQ-INT-005]
 threats: []
@@ -13,9 +13,9 @@ editions: [workspace]
 editions_reason: The REST API exists only on the Team Workspace server; desktop opens no network port and the demo has no real API
 delivered: []
 docs: [api-access-and-webhooks]
-branch:
+branch: claude/enterprise-build-planning-jxy2kq
 pr:
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 # WP-0187 — API: bulk export and bulk write behind bulk.read and bulk.write
@@ -59,3 +59,4 @@ updated: 2026-10-21
 
 <!-- Append dated entries, newest last. -->
 - 2026-10-21 claude: Written as `ready`. Not started.
+- 2026-10-22 claude: Claimed. Building on `claude/enterprise-build-planning-jxy2kq`.
