@@ -3,7 +3,7 @@ id: WP-0182
 title: "Deliver outbound webhooks for real record events"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: in_review
+status: done
 owner: claude
 depends_on: []
 requirements: [REQ-INT-001, REQ-PRE-015]
@@ -11,7 +11,7 @@ threats: []
 estimate: S
 editions: [workspace, desktop]
 editions_reason: Outbound webhooks are an Integration Hub feature of the Team Workspace server and the desktop app; the online demo has no real network egress or receivers
-delivered: [workspace]
+delivered: [workspace, desktop]
 docs: [api-access-and-webhooks]
 branch: wp/WP-0182-deliver-outbound-webhooks
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/689
@@ -44,7 +44,7 @@ A webhook an admin creates in the Integration Hub must actually fire when a subs
 - [x] AC-2: The delivery carries the documented payload fields (`event_id`, `event_type`, `occurred_at`, `workspace_id`, `object_key`, `record_id`, `correlation_id`, `data`) and a valid `X-Lanesra-Signature: sha256=<hex>` over the raw body, and appears in the webhook's delivery history
 - [x] AC-3: Deny and limit paths: a paused webhook, a deleted webhook and a webhook scoped to a different object each receive nothing, and the queued event row is cleared in every case
 - [x] AC-4: One pending event whose fan-out errors does not stop the events behind it in the same pass; the failed event stays queued and the others are delivered
-- [ ] AC-5: Desktop's `drain_pending_async_work` also drains pending webhook events (a one-line mirror of the server call)
+- [x] AC-5: Desktop's `drain_pending_async_work` also drains pending webhook events (a one-line mirror of the server call)
 - [x] AC-6: The `api-access-and-webhooks` help article, the Integrations page, `llms-full.txt` and the Releases page state that record events (`record.created`, `record.updated`, `record.archived`) are delivered by the Team Workspace scheduler and the desktop poll
 
 ## Test plan
@@ -78,3 +78,4 @@ A webhook an admin creates in the Integration Hub must actually fire when a subs
 - 2026-10-21 claude: AC-6 done after PR #688 merged (it edits the same Help article line): `api-access-and-webhooks` article now states when events are delivered and that `field.changed` and `workflow.*` are not emitted yet (and carries `wps:'WP-0182'`); Integrations page note; `llms.txt` and `llms-full.txt`; Releases entry `v0.97.0` (version number is a placeholder for the owner to confirm at release). `REGRESSION.md` updated, session log written. `programctl docs --check`, `validate`, binary-asset, feature-flag and vocabulary checks clean. Roadmap page: no entry for outbound webhook delivery exists, so nothing to move. AC-5 stays unticked: no automated test is possible for the `src-tauri` call; the `tauri (desktop shell)` CI job compiles it. Next: wait for CI, then `in_review`.
 - 2026-10-21 claude: Docs, REGRESSION totals and session log done; CI green on PR #689 (all 26 checks). Moved to in_review. AC-5 (desktop poll) is compiled by the `tauri (desktop shell)` job but has no automated test; left for owner acceptance.
 - 2026-10-22 claude: PR #689 merged by the owner (7aefacb). Delivered on Team Workspace. Stays `in_review` for one item: AC-5 (desktop poll drains webhook events) is built and compiled by the `tauri` CI job but has no automated test, so it needs the owner's acceptance before desktop is listed as delivered.
+- 2026-10-22 claude: Owner accepted AC-5 (desktop poll drains webhook events; compiled by the tauri CI job, no automated desktop test) on 2026-10-22. Delivered on Team Workspace and desktop. Done.

@@ -662,6 +662,38 @@ pub struct ApiBulkResult {
     pub failed: usize,
 }
 
+/// A connection as `admin.integration.read` sees it (WP-0189): metadata
+/// only. No secret, no `config_json` (headers can carry tokens), and the
+/// base URL without user info, query or fragment.
+#[derive(Debug, Clone, Serialize)]
+pub struct ApiConnectionSummary {
+    pub id: String,
+    pub name: String,
+    pub connection_type: String,
+    pub base_url: Option<String>,
+    pub auth_mode: String,
+    pub has_secret: bool,
+    pub status: String,
+    pub last_test_at: Option<String>,
+    pub last_test_status: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// A connector as `admin.integration.read` sees it (WP-0189).
+#[derive(Debug, Clone, Serialize)]
+pub struct ApiConnectorSummary {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub connection_type: String,
+    pub action_count: usize,
+    pub agent_tools_enabled: bool,
+    pub agent_write_tools_enabled: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ApiListQuery {
     pub select: Option<Vec<String>>,

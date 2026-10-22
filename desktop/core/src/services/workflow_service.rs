@@ -2349,6 +2349,16 @@ fn run_workflow(
         Some(&summaries.join("; ")),
         error_message.as_deref(),
     )?;
+    super::event_hooks::workflow_finished(
+        conn,
+        workspace_id,
+        &wf.id,
+        &wf.name,
+        entity_type,
+        entity_id,
+        errors.is_empty(),
+        error_message.as_deref(),
+    );
     Ok(())
 }
 

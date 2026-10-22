@@ -29,6 +29,7 @@ pub fn build_router(state: SharedState, frontend_dir: PathBuf) -> Router {
         .route("/api/invoke/:command", post(invoke))
         .merge(crate::api_v1::router())
         .merge(crate::api_webhooks::router())
+        .merge(crate::api_integration_admin::router())
         .merge(crate::agent_v1::router())
         .merge(crate::events_stream::router())
         .merge(crate::admin_actions::router())
