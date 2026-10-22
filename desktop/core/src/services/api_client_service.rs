@@ -63,6 +63,9 @@ pub fn create(
         return Err(AppError::Validation("API client name is required".into()));
     }
     validate_scopes(&input.scopes)?;
+    if let Some(cidr) = input.allowed_cidr.as_deref() {
+        super::network_trust::validate_allowed_cidr(cidr)?;
+    }
     let id = new_uuid();
     let client_id = generate_client_id();
     let scopes_json = serde_json::to_string(&input.scopes).unwrap_or_else(|_| "[]".into());

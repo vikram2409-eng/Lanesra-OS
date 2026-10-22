@@ -62,6 +62,7 @@ pub mod invoice_service;
 pub mod mapping_service;
 pub mod mcp_client_service;
 pub mod metric_service;
+pub mod network_trust;
 pub mod numbering_service;
 pub mod ontology_service;
 pub mod opportunity_service;

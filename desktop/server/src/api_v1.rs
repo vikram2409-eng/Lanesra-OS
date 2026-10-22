@@ -31,8 +31,9 @@ use serde_json::{json, Value};
 use lanesra_core::domain::{AppError, ErrorClass};
 use lanesra_core::models::integration::{ApiClient, ApiListQuery};
 use lanesra_core::services::integration_log_service::{self, FinishOutcome};
-use lanesra_core::services::{api_client_service, api_object_service};
+use lanesra_core::services::{api_client_service, api_object_service, network_trust};
 
+use crate::caller::Caller;
 use crate::dispatch::require_workspace_id;
 use crate::state::SharedState;
 
@@ -85,6 +86,7 @@ pub(crate) fn app_err(e: AppError) -> (StatusCode, Json<Value>) {
 pub(crate) fn authorize(
     state: &SharedState,
     headers: &HeaderMap,
+    caller: Caller,
     required_scope: &str,
 ) -> Result<(ApiClient, String), (StatusCode, Json<Value>)> {
     let presented = headers
@@ -107,6 +109,21 @@ pub(crate) fn authorize(
                 "Invalid or revoked API credential",
             )
         })?;
+    // ADR-0018: the client's allowed network, checked only after the key
+    // verifies so a refusal never tells a guesser that a client id exists.
+    if let Some(allowed) = client.allowed_cidr.as_deref() {
+        if network_trust::is_restricted(allowed)
+            && !caller
+                .0
+                .is_some_and(|ip| network_trust::client_admits(allowed, ip))
+        {
+            log_network_refusal(&conn, &workspace_id, &client, caller);
+            return Err(err_json(
+                StatusCode::FORBIDDEN,
+                "This API client is not allowed from this network address",
+            ));
+        }
+    }
     if !api_client_service::has_scope(&client, required_scope) {
         return Err(err_json(
             StatusCode::FORBIDDEN,
@@ -126,6 +143,36 @@ pub(crate) fn authorize(
         return Err(resp);
     }
     Ok((client, workspace_id))
+}
+
+/// Records a network refusal with the address that was resolved, so an admin
+/// can see where a leaked or misconfigured key was used from.
+fn log_network_refusal(
+    conn: &rusqlite::Connection,
+    workspace_id: &str,
+    client: &ApiClient,
+    caller: Caller,
+) {
+    let from = caller
+        .0
+        .map_or_else(|| "an unknown address".to_string(), |ip| ip.to_string());
+    let execution_id =
+        integration_log_service::start(conn, workspace_id, "api_call", None, None, "inbound", None);
+    integration_log_service::finish(
+        conn,
+        &execution_id,
+        &FinishOutcome {
+            status: "failed".into(),
+            http_status: Some(403),
+            records_failed: 1,
+            error_category: Some("network_blocked".into()),
+            error_message: Some(format!(
+                "API client '{}' was refused from {from}: outside its allowed network",
+                client.name
+            )),
+            ..Default::default()
+        },
+    );
 }
 
 /// Logs one REST call to `integration_executions` and returns the same
@@ -174,8 +221,9 @@ pub(crate) fn logged<T>(
 async fn limits(
     State(state): State<SharedState>,
     headers: HeaderMap,
+    caller: Caller,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let (client, workspace_id) = authorize(&state, &headers, "metadata.read")?;
+    let (client, workspace_id) = authorize(&state, &headers, caller, "metadata.read")?;
     let conn = state.conn.lock().unwrap();
     let settings = integration_log_service::get_settings(&conn, &workspace_id).map_err(app_err)?;
     Ok(Json(json!({
@@ -190,8 +238,9 @@ async fn limits(
 async fn list_object_keys(
     State(state): State<SharedState>,
     headers: HeaderMap,
+    caller: Caller,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let (_client, workspace_id) = authorize(&state, &headers, "metadata.read")?;
+    let (_client, workspace_id) = authorize(&state, &headers, caller, "metadata.read")?;
     let conn = state.conn.lock().unwrap();
     let data = logged(
         &conn,
@@ -205,9 +254,10 @@ async fn list_object_keys(
 async fn get_metadata(
     State(state): State<SharedState>,
     headers: HeaderMap,
+    caller: Caller,
     Path(key): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let (_client, workspace_id) = authorize(&state, &headers, "metadata.read")?;
+    let (_client, workspace_id) = authorize(&state, &headers, caller, "metadata.read")?;
     let conn = state.conn.lock().unwrap();
     let data = logged(
         &conn,
@@ -244,10 +294,11 @@ fn to_api_list_query(q: ListQueryParams) -> ApiListQuery {
 async fn list_records(
     State(state): State<SharedState>,
     headers: HeaderMap,
+    caller: Caller,
     Path(key): Path<String>,
     Query(params): Query<ListQueryParams>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let (_client, workspace_id) = authorize(&state, &headers, "objects.read")?;
+    let (_client, workspace_id) = authorize(&state, &headers, caller, "objects.read")?;
     let query = to_api_list_query(params);
     let conn = state.conn.lock().unwrap();
     let data = logged(
@@ -262,9 +313,10 @@ async fn list_records(
 async fn get_record(
     State(state): State<SharedState>,
     headers: HeaderMap,
+    caller: Caller,
     Path((key, id)): Path<(String, String)>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let (_client, workspace_id) = authorize(&state, &headers, "objects.read")?;
+    let (_client, workspace_id) = authorize(&state, &headers, caller, "objects.read")?;
     let conn = state.conn.lock().unwrap();
     let data = logged(
         &conn,
@@ -278,10 +330,11 @@ async fn get_record(
 async fn create_record(
     State(state): State<SharedState>,
     headers: HeaderMap,
+    caller: Caller,
     Path(key): Path<String>,
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let (_client, workspace_id) = authorize(&state, &headers, "objects.write")?;
+    let (_client, workspace_id) = authorize(&state, &headers, caller, "objects.write")?;
     let conn = state.conn.lock().unwrap();
     let data = logged(
         &conn,
@@ -295,10 +348,11 @@ async fn create_record(
 async fn update_record(
     State(state): State<SharedState>,
     headers: HeaderMap,
+    caller: Caller,
     Path((key, id)): Path<(String, String)>,
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let (_client, workspace_id) = authorize(&state, &headers, "objects.write")?;
+    let (_client, workspace_id) = authorize(&state, &headers, caller, "objects.write")?;
     let conn = state.conn.lock().unwrap();
     let data = logged(
         &conn,
@@ -312,9 +366,10 @@ async fn update_record(
 async fn archive_record(
     State(state): State<SharedState>,
     headers: HeaderMap,
+    caller: Caller,
     Path((key, id)): Path<(String, String)>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let (_client, workspace_id) = authorize(&state, &headers, "objects.write")?;
+    let (_client, workspace_id) = authorize(&state, &headers, caller, "objects.write")?;
     let conn = state.conn.lock().unwrap();
     logged(
         &conn,

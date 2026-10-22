@@ -47,6 +47,7 @@ use lanesra_core::models::integration::{ApiClient, ApiListQuery};
 use lanesra_core::services::{api_client_service, api_object_service};
 
 use crate::api_v1::{authorize, err_json, logged};
+use crate::caller::Caller;
 use crate::state::SharedState;
 
 pub fn router() -> Router<SharedState> {
@@ -74,12 +75,13 @@ type RpcError = (i64, String);
 async fn handle(
     State(state): State<SharedState>,
     headers: HeaderMap,
+    caller: Caller,
     Json(body): Json<Value>,
 ) -> Result<(StatusCode, Json<Value>), (StatusCode, Json<Value>)> {
     // Every method needs at least a valid, active API client - `tools/call`
     // additionally checks the specific tool's own scope below, the same
     // two-tier check `api_v1.rs`'s routes already do per-route.
-    let (client, workspace_id) = authorize(&state, &headers, "metadata.read")?;
+    let (client, workspace_id) = authorize(&state, &headers, caller, "metadata.read")?;
 
     let req: RpcRequest = serde_json::from_value(body).map_err(|e| {
         err_json(

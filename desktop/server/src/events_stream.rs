@@ -28,6 +28,7 @@ use futures_core::Stream;
 use serde_json::{json, Value};
 
 use crate::api_v1::authorize;
+use crate::caller::Caller;
 use crate::state::SharedState;
 
 pub fn router() -> Router<SharedState> {
@@ -37,8 +38,9 @@ pub fn router() -> Router<SharedState> {
 async fn stream_events(
     State(state): State<SharedState>,
     headers: HeaderMap,
+    caller: Caller,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, (StatusCode, Json<Value>)> {
-    let (_client, workspace_id) = authorize(&state, &headers, "events.read")?;
+    let (_client, workspace_id) = authorize(&state, &headers, caller, "events.read")?;
     let db_path = state.db_path.clone();
 
     let stream = async_stream::stream! {
