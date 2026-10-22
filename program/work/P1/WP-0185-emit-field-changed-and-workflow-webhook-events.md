@@ -3,7 +3,7 @@ id: WP-0185
 title: "Emit the field.changed, workflow.completed and workflow.failed webhook events"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: in_progress
+status: in_review
 owner: claude
 depends_on: [WP-0182]
 requirements: [REQ-INT-003, REQ-INT-001]
@@ -11,10 +11,10 @@ threats: []
 estimate: M
 editions: [workspace, desktop]
 editions_reason: The REST API exists only on the Team Workspace server; desktop opens no network port and the demo has no real API
-delivered: []
+delivered: [workspace, desktop]
 docs: [api-access-and-webhooks]
 branch: claude/enterprise-build-planning-jxy2kq
-pr:
+pr: 703
 updated: 2026-10-22
 ---
 
@@ -40,12 +40,12 @@ Three webhook event types can be subscribed to today and nothing emits them, so 
 
 ## Acceptance criteria
 
-- [ ] AC-1: Updating two fields of a Company queues and delivers two `field.changed` events with the right `field`, `previous` and `current`; updating without changing any value queues none
-- [ ] AC-2: `field.changed` is emitted for a custom object's fields as well as built-in ones, and respects `object_scope`
-- [ ] AC-3: A workflow run that completes queues and delivers one `workflow.completed`; a run that fails queues one `workflow.failed` with an error message and no secret in it
-- [ ] AC-4: With no webhook subscribed to these types, nothing is queued and the write path is unchanged (no extra rows, same result)
-- [ ] AC-5: A failure while queueing an event never fails or rolls back the record write or the workflow run
-- [ ] AC-6: The `api-access-and-webhooks` help article and the Integrations page list the six event types and their payloads
+- [x] AC-1: Updating two fields of a Company queues and delivers two `field.changed` events with the right `field`, `previous` and `current`; updating without changing any value queues none
+- [x] AC-2: `field.changed` is emitted for a custom object's fields as well as built-in ones, and respects `object_scope`
+- [x] AC-3: A workflow run that completes queues and delivers one `workflow.completed`; a run that fails queues one `workflow.failed` with an error message and no secret in it
+- [x] AC-4: With no webhook subscribed to these types, nothing is queued and the write path is unchanged (no extra rows, same result)
+- [x] AC-5: A failure while queueing an event never fails or rolls back the record write or the workflow run
+- [x] AC-6: The `api-access-and-webhooks` help article and the Integrations page list the six event types and their payloads
 
 ## Test plan
 
@@ -65,3 +65,4 @@ Three webhook event types can be subscribed to today and nothing emits them, so 
 <!-- Append dated entries, newest last. -->
 - 2026-10-21 claude: Written as `ready`. Not started. Starts after WP-0182 merges.
 - 2026-10-22 claude: Claimed; WP-0182 is done.
+- 2026-10-22 claude: Built and in review (#703, stacked on WP-0189). `event_hooks::field_changes` diffs the before and after field snapshots the entity services already take (Company, Contact, Task, Contract, Opportunity, custom objects; built-in and custom fields) and queues one event per changed field, `data` `{field, source, previous, current, truncated}` with values cut to 2 KB. `event_hooks::workflow_finished` queues `workflow.completed` or `workflow.failed` after the run is recorded, `data` `{workflow_id, workflow_name, run_status, trigger_record}` plus `error` (at most 500 characters) on failure. Deviations from the scope text: there is no `run_id` because `workflow_repo::record_run` does not return one, and the status key is `run_status`. Not covered: Products (their service keeps no field snapshot) and graph-editor workflows (queued to the agent runtime, never run by the flat executor); both are named in the docs. No field class marks a value secret (classification exists only on glossary terms), so no value is withheld. +6 tests.

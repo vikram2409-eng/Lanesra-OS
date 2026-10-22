@@ -929,6 +929,28 @@ pub fn set_entity_values(
         }
     }
 
+    // WP-0185: the same changed keys become `field.changed` webhook events.
+    let changed_before: CustomFieldValues = changed_keys
+        .iter()
+        .map(|k| (k.clone(), before_values.get(k).cloned().unwrap_or_default()))
+        .collect();
+    let changed_after: CustomFieldValues = changed_keys
+        .iter()
+        .map(|k| {
+            let current = effective_values.get(k).map(|v| v.trim()).unwrap_or("");
+            (k.clone(), current.to_string())
+        })
+        .collect();
+    super::event_hooks::field_changes(
+        conn,
+        &workspace_id,
+        entity_type,
+        entity_id,
+        "custom",
+        &changed_before,
+        &changed_after,
+    );
+
     // ADM-WF: field_changed workflows fire from the same seam ADM-BR uses -
     // the one call site every entity's save flow already goes through
     // unconditionally, so no per-entity wiring is needed here either.

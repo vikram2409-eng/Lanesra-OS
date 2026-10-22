@@ -535,3 +535,47 @@ async fn a_paused_or_other_object_webhook_receives_nothing_and_the_queue_is_clea
     );
     drop(f.dir);
 }
+
+// Covers: REQ-INT-003 (WP-0185 AC-1)
+#[tokio::test]
+async fn the_background_scheduler_delivers_field_changed_events() {
+    let f = webhook_fixture();
+    let (port, captured) = spawn_capture_server();
+    add_webhook(&f, port, "Field changes", &["field.changed"], None);
+    {
+        let conn = open_workspace_db(&f.db_path).unwrap();
+        let company = company_service::create(
+            &conn,
+            &f.workspace_id,
+            &company_input("Field Co", "Prospect"),
+            Some(&f.admin_id),
+        )
+        .unwrap();
+        company_service::update(
+            &conn,
+            &company.id,
+            &company_input("Field Co", "Active Customer"),
+            Some(&f.admin_id),
+        )
+        .unwrap();
+    }
+    assert_eq!(pending_event_count(&f), 1, "one field changed");
+
+    lanesra_server::job_scheduler::spawn(
+        f.db_path.clone(),
+        f.key_file_path.clone(),
+        Duration::from_millis(150),
+    );
+    wait_until("the field.changed delivery", || {
+        !captured.lock().unwrap().is_empty()
+    })
+    .await;
+    let call = captured.lock().unwrap()[0].clone();
+    let payload: serde_json::Value = serde_json::from_str(&call.body).unwrap();
+    assert_eq!(payload["event_type"], "field.changed");
+    assert_eq!(payload["data"]["field"], "status");
+    assert_eq!(payload["data"]["previous"], "Prospect");
+    assert_eq!(payload["data"]["current"], "Active Customer");
+    wait_until("the queue to empty", || pending_event_count(&f) == 0).await;
+    drop(f.dir);
+}

@@ -199,6 +199,15 @@ pub fn update(
     )?;
     let after_fields = builtin_field_service::field_values(conn, &before.object_key, id)?;
     let changed = workflow_service::changed_builtin_keys(&before_fields, &after_fields);
+    super::event_hooks::field_changes(
+        conn,
+        &record.workspace_id,
+        &before.object_key,
+        id,
+        "builtin",
+        &before_fields,
+        &after_fields,
+    );
     workflow_service::fire_field_changed(
         conn,
         &record.workspace_id,
