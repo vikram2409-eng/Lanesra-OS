@@ -827,7 +827,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['dependencyExplorer','Ontology Graph'],['businessGlossary','Business Glossary'],['metricDefinitions','Metric Definitions'],['testEval','Test & Evaluation Framework'],['objectTypes','Object Types'],['agentBindings','Agent Bindings'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['dependencyExplorer','Ontology Graph'],['businessGlossary','Business Glossary'],['metricDefinitions','Metric Definitions'],['testEval','Test & Evaluation Framework'],['objectTypes','Object Types'],['agentBindings','Agent Bindings'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['agentIdentities','Agent Identities'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -845,7 +845,7 @@ const ADMIN_CATEGORIES=[
  {key:'experience',label:'Experience',icon:'▦',note:'How records look on screen',items:['layouts','pageBuilder','themeStudio']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
  {key:'apps',label:'Apps',icon:'⬡',note:'Package objects into a focused app, or install one ready-made',items:['apps','packages']},
- {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',items:['aiAgents','aiSkills','aiAgentPipelines','aiEval','agentTeams']},
+ {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',get items(){return ['aiAgents','aiSkills','aiAgentPipelines','aiEval','agentTeams',...(demoFeature('agents.identities_ui')?['agentIdentities']:[])]}},
  {key:'ai',label:'LLM & MCP',icon:'✦',note:'Bring your own LLM key, and the MCP server that lets agents work with your data',items:['ai']},
  {key:'voice-first',label:'Voice Settings',icon:'🎙️',note:'PIN, preferences and the full voice command log - a role\'s own Voice permissions are still set on the Users & roles screen under Access',items:['voiceMode','voice']},
  {key:'assistant',label:'Admin Assistant',icon:'💬',note:'Chat to build workflows, business rules, integrations and the rest of the admin surface',items:['assistant']},
@@ -5681,7 +5681,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,dependencyExplorer:dependencyExplorerTab,businessGlossary:businessGlossaryTab,metricDefinitions:metricDefinitionsTab,testEval:testEvalTab,objectTypes:objectTypesTab,agentBindings:agentBindingsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,dependencyExplorer:dependencyExplorerTab,businessGlossary:businessGlossaryTab,metricDefinitions:metricDefinitionsTab,testEval:testEvalTab,objectTypes:objectTypesTab,agentBindings:agentBindingsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,agentIdentities:agentIdentitiesTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -11649,6 +11649,7 @@ function gatewaySubTab(body){
   <p class="muted" style="font-size:13px;margin-top:0">Recent dispatches that didn't end up served by an agent's primary tier. Demo-only: this static demo has no real provider dispatch to fail over from, so this stays empty rather than showing fabricated events.</p>
   <div class="empty">No failovers recorded yet.</div>
  </div>
+ <div id="retrySimWrap"></div>
  <div class="panel" style="max-width:560px">
   <h4 style="margin-top:0">Observability</h4>
   <p class="muted" style="font-size:13px;margin-top:0">An optional OTLP collector endpoint - each agent/pipeline run's trace (real per-step timing, no LLM output) can be pushed here on demand from that run's own history, or exported as OTLP JSON with no endpoint configured at all. Demo-only: Push/Export buttons live on each pipeline run, this just saves where they'd send to - this static demo has no server to actually POST to a collector from.</p>
@@ -11669,6 +11670,7 @@ function gatewaySubTab(body){
   <button class="btn btn-secondary" id="reindexVectorSearch" ${(s.provider==='openai_compatible'||s.provider==='google_gemini')&&s.apiKey?'':'disabled'}>Reindex now</button>
  </div>
  </div>`;
+ renderRetrySimulatorPanel($('#retrySimWrap'));
  $('#saveDailyBudget').onclick=()=>{
   const v=$('#dailyBudgetInput').value;
   s.dailyTokenBudget=v===''?null:Number(v);
@@ -11817,7 +11819,7 @@ function chatSimPanel(mode,body){
   const input=$('#chatSimInput');
   const text=input.value.trim();
   if(!text)return;
-  msgs.push({role:'user',text});
+  msgs.push({role:'user',text:redactAgentCredential(text)});
   msgs.push({role:'assistant',text:(mode==='admin'?chatSimReplyAdmin:chatSimReplyRecords)(text)});
   save();
   chatSimPanel(mode,body);
@@ -11871,8 +11873,10 @@ function aiAgentsTab(body){
  <div id="agentAccessInspectorWrap"></div>
  <div id="knowledgeMemoryWrap"></div>
  <div id="mcpServersWrap"></div>
+ <div id="agentAuditWrap"></div>
  </div>`;
  renderPolicyEnginePanel(agents,$('#policyEngineWrap'));
+ renderAgentAuditPanel($('#agentAuditWrap'));
  renderAgentAccessInspectorPanel(agents,$('#agentAccessInspectorWrap'));
  renderKnowledgeMemoryPanel(agents,$('#knowledgeMemoryWrap'));
  renderMcpServersPanel($('#mcpServersWrap'));
@@ -12089,6 +12093,332 @@ function renderAgentAccessInspectorPanel(agents,wrap){
   </div>`;
  };
 }
+// ---- WP-0107/0108/0109 mirror: who an agent run acts as --------------------
+// Mirrors core::principals::EffectiveIdentity and agent_identity_service.
+// A run a person starts (Run, Chat, an evaluation, a voice command) is
+// interactive: it acts as that person, further limited by an Agent Identity
+// when the run names one, and never exceeds the person's own access. A run
+// nobody is watching (here, a Workflow Automation "Run AI agent" action)
+// acts as its Agent Identity only and never borrows anyone's Administrator
+// rights. These rules apply whether or not the Agent Identities screen is
+// switched on; the flag only hides the screen and the action's identity
+// picker, exactly as on desktop and Team Workspace (ADR-0012 §4).
+const AGENT_IDENTITIES_FLAG='agents.identities_ui';
+const AGENT_TOKEN_PREFIX='lanesra_agent_';
+const AGENT_CREDENTIAL_DEFAULT_HOURS=24;
+const AGENT_CREDENTIAL_MAX_HOURS=24*7;
+let demoRunIdentity=null;
+function agentEsc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function ensureAgentIdentityData(){
+ if(!data.agentIdentities)data.agentIdentities=[];
+ if(!data.agentCredentials)data.agentCredentials=[];
+ if(!data.agentAudit)data.agentAudit=[];
+}
+// The demo has one signed-in person: the workspace's first active user.
+function demoSignedInUserId(){const u=(data.users||[]).find(x=>x.status==='Active')||(data.users||[])[0];return u?u.id:null}
+function demoUserIsAdministrator(userId){
+ const u=(data.users||[]).find(x=>x.id===userId);
+ if(!u||u.status!=='Active')return false;
+ const role=(data.roles||[]).find(r=>r.name===u.role);
+ return u.role==='Administrator'||role?.id==='role_administrator';
+}
+function demoUserCanReadRecords(userId){
+ const u=(data.users||[]).find(x=>x.id===userId);
+ if(!u||u.status!=='Active')return false;
+ if(demoUserIsAdministrator(userId))return true;
+ const grant=roleGrantFor((data.roles||[]).find(r=>r.name===u.role),'*');
+ return !!grant?.canRead;
+}
+function demoInteractive(userId,agentIdentityId){return {kind:'interactive',userId,agentIdentityId:agentIdentityId||null}}
+function demoUnattended(agentIdentityId){return {kind:'unattended',agentIdentityId:agentIdentityId||null}}
+function currentRunIdentity(){return demoRunIdentity||demoInteractive(demoSignedInUserId())}
+// Like desktop's EffectiveIdentity::enter_run: every step, delegation and
+// tool call inside fn acts as `identity`.
+function withRunIdentity(identity,fn){
+ const prev=demoRunIdentity;
+ demoRunIdentity=identity;
+ try{return fn()}finally{demoRunIdentity=prev}
+}
+// agent_identity_service::grant_for_run: a disabled or deleted identity
+// refuses the run.
+function agentIdentityGrant(identityId){
+ ensureAgentIdentityData();
+ const i=data.agentIdentities.find(x=>x.id===identityId);
+ if(!i)return {error:'This run\'s Agent Identity no longer exists'};
+ if(i.status!=='active')return {error:`Agent Identity "${i.name}" is disabled`};
+ return {grant:i};
+}
+// EffectiveIdentity::require_admin. Returns null when allowed, else why not.
+function runIdentityAdminRefusal(identity){
+ let grant=null;
+ if(identity.agentIdentityId){
+  const g=agentIdentityGrant(identity.agentIdentityId);
+  if(g.error)return g.error;
+  grant=g.grant;
+ }
+ if(identity.kind==='interactive'){
+  if(!demoUserIsAdministrator(identity.userId))return `${userName(identity.userId)} does not hold the Administrator role`;
+  if(grant&&!grant.isAdministrator)return 'This agent\'s identity does not hold the Administrator role';
+  return null;
+ }
+ if(grant&&grant.isAdministrator)return null;
+ return grant?'This agent\'s identity does not hold the Administrator role':'An unattended run needs an Agent Identity that holds the Administrator role';
+}
+// Record tools. An interactive run is limited to the person's own access.
+// An unattended run keeps the record access it always had (desktop's record
+// actor is nobody for a workflow-queued run).
+function runIdentityRecordRefusal(identity){
+ if(identity.agentIdentityId){const g=agentIdentityGrant(identity.agentIdentityId);if(g.error)return g.error}
+ if(identity.kind==='interactive'&&!demoUserCanReadRecords(identity.userId))return `${userName(identity.userId)} cannot read records`;
+ return null;
+}
+function runIdentityLabel(identity){
+ ensureAgentIdentityData();
+ const i=identity.agentIdentityId?data.agentIdentities.find(x=>x.id===identity.agentIdentityId):null;
+ const iName=i?`Agent Identity "${i.name}"`:identity.agentIdentityId?'a deleted Agent Identity':null;
+ if(identity.kind==='interactive')return `${userName(identity.userId)} (person)${iName?`, limited by ${iName}`:''}`;
+ return iName||'No Agent Identity (unattended, no Administrator rights)';
+}
+// agent_identity_service::redact_credential_material: anything shaped like
+// an agent token becomes [REDACTED] before it is stored, logged or traced.
+function redactAgentCredential(text){
+ return String(text??'').replace(/lanesra_agent_([0-9a-f]*)/g,(m,hex)=>hex?'[REDACTED]':m);
+}
+function recordAgentAudit(action,details){
+ ensureAgentIdentityData();
+ data.agentAudit.unshift({id:uid(),at:new Date().toISOString(),action,...details,summary:redactAgentCredential(details.summary||'')});
+ if(data.agentAudit.length>200)data.agentAudit.length=200;
+}
+// One ai_agent_tool_call entry naming the agent, the tool and the
+// effective principal (WP-0109 AC-1).
+function recordAgentToolCall(agent,tool,identity,refusal){
+ recordAgentAudit('ai_agent_tool_call',{
+  agentName:agent.name,tool,
+  startedBy:identity.kind==='interactive'?'person':'workflow',
+  effectivePrincipal:runIdentityLabel(identity),
+  outcome:refusal?'denied':'allowed',
+  summary:refusal||''
+ });
+}
+// The tool a simulated reply stands for: the same choice chatSimAgentReply
+// makes between the records and the admin keyword replies.
+function simulatedToolFor(agent){
+ const names=agent.actionNames||[];
+ if(names.some(n=>DEMO_RECORD_ACTIONS.includes(n)))return names.includes('search_records')?'search_records':names.find(n=>DEMO_RECORD_ACTIONS.includes(n));
+ return names.find(n=>DEMO_ADMIN_ACTIONS.includes(n))||null;
+}
+function agentUsesAdminTools(agent){return (agent?.actionNames||[]).some(n=>DEMO_ADMIN_ACTIONS.includes(n))}
+function renderAgentAuditPanel(wrap){
+ ensureAgentIdentityData();
+ const rows=data.agentAudit.slice(0,25);
+ wrap.innerHTML=`<div class="panel" style="margin-top:16px">
+ <h3 style="margin-top:0">Agent audit trail</h3>
+ <p class="muted" style="font-size:13px">Every tool call an agent makes is recorded with the agent, the tool and the <b>effective principal</b>: the person who started the run, or the Agent Identity a workflow-started run acts as. A run nobody is watching never borrows a person's Administrator rights. In this demo the tool call stands for the simulated reply.</p>
+ ${rows.length?`<div class="table-wrap"><table class="table"><thead><tr><th>When</th><th>Event</th><th>Agent</th><th>Tool</th><th>Acted as</th><th>Outcome</th></tr></thead><tbody>${rows.map(r=>`<tr><td><small>${new Date(r.at).toLocaleString()}</small></td><td><code>${r.action}</code></td><td>${agentEsc(r.agentName||'—')}</td><td>${r.tool?`<code>${r.tool}</code>`:'—'}</td><td>${agentEsc(r.effectivePrincipal||r.identityName||'—')}</td><td>${r.outcome?`<span class="badge${r.outcome==='allowed'?' badge-success':''}">${r.outcome==='allowed'?'Allowed':'Denied'}</span>`:''}${r.summary?`<br><small class="muted">${agentEsc(r.summary)}</small>`:''}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No agent activity yet. Chat with an agent or run a pipeline to see its tool calls here.</div>'}
+ </div>`;
+}
+
+// ---- WP-0108/0109 mirror: Admin → AI Agent Foundry → Agent Identities -----
+// Shown only while the agents.identities_ui flag is released to the demo
+// (same release as desktop and Team Workspace; check_feature_flags.py keeps
+// the demo from showing it earlier). Tokens are generated in the browser,
+// shown once, and stored only as a SHA-256 hash, like the real service.
+function agentIdentitiesTab(body){
+ ensureAgentIdentityData();
+ if(!demoFeature(AGENT_IDENTITIES_FLAG)){body.innerHTML='<div class="panel"><p class="muted">The Agent Identities screen is not switched on yet. Workflow-started agent runs still act as an Agent Identity, never as a person.</p></div>';return}
+ const ids=data.agentIdentities;
+ const roleName=id=>(data.roles||[]).find(r=>r.id===id)?.name||id;
+ body.innerHTML=`<div class="panel">
+ <div class="panel-head"><h3>Agent Identities</h3><button class="btn btn-primary" id="addAgentIdentity">+ New Agent Identity</button></div>
+ <p class="muted" style="font-size:13px">An Agent Identity is who a workflow-started run acts as. It never signs in and never borrows a person's rights, so give it only what its agent needs. Pick one on each "Run AI agent" workflow action. Every change is recorded in the agent audit trail.</p>
+ ${ids.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Name</th><th>Owner</th><th>Rights</th><th>Status</th><th></th></tr></thead><tbody>${ids.map(i=>`<tr><td><b>${agentEsc(i.name)}</b>${i.description?`<br><small class="muted">${agentEsc(i.description)}</small>`:''}</td><td>${agentEsc(userName(i.ownerUserId))}</td><td>${i.isAdministrator?'<span class="badge">Administrator</span> ':''}${(i.accessRoleIds||[]).map(roleName).join(', ')||(i.isAdministrator?'':'None')}</td><td><span class="badge${i.status==='active'?' badge-success':''}">${i.status==='active'?'Active':'Disabled'}</span></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-secondary" data-edit-identity="${i.id}">Edit</button><button class="btn btn-secondary" data-creds-identity="${i.id}">Credentials</button><button class="btn btn-secondary" data-toggle-identity="${i.id}">${i.status==='active'?'Disable':'Enable'}</button><button class="btn btn-secondary" data-del-identity="${i.id}">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No Agent Identities yet.</div>'}
+ <div id="agentIdentityFormWrap"></div>
+ <div id="agentCredentialsWrap"></div>
+ </div>`;
+ $('#addAgentIdentity').onclick=()=>renderAgentIdentityForm(null,$('#agentIdentityFormWrap'));
+ body.querySelectorAll('[data-edit-identity]').forEach(b=>b.onclick=()=>renderAgentIdentityForm(ids.find(i=>i.id===b.dataset.editIdentity),$('#agentIdentityFormWrap')));
+ body.querySelectorAll('[data-creds-identity]').forEach(b=>b.onclick=()=>renderAgentCredentialsPanel(ids.find(i=>i.id===b.dataset.credsIdentity),$('#agentCredentialsWrap')));
+ body.querySelectorAll('[data-toggle-identity]').forEach(b=>b.onclick=()=>{
+  const i=ids.find(x=>x.id===b.dataset.toggleIdentity);
+  i.status=i.status==='active'?'disabled':'active';
+  recordAgentAudit(i.status==='active'?'agent_identity_enabled':'agent_identity_disabled',{identityName:i.name});
+  save();renderView();
+ });
+ body.querySelectorAll('[data-del-identity]').forEach(b=>b.onclick=()=>{
+  const i=ids.find(x=>x.id===b.dataset.delIdentity);
+  if(!confirm(`Delete Agent Identity '${i.name}'? Workflow actions using it stop running until you pick another.`))return;
+  data.agentIdentities=data.agentIdentities.filter(x=>x.id!==i.id);
+  data.agentCredentials=data.agentCredentials.filter(c=>c.identityId!==i.id);
+  recordAgentAudit('agent_identity_deleted',{identityName:i.name});
+  save();renderView();
+ });
+}
+function renderAgentIdentityForm(identity,wrap){
+ const users=(data.users||[]).filter(u=>u.status==='Active');
+ const roles=(data.roles||[]).filter(r=>r.id!=='role_administrator');
+ const cur=identity||{name:'',description:'',ownerUserId:users[0]?.id||'',isAdministrator:false,accessRoleIds:[]};
+ wrap.innerHTML=`<form id="agentIdentityForm" class="panel" style="margin-top:12px">
+ <h4 style="margin-top:0">${identity?`Edit ${agentEsc(identity.name)}`:'New Agent Identity'}</h4>
+ <div class="form-grid">
+  <div class="field"><label>Name</label><input name="name" required value="${agentEsc(cur.name)}"></div>
+  <div class="field"><label>Description</label><input name="description" value="${agentEsc(cur.description||'')}"></div>
+  <div class="field"><label>Accountable owner</label><select name="ownerUserId">${users.map(u=>`<option value="${u.id}" ${u.id===cur.ownerUserId?'selected':''}>${agentEsc(u.name)}</option>`).join('')}</select></div>
+  <div class="field"><label><input type="checkbox" name="isAdministrator" ${cur.isAdministrator?'checked':''}> Administrator (needed only for agents that use admin tools)</label></div>
+  <div class="field full"><label>Access Roles</label>${roles.length?roles.map(r=>`<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="role_${r.id}" ${(cur.accessRoleIds||[]).includes(r.id)?'checked':''}> ${agentEsc(r.name)}</label>`).join(''):'<p class="muted">No Access Roles defined.</p>'}</div>
+  <div class="field full" style="display:flex;gap:8px"><button class="btn btn-primary" type="submit">Save</button><button class="btn btn-secondary" type="button" id="cancelAgentIdentity">Cancel</button></div>
+ </div></form>`;
+ $('#cancelAgentIdentity').onclick=()=>{wrap.innerHTML=''};
+ $('#agentIdentityForm').onsubmit=e=>{
+  e.preventDefault();
+  const f=e.target;
+  const name=f.elements.name.value.trim();
+  if(!name)return;
+  if(data.agentIdentities.some(i=>i.name.toLowerCase()===name.toLowerCase()&&i.id!==identity?.id)){toast('An Agent Identity with that name already exists');return}
+  const input={name,description:f.elements.description.value.trim(),ownerUserId:f.elements.ownerUserId.value,isAdministrator:f.elements.isAdministrator.checked,accessRoleIds:roles.filter(r=>f.elements[`role_${r.id}`]?.checked).map(r=>r.id)};
+  if(identity){Object.assign(identity,input);recordAgentAudit('agent_identity_updated',{identityName:name})}
+  else{data.agentIdentities.push({id:'aid_'+uid(),status:'active',createdAt:new Date().toISOString(),...input});recordAgentAudit('agent_identity_created',{identityName:name})}
+  save();renderView();
+ };
+}
+async function sha256Hex(text){
+ const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text));
+ return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function newAgentToken(){
+ const bytes=crypto.getRandomValues(new Uint8Array(24));
+ return AGENT_TOKEN_PREFIX+[...bytes].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+function agentCredentialState(c){
+ if(c.revokedAt)return 'revoked';
+ return Date.now()>=new Date(c.expiresAt).getTime()?'expired':'active';
+}
+// agent_identity_service::issue_credential: lifetime 1 hour to one week.
+async function issueAgentCredential(identity,label,hours){
+ if(!label)throw new Error('A credential needs a label');
+ if(!(hours>=1&&hours<=AGENT_CREDENTIAL_MAX_HOURS))throw new Error(`A credential lasts between 1 and ${AGENT_CREDENTIAL_MAX_HOURS} hours`);
+ const token=newAgentToken();
+ const c={id:'acr_'+uid(),identityId:identity.id,label,tokenHash:await sha256Hex(token),createdAt:new Date().toISOString(),expiresAt:new Date(Date.now()+hours*3600000).toISOString(),revokedAt:null};
+ data.agentCredentials.push(c);
+ recordAgentAudit('agent_credential_issued',{identityName:identity.name,summary:`Issued credential '${label}', expires ${c.expiresAt}`});
+ save();
+ return token;
+}
+// agent_identity_service::authenticate: an unknown, revoked or expired
+// token is refused immediately (WP-0108 AC-2).
+async function authenticateAgentToken(token){
+ ensureAgentIdentityData();
+ const hash=await sha256Hex(String(token||'').trim());
+ const c=data.agentCredentials.find(x=>x.tokenHash===hash);
+ if(!c)return {error:'This agent credential is not valid'};
+ const state=agentCredentialState(c);
+ if(state==='revoked')return {error:'This agent credential has been revoked'};
+ if(state==='expired')return {error:'This agent credential has expired'};
+ const g=agentIdentityGrant(c.identityId);
+ if(g.error)return {error:g.error};
+ return {identity:g.grant,credential:c};
+}
+function renderAgentCredentialsPanel(identity,wrap,shownToken){
+ ensureAgentIdentityData();
+ const creds=data.agentCredentials.filter(c=>c.identityId===identity.id);
+ wrap.innerHTML=`<div class="panel" style="margin-top:12px">
+ <h4 style="margin-top:0">Credentials for ${agentEsc(identity.name)}</h4>
+ ${shownToken?`<div class="panel" style="border:1px solid var(--warning,#b7791f)"><p><b>Copy this token now.</b> It is shown once and stored only as a hash. This demo's token is a throwaway value that works only in this browser.</p><code style="word-break:break-all" id="agentTokenShown">${shownToken}</code> <button class="btn btn-secondary" id="copyAgentToken">Copy</button></div>`:''}
+ ${creds.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Label</th><th>Expires</th><th>Status</th><th></th></tr></thead><tbody>${creds.map(c=>{const s=agentCredentialState(c);return `<tr><td>${agentEsc(c.label)}</td><td><small>${new Date(c.expiresAt).toLocaleString()}</small></td><td><span class="badge${s==='active'?' badge-success':''}">${s[0].toUpperCase()+s.slice(1)}</span></td><td>${s==='revoked'?'':`<button class="btn btn-secondary" data-rotate-cred="${c.id}">Rotate</button> <button class="btn btn-secondary" data-revoke-cred="${c.id}">Revoke</button>`}</td></tr>`}).join('')}</tbody></table></div>`:'<p class="muted">No credentials yet.</p>'}
+ <form id="issueCredForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px"><input name="label" placeholder="Label, e.g. nightly job" required><input name="hours" type="number" min="1" max="${AGENT_CREDENTIAL_MAX_HOURS}" value="${AGENT_CREDENTIAL_DEFAULT_HOURS}" style="width:90px" title="Lifetime in hours"><span class="muted" style="font-size:12px">hours</span><button class="btn btn-primary" type="submit">Issue credential</button></form>
+ <form id="testCredForm" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px"><input name="token" placeholder="Paste a token to check it" style="flex:1;min-width:220px"><button class="btn btn-secondary" type="submit">Check token</button></form>
+ <div id="testCredResult"></div>
+ </div>`;
+ const copy=$('#copyAgentToken');if(copy)copy.onclick=()=>{navigator.clipboard?.writeText(shownToken).then(()=>toast('Copied'),()=>toast('Copy failed - select the token instead'))};
+ $('#issueCredForm').onsubmit=async e=>{
+  e.preventDefault();
+  try{const token=await issueAgentCredential(identity,e.target.elements.label.value.trim(),Number(e.target.elements.hours.value));renderAgentCredentialsPanel(identity,wrap,token)}
+  catch(err){toast(err.message)}
+ };
+ $('#testCredForm').onsubmit=async e=>{
+  e.preventDefault();
+  const r=await authenticateAgentToken(e.target.elements.token.value);
+  $('#testCredResult').innerHTML=r.error?`<p><span class="badge" style="background:var(--danger,#c0392b);color:#fff">Refused</span> ${agentEsc(r.error)}</p>`:`<p><span class="badge badge-success">Accepted</span> Acts as Agent Identity "${agentEsc(r.identity.name)}"</p>`;
+ };
+ wrap.querySelectorAll('[data-revoke-cred]').forEach(b=>b.onclick=()=>{
+  const c=data.agentCredentials.find(x=>x.id===b.dataset.revokeCred);
+  c.revokedAt=new Date().toISOString();
+  recordAgentAudit('agent_credential_revoked',{identityName:identity.name,summary:`Revoked credential '${c.label}'`});
+  save();renderAgentCredentialsPanel(identity,wrap);
+ });
+ wrap.querySelectorAll('[data-rotate-cred]').forEach(b=>b.onclick=async()=>{
+  const c=data.agentCredentials.find(x=>x.id===b.dataset.rotateCred);
+  c.revokedAt=new Date().toISOString();
+  const token=await issueAgentCredential(identity,c.label,AGENT_CREDENTIAL_DEFAULT_HOURS);
+  recordAgentAudit('agent_credential_rotated',{identityName:identity.name,summary:`Rotated credential '${c.label}'`});
+  save();renderAgentCredentialsPanel(identity,wrap,token);
+ });
+}
+
+// ---- WP-0124 mirror: retry with backoff and the error taxonomy -------------
+// Mirrors core::services::retry and the ADR-0009 error classes. Only a
+// transient error is retried: up to 3 attempts, a full-jitter backoff
+// window of 500 ms doubling to a 20 s cap, and a provider's Retry-After
+// honoured but capped at 20 s. Policy, validation and internal errors stop
+// at once; a configuration error moves the gateway to the next tier.
+const RETRY_POLICY={maxAttempts:3,baseDelayMs:500,maxDelayMs:20000};
+const DEMO_PROVIDER_FAULTS={
+ rate_limited:{label:'429 Too Many Requests, Retry-After 3 s',cls:'transient',code:'provider.rate_limited',retryAfterMs:3000},
+ unavailable:{label:'503 Service Unavailable',cls:'transient',code:'provider.unavailable'},
+ timeout:{label:'Request timed out',cls:'transient',code:'provider.timeout'},
+ missing_key:{label:'401 Unauthorized (bad or missing key)',cls:'configuration',code:'config.missing_key'},
+ policy:{label:'Tool-Call Firewall denies the call',cls:'policy',code:'policy.denied'},
+ validation:{label:'400 Bad Request (invalid arguments)',cls:'validation',code:'validation.arguments'}
+};
+function retryBackoffDelayMs(attempt,jitterUnit){
+ const windowMs=Math.min(RETRY_POLICY.baseDelayMs*2**Math.min(attempt,32),RETRY_POLICY.maxDelayMs);
+ return Math.round(windowMs*Math.min(Math.max(jitterUnit,0),1));
+}
+function retryDelayFor(fault,attempt,jitterUnit){
+ if(fault.cls!=='transient')return null;
+ if(fault.retryAfterMs!=null)return Math.min(fault.retryAfterMs,RETRY_POLICY.maxDelayMs);
+ return retryBackoffDelayMs(attempt,jitterUnit);
+}
+// Runs a simulated dispatch that fails `failures` times with `fault`, then
+// succeeds. The clock is simulated: delays are computed, never slept.
+function simulateRetriedDispatch(faultKey,failures,jitter){
+ const fault=DEMO_PROVIDER_FAULTS[faultKey];
+ const jitterUnit=jitter||Math.random;
+ const attempts=[];
+ let waitedMs=0;
+ for(let attempt=0;;attempt++){
+  if(attempt>=failures){attempts.push({n:attempt+1,ok:true});return {attempts,outcome:'succeeded',waitedMs}}
+  const entry={n:attempt+1,ok:false,code:fault.code,cls:fault.cls};
+  attempts.push(entry);
+  if(attempt+1>=RETRY_POLICY.maxAttempts){
+   return {attempts,outcome:'failed',waitedMs,next:fault.cls==='transient'?'Attempts used up. The gateway moves to the agent\'s next routing tier, if it has one.':null};
+  }
+  const delay=retryDelayFor(fault,attempt,jitterUnit());
+  if(delay==null){
+   return {attempts,outcome:'failed',waitedMs,next:fault.cls==='configuration'?'Not retried. A configuration error moves the gateway to the next routing tier.':`Not retried. A ${fault.cls} error never is.`};
+  }
+  entry.delayMs=delay;
+  entry.why=fault.retryAfterMs!=null?'Retry-After':'backoff';
+  waitedMs+=delay;
+ }
+}
+function renderRetrySimulatorPanel(wrap){
+ wrap.innerHTML=`<div class="panel">
+ <h4 style="margin-top:0">Retries and failure handling</h4>
+ <p class="muted" style="font-size:13px;margin-top:0">How a real run handles a provider error. Only a temporary error is retried: up to 3 attempts, waiting a random time within a window that starts at 0.5 s and doubles to a 20 s cap, or the provider's Retry-After (also capped at 20 s). A policy, validation or internal error stops at once. A bad key or missing model moves to the agent's next routing tier. This demo has no real provider, so pick a failure to see what would happen; the waits are calculated, not slept.</p>
+ <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+  <select id="retryFault">${Object.entries(DEMO_PROVIDER_FAULTS).map(([k,f])=>`<option value="${k}">${f.label}</option>`).join('')}</select>
+  <select id="retryFailures"><option value="1">fails once, then succeeds</option><option value="2">fails twice, then succeeds</option><option value="3">fails every time</option></select>
+  <button class="btn btn-secondary" id="runRetrySim">Simulate a dispatch</button>
+ </div>
+ <div id="retrySimResult"></div>
+ </div>`;
+ $('#runRetrySim').onclick=()=>{
+  const r=simulateRetriedDispatch($('#retryFault').value,Number($('#retryFailures').value));
+  $('#retrySimResult').innerHTML=`<ol style="margin:12px 0 4px">${r.attempts.map(a=>a.ok?`<li>Attempt ${a.n}: <span class="badge badge-success">succeeded</span></li>`:`<li>Attempt ${a.n}: <code>${a.code}</code> (${a.cls})${a.delayMs!=null?` → wait ${(a.delayMs/1000).toFixed(2)} s (${a.why})`:''}</li>`).join('')}</ol>
+  <p><span class="badge${r.outcome==='succeeded'?' badge-success':''}">${r.outcome==='succeeded'?'Succeeded':'Failed'}</span> after ${r.attempts.length} attempt${r.attempts.length===1?'':'s'}, ${(r.waitedMs/1000).toFixed(2)} s waiting.${r.next?` ${r.next}`:''}</p>`;
+ };
+}
+
 // ---- AI Agent Platform v2, Phase 4 mirror ----------------------------------
 // Document RAG (Knowledge Collections/Sources) and the three itemized
 // memory types (Session/Working/Entity a remember/get_memory tool call
@@ -12984,6 +13314,8 @@ function aiAgentRoutingPanel(agent,wrap){
 // own "depth-guarded against runaway recursion" language.
 function chatSimAgentReply(agent,text,depth){
  depth=depth||0;
+ text=redactAgentCredential(text);
+ const identity=currentRunIdentity();
  const actionNames=agent.actionNames||[];
  const usesRecords=actionNames.some(n=>DEMO_RECORD_ACTIONS.includes(n));
  const usesAdmin=actionNames.some(n=>DEMO_ADMIN_ACTIONS.includes(n));
@@ -12991,7 +13323,16 @@ function chatSimAgentReply(agent,text,depth){
  const personaSuffix=persona?` - persona: "${persona}${(agent.systemPrompt||'').length>80?'...':''}"`:'';
  if(!usesRecords&&!usesAdmin&&depth<3){
   const delegate=(agent.delegateAgentIds||[]).map(id=>(data.aiAgents||[]).find(a=>a.id===id&&a.id!==agent.id&&a.isActive)).find(Boolean);
+  if(delegate)recordAgentToolCall(agent,'delegate_to_agent',identity,null);
   if(delegate)return `No actions of its own - delegating to ${delegate.icon} ${delegate.name} (Simulated as "${agent.name}"${personaSuffix}, via delegate_to_agent):\n${chatSimAgentReply(delegate,text,depth+1)}`;
+ }
+ // WP-0107/0109: the tool this reply stands for is checked against the
+ // run's effective identity and recorded, allowed or denied.
+ const tool=simulatedToolFor(agent);
+ if(tool){
+  const refusal=DEMO_ADMIN_ACTIONS.includes(tool)?runIdentityAdminRefusal(identity):runIdentityRecordRefusal(identity);
+  recordAgentToolCall(agent,tool,identity,refusal);
+  if(refusal)return `Refused: ${tool} was not run. ${refusal}. (Simulated as "${agent.name}", acting as ${runIdentityLabel(identity)})`;
  }
  let base;
  if(usesRecords)base=chatSimReplyRecords(text);
@@ -13017,7 +13358,7 @@ function chatSimAgentPanel(agent,body){
   const input=$('#agentChatInput');
   const text=input.value.trim();
   if(!text)return;
-  msgs.push({role:'user',text});
+  msgs.push({role:'user',text:redactAgentCredential(text)});
   msgs.push({role:'assistant',text:chatSimAgentReply(agent,text)});
   save();
   chatSimAgentPanel(agent,body);
@@ -13078,7 +13419,35 @@ function simStep(step,input){
  * "APPROVED" or 3 rounds pass. Records the run (capped at the most
  * recent 20) - real, structured history, even though each step's
  * "answer" is the same keyword-matched simulation. */
-function runAiAgentPipelineNow(pipeline,triggerInput){
+// WP-0107/0109: a pipeline run acts as one effective identity for every
+// step and delegation. A run whose Agent Identity is disabled or deleted,
+// or whose steps use admin tools the identity may not, is refused before
+// any step runs and recorded as failed.
+function pipelineRunRefusal(pipeline,identity){
+ if(identity.agentIdentityId){const g=agentIdentityGrant(identity.agentIdentityId);if(g.error)return g.error}
+ const usesAdmin=(pipeline.steps||[]).some(s=>agentUsesAdminTools((data.aiAgents||[]).find(a=>a.id===s.agentId)));
+ return usesAdmin?runIdentityAdminRefusal(identity):null;
+}
+function runAiAgentPipelineNow(pipeline,triggerInput,identity){
+ identity=identity||currentRunIdentity();
+ triggerInput=redactAgentCredential(triggerInput);
+ const actedAs=runIdentityLabel(identity);
+ const refusal=pipelineRunRefusal(pipeline,identity);
+ if(refusal){
+  const run={id:uid(),startedAt:new Date().toISOString(),triggerInput:triggerInput||'',steps:[],finalOutput:'',status:'failed',error:refusal,actedAs};
+  pipeline.runs=pipeline.runs||[];
+  pipeline.runs.unshift(run);
+  if(pipeline.runs.length>20)pipeline.runs.length=20;
+  recordAgentAudit('ai_agent_run_refused',{agentName:pipeline.name,effectivePrincipal:actedAs,outcome:'denied',summary:refusal});
+  save();
+  return run;
+ }
+ const run=withRunIdentity(identity,()=>runAiAgentPipelineSteps(pipeline,triggerInput));
+ run.actedAs=actedAs;
+ save();
+ return run;
+}
+function runAiAgentPipelineSteps(pipeline,triggerInput){
  const topology=pipeline.topology||'sequential';
  let steps=[];
  let finalOutput='';
@@ -13222,7 +13591,7 @@ function aiAgentPipelinesTab(body){
   const input=prompt(`Input for "${p.name}" (used where a step references {{trigger_input}}):`,'')||'';
   const run=runAiAgentPipelineNow(p,input);
   const wrap=$('#pipelineRunWrap');
-  wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4>Run result — ${p.name} <span class="badge">${run.status}</span></h4>${run.steps.map((s,i)=>`<div style="margin-bottom:8px"><b>${i+1}. ${s.agentName}</b>${stepDurationMs(s)!==null?` <small class="muted">(${stepDurationMs(s)}ms)</small>`:''}<br><small class="muted">in: ${s.input||'(empty)'}</small><br>${s.output}</div>`).join('')}<div id="otlpTraceActionsWrap"></div></div>`;
+  wrap.innerHTML=`<div class="panel" style="margin-top:16px"><h4>Run result — ${p.name} <span class="badge">${run.status}</span></h4><p class="muted" style="font-size:13px">Acted as ${agentEsc(run.actedAs||'')}</p>${run.error?`<p>${agentEsc(run.error)}</p>`:''}${run.steps.map((s,i)=>`<div style="margin-bottom:8px"><b>${i+1}. ${s.agentName}</b>${stepDurationMs(s)!==null?` <small class="muted">(${stepDurationMs(s)}ms)</small>`:''}<br><small class="muted">in: ${s.input||'(empty)'}</small><br>${s.output}</div>`).join('')}<div id="otlpTraceActionsWrap"></div></div>`;
   renderOtlpTraceActions(p,run,$('#otlpTraceActionsWrap'));
  });
  body.querySelectorAll('[data-hierarchy-pipeline]').forEach(b=>b.onclick=()=>{
@@ -14074,15 +14443,23 @@ function executeWorkflowAction(a,key,record){
   const isPipeline=a.targetType==='pipeline';
   const target=isPipeline?(data.aiAgentPipelines||[]).find(p=>p.id===a.targetId&&p.isActive):(data.aiAgents||[]).find(x=>x.id===a.targetId&&x.isActive);
   if(!target)return null;
-  const resolvedInput=(a.inputTemplate||'').startsWith('field:')?String(record[a.inputTemplate.slice(6)]??''):(a.inputTemplate||'');
+  const resolvedInput=redactAgentCredential((a.inputTemplate||'').startsWith('field:')?String(record[a.inputTemplate.slice(6)]??''):(a.inputTemplate||''));
+  // WP-0107/0109: nobody is watching a workflow-started run, so it acts as
+  // the action's Agent Identity only, never as the person who saved.
+  const identity=demoUnattended(a.agentIdentityId);
   if(isPipeline){
-   runAiAgentPipelineNow(target,resolvedInput);
-   return `ran pipeline "${target.name}"`;
+   const run=runAiAgentPipelineNow(target,resolvedInput,identity);
+   return run.status==='failed'&&run.error?`pipeline "${target.name}" refused: ${run.error}`:`ran pipeline "${target.name}"`;
+  }
+  const refusal=(a.agentIdentityId&&agentIdentityGrant(a.agentIdentityId).error)||(agentUsesAdminTools(target)?runIdentityAdminRefusal(identity):null);
+  if(refusal){
+   recordAgentAudit('ai_agent_run_refused',{agentName:target.name,effectivePrincipal:runIdentityLabel(identity),outcome:'denied',summary:refusal});
+   return `agent "${target.name}" refused: ${refusal}`;
   }
   ensureChatSim();
   if(!data.chatSim.agents[target.id])data.chatSim.agents[target.id]=[];
   data.chatSim.agents[target.id].push({role:'user',text:resolvedInput||'(triggered by workflow)'});
-  data.chatSim.agents[target.id].push({role:'assistant',text:chatSimAgentReply(target,resolvedInput||'')});
+  data.chatSim.agents[target.id].push({role:'assistant',text:withRunIdentity(identity,()=>chatSimAgentReply(target,resolvedInput||''))});
   return `ran agent "${target.name}"`;
  }
  // create_task (default, and the only action type older saved data has)
@@ -14179,7 +14556,8 @@ function workflowActionRowHtml(entityKey,a,idx,recordTargets,relTargets){
   const options=targetType==='pipeline'?(data.aiAgentPipelines||[]):(data.aiAgents||[]);
   bodyHtml=`<select name="wact${idx}_targetType" data-wact-target-type="${idx}"><option value="agent" ${targetType==='agent'?'selected':''}>AI Agent</option><option value="pipeline" ${targetType==='pipeline'?'selected':''}>Pipeline</option></select>
    <select name="wact${idx}_targetId">${options.map(o=>`<option value="${o.id}" ${o.id===a.targetId?'selected':''}>${o.name}</option>`).join('')}</select>
-   <input name="wact${idx}_inputTemplate" value="${a.inputTemplate||''}" placeholder='Input (or "field:key")' style="min-width:200px">`;
+   <input name="wact${idx}_inputTemplate" value="${a.inputTemplate||''}" placeholder='Input (or "field:key")' style="min-width:200px">
+   ${demoFeature(AGENT_IDENTITIES_FLAG)?`<select name="wact${idx}_agentIdentityId" title="Who this run acts as"><option value="">Runs as: no Agent Identity</option>${(data.agentIdentities||[]).map(i=>`<option value="${i.id}" ${i.id===a.agentIdentityId?'selected':''}>Runs as: ${agentEsc(i.name)}${i.status==='active'?'':' (disabled)'}</option>`).join('')}</select>`:''}`;
  }else{ // update_field / set_default_field / clear_field
   const isClear=type==='clear_field';
   bodyHtml=`<select name="wact${idx}_updateFieldKey">${actionableFields.map(f=>`<option value="${f[0]}" ${f[0]===a.updateFieldKey?'selected':''}>${f[1]}</option>`).join('')}</select>
@@ -14216,7 +14594,11 @@ function mountWorkflowActionsEditor(container,entityKey,initialActions){
    if(type==='create_task')return {type,taskTitle:g('taskTitle')||'',daysOffset:Number(g('daysOffset')||0)};
    if(type==='create_record')return {type,recordTargetEntity:g('recordTargetEntity')||'',recordNameTemplate:g('recordNameTemplate')||''};
    if(type==='update_related_record')return {type,relTargetEntity:g('relTargetEntity')||'',relTargetField:g('relTargetField')||'',relValue:g('relValue')||''};
-   if(type==='run_ai_agent')return {type,targetType:g('targetType')||'agent',targetId:g('targetId')||'',inputTemplate:g('inputTemplate')||''};
+   if(type==='run_ai_agent'){
+    // The identity picker is hidden while its flag is off; keep what was set.
+    const idEl=form.elements[`wact${idx}_agentIdentityId`];
+    return {type,targetType:g('targetType')||'agent',targetId:g('targetId')||'',inputTemplate:g('inputTemplate')||'',agentIdentityId:idEl?(idEl.value||null):(a.agentIdentityId||null)};
+   }
    const copyFrom=g('updateCopyFrom')||'';
    return {type,updateFieldKey:g('updateFieldKey')||'',updateValue:copyFrom?'':(g('updateValue')||''),updateCopyFrom:copyFrom};
   });
@@ -14764,7 +15146,7 @@ function bindRoadmapSearch(){
 }
 function releasesPage(){document.title='Releases — Lanesra OS';
  setPageMeta('The full Lanesra OS changelog - every shipped release across the desktop app, the online demo and this website, compiled directly from the working codebase. See also the desktop-only installer tags on GitHub, cut less often than this list.');
- const releases=[['v0.97.0','October 2026','Outbound webhooks now deliver real record events',['A webhook an admin created in the Integration Hub never actually fired when a record changed: the event was queued but nothing sent it, and only the <b>Test</b> button delivered (tracked as RAID I-29, work package WP-0182). Queued <code>record.created</code>, <code>record.updated</code> and <code>record.archived</code> events are now signed, sent and cleared by the Team Workspace server\'s scheduler within about a minute, and by the desktop app\'s background poll.','One event that cannot be processed no longer stops the events behind it: it stays queued and is retried on the next pass, and the server logs it. A paused, deleted or other-object-scoped webhook still receives nothing, and the queue clears either way.','Shipped on Team Workspace and the desktop app (new Rust tests: the real scheduler thread delivering signed create, update and archive events, the negative cases, and failure isolation). Not in the online demo, which has no real network egress.','Webhook signing secrets can now be used: the Integration Hub shows a webhook\'s secret once when it is created, and a new <b>Rotate secret</b> action replaces it (admin only, audited without the value, work package WP-0183). Until now the secret was generated but never visible, so a receiver had no way to verify a signature. The online demo shows the same dialogs with a throwaway value.','API clients can now be limited to a network. The <b>Allowed networks</b> list on an API client (previously stored but ignored, so a leaked key worked from anywhere) is enforced on REST, MCP and the event stream: a call from outside it gets 403 and is logged with the address it came from (work package WP-0184). Behind a reverse proxy, set the new <code>LANESRA_TRUSTED_PROXIES</code> setting so the real caller address is used; forwarded headers from anyone else are ignored.','Unattended agent runs now act as an <b>Agent Identity</b>, never as a person (work packages WP-0107 to WP-0109). On upgrade each schedule and webhook trigger gets its own identity with no Administrator role and no Access Roles, so it keeps exactly the rights it had; every assignment is audited. A webhook call now runs only an agent or pipeline with an active webhook trigger (403 otherwise), and every tool call an agent makes records who it acted as. See <a href="/help/agent-identities">Agent Identities</a>.','API clients can now search: <code>GET /api/v1/search?q=…</code> finds records by text across every readable object, with an optional object filter and paging, for clients holding the <code>search.read</code> scope, which until now could be granted but did nothing (work package WP-0186). The command-line tool gains <code>lanesra search</code>.','Bulk export and bulk write for API clients (work package WP-0187): <code>GET /api/v1/objects/{key}/export</code> streams an object as NDJSON or CSV (scope <code>bulk.read</code>), and <code>POST /api/v1/objects/{key}/bulk</code> applies up to 1000 create, update and archive operations with a result per item (scope <code>bulk.write</code>); both scopes could be granted before but did nothing. <b>Behaviour change:</b> Business Rules that block a save now also apply to writes through the REST API, MCP and CSV import, which until now bypassed them. The command-line tool gains <code>lanesra records export</code> and <code>lanesra records bulk</code>.','Webhooks can be managed over the API (work package WP-0188) by a client holding <code>webhooks.manage</code>, which until now did nothing: create, update, pause, reactivate, test, rotate the secret, delete and read delivery history under <code>/api/v1/webhooks</code>, audited under the client\'s id. Creating or updating a webhook, in the admin screen too, now checks that its connection\'s URL is one the server may reach (previously such a webhook was saved and then every delivery failed). The command-line tool gains <code>lanesra webhooks</code>.','Every API scope now does what it says (work package WP-0189, closing RAID I-31). <code>admin.integration.read</code> lists connections, connectors, jobs and API clients without any secret, and <code>admin.integration.manage</code> pauses, reactivates and runs them; a paused connection makes no outbound call until reactivated. A test now fails the build if a scope can be granted without a route enforcing it.','Webhooks now send every event type they can subscribe to (work package WP-0185). <code>field.changed</code> is sent once per field whose value changes on save, built-in or custom, with the previous and current value (cut to 2 KB). <code>workflow.completed</code> and <code>workflow.failed</code> are sent when a workflow run finishes, with the workflow, the record that triggered it and, on failure, an error of at most 500 characters. Workflows built in the graph editor do not send them yet. Events are only queued when a webhook subscribes, and a failure to queue one never blocks a save or a workflow.']],
+ const releases=[['v0.97.0','October 2026','Outbound webhooks now deliver real record events',['A webhook an admin created in the Integration Hub never actually fired when a record changed: the event was queued but nothing sent it, and only the <b>Test</b> button delivered (tracked as RAID I-29, work package WP-0182). Queued <code>record.created</code>, <code>record.updated</code> and <code>record.archived</code> events are now signed, sent and cleared by the Team Workspace server\'s scheduler within about a minute, and by the desktop app\'s background poll.','One event that cannot be processed no longer stops the events behind it: it stays queued and is retried on the next pass, and the server logs it. A paused, deleted or other-object-scoped webhook still receives nothing, and the queue clears either way.','Shipped on Team Workspace and the desktop app (new Rust tests: the real scheduler thread delivering signed create, update and archive events, the negative cases, and failure isolation). Not in the online demo, which has no real network egress.','Webhook signing secrets can now be used: the Integration Hub shows a webhook\'s secret once when it is created, and a new <b>Rotate secret</b> action replaces it (admin only, audited without the value, work package WP-0183). Until now the secret was generated but never visible, so a receiver had no way to verify a signature. The online demo shows the same dialogs with a throwaway value.','API clients can now be limited to a network. The <b>Allowed networks</b> list on an API client (previously stored but ignored, so a leaked key worked from anywhere) is enforced on REST, MCP and the event stream: a call from outside it gets 403 and is logged with the address it came from (work package WP-0184). Behind a reverse proxy, set the new <code>LANESRA_TRUSTED_PROXIES</code> setting so the real caller address is used; forwarded headers from anyone else are ignored.','Unattended agent runs now act as an <b>Agent Identity</b>, never as a person (work packages WP-0107 to WP-0109). On upgrade each schedule and webhook trigger gets its own identity with no Administrator role and no Access Roles, so it keeps exactly the rights it had; every assignment is audited. A webhook call now runs only an agent or pipeline with an active webhook trigger (403 otherwise), and every tool call an agent makes records who it acted as. See <a href="/help/agent-identities">Agent Identities</a>.','API clients can now search: <code>GET /api/v1/search?q=…</code> finds records by text across every readable object, with an optional object filter and paging, for clients holding the <code>search.read</code> scope, which until now could be granted but did nothing (work package WP-0186). The command-line tool gains <code>lanesra search</code>.','Bulk export and bulk write for API clients (work package WP-0187): <code>GET /api/v1/objects/{key}/export</code> streams an object as NDJSON or CSV (scope <code>bulk.read</code>), and <code>POST /api/v1/objects/{key}/bulk</code> applies up to 1000 create, update and archive operations with a result per item (scope <code>bulk.write</code>); both scopes could be granted before but did nothing. <b>Behaviour change:</b> Business Rules that block a save now also apply to writes through the REST API, MCP and CSV import, which until now bypassed them. The command-line tool gains <code>lanesra records export</code> and <code>lanesra records bulk</code>.','Webhooks can be managed over the API (work package WP-0188) by a client holding <code>webhooks.manage</code>, which until now did nothing: create, update, pause, reactivate, test, rotate the secret, delete and read delivery history under <code>/api/v1/webhooks</code>, audited under the client\'s id. Creating or updating a webhook, in the admin screen too, now checks that its connection\'s URL is one the server may reach (previously such a webhook was saved and then every delivery failed). The command-line tool gains <code>lanesra webhooks</code>.','Every API scope now does what it says (work package WP-0189, closing RAID I-31). <code>admin.integration.read</code> lists connections, connectors, jobs and API clients without any secret, and <code>admin.integration.manage</code> pauses, reactivates and runs them; a paused connection makes no outbound call until reactivated. A test now fails the build if a scope can be granted without a route enforcing it.','Webhooks now send every event type they can subscribe to (work package WP-0185). <code>field.changed</code> is sent once per field whose value changes on save, built-in or custom, with the previous and current value (cut to 2 KB). <code>workflow.completed</code> and <code>workflow.failed</code> are sent when a workflow run finishes, with the workflow, the record that triggered it and, on failure, an error of at most 500 characters. Workflows built in the graph editor do not send them yet. Events are only queued when a webhook subscribes, and a failure to queue one never blocks a save or a workflow.','The online demo now follows the Agent Identity rules (work packages WP-0107 to WP-0109): a workflow-started agent run acts as its Agent Identity and never borrows anyone\'s Administrator rights, runs you start act as you, every simulated tool call is recorded in a new <b>Agent audit trail</b> under AI Agents, and agent tokens never reach chat history, run inputs or the audit trail. The Agent Identities screen with show-once credentials is built and switches on with desktop and Team Workspace.','The online demo shows how a run handles a provider error (work package WP-0124): <b>Admin → LLM &amp; MCP → Gateway → Retries and failure handling</b> simulates a failure and shows each attempt, the backoff or Retry-After wait, and whether the run retries, fails over or stops. A new help article, <a href="/help/agent-limits-and-partial-results">Agent limits and failures</a>, explains the error classes and retry rules for every edition.']],
 ['v0.96.0','October 2026','Ontology Layer (Palantir-style), part 2 — the Ontology Graph visual redesign &amp; Object 360',['The Ontology Graph\'s visual language is redesigned (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/339">#339</a>) around a radial dot-graph instead of the old fixed dependents/dependencies columns: a persistent type-color legend that doubles as a click-to-dim toggle-filter, a floating inspector card with cross-link actions and relationships grouped by edge type, and a zoomed-out "cloud" view for a component\'s full upstream/downstream impact. This is still schema/config-level only - it answers "what depends on the Company object type," not "show me everything connected to one specific company."','Object 360 (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/352">#352</a>) is that second, genuinely different capability: given one real record - a specific Company, not just its object type - shows every other real record directly linked to it, unioning the generic admin-defined relationship system with the built-in CRM\'s own hardcoded FK relationships (<code>company_id</code>, <code>Task.related_type</code>/<code>related_id</code>, and similar) which predate and completely bypass it, so a fresh workspace\'s own records don\'t show up empty here. Also shows the record\'s Business Unit, the Business Rules/Workflows that apply to records of its type, the AI Agents scoped to that type, and its own real audit history - opened from a "View in Object 360" button on any record\'s own detail page, to any user who can already view that record, not just Administrators.','Shipped on the desktop edition (new Rust tests covering native FK aggregation and agent object-type scoping) and mirrored in the online demo, with one named gap: Opportunities and generic Custom Object record forms don\'t yet have a working cross-object navigation callback wired from <code>App.tsx</code>, so their Object 360 entry point still works for browsing/re-centering, just without the "Open record" shortcut on those two surfaces specifically.']],
 ['v0.95.0','October 2026','Ontology Layer (Palantir-style), part 1 — Object Types, Link Types, Governed Actions &amp; AI Agent Binding',['The first core build of a Palantir-Foundry-style Ontology Layer (epic <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/340">#340</a>): a typed Object Type &amp; Link Type registry (issues <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/341">#341</a>/<a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/342">#342</a>) unifying every built-in and Custom Object into one read model - identity, a plain-English description sourced from the Business Glossary where one is mapped, and every Link Type it participates in - over the existing object/field/relationship services, no new store.','Action Types (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/343">#343</a>) are the epic\'s single biggest net-new primitive: a named, parameterized write operation scoped to one Object Type ("Mark Company Inactive," "Reassign Company Owner"), invokable identically by a human (a record page\'s now-generalized Quick Action button) and a governed AI agent, always through the object\'s own real write path so a Business Rule that would block the result blocks the Action exactly as it blocks a manual edit. AI Agent Ontology Binding (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/344">#344</a>) layers opt-in scoping on top: an agent can be restricted to exactly the Object Types and Action Types it may touch, on top of the existing Policy Engine risk-tier firewall, additive so every pre-existing agent keeps running unscoped exactly as before.','The Ontology Manager (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/345">#345</a>) ties it together: a pre-filtered Ontology Graph deep link from any Object Type straight to its own node, a shared scope editor extracted from the Agent Foundry\'s inline form, and a standalone Agent Bindings screen listing every agent\'s Ontology scope - editable from either surface with no drift. Shipped identically on the desktop app and the online demo.']],
 ['v0.94.0','October 2026','Domain A: Intelligence Foundation — the Lanesra System Graph, a Semantic Metadata Layer &amp; a Unified Test/Evaluation Framework',['FND-01 (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/256">#256</a>) adds a canonical, incrementally-updated dependency graph over 9 core component types (custom objects, fields, relationships, business rules, workflows, screen/page layouts, AI agents, agent teams), with bounded recursive upstream/downstream traversal and a read-only Ontology Graph admin screen - every owning service syncs its own node/edges inline right after its own write, the same "leaf recorder called after the fact" shape the audit trail already established. An honestly-scoped v1 slice (9 of ~20 spec node types) over the cheapest-to-get-right, already-reliable relationships - the rest is a documented follow-up.','FND-02 (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/257">#257</a>) adds a Business Glossary (name, definition, owner, synonyms, data classification), object/field-to-glossary-term and semantic-role mappings, and declarative Metric definitions (aggregation, source, grain, filters, time logic), versioned with capped history - built on FND-01\'s System Graph for traceability rather than a second mechanism, so a metric or glossary term now traces to its exact source via the Ontology Graph. Metrics are a declarative description for this wave, not yet a working formula engine.','FND-03 (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/258">#258</a>) unifies seven test types - Business Rule, Workflow, Access/Security, Screen Visibility, Integration Mapping, Agent Evaluation, Agent Team Evaluation - into one Test Run with one readiness result, wrapping each type\'s existing dry-run/read-only function rather than re-implementing any of them; a Solution\'s own test cases now run together as one deployment-validation job. Shipped on the desktop edition (new Rust integration tests across all three phases) and mirrored in the online demo.']],
@@ -15108,6 +15490,15 @@ const HELP_CATEGORIES=[
      {heading:'Per-agent routing',bodyHtml:`<p>From <b>Admin → AI Agent Foundry → AI Agents</b>, click <b>Routing</b> on any agent row to set:</p><ul><li><b>Primary provider</b> - tried first</li><li><b>Fallback provider</b> - tried automatically if the primary errors or is rate-limited</li><li><b>Local / air-gapped fallback</b> - the last resort, typically a fully local model, for when both cloud providers above are unavailable</li></ul><p>plus a per-agent <b>temperature</b> and <b>max tokens</b> override. An agent with no routing policy configured behaves exactly as it did before the Gateway existed - this is purely additive.</p>`},
      {heading:'Token budgets',bodyHtml:`<p>Real usage is tracked per (workspace, agent, user, day) and enforced against a daily budget at two tiers: a <b>System</b> daily token budget (Admin → LLM &amp; MCP → Gateway → "System token budget," the top of the hierarchy - applies to every agent run in the workspace) and, from the same Routing panel above, an optional per-<b>Agent</b> daily budget. Today's usage and any failover events (which tier answered the request, and why the tier above it didn't) show on the Gateway's own health view.</p>`},
      {heading:'DLP-driven forced air-gapping',bodyHtml:`<div class="callout callout-info"><p>In the same Routing panel, an agent can name which sensitive data classes force it straight to its local/air-gapped fallback the instant a scan detects one in the request - <b>regardless of the normal primary → fallback → local order</b>.</p></div><table><thead><tr><th>Class</th></tr></thead><tbody><tr><td>Social Security Number</td></tr><tr><td>Credit card number</td></tr><tr><td>Bank account / routing number</td></tr><tr><td>Phone number</td></tr><tr><td>Email address</td></tr></tbody></table><p>Leave every class unchecked and nothing changes - this is opt-in per agent, not a workspace-wide policy.</p>`},
+    ]},
+   {slug:'agent-limits-and-partial-results',title:'Agent limits and failures: retries, error classes and failover',
+    summary:'How an agent run handles a model provider error: which errors are retried, how long it waits, and when the gateway moves to the next routing tier.', wps:'WP-0124',
+    sections:[
+     {heading:'Every error has a class',bodyHtml:`<p>When a model call fails, the error is put into one of five classes. The class decides what happens next, so a run never retries something that cannot succeed.</p><table><thead><tr><th>Class</th><th>Examples</th><th>Retried?</th></tr></thead><tbody><tr><td><b>Transient</b></td><td>429 Too Many Requests (<code>provider.rate_limited</code>), 5xx (<code>provider.unavailable</code>), a timeout (<code>provider.timeout</code>), a dropped connection (<code>provider.network</code>)</td><td>Yes</td></tr><tr><td><b>Configuration</b></td><td>401 or 403, a bad or missing key (<code>config.missing_key</code>); 404, an unknown model (<code>config.model_not_found</code>)</td><td>No, but the gateway tries the next routing tier</td></tr><tr><td><b>Policy</b></td><td>The Tool-Call Firewall or an access rule refuses (<code>policy.denied</code>)</td><td>No</td></tr><tr><td><b>Validation</b></td><td>Any other 4xx, such as invalid arguments (<code>validation.arguments</code>)</td><td>No</td></tr><tr><td><b>Internal</b></td><td>A fault inside Lanesra OS</td><td>No</td></tr></tbody></table>`},
+     {heading:'Retries and backoff',bodyHtml:`<p>A transient error is retried up to <b>3 attempts</b> in total. Between attempts the run waits a random time inside a window that starts at <b>0.5 s</b> and doubles each time, up to <b>20 s</b> (so many runs hitting the same limit do not all retry at once). If the provider sends a <code>Retry-After</code> header, that wait is used instead, capped at 20 s. Retries apply to every model call, whether or not the agent has its own routing.</p>`},
+     {heading:'Failover to the next tier',bodyHtml:`<p>If an agent has <a href="/help/unified-ai-gateway">routing</a>, the gateway moves to its next tier (primary, then fallback, then local) when a transient error is still failing after its retries, or when a tier is misconfigured. A policy, validation or internal error stops the run at once, because another provider would give the same answer.</p>`},
+     {heading:'Still being built',bodyHtml:`<p>Step limits that end a long run with a partial result, a retry policy set per workflow step, context compaction for long conversations, and agents that see their remaining token budget are planned and are not in the product yet. This article will cover them when they ship.</p>`},
+     {heading:'In the online demo',bodyHtml:`<p>The demo has no real model provider, so it shows the same rules as a simulation: open <b>Admin → LLM &amp; MCP → Gateway → Retries and failure handling</b>, pick a failure, and see each attempt, the wait before it and the outcome. The waits are calculated, not slept.</p>`},
     ]},
    {slug:'context-layer-vector-search',title:'Context Layer & Vector Search',
     summary:'Lexical search_records vs. embeddings-based semantic_search_records, setting up Vector Search, and the agent context primer tools.',
@@ -15630,6 +16021,7 @@ docker run -d -p 8080:8080 -v lanesra-data:/data --name lanesra lanesra-os-serve
       {heading:'What happened to existing triggers on upgrade',bodyHtml:`<p>Each existing schedule and webhook trigger was given its own Agent Identity named after it. It is owned by whoever created the trigger, or the workspace's first Administrator, is <b>not</b> an Administrator and holds <b>no</b> Access Roles. That is exactly what the trigger could do before, so nothing that worked stopped working and nothing gained a right. Each assignment is in the audit log as <code>agent_identity_assigned_on_upgrade</code>. If a scheduled agent needs admin tools, give its identity the Administrator role.</p>`},
       {heading:'The audit trail',bodyHtml:`<p>Every tool call an agent makes writes an <code>ai_agent_tool_call</code> audit entry naming the agent, the tool and the <b>effective principal</b>: the person who started the run, or the Agent Identity (with the record actor for a webhook).</p>`},
       {heading:'Managing identities',bodyHtml:`<p>Agent Identities and their credentials are Administrator-only. A credential's token is shown once when it is issued or rotated and is stored only as a hash. The <b>Admin → AI → Agent Identities</b> screen and the <b>runs as</b> picker on each trigger are being built and are not switched on yet; until then, triggers keep the identity they were given on upgrade.</p>`},
+      {heading:'In the online demo',bodyHtml:`<p>The demo follows the same rules. A <b>Run AI agent</b> Workflow Automation action is its unattended run: it acts as the action's Agent Identity, or, without one, has no Administrator rights, so an agent that uses admin tools is refused. Runs you start yourself act as you. <b>Admin → AI Agent Foundry → AI Agents</b> shows an <b>Agent audit trail</b> naming who each tool call acted as, and agent tokens pasted into a chat or run input are stored as <code>[REDACTED]</code>. The Agent Identities screen and the action's identity picker are built in the demo too and switch on in the same release as desktop and Team Workspace.</p>`},
      ]},
     {slug:'access-foundation-whats-next',title:"What's next: Field Access Policies, graded AI Action Levels & Enterprise Identity",
      summary:'Organization/Org Units/Work Teams/ownership and Access Roles/Record Scopes/the Access Inspector are Phases 1 & 2 of six. Agent Access Governance already delivers a real slice of Phase 5; Field Access Policies, Record Access Policies, graded AI Action Levels and SSO remain open.',

@@ -3,7 +3,7 @@ id: WP-0189
 title: "API: integration administration and the scope-vocabulary test"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0186, WP-0187, WP-0188]
 requirements: [REQ-INT-006, REQ-INT-005]
@@ -67,3 +67,4 @@ updated: 2026-10-22
   - `server/tests/api_scope_vocabulary.rs` maps every entry of `VALID_SCOPES` to an enforcing route and proves allow (the scope alone is not refused) and deny (every other scope together is refused with 403). Verified it fails when a scope is added without a route: adding `reports.read` made it fail with "scopes with no enforcing route: [\"reports.read\"]" (reverted).
   - Docs: the APIs page scope table now lists all eleven scopes with the least-privilege callout updated; endpoint rows; help section "Integration administration and the scope table"; llms files; Releases entry. No "not enforced" caveat remained in the pages to remove.
   - Tests: `server/tests/api_v1_integration_admin.rs` 3 (listings scanned for planted secrets and secret column names; pause, reactivate and run with the run in the integration log and five audit rows; read and manage do not grant each other), `server/tests/api_scope_vocabulary.rs` 1, `core/tests/integration_webhook.rs` +1 (paused connection gets no delivery), `integration_admin_service` unit test +1 (URL credentials stripped). Connection-using and API suites pass unchanged.
+- 2026-10-22 claude: Merged in #703; done.

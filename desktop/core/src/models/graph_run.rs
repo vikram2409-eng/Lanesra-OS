@@ -4,16 +4,20 @@
 //! `services::graph_runtime_service`'s module doc comment for the
 //! queued -> ... -> completed/failed/cancelled state machine.
 
+/// Run statuses, ADR-0007 §1. `planning` is kept for the Phase 3 plan
+/// approval and behaves as a waiting status. Every change between these goes
+/// through `services::run_state::transition`.
 pub const RUN_STATUSES: &[&str] = &[
     "queued",
     "planning",
     "running",
-    "waiting_tool",
-    "waiting_agent",
-    "waiting_approval",
-    "waiting_scheduled",
     "paused",
+    "waiting_approval",
+    "waiting_budget",
+    "waiting_model",
+    "waiting_scheduled",
     "completed",
+    "completed_partial",
     "failed",
     "cancelled",
 ];
@@ -24,20 +28,51 @@ pub const RUN_STATUSES: &[&str] = &[
 pub fn is_waiting_status(status: &str) -> bool {
     matches!(
         status,
-        "waiting_tool" | "waiting_agent" | "waiting_approval" | "waiting_scheduled" | "paused"
+        "planning"
+            | "paused"
+            | "waiting_approval"
+            | "waiting_budget"
+            | "waiting_model"
+            | "waiting_scheduled"
     )
 }
 
+/// Nothing leaves a terminal status (ADR-0007 §3).
 pub fn is_terminal_status(status: &str) -> bool {
-    matches!(status, "completed" | "failed" | "cancelled")
+    matches!(
+        status,
+        "completed" | "completed_partial" | "failed" | "cancelled"
+    )
 }
 
+/// Step statuses, ADR-0007 §2. A step has one row per attempt.
 pub const RUN_NODE_STATUSES: &[&str] = &[
+    "pending",
     "running",
     "waiting_approval",
     "completed",
+    "completed_partial",
     "failed",
     "skipped",
+    "cancelled",
+];
+
+/// Why a run stopped or is waiting, ADR-0007 §4.
+pub const STOP_REASONS: &[&str] = &[
+    "end_reached",
+    "limit_rounds",
+    "limit_tokens",
+    "limit_wall_clock",
+    "budget_exhausted",
+    "approval_pending",
+    "approval_rejected",
+    "guardrail_failed",
+    "policy_denied",
+    "model_unavailable",
+    "error",
+    "cancelled_by_user",
+    "cancelled_by_policy",
+    "interrupted",
 ];
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -54,6 +89,13 @@ pub struct RunNode {
     pub error_message: Option<String>,
     pub started_at: String,
     pub finished_at: Option<String>,
+    pub tokens_in: Option<i64>,
+    pub tokens_out: Option<i64>,
+    pub cost_usd: Option<f64>,
+    /// What went into this step's context and why (WP-0111).
+    pub context_receipt_json: Option<String>,
+    /// Each guardrail's verdict on this step (WP-0111).
+    pub guardrail_verdicts_json: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -79,5 +121,16 @@ pub struct GraphRun {
     pub steps_executed: i64,
     pub started_at: String,
     pub finished_at: Option<String>,
+    /// Set on terminal and waiting statuses (ADR-0007 §4).
+    pub stop_reason: Option<String>,
+    /// The run this one replays (WP-0207).
+    pub parent_run_id: Option<String>,
+    /// The step of another run this one was forked from (WP-0207).
+    pub fork_of_step_id: Option<String>,
+    pub budget_json: Option<String>,
+    pub cost_usd: Option<f64>,
+    /// The worker holding a `running` run, and until when (ADR-0007 §5).
+    pub lease_owner: Option<String>,
+    pub lease_expires_at: Option<String>,
     pub nodes: Vec<RunNode>,
 }

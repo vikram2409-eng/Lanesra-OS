@@ -3993,16 +3993,18 @@ export interface ExecutionGraphInput {
   edges: GraphEdgeInput[];
 }
 
+// ADR-0007 §1. Mirrors core::models::graph_run::RUN_STATUSES.
 export type GraphRunStatus =
   | "queued"
   | "planning"
   | "running"
-  | "waiting_tool"
-  | "waiting_agent"
-  | "waiting_approval"
-  | "waiting_scheduled"
   | "paused"
+  | "waiting_approval"
+  | "waiting_budget"
+  | "waiting_model"
+  | "waiting_scheduled"
   | "completed"
+  | "completed_partial"
   | "failed"
   | "cancelled";
 
@@ -4013,12 +4015,25 @@ export interface RunNode {
   node_key: string;
   node_type: GraphNodeType;
   attempt: number;
-  status: "running" | "waiting_approval" | "completed" | "failed" | "skipped";
+  status:
+    | "pending"
+    | "running"
+    | "waiting_approval"
+    | "completed"
+    | "completed_partial"
+    | "failed"
+    | "skipped"
+    | "cancelled";
   input_json: string | null;
   output_json: string | null;
   error_message: string | null;
   started_at: string;
   finished_at: string | null;
+  tokens_in: number | null;
+  tokens_out: number | null;
+  cost_usd: number | null;
+  context_receipt_json: string | null;
+  guardrail_verdicts_json: string | null;
 }
 
 export interface GraphRun {
@@ -4038,6 +4053,13 @@ export interface GraphRun {
   steps_executed: number;
   started_at: string;
   finished_at: string | null;
+  stop_reason: string | null;
+  parent_run_id: string | null;
+  fork_of_step_id: string | null;
+  budget_json: string | null;
+  cost_usd: number | null;
+  lease_owner: string | null;
+  lease_expires_at: string | null;
   nodes: RunNode[];
 }
 

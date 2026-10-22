@@ -3,7 +3,7 @@ id: WP-0185
 title: "Emit the field.changed, workflow.completed and workflow.failed webhook events"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0182]
 requirements: [REQ-INT-003, REQ-INT-001]
@@ -66,3 +66,4 @@ Three webhook event types can be subscribed to today and nothing emits them, so 
 - 2026-10-21 claude: Written as `ready`. Not started. Starts after WP-0182 merges.
 - 2026-10-22 claude: Claimed; WP-0182 is done.
 - 2026-10-22 claude: Built and in review (#703, stacked on WP-0189). `event_hooks::field_changes` diffs the before and after field snapshots the entity services already take (Company, Contact, Task, Contract, Opportunity, custom objects; built-in and custom fields) and queues one event per changed field, `data` `{field, source, previous, current, truncated}` with values cut to 2 KB. `event_hooks::workflow_finished` queues `workflow.completed` or `workflow.failed` after the run is recorded, `data` `{workflow_id, workflow_name, run_status, trigger_record}` plus `error` (at most 500 characters) on failure. Deviations from the scope text: there is no `run_id` because `workflow_repo::record_run` does not return one, and the status key is `run_status`. Not covered: Products (their service keeps no field snapshot) and graph-editor workflows (queued to the agent runtime, never run by the flat executor); both are named in the docs. No field class marks a value secret (classification exists only on glossary terms), so no value is withheld. +6 tests.
+- 2026-10-22 claude: Merged in #703; done.

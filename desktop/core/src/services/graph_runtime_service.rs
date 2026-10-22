@@ -1,7 +1,7 @@
 //! AI Agent Platform v2, Phase 3: the Shared Execution Graph Runtime's
 //! step-by-step executor. Walks a published `ExecutionGraph` one node at a
 //! time from `ai_runs.current_node_id`, checkpointing (`graph_run_repo::
-//! checkpoint`/`set_waiting_approval`/`set_waiting_scheduled`) after every
+//! checkpoint`/`set_pending_approval`/`set_resume_at`) after every
 //! node transition so a run surviving a process restart is just calling
 //! `resume_run` again - it re-reads `current_node_id`/`context_json` off
 //! `ai_runs` and continues from exactly there, the same durability
@@ -92,7 +92,7 @@ use crate::models::graph_run::GraphRun;
 use crate::repositories::{ai_agent_repo, execution_graph_repo, graph_run_repo};
 use crate::services::{
     ai_eval_service, ai_orchestration_service, ai_service, approval_service, chat_service,
-    workflow_service,
+    run_state, workflow_service,
 };
 
 /// Policy-configurable in a later phase (see issue #168's own "Concurrency"
@@ -1046,30 +1046,29 @@ async fn run_from(
         let run = graph_run_repo::get_run(conn, run_id)?
             .ok_or_else(|| AppError::NotFound("Run".into()))?;
         if run.steps_executed >= MAX_STEPS_DEFAULT {
-            graph_run_repo::finish_run(conn, run_id, "failed", Some("step limit exceeded"))?;
+            fail_run(conn, run_id, "limit_rounds", "step limit exceeded")?;
             break;
         }
         let Some(node) = graph.nodes.iter().find(|n| n.id == current_id) else {
-            graph_run_repo::finish_run(
+            fail_run(
                 conn,
                 run_id,
-                "failed",
-                Some("graph shape error: current node not found"),
+                "error",
+                "graph shape error: current node not found",
             )?;
             break;
         };
         if node.node_type == "end" {
             let mut context = parse_context(&run.context_json);
             context.remove("__parallel_join_results");
-            graph_run_repo::checkpoint(
+            checkpoint(
                 conn,
                 run_id,
-                "running",
                 &dump_context(&context),
                 None,
                 run.steps_executed + 1,
             )?;
-            graph_run_repo::finish_run(conn, run_id, "completed", None)?;
+            run_state::transition(conn, run_id, "running", "completed", Some("end_reached"))?;
             break;
         }
         let mut context = parse_context(&run.context_json);
@@ -1086,10 +1085,9 @@ async fn run_from(
         .await
         {
             Ok(NodeOutcome::Continue(next_id)) => {
-                graph_run_repo::checkpoint(
+                checkpoint(
                     conn,
                     run_id,
-                    "running",
                     &dump_context(&context),
                     Some(&next_id),
                     run.steps_executed + 1,
@@ -1097,7 +1095,14 @@ async fn run_from(
                 current_id = next_id;
             }
             Ok(NodeOutcome::WaitingApproval(approval_id)) => {
-                graph_run_repo::set_waiting_approval(
+                run_state::transition(
+                    conn,
+                    run_id,
+                    "running",
+                    "waiting_approval",
+                    Some("approval_pending"),
+                )?;
+                graph_run_repo::set_pending_approval(
                     conn,
                     run_id,
                     &dump_context(&context),
@@ -1110,7 +1115,8 @@ async fn run_from(
                 resume_at,
                 next_node_id,
             }) => {
-                graph_run_repo::set_waiting_scheduled(
+                run_state::transition(conn, run_id, "running", "waiting_scheduled", None)?;
+                graph_run_repo::set_resume_at(
                     conn,
                     run_id,
                     &dump_context(&context),
@@ -1120,12 +1126,37 @@ async fn run_from(
                 break;
             }
             Err(e) => {
-                graph_run_repo::finish_run(conn, run_id, "failed", Some(&e.to_string()))?;
+                fail_run(conn, run_id, "error", &e.to_string())?;
                 break;
             }
         }
     }
     graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))
+}
+
+/// Saves where a `running` run is and renews this worker's lease on it.
+fn checkpoint(
+    conn: &Connection,
+    run_id: &str,
+    context_json: &str,
+    current_node_id: Option<&str>,
+    steps_executed: i64,
+) -> AppResult<()> {
+    graph_run_repo::checkpoint(conn, run_id, context_json, current_node_id, steps_executed)?;
+    run_state::renew_lease(conn, run_id)
+}
+
+fn fail_run(conn: &Connection, run_id: &str, stop_reason: &str, message: &str) -> AppResult<()> {
+    run_state::transition(conn, run_id, "running", "failed", Some(stop_reason))?;
+    graph_run_repo::set_error_message(conn, run_id, Some(message))?;
+    Ok(())
+}
+
+/// A waiting or paused run goes back to `queued`, then this worker takes it
+/// (ADR-0007 §3).
+fn requeue_and_take(conn: &Connection, run_id: &str, from: &str) -> AppResult<()> {
+    run_state::transition(conn, run_id, from, "queued", None)?;
+    run_state::transition(conn, run_id, "queued", "running", None)
 }
 
 fn get_published_graph(
@@ -1175,7 +1206,8 @@ pub async fn start_run(
         source_entity_type,
         source_entity_id,
     )?;
-    graph_run_repo::checkpoint(conn, &run_id, "running", "{}", Some(&trigger.id), 0)?;
+    run_state::transition(conn, &run_id, "queued", "running", None)?;
+    checkpoint(conn, &run_id, "{}", Some(&trigger.id), 0)?;
     run_from(
         conn,
         workspace_id,
@@ -1220,6 +1252,7 @@ pub async fn resume_run(
         .current_node_id
         .clone()
         .ok_or_else(|| AppError::Validation("run has no current_node_id to resume from".into()))?;
+    requeue_and_take(conn, run_id, &run.status)?;
     run_from(
         conn,
         workspace_id,
@@ -1274,11 +1307,10 @@ pub async fn resolve_approval(
         .ok_or_else(|| AppError::Validation("run has no current_node_id".into()))?;
     let label = if approve { "approved" } else { "rejected" };
     let next = branch_outgoing(&graph, &approval_node_id, label)?.to_string();
-    graph_run_repo::clear_wait_markers(conn, run_id)?;
-    graph_run_repo::checkpoint(
+    requeue_and_take(conn, run_id, "waiting_approval")?;
+    checkpoint(
         conn,
         run_id,
-        "running",
         &run.context_json,
         Some(&next),
         run.steps_executed + 1,
@@ -1300,7 +1332,13 @@ pub async fn cancel_run(
             run.status
         )));
     }
-    graph_run_repo::finish_run(conn, run_id, "cancelled", None)?;
+    run_state::transition(
+        conn,
+        run_id,
+        &run.status,
+        "cancelled",
+        Some("cancelled_by_user"),
+    )?;
     get_owned_run(conn, run_id, workspace_id)
 }
 

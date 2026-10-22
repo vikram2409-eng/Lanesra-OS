@@ -2,7 +2,8 @@
 //! analogue of `ai_agent_run_repo` for `ai_agent_runs`/`ai_agent_run_steps`,
 //! generalized from a fixed step order to an arbitrary graph position. See
 //! `services::graph_runtime_service` for the state machine that writes
-//! through this.
+//! through this. `ai_runs.status` is written only by
+//! `services::run_state::transition` (ADR-0007 §4); nothing here changes it.
 
 use rusqlite::{Connection, OptionalExtension};
 
@@ -27,6 +28,13 @@ fn map_run_row(row: &rusqlite::Row) -> rusqlite::Result<GraphRun> {
         steps_executed: row.get("steps_executed")?,
         started_at: row.get("started_at")?,
         finished_at: row.get("finished_at")?,
+        stop_reason: row.get("stop_reason")?,
+        parent_run_id: row.get("parent_run_id")?,
+        fork_of_step_id: row.get("fork_of_step_id")?,
+        budget_json: row.get("budget_json")?,
+        cost_usd: row.get("cost_usd")?,
+        lease_owner: row.get("lease_owner")?,
+        lease_expires_at: row.get("lease_expires_at")?,
         nodes: Vec::new(), // filled in by `hydrate`
     })
 }
@@ -45,6 +53,11 @@ fn map_run_node_row(row: &rusqlite::Row) -> rusqlite::Result<RunNode> {
         error_message: row.get("error_message")?,
         started_at: row.get("started_at")?,
         finished_at: row.get("finished_at")?,
+        tokens_in: row.get("tokens_in")?,
+        tokens_out: row.get("tokens_out")?,
+        cost_usd: row.get("cost_usd")?,
+        context_receipt_json: row.get("context_receipt_json")?,
+        guardrail_verdicts_json: row.get("guardrail_verdicts_json")?,
     })
 }
 
@@ -115,17 +128,14 @@ pub fn list_due_delayed_runs(
     rows.into_iter().map(|r| hydrate(conn, r)).collect()
 }
 
-/// Every run this workspace has left in a resumable `waiting_*`/`paused`
-/// state - what a desktop app start (or a Team Workspace worker's own
-/// startup sweep) calls once to pick back up anything interrupted by the
-/// last process's exit, the same durability property `ai_agent_runs`
-/// already gives a paused Pipeline run.
+/// Every run this workspace has left `running` - what the interrupted-run
+/// sweep (ADR-0007 §5, WP-0141) checks for an expired lease.
 pub fn list_resumable_runs(
     conn: &Connection,
     workspace_id: &str,
 ) -> rusqlite::Result<Vec<GraphRun>> {
     let mut stmt = conn.prepare(
-        "SELECT * FROM ai_runs WHERE workspace_id = ?1 AND status IN ('running', 'planning', 'waiting_tool', 'waiting_agent') ORDER BY started_at",
+        "SELECT * FROM ai_runs WHERE workspace_id = ?1 AND status = 'running' ORDER BY started_at",
     )?;
     let rows: Vec<GraphRun> = stmt
         .query_map([workspace_id], map_run_row)?
@@ -142,19 +152,20 @@ pub fn list_resumable_runs(
 pub fn checkpoint(
     conn: &Connection,
     id: &str,
-    status: &str,
     context_json: &str,
     current_node_id: Option<&str>,
     steps_executed: i64,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "UPDATE ai_runs SET status = ?1, context_json = ?2, current_node_id = ?3, steps_executed = ?4 WHERE id = ?5",
-        (status, context_json, current_node_id, steps_executed, id),
+        "UPDATE ai_runs SET context_json = ?1, current_node_id = ?2, steps_executed = ?3 WHERE id = ?4",
+        (context_json, current_node_id, steps_executed, id),
     )?;
     Ok(())
 }
 
-pub fn set_waiting_approval(
+/// What a `waiting_approval` run is blocked on. Set right after the run
+/// moves to that status.
+pub fn set_pending_approval(
     conn: &Connection,
     id: &str,
     context_json: &str,
@@ -162,13 +173,15 @@ pub fn set_waiting_approval(
     approval_id: &str,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "UPDATE ai_runs SET status = 'waiting_approval', context_json = ?1, current_node_id = ?2, pending_approval_id = ?3 WHERE id = ?4",
+        "UPDATE ai_runs SET context_json = ?1, current_node_id = ?2, pending_approval_id = ?3 WHERE id = ?4",
         (context_json, current_node_id, approval_id, id),
     )?;
     Ok(())
 }
 
-pub fn set_waiting_scheduled(
+/// When a `waiting_scheduled` run is due. Set right after the run moves to
+/// that status.
+pub fn set_resume_at(
     conn: &Connection,
     id: &str,
     context_json: &str,
@@ -176,29 +189,20 @@ pub fn set_waiting_scheduled(
     resume_at: &str,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "UPDATE ai_runs SET status = 'waiting_scheduled', context_json = ?1, current_node_id = ?2, resume_at = ?3 WHERE id = ?4",
+        "UPDATE ai_runs SET context_json = ?1, current_node_id = ?2, resume_at = ?3 WHERE id = ?4",
         (context_json, current_node_id, resume_at, id),
     )?;
     Ok(())
 }
 
-pub fn clear_wait_markers(conn: &Connection, id: &str) -> rusqlite::Result<()> {
-    conn.execute(
-        "UPDATE ai_runs SET pending_approval_id = NULL, resume_at = NULL WHERE id = ?1",
-        [id],
-    )?;
-    Ok(())
-}
-
-pub fn finish_run(
+pub fn set_error_message(
     conn: &Connection,
     id: &str,
-    status: &str,
     error_message: Option<&str>,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "UPDATE ai_runs SET status = ?1, error_message = ?2, finished_at = ?3, pending_approval_id = NULL, resume_at = NULL WHERE id = ?4",
-        (status, error_message, now_iso(), id),
+        "UPDATE ai_runs SET error_message = ?1 WHERE id = ?2",
+        (error_message, id),
     )?;
     Ok(())
 }

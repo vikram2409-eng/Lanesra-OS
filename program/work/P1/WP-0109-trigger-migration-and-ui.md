@@ -10,10 +10,10 @@ requirements: [REQ-GOV-003]
 threats: [T-03]
 estimate: M
 editions: [desktop, workspace, demo]
-delivered: [desktop, workspace]
+delivered: [desktop, workspace, demo]
 docs: [agent-identities, access-roles-and-record-scopes]
 branch: claude/enterprise-build-planning-jxy2kq
-pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/700
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/704
 updated: 2026-10-22
 ---
 
@@ -80,3 +80,5 @@ Migrate existing unattended triggers to use Agent Identities, and build the Agen
   - Not in this package: the identity picker on agents (needs the eight-group editor, WP-0160) and record-level enforcement for identities (RAID I-20). Online demo: building flags are off in every release and the demo does not simulate triggers, so its delivery ships with the flag's graduation in WP-0160. Help: `access-roles-and-record-scopes` gains "Who scheduled and webhook runs act as".
 - 2026-10-22 claude: Help article `agent-identities` added (app.js, sitemap, docs index, llms files, Releases v0.97.0 entry). Demo edition: RAID Q-21.
 - 2026-10-22 claude: PR #700 merged by the owner (cfc4a38). Delivered on desktop and Team Workspace. Stays `in_review` only for the online demo edition, which ships with the flag in WP-0160 (RAID Q-21).
+- 2026-10-22 claude: Online demo edition built (RAID Q-21). The demo's unattended run is the Workflow Automation "Run AI agent" action (it has no schedule or webhook triggers, so there is nothing to migrate): the action carries an Agent Identity, chosen with a picker shown only while `agents.identities_ui` is on and kept when the picker is hidden. Every simulated tool call writes an `ai_agent_tool_call` entry naming the agent, the tool and the effective principal, shown in a new Agent audit trail under AI Agents. Verified in headless Chromium.
+- 2026-10-22 claude: In review in #704.
