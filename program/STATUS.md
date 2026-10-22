@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 18 | 1 | 0 | 0 | 1 | 32 / 36 | `████████░░` 89% |
-| 1 · Foundations | 50 | 0 | 11 | 9 | 0 | 30 | 0 / 150 | `░░░░░░░░░░` 0% |
+| 1 · Foundations | 50 | 2 | 9 | 9 | 0 | 30 | 3 / 150 | `░░░░░░░░░░` 2% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -19,9 +19,9 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 113 | 5 | 10 / 393 |
-| Team Workspace | 124 | 4 | 8 / 440 |
-| Online demo | 86 | 1 | 2 / 304 |
+| Desktop | 113 | 9 | 18 / 393 |
+| Team Workspace | 124 | 10 | 19 / 440 |
+| Online demo | 86 | 2 | 4 / 304 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -37,20 +37,23 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0122](work/P1/WP-0122-native-function-calling-and-strict-json-tool-format.md) | Native function calling and strict JSON tool format | in_progress | muse | `wp/WP-0122-tool-calling` | - |
 | [WP-0124](work/P1/WP-0124-retry-with-backoff-and-error-taxonomy.md) | Retry with backoff and error taxonomy | in_review | claude | `wp/WP-0124-retry-backoff-v2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/678 |
 | [WP-0130](work/P1/WP-0130-prompt-catalog-written-fresh.md) | Prompt catalog, written fresh | in_progress | muse | `wp/WP-0130-prompt-catalog` | - |
-| [WP-0143](work/P1/WP-0143-tool-catalog-credentials-and-delegation-guard-audit.md) | Tool catalog, credentials and delegation guard audit | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/687 |
 | [WP-0182](work/P1/WP-0182-deliver-outbound-webhooks-for-real-record-events.md) | Deliver outbound webhooks for real record events | in_review | claude | `wp/WP-0182-deliver-outbound-webhooks` | https://github.com/vikram2409-eng/Lanesra-OS/pull/689 |
 | [WP-0183](work/P1/WP-0183-webhook-signing-secret-show-once-and-rotate.md) | Webhook signing secret: show once and rotate | in_review | claude | `wp/WP-0183-webhook-signing-secret` | https://github.com/vikram2409-eng/Lanesra-OS/pull/690 |
-| [WP-0184](work/P1/WP-0184-api-client-network-restriction-and-scope-enforcement.md) | API clients: enforce the allowed network with a trusted-proxy rule | in_review | claude | `wp/WP-0184-api-client-network-restriction` | https://github.com/vikram2409-eng/Lanesra-OS/pull/691 |
 
 ## Ready to start (all dependencies done)
 
-None.
+Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXXX-*` branch or a draft PR means claimed). Hand it over with `programctl brief WP-XXXX`.
+
+| WP | Title | Phase | Estimate |
+|---|---|---|---|
+| [WP-0186](work/P1/WP-0186-api-record-search.md) | API: record search behind the search.read scope | 1 | S |
+| [WP-0187](work/P1/WP-0187-api-bulk-export-and-bulk-write.md) | API: bulk export and bulk write behind bulk.read and bulk.write | 1 | M |
 
 ## Requirement coverage
 
 - Spec requirements tracked: **244**
 - Mapped to a work package: **244**
-- Delivered (every mapped work package done): **20**
+- Delivered (every mapped work package done): **24**
 
 ## Phase 0 · Precursors
 
@@ -88,8 +91,8 @@ None.
 | [WP-0104](work/P1/WP-0104-directory-mapping-groups-to-roles-approvers-and-provisioning.md) | Directory mapping: groups to roles, approvers and provisioning | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace | WP-0102, WP-0103 |
 | [WP-0105](work/P1/WP-0105-enterprise-sign-in-on-the-desktop-edition.md) | Enterprise sign-in on the desktop edition | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Desktop | WP-0102, WP-0103 |
 | [WP-0106](work/P1/WP-0106-team-workspace-first-run-and-sign-in-hardening.md) | Team Workspace first-run and sign-in hardening | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace ○Desktop | WP-0107, WP-0108, WP-0020 |
-| [WP-0107](work/P1/WP-0107-principal-model-and-effective-identity.md) | Principal model and effective-identity rules | E1.0 Identity foundation | 👀 in review | M | ○Desktop ○Team Workspace ○Online demo | WP-0009 |
-| [WP-0108](work/P1/WP-0108-agent-identities-and-credentials.md) | Agent Identities and credentials | E1.0 Identity foundation | 👀 in review | M | ○Desktop ○Team Workspace ○Online demo | WP-0107 |
+| [WP-0107](work/P1/WP-0107-principal-model-and-effective-identity.md) | Principal model and effective-identity rules | E1.0 Identity foundation | 👀 in review | M | ✓Desktop ✓Team Workspace ○Online demo | WP-0009 |
+| [WP-0108](work/P1/WP-0108-agent-identities-and-credentials.md) | Agent Identities and credentials | E1.0 Identity foundation | 👀 in review | M | ✓Desktop ✓Team Workspace ○Online demo | WP-0107 |
 | [WP-0109](work/P1/WP-0109-trigger-migration-and-ui.md) | Trigger migration and Agent Identity UI | E1.0 Identity foundation | 👀 in review | M | ✓Desktop ✓Team Workspace ○Online demo | WP-0107, WP-0108 |
 | [WP-0110](work/P1/WP-0110-run-and-step-schema-extensions.md) | Run and step schema extensions | E1.2 Run model and trace | ⚪ proposed | M | ○Desktop ○Team Workspace | WP-0009, WP-0007, WP-0107 |
 | [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | E1.2 Run model and trace | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0110 |
@@ -99,7 +102,7 @@ None.
 | [WP-0121](work/P1/WP-0121-step-limits-and-partial-results.md) | Step limits and partial results | E1.3 Agent loop | 🟢 ready | L | ○Desktop ○Team Workspace ○Online demo | WP-0110, WP-0005 |
 | [WP-0122](work/P1/WP-0122-native-function-calling-and-strict-json-tool-format.md) | Native function calling and strict JSON tool format | E1.3 Agent loop | 🔨 in progress | L | ○Desktop ○Team Workspace | WP-0005 |
 | [WP-0123](work/P1/WP-0123-per-step-model-routing-and-data-boundaries.md) | Per-step model routing and data boundaries | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0121 |
-| [WP-0124](work/P1/WP-0124-retry-with-backoff-and-error-taxonomy.md) | Retry with backoff and error taxonomy | E1.3 Agent loop | 👀 in review | M | ○Desktop ○Team Workspace ○Online demo | WP-0009, WP-0005 |
+| [WP-0124](work/P1/WP-0124-retry-with-backoff-and-error-taxonomy.md) | Retry with backoff and error taxonomy | E1.3 Agent loop | 👀 in review | M | ✓Desktop ✓Team Workspace ○Online demo | WP-0009, WP-0005 |
 | [WP-0125](work/P1/WP-0125-context-window-handling-and-compaction-policies.md) | Context window handling and compaction policies | E1.3 Agent loop | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0121 |
 | [WP-0126](work/P1/WP-0126-budget-awareness-in-agent-turns.md) | Budget awareness in agent turns | E1.3 Agent loop | ⚪ proposed | S | ○Desktop ○Team Workspace ○Online demo | WP-0121 |
 | [WP-0127](work/P1/WP-0127-do-not-persist-state-fields.md) | Do-not-persist state fields | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0111 |
@@ -111,7 +114,7 @@ None.
 | [WP-0140](work/P1/WP-0140-per-tool-caps-and-rate-limits.md) | Per-tool caps and rate limits | E1.5 Tools and firewall | 🟢 ready | M | ○Desktop ○Team Workspace ○Online demo | WP-0122 |
 | [WP-0141](work/P1/WP-0141-idempotency-keys-and-side-effect-safe-resume.md) | Idempotency keys and side-effect-safe resume | E1.5 Tools and firewall | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0110 |
 | [WP-0142](work/P1/WP-0142-gate-on-server-initiated-mcp-requests.md) | Gate on server-initiated MCP requests | E1.5 Tools and firewall | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0150 |
-| [WP-0143](work/P1/WP-0143-tool-catalog-credentials-and-delegation-guard-audit.md) | Tool catalog, credentials and delegation guard audit | E1.5 Tools and firewall | 👀 in review | S | — | WP-0008 |
+| [WP-0143](work/P1/WP-0143-tool-catalog-credentials-and-delegation-guard-audit.md) | Tool catalog, credentials and delegation guard audit | E1.5 Tools and firewall | ✅ done | S | — | WP-0008 |
 | [WP-0144](work/P1/WP-0144-test-button-on-every-model-tool-connector-agent-and-team.md) | Test button on every model, tool, connector, agent and team | E1.5 Tools and firewall | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0010 |
 | [WP-0145](work/P1/WP-0145-minimal-untrusted-content-defence.md) | Minimal untrusted-content defence for tool results | E1.5 Tools and firewall | 🟢 ready | L | ○Desktop ○Team Workspace ○Online demo | WP-0122, WP-0128, WP-0011, WP-0130 |
 | [WP-0146](work/P1/WP-0146-bring-your-own-model-provider-coverage.md) | Bring-your-own-model provider coverage and model catalog | E1.3 Agent loop | ⚪ proposed | XL | ○Desktop ○Team Workspace ○Online demo | WP-0005, WP-0122 |
@@ -123,9 +126,9 @@ None.
 | [WP-0170](work/P1/WP-0170-run-the-published-agent-version.md) | Run the published agent version | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0110 |
 | [WP-0180](work/P1/WP-0180-team-workspace-operations-backups-upgrades-health.md) | Team Workspace operations: backups, key recovery, upgrades and health | E1.9 Team Workspace platform | ⚪ proposed | L | ○Team Workspace ○Desktop | WP-0020, WP-0007 |
 | [WP-0181](work/P1/WP-0181-several-workspaces-on-one-team-workspace-server.md) | Several workspaces on one Team Workspace server | E1.9 Team Workspace platform | ⚪ proposed | XL | ○Team Workspace | WP-0100, WP-0020, WP-0007 |
-| [WP-0182](work/P1/WP-0182-deliver-outbound-webhooks-for-real-record-events.md) | Deliver outbound webhooks for real record events | E1.9 Team Workspace platform | 👀 in review | S | ○Team Workspace ○Desktop | - |
-| [WP-0183](work/P1/WP-0183-webhook-signing-secret-show-once-and-rotate.md) | Webhook signing secret: show once and rotate | E1.9 Team Workspace platform | 👀 in review | M | ○Team Workspace ○Desktop ○Online demo | WP-0182 |
-| [WP-0184](work/P1/WP-0184-api-client-network-restriction-and-scope-enforcement.md) | API clients: enforce the allowed network with a trusted-proxy rule | E1.9 Team Workspace platform | 👀 in review | M | ○Team Workspace | - |
+| [WP-0182](work/P1/WP-0182-deliver-outbound-webhooks-for-real-record-events.md) | Deliver outbound webhooks for real record events | E1.9 Team Workspace platform | 👀 in review | S | ✓Team Workspace ○Desktop | - |
+| [WP-0183](work/P1/WP-0183-webhook-signing-secret-show-once-and-rotate.md) | Webhook signing secret: show once and rotate | E1.9 Team Workspace platform | 👀 in review | M | ✓Team Workspace ✓Desktop ✓Online demo | WP-0182 |
+| [WP-0184](work/P1/WP-0184-api-client-network-restriction-and-scope-enforcement.md) | API clients: enforce the allowed network with a trusted-proxy rule | E1.9 Team Workspace platform | ✅ done | M | ✓Team Workspace | - |
 | [WP-0185](work/P1/WP-0185-emit-field-changed-and-workflow-webhook-events.md) | Emit the field.changed, workflow.completed and workflow.failed webhook events | E1.9 Team Workspace platform | 🟢 ready | M | ○Team Workspace ○Desktop | WP-0182 |
 | [WP-0186](work/P1/WP-0186-api-record-search.md) | API: record search behind the search.read scope | E1.9 Team Workspace platform | 🟢 ready | S | ○Team Workspace | WP-0184 |
 | [WP-0187](work/P1/WP-0187-api-bulk-export-and-bulk-write.md) | API: bulk export and bulk write behind bulk.read and bulk.write | E1.9 Team Workspace platform | 🟢 ready | M | ○Team Workspace | WP-0184 |

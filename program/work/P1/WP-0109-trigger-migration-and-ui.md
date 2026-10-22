@@ -11,7 +11,7 @@ threats: [T-03]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: [desktop, workspace]
-docs: [access-roles-and-record-scopes]
+docs: [agent-identities, access-roles-and-record-scopes]
 branch: claude/enterprise-build-planning-jxy2kq
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/700
 updated: 2026-10-22
@@ -78,3 +78,4 @@ Migrate existing unattended triggers to use Agent Identities, and build the Agen
   - AC-2: fixture `0081_triggers.db` (`gen_fixtures.py --with-triggers`) proves owners, no rights, audit rows, and that the triggers still run after upgrade.
   - UI: Admin → AI → Agent Identities (identities, credentials issued once, rotate, revoke) and a "runs as" picker on each trigger, behind the `building` flag `agents.identities_ui` (removed by WP-0160). Commands in Tauri and the server dispatch; vitest and a server HTTP test.
   - Not in this package: the identity picker on agents (needs the eight-group editor, WP-0160) and record-level enforcement for identities (RAID I-20). Online demo: building flags are off in every release and the demo does not simulate triggers, so its delivery ships with the flag's graduation in WP-0160. Help: `access-roles-and-record-scopes` gains "Who scheduled and webhook runs act as".
+- 2026-10-22 claude: Help article `agent-identities` added (app.js, sitemap, docs index, llms files, Releases v0.97.0 entry). Demo edition: RAID Q-21.
