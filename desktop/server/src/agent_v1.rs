@@ -24,6 +24,7 @@ use lanesra_core::services::ai_orchestration_service;
 
 use crate::admin_actions::run_with_own_connection;
 use crate::api_v1::{app_err, authorize, logged};
+use crate::caller::Caller;
 use crate::state::SharedState;
 
 pub fn router() -> Router<SharedState> {
@@ -44,29 +45,32 @@ struct TriggerBody {
 async fn trigger_agent(
     State(state): State<SharedState>,
     headers: HeaderMap,
+    caller: Caller,
     Path(agent_id): Path<String>,
     Json(body): Json<TriggerBody>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    trigger(state, headers, "agent", agent_id, body).await
+    trigger(state, headers, caller, "agent", agent_id, body).await
 }
 
 async fn trigger_pipeline(
     State(state): State<SharedState>,
     headers: HeaderMap,
+    caller: Caller,
     Path(pipeline_id): Path<String>,
     Json(body): Json<TriggerBody>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    trigger(state, headers, "pipeline", pipeline_id, body).await
+    trigger(state, headers, caller, "pipeline", pipeline_id, body).await
 }
 
 async fn trigger(
     state: SharedState,
     headers: HeaderMap,
+    caller: Caller,
     target_type: &'static str,
     target_id: String,
     body: TriggerBody,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let (client, workspace_id) = authorize(&state, &headers, "agents.trigger")?;
+    let (client, workspace_id) = authorize(&state, &headers, caller, "agents.trigger")?;
     let db_path = state.db_path.clone();
     let master_key = crate::dispatch::resolve_master_key(&state.db_path).map_err(app_err)?;
     // WP-0107/WP-0109: a webhook run is unattended and acts as its

@@ -19,6 +19,9 @@ services:
     #   LANESRA_ALLOWED_ORIGINS: "https://lanesra.example.com"
     #   # Internal services the server may call (e.g. an Ollama host); see README.
     #   LANESRA_OUTBOUND_ALLOW: "10.0.4.0/24"
+    #   # Your reverse proxy, so an API client's Allowed network sees the
+    #   # real caller via X-Forwarded-For; see README.
+    #   LANESRA_TRUSTED_PROXIES: "172.18.0.1"
 
 volumes:
   lanesra-data:

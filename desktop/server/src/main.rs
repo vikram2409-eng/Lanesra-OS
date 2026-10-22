@@ -46,6 +46,9 @@ async fn main() {
     if security.trust_proxy_https {
         tracing::info!("trusting a reverse proxy for TLS - session cookie will be marked Secure");
     }
+    for entry in &security.trusted_proxies {
+        tracing::info!(%entry, "trusting this proxy's X-Forwarded-For for API client network checks");
+    }
     if !security.allowed_origins.is_empty() {
         tracing::info!(origins = ?security.allowed_origins, "CORS enabled for the listed origins");
     }
@@ -71,5 +74,10 @@ async fn main() {
         .expect("could not bind to address");
     tracing::info!(%addr, "Lanesra OS Team Workspace server listening");
 
-    axum::serve(listener, app).await.expect("server error");
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .expect("server error");
 }
