@@ -144,6 +144,8 @@ pub struct AiAgentTrigger {
     pub last_run_at: Option<String>,
     pub created_at: String,
     pub created_by: Option<String>,
+    /// The Agent Identity this trigger's runs act as (WP-0109).
+    pub agent_identity_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

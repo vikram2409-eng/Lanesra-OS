@@ -174,6 +174,10 @@ import type {
   DashboardKpiPrefs,
   EffectiveNumbering,
   FeatureFlagList,
+  AgentCredential,
+  AgentIdentity,
+  AgentIdentityInput,
+  IssuedAgentCredential,
   FeatureFlagOverrideInput,
   ImportPackageInput,
   InstalledApp,
@@ -586,6 +590,20 @@ export const api = {
   listAiAgentTriggers: (targetType: AiAgentTargetType, targetId: string) => call<AiAgentTrigger[]>("list_ai_agent_triggers", { targetType, targetId }),
   setAiAgentTriggerActive: (id: string, isActive: boolean) => call<void>("set_ai_agent_trigger_active", { id, isActive }),
   deleteAiAgentTrigger: (id: string) => call<void>("delete_ai_agent_trigger", { id }),
+  setAiAgentTriggerIdentity: (id: string, agentIdentityId: string | null) =>
+    call<AiAgentTrigger>("set_ai_agent_trigger_identity", { id, agentIdentityId }),
+  // WP-0108/WP-0109: Agent Identities and their credentials (Administrator only).
+  listAgentIdentities: () => call<AgentIdentity[]>("list_agent_identities"),
+  createAgentIdentity: (input: AgentIdentityInput) => call<AgentIdentity>("create_agent_identity", { input }),
+  updateAgentIdentity: (id: string, input: AgentIdentityInput) => call<AgentIdentity>("update_agent_identity", { id, input }),
+  setAgentIdentityActive: (id: string, active: boolean) => call<AgentIdentity>("set_agent_identity_active", { id, active }),
+  deleteAgentIdentity: (id: string) => call<void>("delete_agent_identity", { id }),
+  listAgentCredentials: (identityId: string) => call<AgentCredential[]>("list_agent_credentials", { identityId }),
+  issueAgentCredential: (identityId: string, label: string, lifetimeHours: number | null) =>
+    call<IssuedAgentCredential>("issue_agent_credential", { identityId, label, lifetimeHours }),
+  rotateAgentCredential: (credentialId: string, lifetimeHours: number | null) =>
+    call<IssuedAgentCredential>("rotate_agent_credential", { credentialId, lifetimeHours }),
+  revokeAgentCredential: (credentialId: string) => call<void>("revoke_agent_credential", { credentialId }),
   listAiAgentRuns: (targetType: AiAgentTargetType, targetId: string, limit: number) => call<AiAgentRun[]>("list_ai_agent_runs", { targetType, targetId, limit }),
   runAiAgent: (id: string, input: string) => callAdminAction<AiAgentRun>("run_ai_agent", { id, input }, "POST", `/api/admin/ai-agents/${encodeURIComponent(id)}/run`, { input }),
   runAiAgentPipeline: (id: string, input: string) =>

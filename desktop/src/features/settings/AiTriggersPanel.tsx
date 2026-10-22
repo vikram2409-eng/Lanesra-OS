@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
 import type { AiAgentTargetType, AiAgentTriggerType } from "../../lib/types";
+import { useFeature } from "../../lib/useFeature";
+import { AGENT_IDENTITIES_FLAG, AGENT_IDENTITIES_QUERY_KEY } from "./AgentIdentitiesAdmin";
 
 // AI & Agentic Layer, Phase 6b: schedule/webhook Triggers for one Agent
 // or Pipeline - folded into that target's own row rather than a
@@ -42,6 +44,21 @@ export function AiTriggersPanel({ targetType, targetId }: { targetType: AiAgentT
     onSuccess: invalidate,
   });
   const remove = useMutation({ mutationFn: (id: string) => api.deleteAiAgentTrigger(id), onSuccess: invalidate });
+  // WP-0109: which Agent Identity each trigger's runs act as.
+  const showIdentities = useFeature(AGENT_IDENTITIES_FLAG);
+  const identitiesQuery = useQuery({
+    queryKey: AGENT_IDENTITIES_QUERY_KEY,
+    queryFn: () => api.listAgentIdentities(),
+    enabled: showIdentities,
+  });
+  const setIdentity = useMutation({
+    mutationFn: ({ id, identityId }: { id: string; identityId: string | null }) => api.setAiAgentTriggerIdentity(id, identityId),
+    onSuccess: () => {
+      setError(null);
+      invalidate();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not change this trigger's identity"),
+  });
 
   return (
     <div style={{ marginTop: 8, fontSize: 13 }}>
@@ -52,6 +69,25 @@ export function AiTriggersPanel({ targetType, targetId }: { targetType: AiAgentT
           <span>{t.trigger_type === "schedule" ? `Every ${t.interval_minutes} min` : "Webhook"}</span>
           <span className={`badge${t.is_active ? " badge-success" : ""}`}>{t.is_active ? "Active" : "Paused"}</span>
           {t.last_run_at && <span style={{ color: "var(--text-muted)" }}>last ran {new Date(t.last_run_at).toLocaleString()}</span>}
+          {showIdentities && (
+            <label>
+              runs as{" "}
+              <select
+                aria-label="Runs as Agent Identity"
+                value={t.agent_identity_id ?? ""}
+                disabled={setIdentity.isPending}
+                onChange={(e) => setIdentity.mutate({ id: t.id, identityId: e.target.value || null })}
+              >
+                <option value="">No identity (no rights)</option>
+                {(identitiesQuery.data ?? []).map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.name}
+                    {i.status === "active" ? "" : " (disabled)"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <button className="btn btn-secondary" onClick={() => toggle.mutate({ id: t.id, isActive: !t.is_active })}>
             {t.is_active ? "Pause" : "Resume"}
           </button>

@@ -18,8 +18,11 @@
 //!
 //! Covers: REQ-GOV-002, REQ-GOV-003 (WP-0107). Threats: T-03, T-12.
 
+use std::cell::RefCell;
+
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 
 use crate::domain::{AppError, AppResult, ErrorClass};
 
@@ -160,4 +163,63 @@ impl EffectiveIdentity {
 
 fn denied(message: &str) -> AppError {
     AppError::classified(ErrorClass::Policy, "policy.access_denied", message)
+}
+
+impl EffectiveIdentity {
+    /// Who a tool call or audit entry acted as (WP-0109 AC-1).
+    pub fn audit_json(&self) -> Value {
+        match self {
+            Self::Interactive {
+                user_id,
+                agent_identity,
+            } => json!({
+                "type": "human",
+                "user_id": user_id,
+                "agent_identity_id": agent_identity.as_ref().map(|g| &g.id),
+            }),
+            Self::Unattended {
+                agent_identity,
+                record_actor,
+            } => json!({
+                "type": "agent_identity",
+                "agent_identity_id": agent_identity.as_ref().map(|g| &g.id),
+                "record_actor": record_actor,
+            }),
+        }
+    }
+
+    /// Makes this the identity of the run executing on this thread until
+    /// the guard drops. A run (and everything it delegates to) executes on
+    /// one thread: the database connection cannot leave it.
+    pub fn enter_run(&self) -> RunIdentityGuard {
+        RUN_IDENTITY.with(|stack| stack.borrow_mut().push(self.clone()));
+        RunIdentityGuard
+    }
+}
+
+thread_local! {
+    static RUN_IDENTITY: RefCell<Vec<EffectiveIdentity>> = const { RefCell::new(Vec::new()) };
+}
+
+pub struct RunIdentityGuard;
+
+impl Drop for RunIdentityGuard {
+    fn drop(&mut self) {
+        RUN_IDENTITY.with(|stack| {
+            stack.borrow_mut().pop();
+        });
+    }
+}
+
+/// The identity of the run executing on this thread, if any.
+pub fn current_run_identity() -> Option<EffectiveIdentity> {
+    RUN_IDENTITY.with(|stack| stack.borrow().last().cloned())
+}
+
+/// The effective principal for an audit entry: the run's identity, or for
+/// a call outside any run, the person making it.
+pub fn audit_principal(actor: Option<&str>) -> Value {
+    current_run_identity()
+        .unwrap_or_else(|| EffectiveIdentity::from_actor(actor))
+        .audit_json()
 }
