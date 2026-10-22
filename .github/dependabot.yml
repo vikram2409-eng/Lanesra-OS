@@ -1,4 +1,9 @@
 version: 2
+# Owner decision 2026-10-22 (RAID Q-25): minor and patch updates arrive as one
+# grouped pull request per ecosystem each week. Major versions are planned as
+# work packages instead (WP-0193 to WP-0197), so they are ignored here.
+# Security updates are separate from version updates and are not affected by
+# these groups or ignore rules: they still open straight away.
 updates:
   - package-ecosystem: "cargo"
     directory: "/desktop"
@@ -6,15 +11,30 @@ updates:
       interval: "weekly"
     labels:
       - "dependencies"
+    groups:
+      cargo-minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "npm"
     directory: "/desktop"
     schedule:
       interval: "weekly"
     labels:
       - "dependencies"
+    groups:
+      npm-minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
     labels:
       - "dependencies"
+    groups:
+      actions:
+        patterns: ["*"]
