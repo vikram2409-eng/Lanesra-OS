@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 18 | 1 | 0 | 0 | 1 | 32 / 36 | `████████░░` 89% |
-| 1 · Foundations | 58 | 14 | 4 | 5 | 0 | 35 | 25 / 162 | `█░░░░░░░░░` 15% |
+| 1 · Foundations | 58 | 14 | 5 | 4 | 0 | 35 | 25 / 162 | `█░░░░░░░░░` 15% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -19,9 +19,9 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 119 | 12 | 23 / 402 |
-| Team Workspace | 132 | 17 | 31 / 452 |
-| Online demo | 87 | 6 | 12 / 305 |
+| Desktop | 119 | 13 | 24 / 402 |
+| Team Workspace | 132 | 18 | 32 / 452 |
+| Online demo | 87 | 7 | 13 / 305 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -33,6 +33,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | in_review | muse | `wp/WP-0101-identity-adr` | https://github.com/vikram2409-eng/Lanesra-OS/pull/672 |
 | [WP-0122](work/P1/WP-0122-native-function-calling-and-strict-json-tool-format.md) | Native function calling and strict JSON tool format | in_progress | muse | `wp/WP-0122-tool-calling` | - |
 | [WP-0130](work/P1/WP-0130-prompt-catalog-written-fresh.md) | Prompt catalog, written fresh | in_progress | muse | `wp/WP-0130-prompt-catalog` | - |
+| [WP-0190](work/P1/WP-0190-release-the-agent-identities-screen.md) | Release the Agent Identities screen and trigger picker ahead of WP-0160 | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
 | [WP-0191](work/P1/WP-0191-admin-visible-outbound-refusals.md) | Show outbound-guard refusals to admins with the fix | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
 
 ## Ready to start (all dependencies done)
@@ -42,7 +43,6 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | WP | Title | Phase | Estimate |
 |---|---|---|---|
 | [WP-0121](work/P1/WP-0121-step-limits-and-partial-results.md) | Step limits and partial results | 1 | L |
-| [WP-0190](work/P1/WP-0190-release-the-agent-identities-screen.md) | Release the Agent Identities screen and trigger picker ahead of WP-0160 | 1 | S |
 
 ## Requirement coverage
 
@@ -129,7 +129,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0187](work/P1/WP-0187-api-bulk-export-and-bulk-write.md) | API: bulk export and bulk write behind bulk.read and bulk.write | E1.9 Team Workspace platform | ✅ done | M | ✓Team Workspace | WP-0184 |
 | [WP-0188](work/P1/WP-0188-api-webhook-management.md) | API: webhook management behind the webhooks.manage scope | E1.9 Team Workspace platform | ✅ done | M | ✓Team Workspace | WP-0183, WP-0184 |
 | [WP-0189](work/P1/WP-0189-api-integration-administration-and-scope-vocabulary-test.md) | API: integration administration and the scope-vocabulary test | E1.9 Team Workspace platform | ✅ done | M | ✓Team Workspace | WP-0186, WP-0187, WP-0188 |
-| [WP-0190](work/P1/WP-0190-release-the-agent-identities-screen.md) | Release the Agent Identities screen and trigger picker ahead of WP-0160 | E1.0 Identity foundation | 🟢 ready | S | ○Desktop ○Team Workspace ○Online demo | WP-0109 |
+| [WP-0190](work/P1/WP-0190-release-the-agent-identities-screen.md) | Release the Agent Identities screen and trigger picker ahead of WP-0160 | E1.0 Identity foundation | 🔨 in progress | S | ✓Desktop ✓Team Workspace ✓Online demo | WP-0109 |
 | [WP-0191](work/P1/WP-0191-admin-visible-outbound-refusals.md) | Show outbound-guard refusals to admins with the fix | E1.9 Team Workspace platform | 🔨 in progress | S | ✓Team Workspace | WP-0143 |
 | [WP-0192](work/P1/WP-0192-two-level-outbound-allow-list.md) | Two-level outbound allow-list: operator bound, workspace narrows | E1.9 Team Workspace platform | ⚪ proposed | M | ○Team Workspace | WP-0181, WP-0143 |
 | [WP-0193](work/P1/WP-0193-upgrade-rusqlite.md) | Upgrade rusqlite 0.31 to 0.40 | E0.1 Program and engineering readiness | ⚪ proposed | M | ○Desktop ○Team Workspace | - |

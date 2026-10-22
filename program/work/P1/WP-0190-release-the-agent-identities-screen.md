@@ -3,16 +3,16 @@ id: WP-0190
 title: "Release the Agent Identities screen and trigger picker ahead of WP-0160"
 phase: 1
 epic: E1.0 Identity foundation
-status: ready
-owner: unassigned
+status: in_progress
+owner: claude
 depends_on: [WP-0109]
 requirements: [REQ-GOV-003, REQ-GOV-029, REQ-PRE-021]
 threats: [T-03, T-12]
 estimate: S
 editions: [desktop, workspace, demo]
-delivered: []
+delivered: [desktop, workspace, demo]
 docs: [agent-identities, access-roles-and-record-scopes]
-branch: 
+branch: claude/enterprise-build-planning-jxy2kq
 pr: 
 updated: 2026-10-22
 ---
@@ -36,9 +36,9 @@ Admins cannot give an Agent Identity the Administrator role today: the only scre
 
 ## Acceptance criteria
 
-- [ ] AC-1: The flag is `ga`, on by default in both editions, listed outside developer mode, and an override can still turn it off (Rust test)
-- [ ] AC-2: The demo shows the Agent Identities screen and the action's Runs as picker (`check_feature_flags.py` passes with the flag released)
-- [ ] AC-3: The help articles no longer say the screen is unavailable
+- [x] AC-1: The flag is `ga`, on by default in both editions, listed outside developer mode, and an override can still turn it off (Rust test)
+- [x] AC-2: The demo shows the Agent Identities screen and the action's Runs as picker (`check_feature_flags.py` passes with the flag released)
+- [x] AC-3: The help articles no longer say the screen is unavailable
 
 ## Test plan
 
@@ -53,3 +53,4 @@ Admins cannot give an Agent Identity the Administrator role today: the only scre
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 - 2026-10-22 claude: Written after the owner approved the recommendations in RAID Q-24.
 - 2026-10-22 claude: Started, then paused: the session's automatic permission check refused the edit that adds the flag to the demo's `DEMO_RELEASED_FEATURES`, as a feature-flag change. Shipping the desktop and Team Workspace half alone would break REQ-PRE-021 (same release in every edition), so nothing is committed. The flag change, its Rust test and the help-text edits are ready to apply as soon as the owner allows it.
+- 2026-10-22 claude: The owner allowed the flag change. Built: `agents.identities_ui` is `ga`, on by default in desktop and Team Workspace and still switchable off per workspace until WP-0160 removes it; the demo lists it in `DEMO_RELEASED_FEATURES`, so the Agent Identities screen and the action's Runs as picker show there too. Help (`agent-identities`, `access-roles-and-record-scopes`), Releases and llms files updated. The Feature flags admin screen now appears for Administrators, because this flag can be switched. Test: `the_agent_identities_screen_is_released_on_in_every_edition`; the existing `agentIdentities.test.tsx` covers the screen and picker with the flag on and off.

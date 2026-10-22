@@ -208,3 +208,45 @@ fn every_signed_in_user_can_read_the_flag_list() {
         .iter()
         .any(|f| f.key == PLAYGROUND_SHELL.key && f.stage == "building" && !f.enabled));
 }
+
+#[test]
+fn the_agent_identities_screen_is_released_on_in_every_edition() {
+    // Covers: REQ-GOV-003, REQ-PRE-021 (WP-0190 AC-1)
+    use lanesra_core::services::feature_flag_service::AGENT_IDENTITIES_UI;
+    let (conn, ws, admin) = setup_workspace();
+    for edition in [Edition::Desktop, Edition::Workspace] {
+        let listed = feature_flag_service::list(&conn, &ws, edition, false).unwrap();
+        let flag = listed
+            .flags
+            .iter()
+            .find(|f| f.key == AGENT_IDENTITIES_UI.key)
+            .expect("listed outside developer mode");
+        assert_eq!(flag.stage, "ga");
+        assert!(flag.enabled && !flag.overridden && flag.can_toggle);
+        assert!(
+            feature_flag_service::is_enabled(&conn, &ws, edition, &AGENT_IDENTITIES_UI, false)
+                .unwrap()
+        );
+    }
+    // An admin can still switch it off for this workspace until it is removed.
+    feature_flag_service::set_override(
+        &conn,
+        &ws,
+        Edition::Workspace,
+        &FeatureFlagOverrideInput {
+            key: AGENT_IDENTITIES_UI.key.into(),
+            enabled: Some(false),
+        },
+        Some(&admin),
+        false,
+    )
+    .unwrap();
+    assert!(!feature_flag_service::is_enabled(
+        &conn,
+        &ws,
+        Edition::Workspace,
+        &AGENT_IDENTITIES_UI,
+        false
+    )
+    .unwrap());
+}
