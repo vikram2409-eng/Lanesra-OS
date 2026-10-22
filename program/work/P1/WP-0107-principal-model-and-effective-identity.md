@@ -10,11 +10,11 @@ requirements: [REQ-GOV-002, REQ-GOV-003]
 threats: [T-03, T-12]
 estimate: M
 editions: [desktop, workspace, demo]
-delivered: []
+delivered: [desktop, workspace]
 docs: [agent-identities, access-roles-and-record-scopes]
 branch: wp/WP-0107-principal-model
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/682
-updated: 2026-10-20
+updated: 2026-10-22
 ---
 
 # WP-0107 — Principal model and effective-identity rules
@@ -57,3 +57,4 @@ Define the principal model (human, agent_identity, api_client) and the effective
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 - 2026-10-18 claude: Owner decision 2026-10-18: Muse builds this work package following ADR-0016 (Accepted); Claude reviews the PR before the owner merges it. Refine to ready first (Muse batch 5).
 - 2026-10-20 claude: Reworked after review. `principals.rs` now builds on Access Control v1 (the `Administrator` user role via `user_service::require_admin`) instead of a separate role ranking. Every run carries an `EffectiveIdentity`: `run_internal` refuses an admin-scoped step unless every principal holds Administrator (`policy.access_denied`), and records the refused run as failed. The webhook route no longer lends the API client owner's Administrator rights (the owner-is-Administrator path); the owner's Access Roles still limit record access. AC-1 and AC-2 proven on real runs in `tests/principals.rs` and by the matrix in `tests/effective_identity_matrix.rs`. Not in this WP: an admin Agent Identity running unattended end to end needs WP-0108's stored identities (the inner `chat_service` gate still checks the record actor, so it fails closed until then); unattributed record writes on unattended runs (RAID I-20) move to WP-0109, when triggers run as Agent Identities.
+- 2026-10-22 claude: PR #682 merged. The rules are enforced in the shared core, so desktop and Team Workspace are delivered; help article `agent-identities` written (with WP-0109, PR #700). Stays `in_review` only for the online demo edition: see RAID Q-21.

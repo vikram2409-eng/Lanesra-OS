@@ -52,22 +52,38 @@ fn like_pattern(query: &str) -> String {
     )
 }
 
+/// How much `search` returns: a cap on the total, and optionally one
+/// object type (WP-0186's `object` filter) so the cap is spent only on it.
+struct Scope<'a> {
+    max: usize,
+    only: Option<&'a str>,
+}
+
+impl Scope<'_> {
+    fn wants(&self, entity_type: &str) -> bool {
+        self.only.is_none_or(|only| only == entity_type)
+    }
+}
+
 /// Runs `sql` (already scoped to `workspace_id` and non-archived rows) and
-/// maps each row via `row_fn`, appending into `out` up to `MAX_RESULTS`
+/// maps each row via `row_fn`, appending into `out` up to `scope.max`
 /// total across every entity type's contribution - shared by every
 /// per-entity block below so the cap and the row-mapping boilerplate is
-/// written once instead of nine times.
+/// written once instead of nine times. Skipped when `scope` names another
+/// object type.
 fn collect(
     conn: &Connection,
     out: &mut Vec<SearchResult>,
+    scope: &Scope,
+    entity_type: &str,
     sql: &str,
     params: &[&dyn rusqlite::ToSql],
     row_fn: impl Fn(&rusqlite::Row) -> rusqlite::Result<SearchResult>,
 ) -> AppResult<()> {
-    if out.len() >= MAX_RESULTS {
+    if out.len() >= scope.max || !scope.wants(entity_type) {
         return Ok(());
     }
-    let remaining = (MAX_RESULTS - out.len()) as i64;
+    let remaining = (scope.max - out.len()) as i64;
     let sql = format!("{sql} LIMIT {remaining}");
     let mut stmt = conn.prepare(&sql)?;
     let rows = stmt.query_map(params, row_fn)?;
@@ -86,6 +102,44 @@ pub fn global_search(
     workspace_id: &str,
     query: &str,
 ) -> AppResult<Vec<SearchResult>> {
+    search(
+        conn,
+        workspace_id,
+        query,
+        &Scope {
+            max: MAX_RESULTS,
+            only: None,
+        },
+    )
+}
+
+/// The REST API's record search (WP-0186): the same search as
+/// `global_search`, with a larger cap and an optional object type filter.
+/// Returns at most `max` results.
+pub fn search_records(
+    conn: &Connection,
+    workspace_id: &str,
+    query: &str,
+    object_key: Option<&str>,
+    max: usize,
+) -> AppResult<Vec<SearchResult>> {
+    search(
+        conn,
+        workspace_id,
+        query,
+        &Scope {
+            max,
+            only: object_key,
+        },
+    )
+}
+
+fn search(
+    conn: &Connection,
+    workspace_id: &str,
+    query: &str,
+    scope: &Scope,
+) -> AppResult<Vec<SearchResult>> {
     let query = query.trim();
     if query.chars().count() < 2 {
         return Ok(Vec::new());
@@ -94,7 +148,7 @@ pub fn global_search(
     let mut out = Vec::new();
 
     collect(
-        conn, &mut out,
+        conn, &mut out, scope, "Company",
         "SELECT id, name, customer_number, email, phone FROM companies
          WHERE workspace_id = ?1 AND archived_at IS NULL
            AND (name LIKE ?2 ESCAPE '\\' OR customer_number LIKE ?2 ESCAPE '\\' OR email LIKE ?2 ESCAPE '\\'
@@ -109,7 +163,7 @@ pub fn global_search(
     )?;
 
     collect(
-        conn, &mut out,
+        conn, &mut out, scope, "Contact",
         "SELECT id, first_name, last_name, contact_number, email, phone, mobile FROM contacts
          WHERE workspace_id = ?1 AND archived_at IS NULL
            AND (first_name LIKE ?2 ESCAPE '\\' OR last_name LIKE ?2 ESCAPE '\\' OR contact_number LIKE ?2 ESCAPE '\\'
@@ -128,7 +182,7 @@ pub fn global_search(
     )?;
 
     collect(
-        conn, &mut out,
+        conn, &mut out, scope, "Opportunity",
         "SELECT id, name, opportunity_number FROM opportunities
          WHERE workspace_id = ?1 AND archived_at IS NULL AND (name LIKE ?2 ESCAPE '\\' OR opportunity_number LIKE ?2 ESCAPE '\\')",
         params![workspace_id, like],
@@ -136,7 +190,7 @@ pub fn global_search(
     )?;
 
     collect(
-        conn, &mut out,
+        conn, &mut out, scope, "Product",
         "SELECT id, name, sku, product_number, category FROM products
          WHERE workspace_id = ?1 AND archived_at IS NULL
            AND (name LIKE ?2 ESCAPE '\\' OR sku LIKE ?2 ESCAPE '\\' OR product_number LIKE ?2 ESCAPE '\\' OR category LIKE ?2 ESCAPE '\\')",
@@ -148,28 +202,28 @@ pub fn global_search(
     )?;
 
     collect(
-        conn, &mut out,
+        conn, &mut out, scope, "Quote",
         "SELECT id, quote_number FROM quotes WHERE workspace_id = ?1 AND archived_at IS NULL AND quote_number LIKE ?2 ESCAPE '\\'",
         params![workspace_id, like],
         |r| Ok(SearchResult { entity_type: "Quote".into(), entity_id: r.get("id")?, title: r.get("quote_number")?, subtitle: None }),
     )?;
 
     collect(
-        conn, &mut out,
+        conn, &mut out, scope, "Order",
         "SELECT id, order_number FROM orders WHERE workspace_id = ?1 AND archived_at IS NULL AND order_number LIKE ?2 ESCAPE '\\'",
         params![workspace_id, like],
         |r| Ok(SearchResult { entity_type: "Order".into(), entity_id: r.get("id")?, title: r.get("order_number")?, subtitle: None }),
     )?;
 
     collect(
-        conn, &mut out,
+        conn, &mut out, scope, "Invoice",
         "SELECT id, invoice_number FROM invoices WHERE workspace_id = ?1 AND archived_at IS NULL AND invoice_number LIKE ?2 ESCAPE '\\'",
         params![workspace_id, like],
         |r| Ok(SearchResult { entity_type: "Invoice".into(), entity_id: r.get("id")?, title: r.get("invoice_number")?, subtitle: None }),
     )?;
 
     collect(
-        conn, &mut out,
+        conn, &mut out, scope, "Contract",
         "SELECT id, title, contract_number FROM contracts
          WHERE workspace_id = ?1 AND archived_at IS NULL AND (title LIKE ?2 ESCAPE '\\' OR contract_number LIKE ?2 ESCAPE '\\')",
         params![workspace_id, like],
@@ -177,7 +231,7 @@ pub fn global_search(
     )?;
 
     collect(
-        conn, &mut out,
+        conn, &mut out, scope, "Task",
         "SELECT id, title, task_number FROM tasks
          WHERE workspace_id = ?1 AND archived_at IS NULL AND (title LIKE ?2 ESCAPE '\\' OR task_number LIKE ?2 ESCAPE '\\')",
         params![workspace_id, like],
@@ -188,12 +242,14 @@ pub fn global_search(
     // since each is its own logical entity_type sharing the one physical
     // custom_records table (see custom_record_repo's own doc comment).
     for def in custom_object_service::list(conn, workspace_id, true)? {
-        if out.len() >= MAX_RESULTS {
+        if out.len() >= scope.max {
             break;
         }
         collect(
             conn,
             &mut out,
+            scope,
+            &def.key,
             "SELECT id, primary_name, display_number FROM custom_records
              WHERE workspace_id = ?1 AND object_key = ?2 AND archived_at IS NULL
                AND (primary_name LIKE ?3 ESCAPE '\\' OR display_number LIKE ?3 ESCAPE '\\')",
@@ -215,8 +271,8 @@ pub fn global_search(
     // one relationships/rules/workflows already use), since a custom
     // field match should still show the record's real name, not the
     // matched value itself, as the result title.
-    if out.len() < MAX_RESULTS {
-        let remaining = (MAX_RESULTS - out.len()) as i64;
+    if out.len() < scope.max {
+        let remaining = (scope.max - out.len()) as i64;
         let mut stmt = conn.prepare(
             "SELECT v.entity_id, d.entity_type, d.label, v.value_text
              FROM custom_field_values v
@@ -236,8 +292,11 @@ pub fn global_search(
             })?
             .collect::<rusqlite::Result<_>>()?;
         for (entity_id, entity_type, label, value) in matches {
-            if out.len() >= MAX_RESULTS {
+            if out.len() >= scope.max {
                 break;
+            }
+            if !scope.wants(&entity_type) {
+                continue;
             }
             if let Some(resolved) =
                 crate::services::entity_registry::resolve(conn, &entity_type, &entity_id)?

@@ -151,6 +151,7 @@ fn map_trigger_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentTrigger> {
         last_run_at: row.get("last_run_at")?,
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
+        agent_identity_id: row.get("agent_identity_id")?,
     })
 }
 
@@ -219,6 +220,37 @@ pub fn list_due_schedule_triggers(
     )?;
     let rows = stmt.query_map([workspace_id], map_trigger_row)?.collect();
     rows
+}
+
+pub fn set_trigger_identity(
+    conn: &Connection,
+    id: &str,
+    agent_identity_id: Option<&str>,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE ai_agent_triggers SET agent_identity_id = ?2 WHERE id = ?1",
+        (id, agent_identity_id),
+    )?;
+    Ok(())
+}
+
+/// The active webhook trigger a webhook call for this target must match
+/// (RAID I-14), if there is one.
+pub fn find_active_webhook_trigger(
+    conn: &Connection,
+    workspace_id: &str,
+    target_type: &str,
+    target_id: &str,
+) -> rusqlite::Result<Option<AiAgentTrigger>> {
+    conn.query_row(
+        "SELECT * FROM ai_agent_triggers
+         WHERE workspace_id = ?1 AND target_type = ?2 AND target_id = ?3
+           AND trigger_type = 'webhook' AND is_active = 1
+         ORDER BY created_at LIMIT 1",
+        (workspace_id, target_type, target_id),
+        map_trigger_row,
+    )
+    .optional()
 }
 
 pub fn mark_trigger_run(conn: &Connection, id: &str) -> rusqlite::Result<()> {

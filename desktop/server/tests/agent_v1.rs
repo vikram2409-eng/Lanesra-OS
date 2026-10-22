@@ -152,6 +152,14 @@ async fn a_webhook_trigger_call_runs_the_agent_inline_and_returns_its_answer() {
     assert_eq!(created["ok"], true, "{created:?}");
     let agent_id = created["data"]["id"].as_str().unwrap().to_string();
 
+    // WP-0109 (RAID I-14): a webhook call needs an active webhook trigger.
+    let trigger = invoke(
+        &client, addr, "create_ai_agent_trigger",
+        json!({"input": {"target_type": "agent", "target_id": agent_id, "trigger_type": "webhook", "interval_minutes": null}}),
+    )
+    .await;
+    assert_eq!(trigger["ok"], true, "{trigger:?}");
+
     let api_key = issue_api_key(&state, &workspace_id, &admin_id, &["agents.trigger"]);
 
     let response = reqwest::Client::new()
@@ -199,4 +207,128 @@ async fn a_webhook_trigger_call_without_the_scope_is_forbidden() {
         .await
         .unwrap();
     assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn a_webhook_call_for_a_target_without_an_active_webhook_trigger_is_refused() {
+    // Covers: REQ-GOV-003 (WP-0109, RAID I-14)
+    let (addr, state, _dir) = spawn_file_backed_server().await;
+    let client = client_with_cookies();
+    let setup = first_run(&client, addr).await;
+    let workspace_id = setup["data"][0]["id"].as_str().unwrap().to_string();
+    let admin_id = setup["data"][1]["id"].as_str().unwrap().to_string();
+    let created = invoke(
+        &client, addr, "create_ai_agent",
+        json!({"input": {"name": "Untriggered Agent", "description": null, "icon": "🤖", "system_prompt": "Hi.", "action_names": [], "delegate_agent_ids": [], "skill_ids": []}}),
+    )
+    .await;
+    let agent_id = created["data"]["id"].as_str().unwrap().to_string();
+    // A schedule trigger is not a webhook trigger.
+    let schedule = invoke(
+        &client, addr, "create_ai_agent_trigger",
+        json!({"input": {"target_type": "agent", "target_id": agent_id, "trigger_type": "schedule", "interval_minutes": 60}}),
+    )
+    .await;
+    assert_eq!(schedule["ok"], true, "{schedule:?}");
+
+    let api_key = issue_api_key(&state, &workspace_id, &admin_id, &["agents.trigger"]);
+    let response = reqwest::Client::new()
+        .post(format!("http://{addr}/api/v1/agents/{agent_id}/trigger"))
+        .bearer_auth(&api_key)
+        .json(&json!({"input": "hi"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+    let body: Value = response.json().await.unwrap();
+    assert!(
+        body.to_string().contains("no active webhook trigger"),
+        "{body}"
+    );
+}
+
+#[tokio::test]
+async fn an_administrator_manages_agent_identities_and_picks_one_for_a_trigger() {
+    // Covers: REQ-GOV-003 (WP-0109)
+    let (addr, _state, _dir) = spawn_file_backed_server().await;
+    let client = client_with_cookies();
+    let setup = first_run(&client, addr).await;
+    let admin_id = setup["data"][1]["id"].as_str().unwrap().to_string();
+
+    let identity = invoke(
+        &client, addr, "create_agent_identity",
+        json!({"input": {"name": "Nightly reports", "description": null, "owner_user_id": admin_id}}),
+    )
+    .await;
+    assert_eq!(identity["ok"], true, "{identity:?}");
+    assert_eq!(identity["data"]["is_administrator"], false);
+    let identity_id = identity["data"]["id"].as_str().unwrap().to_string();
+
+    let listed = invoke(&client, addr, "list_agent_identities", json!({})).await;
+    assert_eq!(listed["data"].as_array().unwrap().len(), 1, "{listed:?}");
+
+    let issued = invoke(
+        &client,
+        addr,
+        "issue_agent_credential",
+        json!({"identityId": identity_id, "label": "ci", "lifetimeHours": 24}),
+    )
+    .await;
+    assert_eq!(issued["ok"], true, "{issued:?}");
+    let credential_id = issued["data"]["credential"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let credentials = invoke(
+        &client,
+        addr,
+        "list_agent_credentials",
+        json!({"identityId": identity_id}),
+    )
+    .await;
+    assert!(
+        credentials["data"][0].get("token").is_none(),
+        "{credentials:?}"
+    );
+    let revoked = invoke(
+        &client,
+        addr,
+        "revoke_agent_credential",
+        json!({"credentialId": credential_id}),
+    )
+    .await;
+    assert_eq!(revoked["ok"], true, "{revoked:?}");
+
+    let agent = invoke(
+        &client, addr, "create_ai_agent",
+        json!({"input": {"name": "Scheduled Agent", "description": null, "icon": "🤖", "system_prompt": "Hi.", "action_names": [], "delegate_agent_ids": [], "skill_ids": []}}),
+    )
+    .await;
+    let agent_id = agent["data"]["id"].as_str().unwrap().to_string();
+    let trigger = invoke(
+        &client, addr, "create_ai_agent_trigger",
+        json!({"input": {"target_type": "agent", "target_id": agent_id, "trigger_type": "schedule", "interval_minutes": 60}}),
+    )
+    .await;
+    let trigger_id = trigger["data"]["id"].as_str().unwrap().to_string();
+
+    let picked = invoke(
+        &client,
+        addr,
+        "set_ai_agent_trigger_identity",
+        json!({"id": trigger_id, "agentIdentityId": identity_id}),
+    )
+    .await;
+    assert_eq!(picked["ok"], true, "{picked:?}");
+    assert_eq!(picked["data"]["agent_identity_id"], identity_id.as_str());
+
+    let cleared = invoke(
+        &client,
+        addr,
+        "set_ai_agent_trigger_identity",
+        json!({"id": trigger_id}),
+    )
+    .await;
+    assert_eq!(cleared["ok"], true, "{cleared:?}");
+    assert!(cleared["data"]["agent_identity_id"].is_null());
 }

@@ -17,7 +17,8 @@ import { WorkflowAutomationAdmin } from "./WorkflowAutomationAdmin";
 import { StatusTransitionsAdmin } from "./StatusTransitionsAdmin";
 import { NumberingAdmin } from "./NumberingAdmin";
 import { FeatureFlagsAdmin } from "./FeatureFlagsAdmin";
-import { useShowFeatureFlagsAdmin } from "../../lib/useFeature";
+import { useFeature, useShowFeatureFlagsAdmin } from "../../lib/useFeature";
+import { AGENT_IDENTITIES_FLAG, AgentIdentitiesAdmin } from "./AgentIdentitiesAdmin";
 import { DashboardKpiAdmin } from "./DashboardKpiAdmin";
 import { DashboardLayoutsAdmin } from "./DashboardLayoutsAdmin";
 import { AppsAdmin } from "./AppsAdmin";
@@ -102,6 +103,7 @@ export type AdminTab =
   | "ai"
   | "assistant"
   | "aiAgents"
+  | "agentIdentities"
   | "aiSkills"
   | "aiAgentPipelines"
   | "aiEvalSuites"
@@ -141,6 +143,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "ai", label: "LLM & MCP" },
   { key: "assistant", label: "Admin Assistant" },
   { key: "aiAgents", label: "AI Agents" },
+  { key: "agentIdentities", label: "Agent Identities" },
   { key: "aiSkills", label: "Skills" },
   { key: "aiAgentPipelines", label: "Orchestration" },
   { key: "aiEvalSuites", label: "Evaluations" },
@@ -369,7 +372,7 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
     label: "AI Agent Foundry",
     icon: "🏭",
     note: "Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other",
-    items: ["aiAgents", "aiSkills", "aiAgentPipelines", "aiEvalSuites", "agentTeams"],
+    items: ["aiAgents", "agentIdentities", "aiSkills", "aiAgentPipelines", "aiEvalSuites", "agentTeams"],
   },
   {
     key: "help",
@@ -409,6 +412,8 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
   // WP-0010: the Feature flags screen is listed only when it has
   // something an Administrator can change (or in developer mode).
   const showFeatureFlags = useShowFeatureFlagsAdmin();
+  // WP-0109: Agent Identities is listed only while its flag is on.
+  const showAgentIdentities = useFeature(AGENT_IDENTITIES_FLAG);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["workspaceStatus"] });
@@ -467,7 +472,10 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
                 </div>
               </div>
               <div className="admin-cat-items">
-                {cat.items.filter((key) => key !== "featureFlags" || showFeatureFlags).map((key) => (
+                {cat.items
+                  .filter((key) => key !== "featureFlags" || showFeatureFlags)
+                  .filter((key) => key !== "agentIdentities" || showAgentIdentities)
+                  .map((key) => (
                   <button key={key} className="admin-cat-item" onClick={() => openTab(key)}>
                     {tabLabel(key)}
                     <span className="admin-cat-arrow">→</span>
@@ -534,6 +542,7 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
       {tab === "ai" && <AiSettingsAdmin />}
       {tab === "assistant" && <ChatPanel mode="admin" />}
       {tab === "aiAgents" && <AiAgentsAdmin onOpenHelp={openHelpTopic} />}
+      {tab === "agentIdentities" && showAgentIdentities && <AgentIdentitiesAdmin />}
       {tab === "aiSkills" && <AiSkillsAdmin />}
       {tab === "aiAgentPipelines" && <AiAgentPipelinesAdmin />}
       {tab === "aiEvalSuites" && <AiEvalSuitesAdmin />}

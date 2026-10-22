@@ -607,6 +607,27 @@ pub struct ApiRecordPage {
     pub page_size: i64,
 }
 
+/// One hit from `GET /api/v1/search` (WP-0186).
+#[derive(Debug, Clone, Serialize)]
+pub struct ApiSearchResult {
+    pub object_key: String,
+    pub id: String,
+    pub title: String,
+    /// Why it matched when that is not the title: an email, phone or a
+    /// searchable custom field's "label: value".
+    pub snippet: Option<String>,
+}
+
+/// A page of `GET /api/v1/search` results. `total` counts at most
+/// `api_object_service::SEARCH_RESULT_CAP` matches.
+#[derive(Debug, Clone, Serialize)]
+pub struct ApiSearchPage {
+    pub results: Vec<ApiSearchResult>,
+    pub total: i64,
+    pub page: i64,
+    pub page_size: i64,
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct ApiListQuery {
     pub select: Option<Vec<String>>,

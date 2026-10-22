@@ -13,6 +13,7 @@ use lanesra_core::models::access_role::{
 };
 use lanesra_core::models::action_type::ActionTypeDefinitionInput;
 use lanesra_core::models::activity::ActivityInput;
+use lanesra_core::models::agent_identity::AgentIdentityInput;
 use lanesra_core::models::ai::{
     AiAgentModelRouting, AiDailyTokenBudgetInput, AiEmbeddingSettingsInput,
     AiObservabilitySettingsInput, AiProviderInput, AiSettingsInput,
@@ -86,15 +87,16 @@ use lanesra_core::models::workspace_theme::{ThemeTokens, WorkspaceThemeInput};
 use lanesra_core::repositories::{notification_repo, user_repo, workspace_repo};
 use lanesra_core::services::{
     access_role_service, access_service, action_type_service, activity_service, admin_home_service,
-    admin_nav_service, admin_search_service, agent_access_inspector_service, agent_version_service,
-    ai_agent_service, ai_eval_service, ai_gateway_service, ai_knowledge_service, ai_memory_service,
-    ai_orchestration_service, ai_provider_service, ai_service, api_client_service,
-    api_object_service, app_service, approval_service, audit_service, auth_service, backup_service,
-    bulk_action_service, business_rule_service, chat_service, company_service,
-    connection_ref_service, connection_service, connector_service, connector_template_service,
-    connector_tool_service, contact_service, contract_service, custom_field_service,
-    custom_object_service, custom_record_service, custom_report_service, dashboard_layout_service,
-    dashboard_service, dashboard_widget_service, data_exchange_service, execution_graph_service,
+    admin_nav_service, admin_search_service, agent_access_inspector_service,
+    agent_identity_service, agent_version_service, ai_agent_service, ai_eval_service,
+    ai_gateway_service, ai_knowledge_service, ai_memory_service, ai_orchestration_service,
+    ai_provider_service, ai_service, api_client_service, api_object_service, app_service,
+    approval_service, audit_service, auth_service, backup_service, bulk_action_service,
+    business_rule_service, chat_service, company_service, connection_ref_service,
+    connection_service, connector_service, connector_template_service, connector_tool_service,
+    contact_service, contract_service, custom_field_service, custom_object_service,
+    custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
+    dashboard_widget_service, data_exchange_service, execution_graph_service,
     external_object_service, glossary_service, graph_runtime_service, industry_package_service,
     integration_job_service, integration_log_service, invoice_service, mapping_service,
     mcp_client_service, metric_service, numbering_service, ontology_service, opportunity_service,
@@ -2952,6 +2954,102 @@ pub fn dispatch(
             let id: String = arg(args, "id")?;
             let is_active: bool = arg(args, "isActive")?;
             ai_orchestration_service::set_trigger_active(conn, &id, is_active, actor)?;
+            Ok(Value::Null)
+        }
+        "set_ai_agent_trigger_identity" => {
+            let id: String = arg(args, "id")?;
+            let agent_identity_id: Option<String> = arg(args, "agentIdentityId")?;
+            to_value(ai_orchestration_service::set_trigger_identity(
+                conn,
+                &require_workspace_id(conn)?,
+                &id,
+                agent_identity_id.as_deref(),
+                actor,
+            )?)
+        }
+        // WP-0108/WP-0109: Agent Identities and their credentials.
+        "list_agent_identities" => to_value(agent_identity_service::list(
+            conn,
+            &require_workspace_id(conn)?,
+            actor,
+        )?),
+        "create_agent_identity" => {
+            let input: AgentIdentityInput = arg(args, "input")?;
+            to_value(agent_identity_service::create(
+                conn,
+                &require_workspace_id(conn)?,
+                &input,
+                actor,
+            )?)
+        }
+        "update_agent_identity" => {
+            let id: String = arg(args, "id")?;
+            let input: AgentIdentityInput = arg(args, "input")?;
+            to_value(agent_identity_service::update(
+                conn,
+                &require_workspace_id(conn)?,
+                &id,
+                &input,
+                actor,
+            )?)
+        }
+        "set_agent_identity_active" => {
+            let id: String = arg(args, "id")?;
+            let active: bool = arg(args, "active")?;
+            to_value(agent_identity_service::set_active(
+                conn,
+                &require_workspace_id(conn)?,
+                &id,
+                active,
+                actor,
+            )?)
+        }
+        "delete_agent_identity" => {
+            let id: String = arg(args, "id")?;
+            agent_identity_service::delete(conn, &require_workspace_id(conn)?, &id, actor)?;
+            Ok(Value::Null)
+        }
+        "list_agent_credentials" => {
+            let identity_id: String = arg(args, "identityId")?;
+            to_value(agent_identity_service::list_credentials(
+                conn,
+                &require_workspace_id(conn)?,
+                &identity_id,
+                actor,
+            )?)
+        }
+        "issue_agent_credential" => {
+            let identity_id: String = arg(args, "identityId")?;
+            let label: String = arg(args, "label")?;
+            let lifetime_hours: Option<i64> = arg(args, "lifetimeHours")?;
+            to_value(agent_identity_service::issue_credential(
+                conn,
+                &require_workspace_id(conn)?,
+                &identity_id,
+                &label,
+                lifetime_hours,
+                actor,
+            )?)
+        }
+        "rotate_agent_credential" => {
+            let credential_id: String = arg(args, "credentialId")?;
+            let lifetime_hours: Option<i64> = arg(args, "lifetimeHours")?;
+            to_value(agent_identity_service::rotate_credential(
+                conn,
+                &require_workspace_id(conn)?,
+                &credential_id,
+                lifetime_hours,
+                actor,
+            )?)
+        }
+        "revoke_agent_credential" => {
+            let credential_id: String = arg(args, "credentialId")?;
+            agent_identity_service::revoke_credential(
+                conn,
+                &require_workspace_id(conn)?,
+                &credential_id,
+                actor,
+            )?;
             Ok(Value::Null)
         }
         "delete_ai_agent_trigger" => {

@@ -161,6 +161,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
         include_str!("migrations/0080_feature_flag_overrides.sql"),
     ),
     (81, include_str!("migrations/0081_agent_identities.sql")),
+    (
+        82,
+        include_str!("migrations/0082_trigger_agent_identities.sql"),
+    ),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -234,7 +238,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 81);
+        assert_eq!(version, 82);
 
         let table_count: i64 = conn
             .query_row(

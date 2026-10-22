@@ -72,3 +72,40 @@ fn missing_required_base_url_is_rejected() {
         Cli::try_parse_from(["lanesra", "--api-key", "client_x.secret", "objects", "list"]);
     assert!(result.is_err());
 }
+
+#[test]
+fn search_parses_its_text_and_filters_into_the_query_string() {
+    // Covers: REQ-INT-006 (WP-0186 AC-5)
+    let cli = Cli::try_parse_from([
+        "lanesra",
+        "--base-url",
+        "http://localhost:8787",
+        "--api-key",
+        "client_x.secret",
+        "search",
+        "acme corp",
+        "--object",
+        "Company",
+        "--page-size",
+        "10",
+    ])
+    .unwrap();
+    match cli.command {
+        Command::Search {
+            text,
+            object,
+            page,
+            page_size,
+        } => {
+            assert_eq!(
+                lanesra_cli::search_query(text, object, page, page_size),
+                vec![
+                    ("q", "acme corp".to_string()),
+                    ("object", "Company".to_string()),
+                    ("page_size", "10".to_string()),
+                ]
+            );
+        }
+        other => panic!("unexpected command: {other:?}"),
+    }
+}

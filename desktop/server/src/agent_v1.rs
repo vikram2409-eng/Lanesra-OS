@@ -73,27 +73,24 @@ async fn trigger(
     let (client, workspace_id) = authorize(&state, &headers, caller, "agents.trigger")?;
     let db_path = state.db_path.clone();
     let master_key = crate::dispatch::resolve_master_key(&state.db_path).map_err(app_err)?;
-    // WP-0107: a webhook run is unattended. Its records are limited by the
-    // API client owner's Access Roles, but it never borrows the owner's
-    // Administrator rights (`EffectiveIdentity::require_admin`).
-    let identity =
-        lanesra_core::principals::EffectiveIdentity::unattended(client.owner_user_id.as_deref());
+    // WP-0107/WP-0109: a webhook run is unattended and acts as its
+    // trigger's Agent Identity; the API client owner's Access Roles still
+    // limit its records, but it never borrows the owner's Administrator
+    // rights. A target with no active webhook trigger is refused (I-14).
+    let record_actor = client.owner_user_id.clone();
     let workspace_id_for_log = workspace_id.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
         logged(
             &conn,
             &workspace_id_for_log,
-            ai_orchestration_service::run_triggered(
+            ai_orchestration_service::run_webhook(
                 &conn,
                 &workspace_id,
                 &master_key,
                 target_type,
                 &target_id,
-                &identity,
+                record_actor.as_deref(),
                 &body.input,
-                Some("webhook"),
-                None,
-                None,
             )
             .await,
         )

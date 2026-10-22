@@ -3,7 +3,7 @@ id: WP-0184
 title: "API clients: enforce the allowed network with a trusted-proxy rule"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: in_review
+status: done
 owner: claude
 depends_on: []
 requirements: [REQ-INT-004, REQ-PRE-019]
@@ -11,11 +11,11 @@ threats: [T-20]
 estimate: M
 editions: [workspace]
 editions_reason: The REST API and MCP endpoint exist only on the Team Workspace server; desktop opens no network port and the demo has no real API
-delivered: []
+delivered: [workspace]
 docs: [api-access-and-webhooks, set-up-team-workspace]
 branch: wp/WP-0184-api-client-network-restriction
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/691
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 # WP-0184 — API clients: enforce the allowed network with a trusted-proxy rule
@@ -70,3 +70,4 @@ An API client can be created with an **Allowed CIDR**, and the Help article tell
 - 2026-10-21 claude: Refined to `ready` per ADR-0018 (owner answered Q-19). The scope work that was originally part of this WP moved to WP-0186 to WP-0189. Not started.
 - 2026-10-21 claude: Claimed. Branched from the WP-0182 branch (for the planning files); no code dependency on WP-0182 or WP-0183. Design: a pure `network_trust` module in core (resolver and list matching, reusing `ssrf_guard::AllowEntry`), `SecurityConfig.trusted_proxies`, a `Caller` extractor in the server that resolves the address once per request, and the check in `authorize()`. No API-client edit operation exists, so AC-6 validation is on create. Next: failing tests first.
 - 2026-10-21 claude: Built. Core `network_trust` (resolver, list parsing, `is_restricted`, `client_admits`, `validate_allowed_cidr`), `SecurityConfig.trusted_proxies` read from `LANESRA_TRUSTED_PROXIES` (a malformed entry panics at startup naming it), `Caller` extractor, check in `authorize()` between key verification and the scope check, refusal logged as `network_blocked` with the resolved address. If the server is not given the peer address (served without connect info) a restricted client is refused and unrestricted ones still work; `main.rs` serves with connect info. Create validates the list; there is no edit operation for API clients. Added threat T-20. Tests: 9 core `network_trust`, 1 `integration_api_client`, 7 server `api_network` (loopback is the peer; loopback is listed as a trusted proxy to drive the forwarded path). The create test was seen failing with validation removed. Docs: help articles, Developers pages, README, docker-compose, llms, Releases. Server suite (11 binaries) green with `--features lanesra-core/test-support`.
+- 2026-10-22 claude: PR #691 merged by the owner (c552f6d). Delivered on Team Workspace, its only edition; help articles updated. Done.

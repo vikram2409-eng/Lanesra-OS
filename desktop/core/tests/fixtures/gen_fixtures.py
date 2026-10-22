@@ -47,7 +47,51 @@ def seed(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def gen(out_dir: Path, version: int, label: str) -> Path:
+def seed_triggers(conn: sqlite3.Connection) -> None:
+    """Users, an agent and unattended triggers (WP-0109 AC-2 upgrade fixture).
+
+    One trigger was created by a Sales user, one by an Administrator, and
+    one has no creator, so the upgrade must fall back to the first
+    Administrator as the owner of its Agent Identity.
+    """
+    ts = "2026-10-17T00:00:00Z"
+    conn.executemany(
+        "INSERT OR IGNORE INTO roles (id, name) VALUES (?, ?)",
+        [("role_admin", "Administrator"), ("role_sales", "Sales")],
+    )
+    for uid, name, created in [
+        ("u_admin", "admin", "2026-10-01T00:00:00Z"),
+        ("u_sales", "sales", "2026-10-02T00:00:00Z"),
+    ]:
+        conn.execute(
+            "INSERT INTO users (id, workspace_id, username, display_name, password_hash, created_at, updated_at)"
+            " VALUES (?, 'ws_fixture', ?, ?, 'x', ?, ?)",
+            (uid, name, name.title(), created, created),
+        )
+    conn.execute(
+        "INSERT INTO user_roles (user_id, role_id) SELECT 'u_admin', id FROM roles WHERE name = 'Administrator'"
+    )
+    conn.execute(
+        "INSERT INTO user_roles (user_id, role_id) SELECT 'u_sales', id FROM roles WHERE name = 'Sales'"
+    )
+    conn.execute(
+        "INSERT INTO ai_agents (id, workspace_id, name, system_prompt, action_names_json, created_at, updated_at)"
+        " VALUES ('a_fixture', 'ws_fixture', 'Fixture agent', 'Summarise.', '[]', ?, ?)",
+        (ts, ts),
+    )
+    conn.executemany(
+        "INSERT INTO ai_agent_triggers (id, workspace_id, target_type, target_id, trigger_type,"
+        " interval_minutes, created_at, created_by) VALUES (?, 'ws_fixture', 'agent', 'a_fixture', ?, ?, ?, ?)",
+        [
+            ("t_sched_sales", "schedule", 60, ts, "u_sales"),
+            ("t_hook_admin", "webhook", None, ts, "u_admin"),
+            ("t_sched_orphan", "schedule", 30, ts, None),
+        ],
+    )
+    conn.commit()
+
+
+def gen(out_dir: Path, version: int, label: str, triggers: bool = False) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{version:04d}_{label}.db"
     if path.exists():
@@ -64,6 +108,8 @@ def gen(out_dir: Path, version: int, label: str) -> Path:
                 (n,),
             )
         seed(conn)
+        if triggers:
+            seed_triggers(conn)
     finally:
         conn.close()
     return path
@@ -74,8 +120,13 @@ def main(argv=None) -> int:
     ap.add_argument("--out", required=True, help="output directory for fixture .db files")
     ap.add_argument("--version", type=int, default=79, help="schema version to generate (default: 79)")
     ap.add_argument("--label", default="pre_0080", help="label suffix (default: pre_0080)")
+    ap.add_argument(
+        "--with-triggers",
+        action="store_true",
+        help="also seed users, an agent and unattended triggers (WP-0109)",
+    )
     args = ap.parse_args(argv)
-    path = gen(Path(args.out), args.version, args.label)
+    path = gen(Path(args.out), args.version, args.label, args.with_triggers)
     print(f"wrote {path}")
     return 0
 

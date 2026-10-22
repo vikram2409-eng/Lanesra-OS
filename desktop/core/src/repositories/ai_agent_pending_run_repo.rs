@@ -20,6 +20,7 @@ pub struct PendingRun {
     pub triggered_by: Option<String>,
     pub source_entity_type: Option<String>,
     pub source_entity_id: Option<String>,
+    pub agent_identity_id: Option<String>,
 }
 
 fn map_row(row: &rusqlite::Row) -> rusqlite::Result<PendingRun> {
@@ -32,6 +33,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<PendingRun> {
         triggered_by: row.get("triggered_by")?,
         source_entity_type: row.get("source_entity_type")?,
         source_entity_id: row.get("source_entity_id")?,
+        agent_identity_id: row.get("agent_identity_id")?,
     })
 }
 
@@ -46,11 +48,12 @@ pub fn enqueue(
     triggered_by: Option<&str>,
     source_entity_type: Option<&str>,
     source_entity_id: Option<&str>,
+    agent_identity_id: Option<&str>,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "INSERT INTO ai_agent_pending_runs (id, workspace_id, target_type, target_id, resolved_input_text, triggered_by, source_entity_type, source_entity_id, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        (id, workspace_id, target_type, target_id, resolved_input_text, triggered_by, source_entity_type, source_entity_id, now_iso()),
+        "INSERT INTO ai_agent_pending_runs (id, workspace_id, target_type, target_id, resolved_input_text, triggered_by, source_entity_type, source_entity_id, created_at, agent_identity_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+        (id, workspace_id, target_type, target_id, resolved_input_text, triggered_by, source_entity_type, source_entity_id, now_iso(), agent_identity_id),
     )?;
     Ok(())
 }

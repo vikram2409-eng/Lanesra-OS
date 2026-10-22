@@ -20,7 +20,7 @@
 use rusqlite::Connection;
 
 use crate::domain::ids::new_uuid;
-use crate::domain::{AppError, AppResult};
+use crate::domain::{AppError, AppResult, ErrorClass};
 use crate::models::ai_agent_pipeline::{
     AiAgentPipeline, AiAgentPipelineInput, AiAgentRun, AiAgentTrigger, AiAgentTriggerInput,
     PIPELINE_TOPOLOGIES, TRIGGER_TARGET_TYPES, TRIGGER_TYPES,
@@ -274,6 +274,46 @@ pub fn set_trigger_active(
 pub fn delete_trigger(conn: &Connection, id: &str, actor_user_id: Option<&str>) -> AppResult<()> {
     require_admin(conn, actor_user_id)?;
     Ok(ai_agent_pipeline_repo::delete_trigger(conn, id)?)
+}
+
+/// Chooses the Agent Identity a trigger's runs act as (WP-0109), or none.
+/// Administrator-only and audited.
+pub fn set_trigger_identity(
+    conn: &Connection,
+    workspace_id: &str,
+    trigger_id: &str,
+    agent_identity_id: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentTrigger> {
+    require_admin(conn, actor_user_id)?;
+    let trigger = match ai_agent_pipeline_repo::get_trigger(conn, trigger_id)? {
+        Some(t) if t.workspace_id == workspace_id => t,
+        _ => return Err(AppError::NotFound("Trigger".into())),
+    };
+    if let Some(identity_id) = agent_identity_id {
+        super::agent_identity_service::grant_for_run(conn, workspace_id, identity_id)?;
+    }
+    ai_agent_pipeline_repo::set_trigger_identity(conn, trigger_id, agent_identity_id)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "ai_agent_trigger_identity_set",
+        Some("AiAgentTrigger"),
+        Some(trigger_id),
+        &match agent_identity_id {
+            Some(id) => format!(
+                "The {} trigger now runs as Agent Identity {id}",
+                trigger.trigger_type
+            ),
+            None => format!(
+                "The {} trigger no longer has an Agent Identity",
+                trigger.trigger_type
+            ),
+        },
+        None,
+    )?;
+    Ok(ai_agent_pipeline_repo::get_trigger(conn, trigger_id)?.expect("just updated"))
 }
 
 // --- Execution ----------------------------------------------------------
@@ -726,6 +766,57 @@ pub async fn run_triggered(
     .await
 }
 
+/// An inbound webhook call (`server/src/agent_v1.rs`). It runs only when
+/// the target has an active webhook Trigger (RAID I-14), and acts as that
+/// trigger's Agent Identity (WP-0109); `record_actor` (the API client's
+/// owner) still limits which records it can see.
+pub async fn run_webhook(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    target_type: &str,
+    target_id: &str,
+    record_actor: Option<&str>,
+    input: &str,
+) -> AppResult<AiAgentRun> {
+    let trigger = ai_agent_pipeline_repo::find_active_webhook_trigger(
+        conn,
+        workspace_id,
+        target_type,
+        target_id,
+    )?
+    .ok_or_else(|| {
+        AppError::classified(
+            ErrorClass::Policy,
+            "policy.denied",
+            format!("This {target_type} has no active webhook trigger"),
+        )
+    })?;
+    let mut identity = EffectiveIdentity::unattended(record_actor);
+    if let Some(identity_id) = trigger.agent_identity_id.as_deref() {
+        identity = identity.with_agent_identity(super::agent_identity_service::grant_for_run(
+            conn,
+            workspace_id,
+            identity_id,
+        )?);
+    }
+    let run = run_internal(
+        conn,
+        workspace_id,
+        master_key,
+        target_type,
+        target_id,
+        &identity,
+        input,
+        Some("webhook"),
+        None,
+        None,
+    )
+    .await?;
+    ai_agent_pipeline_repo::mark_trigger_run(conn, &trigger.id)?;
+    Ok(run)
+}
+
 /// The execution engine itself - runs a lone Agent (a 1-step run) or a
 /// Pipeline in order, writing one `ai_agent_runs` row plus one
 /// `ai_agent_run_steps` row per step. See this module's own doc comment
@@ -793,6 +884,8 @@ async fn run_internal(
     if let Err(e) = require_admin_for_steps(conn, workspace_id, identity, &steps) {
         return finalize_run(conn, &run_id, Err(e));
     }
+    // Every step, delegation and tool call of this run acts as `identity`.
+    let _run_identity = identity.enter_run();
     let actor = identity.record_actor();
     let result = match topology.as_str() {
         "consensus" => {
@@ -904,6 +997,9 @@ pub async fn approve_pending_step(
     actor_user_id: Option<&str>,
 ) -> AppResult<AiAgentRun> {
     require_admin(conn, actor_user_id)?;
+    // The approving Administrator resumes the run, so the rest of it acts
+    // as them (WP-0109).
+    let _run_identity = EffectiveIdentity::from_actor(actor_user_id).enter_run();
     let run = ai_agent_run_repo::get_run(conn, run_id)?
         .ok_or_else(|| AppError::NotFound("Run".into()))?;
     if run.status != "awaiting_approval" {
@@ -1016,6 +1112,7 @@ pub fn enqueue(
     triggered_by: Option<&str>,
     source_entity_type: Option<&str>,
     source_entity_id: Option<&str>,
+    agent_identity_id: Option<&str>,
 ) -> AppResult<()> {
     let id = new_uuid();
     Ok(ai_agent_pending_run_repo::enqueue(
@@ -1028,6 +1125,7 @@ pub fn enqueue(
         triggered_by,
         source_entity_type,
         source_entity_id,
+        agent_identity_id,
     )?)
 }
 
@@ -1048,6 +1146,7 @@ pub fn enqueue_due_schedules(conn: &Connection, workspace_id: &str) -> AppResult
             Some("schedule"),
             None,
             None,
+            trigger.agent_identity_id.as_deref(),
         )?;
         ai_agent_pipeline_repo::mark_trigger_run(conn, &trigger.id)?;
     }
@@ -1071,19 +1170,45 @@ pub async fn drain_pending_runs(
     let batch = ai_agent_pending_run_repo::list_batch(conn, workspace_id, limit)?;
     let mut drained = 0;
     for item in &batch {
-        let _ = run_internal(
-            conn,
-            workspace_id,
-            master_key,
-            &item.target_type,
-            &item.target_id,
-            &EffectiveIdentity::unattended(None),
-            &item.resolved_input_text,
-            item.triggered_by.as_deref(),
-            item.source_entity_type.as_deref(),
-            item.source_entity_id.as_deref(),
-        )
-        .await;
+        // WP-0109: the run acts as the identity its trigger names. One that
+        // was disabled or deleted since is refused, and recorded as failed.
+        let identity = match item.agent_identity_id.as_deref() {
+            None => Ok(EffectiveIdentity::unattended(None)),
+            Some(id) => super::agent_identity_service::grant_for_run(conn, workspace_id, id)
+                .map(|grant| EffectiveIdentity::unattended(None).with_agent_identity(grant)),
+        };
+        match identity {
+            Ok(identity) => {
+                let _ = run_internal(
+                    conn,
+                    workspace_id,
+                    master_key,
+                    &item.target_type,
+                    &item.target_id,
+                    &identity,
+                    &item.resolved_input_text,
+                    item.triggered_by.as_deref(),
+                    item.source_entity_type.as_deref(),
+                    item.source_entity_id.as_deref(),
+                )
+                .await;
+            }
+            Err(e) => {
+                let run_id = new_uuid();
+                ai_agent_run_repo::start_run(
+                    conn,
+                    &run_id,
+                    workspace_id,
+                    &item.target_type,
+                    &item.target_id,
+                    item.triggered_by.as_deref(),
+                    item.source_entity_type.as_deref(),
+                    item.source_entity_id.as_deref(),
+                    &item.resolved_input_text,
+                )?;
+                finalize_run(conn, &run_id, Err(e))?;
+            }
+        }
         ai_agent_pending_run_repo::delete(conn, &item.id)?;
         drained += 1;
     }

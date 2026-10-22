@@ -3,18 +3,18 @@ id: WP-0109
 title: Trigger migration and Agent Identity UI
 phase: 1
 epic: E1.0 Identity foundation
-status: ready
-owner: unassigned
+status: in_review
+owner: claude
 depends_on: [WP-0107, WP-0108]
 requirements: [REQ-GOV-003]
 threats: [T-03]
 estimate: M
 editions: [desktop, workspace, demo]
-delivered: []
-docs: [access-roles-and-record-scopes]
-branch: 
-pr: 
-updated: 2026-10-18
+delivered: [desktop, workspace]
+docs: [agent-identities, access-roles-and-record-scopes]
+branch: claude/enterprise-build-planning-jxy2kq
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/700
+updated: 2026-10-22
 ---
 
 
@@ -46,8 +46,8 @@ Migrate existing unattended triggers to use Agent Identities, and build the Agen
 ## Acceptance criteria
 
 
-- [ ] AC-1: Every tool call's audit entry names the agent and the effective principal (conformance test across all run entry points)
-- [ ] AC-2: Existing triggers keep working after upgrade, each with an Agent Identity no broader than before (migration fixture test)
+- [x] AC-1: Every tool call's audit entry names the agent and the effective principal (conformance test across all run entry points)
+- [x] AC-2: Existing triggers keep working after upgrade, each with an Agent Identity no broader than before (migration fixture test)
 
 
 ## Test plan
@@ -71,3 +71,11 @@ Migrate existing unattended triggers to use Agent Identities, and build the Agen
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 - 2026-10-18 claude: Owner decision 2026-10-18: Muse builds this work package following ADR-0016 (Accepted); Claude reviews the PR before the owner merges it. Refine to ready first (Muse batch 5).
+- 2026-10-22 claude: Built at the owner's request of 2026-10-21 ("finish the outstanding pieces"), which supersedes the 2026-10-18 split (Muse builds, Claude reviews); Muse reviews instead.
+  - Migration 0082: every schedule and webhook trigger gets its own Agent Identity, owned by its creator or else the first Administrator, not an Administrator and with no Access Roles (no broader than before: a drained run had no actor, and since WP-0107 a webhook never borrows its client owner's rights). Each assignment is audited (`agent_identity_assigned_on_upgrade`). Identity names use the full trigger id: the upgrade fixture caught a UNIQUE (workspace_id, name) collision with an 8-character prefix.
+  - Runs: the drain resolves the queued item's identity (a disabled or deleted one fails the run, recorded); a webhook call needs an active webhook trigger and runs as its identity with the API client owner as record actor (RAID I-14 closed); a Workflow Automation action may name an identity; approving a paused step resumes as the approving Administrator. The run's identity is held for the run's thread (`principals::enter_run`), so delegation and nested calls inherit it.
+  - AC-1: every `ai_agent_tool_call` audit entry carries `agent_id`, `tool` and `effective_principal`. `core/tests/trigger_identities.rs` covers manual run, schedule drain, webhook, workflow enqueue, chat, delegation and graph agent node.
+  - AC-2: fixture `0081_triggers.db` (`gen_fixtures.py --with-triggers`) proves owners, no rights, audit rows, and that the triggers still run after upgrade.
+  - UI: Admin → AI → Agent Identities (identities, credentials issued once, rotate, revoke) and a "runs as" picker on each trigger, behind the `building` flag `agents.identities_ui` (removed by WP-0160). Commands in Tauri and the server dispatch; vitest and a server HTTP test.
+  - Not in this package: the identity picker on agents (needs the eight-group editor, WP-0160) and record-level enforcement for identities (RAID I-20). Online demo: building flags are off in every release and the demo does not simulate triggers, so its delivery ships with the flag's graduation in WP-0160. Help: `access-roles-and-record-scopes` gains "Who scheduled and webhook runs act as".
+- 2026-10-22 claude: Help article `agent-identities` added (app.js, sitemap, docs index, llms files, Releases v0.97.0 entry). Demo edition: RAID Q-21.

@@ -8,11 +8,13 @@
 
 use lanesra_core::db::open_in_memory_db;
 use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
+use lanesra_core::models::custom_record::CustomRecordInput;
 use lanesra_core::models::integration::ApiListQuery;
 use lanesra_core::models::opportunity::OpportunityInput;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::{
-    api_object_service, custom_object_service, opportunity_service, workspace_service,
+    api_object_service, custom_object_service, custom_record_service, opportunity_service,
+    workspace_service,
 };
 use serde_json::json;
 
@@ -307,4 +309,71 @@ fn filter_and_pagination_are_applied_to_list_records() {
         paged.total, 3,
         "total reflects the whole result set, not just this page"
     );
+}
+
+#[test]
+fn search_finds_custom_object_records_until_the_object_is_deactivated() {
+    // Covers: REQ-INT-006 (WP-0186 AC-1, AC-3)
+    let (conn, workspace_id, admin_id) = setup_workspace();
+    let def = custom_object_service::create(
+        &conn,
+        &workspace_id,
+        &CustomObjectDefinitionInput {
+            singular_label: "Vendor".into(),
+            plural_label: "Vendors".into(),
+            icon: "◆".into(),
+            prefix: "VEN".into(),
+            digits: 4,
+        },
+        Some(&admin_id),
+    )
+    .unwrap();
+    custom_record_service::create(
+        &conn,
+        &workspace_id,
+        &CustomRecordInput {
+            object_key: def.key.clone(),
+            primary_name: "Quokka Supply".into(),
+            status: "Active".into(),
+            owner_user_id: None,
+            notes: None,
+        },
+        Some(&admin_id),
+    )
+    .unwrap();
+    api_object_service::create_record(
+        &conn,
+        &workspace_id,
+        "Company",
+        &json!({"name": "Quokka Holdings", "status": "Prospect"}),
+        Some(&admin_id),
+    )
+    .unwrap();
+
+    let found =
+        api_object_service::search_records(&conn, &workspace_id, "quokka", None, None, None)
+            .unwrap();
+    let mut keys: Vec<&str> = found
+        .results
+        .iter()
+        .map(|r| r.object_key.as_str())
+        .collect();
+    keys.sort_unstable();
+    assert_eq!(keys, vec!["Company", def.key.as_str()]);
+
+    custom_object_service::deactivate(&conn, &def.id, Some(&admin_id)).unwrap();
+    let after =
+        api_object_service::search_records(&conn, &workspace_id, "quokka", None, None, None)
+            .unwrap();
+    assert_eq!(after.total, 1, "{after:?}");
+    assert_eq!(after.results[0].object_key, "Company");
+    assert!(api_object_service::search_records(
+        &conn,
+        &workspace_id,
+        "quokka",
+        Some(&def.key),
+        None,
+        None
+    )
+    .is_err());
 }

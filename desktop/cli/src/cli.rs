@@ -35,6 +35,18 @@ pub enum Command {
         #[command(subcommand)]
         command: RecordsCommand,
     },
+    /// Find records by text across every readable object (GET /api/v1/search; needs the search.read scope)
+    Search {
+        /// The text to look for, e.g. a name, number, email or phone
+        text: String,
+        /// Only search this object, e.g. Company or a custom object's key
+        #[arg(long)]
+        object: Option<String>,
+        #[arg(long)]
+        page: Option<i64>,
+        #[arg(long = "page-size")]
+        page_size: Option<i64>,
+    },
 }
 
 #[derive(Subcommand, Debug)]

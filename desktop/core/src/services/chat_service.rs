@@ -1820,7 +1820,13 @@ pub async fn run_agent_once(
         )
     })?;
     if agent_requires_admin(&agent.action_names) {
-        require_admin(conn, actor)?;
+        // WP-0109: inside a run, the run's effective identity decides (an
+        // unattended run acts as its Agent Identity); outside one, the
+        // person chatting must be an Administrator, as before.
+        match crate::principals::current_run_identity() {
+            Some(identity) => identity.require_admin(conn, workspace_id)?,
+            None => require_admin(conn, actor)?,
+        }
     }
     let tools = agent_tools(conn, agent)?;
     let system_prompt = agent_system_prompt(conn, agent, memory_context)?;
@@ -1981,7 +1987,15 @@ pub async fn run_agent_once(
                             call.name,
                             if ok { "" } else { " (failed)" }
                         ),
-                        None,
+                        // WP-0109 AC-1: the agent and the principal it acted as.
+                        Some(
+                            &json!({
+                                "agent_id": agent.id,
+                                "tool": call.name,
+                                "effective_principal": crate::principals::audit_principal(actor),
+                            })
+                            .to_string(),
+                        ),
                     );
                     let tool_msg = synthetic_message("tool", Some(&content), None, Some(&call.id));
                     history.push(tool_msg.clone());

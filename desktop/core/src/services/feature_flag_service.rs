@@ -37,8 +37,24 @@ pub const PLAYGROUND_SHELL: Flag = Flag {
     stage: Stage::Building,
 };
 
+/// The Agent Identities screen and the identity picker on triggers. Only
+/// the screens: the identity a run acts as is enforced whether or not this
+/// is on (ADR-0012 §4). Built under WP-0109; removed by WP-0160, which adds
+/// the identity picker to the agent editor and ships the screens.
+pub const AGENT_IDENTITIES_UI: Flag = Flag {
+    key: "agents.identities_ui",
+    description: "Agent Identities screen and trigger identity picker",
+    work_package: "WP-0109",
+    remove_by: "WP-0160",
+    default: Defaults {
+        desktop: false,
+        workspace: false,
+    },
+    stage: Stage::Building,
+};
+
 /// Every flag. Add new flags here, with a constant above.
-pub const REGISTRY: &[&Flag] = &[&PLAYGROUND_SHELL];
+pub const REGISTRY: &[&Flag] = &[&PLAYGROUND_SHELL, &AGENT_IDENTITIES_UI];
 
 /// The error a disabled feature's command or route returns. Its kind is
 /// `not_found` (the REST API answers 404) and its message starts with

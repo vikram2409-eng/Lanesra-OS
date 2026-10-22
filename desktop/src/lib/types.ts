@@ -2875,6 +2875,8 @@ export interface AiAgentTrigger {
   last_run_at: string | null;
   created_at: string;
   created_by: string | null;
+  /** WP-0109: the Agent Identity this trigger's runs act as, if any. */
+  agent_identity_id: string | null;
 }
 
 export interface AiAgentTriggerInput {
@@ -4555,4 +4557,47 @@ export interface FeatureFlagList {
 export interface FeatureFlagOverrideInput {
   key: string;
   enabled: boolean | null;
+}
+
+// WP-0108/WP-0109: Agent Identities - who an unattended run acts as.
+export interface AgentIdentity {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  owner_user_id: string;
+  is_administrator: boolean;
+  access_role_ids: string[];
+  status: "active" | "disabled";
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AgentIdentityInput {
+  name: string;
+  description: string | null;
+  owner_user_id: string;
+  is_administrator: boolean;
+  access_role_ids: string[];
+}
+
+/** A credential's metadata; the token itself is shown only once, on issue. */
+export interface AgentCredential {
+  id: string;
+  workspace_id: string;
+  agent_identity_id: string;
+  label: string;
+  expires_at: string;
+  revoked_at: string | null;
+  revoked_by: string | null;
+  last_used_at: string | null;
+  created_at: string;
+  created_by: string | null;
+}
+
+export interface IssuedAgentCredential {
+  credential: AgentCredential;
+  token: string;
 }

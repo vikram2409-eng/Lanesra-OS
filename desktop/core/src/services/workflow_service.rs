@@ -1499,6 +1499,10 @@ struct RunAiAgentParams {
     target_id: String,
     #[serde(default)]
     input_template: String,
+    /// The Agent Identity the queued run acts as (WP-0109). Without one the
+    /// run has no Administrator rights, as before.
+    #[serde(default)]
+    agent_identity_id: Option<String>,
 }
 
 fn parse_params<T: for<'de> Deserialize<'de>>(
@@ -2251,6 +2255,7 @@ pub(crate) fn apply_action(
                 Some("workflow"),
                 Some(entity_type),
                 Some(entity_id),
+                p.agent_identity_id.as_deref(),
             )?;
             Ok(format!("queued {} run", p.target_type))
         }

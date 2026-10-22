@@ -3,6 +3,7 @@ pub mod action_type_commands;
 pub mod activity_commands;
 pub mod admin_commands;
 pub mod agent_commands;
+pub mod agent_identity_commands;
 pub mod ai_agent_commands;
 pub mod ai_agent_pipeline_commands;
 pub mod ai_commands;
