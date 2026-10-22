@@ -39,7 +39,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0130](work/P1/WP-0130-prompt-catalog-written-fresh.md) | Prompt catalog, written fresh | in_progress | muse | `wp/WP-0130-prompt-catalog` | - |
 | [WP-0182](work/P1/WP-0182-deliver-outbound-webhooks-for-real-record-events.md) | Deliver outbound webhooks for real record events | in_review | claude | `wp/WP-0182-deliver-outbound-webhooks` | https://github.com/vikram2409-eng/Lanesra-OS/pull/689 |
 | [WP-0183](work/P1/WP-0183-webhook-signing-secret-show-once-and-rotate.md) | Webhook signing secret: show once and rotate | in_review | claude | `wp/WP-0183-webhook-signing-secret` | https://github.com/vikram2409-eng/Lanesra-OS/pull/690 |
-| [WP-0187](work/P1/WP-0187-api-bulk-export-and-bulk-write.md) | API: bulk export and bulk write behind bulk.read and bulk.write | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | TBD |
+| [WP-0187](work/P1/WP-0187-api-bulk-export-and-bulk-write.md) | API: bulk export and bulk write behind bulk.read and bulk.write | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/701 |
 
 ## Ready to start (all dependencies done)
 
