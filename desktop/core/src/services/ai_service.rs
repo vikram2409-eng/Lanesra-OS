@@ -177,6 +177,15 @@ pub fn save_settings(
             "An OpenAI-compatible provider needs a base URL".into(),
         ));
     }
+    // WP-0191: refuse an address the outbound guard would refuse, now.
+    if let Some(url) = input
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+    {
+        super::ssrf_guard::check_configured_url(url)?;
+    }
     ai_settings_repo::ensure_default(conn, workspace_id)?;
     let existing_secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?;
     let secret_id = match input.api_key.as_deref().filter(|k| !k.is_empty()) {
@@ -310,6 +319,9 @@ pub fn set_otlp_endpoint(
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty());
+    if let Some(url) = endpoint {
+        super::ssrf_guard::check_configured_url(url)?;
+    }
     ai_settings_repo::set_otlp_endpoint(conn, workspace_id, endpoint)?;
     Ok(ai_settings_repo::ensure_default(conn, workspace_id)?)
 }

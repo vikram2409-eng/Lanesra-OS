@@ -3,7 +3,7 @@ id: WP-0107
 title: Principal model and effective-identity rules
 phase: 1
 epic: E1.0 Identity foundation
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0009]
 requirements: [REQ-GOV-002, REQ-GOV-003]
@@ -60,3 +60,4 @@ Define the principal model (human, agent_identity, api_client) and the effective
 - 2026-10-22 claude: PR #682 merged. The rules are enforced in the shared core, so desktop and Team Workspace are delivered; help article `agent-identities` written (with WP-0109, PR #700). Stays `in_review` only for the online demo edition: see RAID Q-21.
 - 2026-10-22 claude: Online demo edition built (RAID Q-21). The demo's runs follow the same effective-identity rules: a run a person starts acts as that person, limited by an Agent Identity when it names one, and never exceeds their access; a workflow-started run acts as its Agent Identity only, and an agent that uses admin tools is refused unless that identity holds Administrator. Verified in headless Chromium against the demo (interactive Viewer refused even with an Administrator identity; unattended runs refused without one; disabled and deleted identities refused).
 - 2026-10-22 claude: In review in #704.
+- 2026-10-22 claude: Merged in #704; done.

@@ -3,7 +3,7 @@ id: WP-0110
 title: Run and step schema extensions
 phase: 1
 epic: E1.2 Run model and trace
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0009, WP-0007, WP-0107]
 requirements: [REQ-CORE-008, REQ-API-001]
@@ -54,3 +54,4 @@ Extend `ai_runs` and `ai_run_nodes` (and the graph run tables) with the fields e
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 - 2026-10-22 claude: Refined to ready against ADR-0007 (precise ACs, scope named, out-of-scope items pointed at their work packages) and built. Migration 0083 adds the run and step fields, the lease columns and an index for the sweep, and parks retired statuses. `services::run_state` holds the transition table and the one guarded `UPDATE ... WHERE status = from`; `graph_runtime_service` now moves runs only through it (start, waiting, resume, approval, cancel, fail, complete), and `graph_run_repo` no longer writes status. A run that becomes `running` takes a lease (2 minutes, renewed at every checkpoint) that is dropped when it leaves `running`. The step limit now records `stop_reason = limit_rounds`. Desktop types updated (`GraphRunStatus`, `RunNode`, `GraphRun`). +6 tests in `core/tests/run_state_machine.rs` and 2 unit tests in `run_state`; new upgrade fixture `0082_runs.db` (`gen_fixtures.py --with-runs`).
 - 2026-10-22 claude: In review in #704.
+- 2026-10-22 claude: Merged in #704; done.

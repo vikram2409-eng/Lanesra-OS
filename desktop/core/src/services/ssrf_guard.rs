@@ -295,6 +295,60 @@ fn check_parsed(policy: &NetworkPolicy, url: &reqwest::Url) -> Result<(), Blocke
     }
 }
 
+/// How long a save waits to resolve a configured host before accepting it.
+/// The address is checked again whenever it is used.
+const SAVE_RESOLVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Checks a URL an admin is saving (a connection, model provider, MCP server
+/// or trace exporter) by the same rules as connecting, so a refused address
+/// is reported where it was typed rather than in a failed run later
+/// (WP-0191). Unlike `check_url`, a host name is resolved too. A name that
+/// does not resolve within two seconds, or at all, is accepted: it is checked
+/// again at connect time.
+pub fn check_configured_url(url: &str) -> AppResult<()> {
+    check_configured_url_with(&current(), url).map_err(AppError::from)
+}
+
+pub fn check_configured_url_with(policy: &NetworkPolicy, url: &str) -> Result<(), Blocked> {
+    let parsed = reqwest::Url::parse(url.trim())
+        .map_err(|_| Blocked(format!("'{url}' is not a valid URL")))?;
+    check_parsed(policy, &parsed)?;
+    let Some(host) = parsed.host_str() else {
+        return Ok(());
+    };
+    let host = host.trim_matches(|c| c == '[' || c == ']').to_string();
+    if host.parse::<IpAddr>().is_ok() {
+        return Ok(()); // a literal address was checked above
+    }
+    let port = parsed.port_or_known_default().unwrap_or(80);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let lookup_host = host.clone();
+    std::thread::spawn(move || {
+        use std::net::ToSocketAddrs;
+        let addrs: Vec<IpAddr> = (lookup_host.as_str(), port)
+            .to_socket_addrs()
+            .map(|a| a.map(|s| s.ip()).collect())
+            .unwrap_or_default();
+        let _ = tx.send(addrs);
+    });
+    let Ok(addrs) = rx.recv_timeout(SAVE_RESOLVE_TIMEOUT) else {
+        return Ok(());
+    };
+    let mut first_refusal = None;
+    for ip in &addrs {
+        match policy.check_ip(*ip) {
+            Ok(()) => return Ok(()),
+            Err(b) => {
+                first_refusal.get_or_insert(b);
+            }
+        }
+    }
+    match first_refusal {
+        Some(b) => Err(Blocked(format!("{host} resolves to {b}"))),
+        None => Ok(()),
+    }
+}
+
 /// The resolved addresses of `host` that the policy allows. Refuses when
 /// none is allowed; a name that also resolves to a refused address is still
 /// usable through its allowed ones.
@@ -382,6 +436,19 @@ pub fn blocked_in(error: &reqwest::Error) -> Option<AppError> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_saved_url_is_checked_by_name_on_team_workspace_only() {
+        let team = NetworkPolicy::workspace(Vec::new());
+        let err = check_configured_url_with(&team, "http://localhost:11434/v1").unwrap_err();
+        assert!(err.0.starts_with("localhost resolves to "), "{err}");
+        assert!(check_configured_url_with(&team, "ftp://example.com").is_err());
+        // Desktop is the user's own machine: local services are fine.
+        let desktop = NetworkPolicy::desktop();
+        check_configured_url_with(&desktop, "http://localhost:11434/v1").unwrap();
+        // Metadata stays refused everywhere.
+        assert!(check_configured_url_with(&desktop, "http://169.254.169.254/").is_err());
+    }
+
     use super::*;
 
     fn ip(s: &str) -> IpAddr {

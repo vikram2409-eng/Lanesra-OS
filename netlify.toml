@@ -14,9 +14,10 @@
   # the moment anything else changed - Netlify's convention is exit 0 =
   # skip this build, non-zero = build normally, so no extra wrapping is
   # needed. Applies to production and PR deploy-preview builds alike.
+  # .github/ (CI workflows, Dependabot config) is never part of the site either.
   # program/ and the AI agent instruction files are the build program's
   # tracker (see program/README.md) - updated constantly, never part of the site.
-  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ':!desktop' ':!program' ':!AGENTS.md' ':!CLAUDE.md' ':!GEMINI.md'"
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- . ':!desktop' ':!program' ':!.github' ':!AGENTS.md' ':!CLAUDE.md' ':!GEMINI.md'"
 
 [[redirects]]
   from = "/backlog"

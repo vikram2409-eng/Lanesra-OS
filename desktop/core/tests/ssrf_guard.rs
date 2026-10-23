@@ -174,17 +174,35 @@ async fn a_model_provider_on_an_internal_address_is_refused() {
     .unwrap();
     let key = [71u8; 32];
     let (port, hits) = spawn_server("127.0.0.1", ok_response());
+    let internal = AiSettingsInput {
+        provider: "openai_compatible".into(),
+        base_url: Some(format!("http://127.0.0.1:{port}/v1")),
+        model: "local-model".into(),
+        api_key: Some("sk-test".into()),
+    };
+    // WP-0191: saving it is refused now, naming the setting to change.
+    let refused = ai_service::save_settings(&conn, &workspace.id, &key, &internal, Some(&admin.id))
+        .unwrap_err();
+    assert_blocked(&refused);
+    assert!(
+        refused.to_string().contains(ssrf_guard::ALLOW_LIST_ENV),
+        "{refused}"
+    );
+    // A URL saved before that check existed is still refused when used.
     ai_service::save_settings(
         &conn,
         &workspace.id,
         &key,
         &AiSettingsInput {
-            provider: "openai_compatible".into(),
-            base_url: Some(format!("http://127.0.0.1:{port}/v1")),
-            model: "local-model".into(),
-            api_key: Some("sk-test".into()),
+            base_url: Some(format!("http://{ALLOWED}:{port}/v1")),
+            ..internal.clone()
         },
         Some(&admin.id),
+    )
+    .unwrap();
+    conn.execute(
+        "UPDATE ai_settings SET base_url = ?1 WHERE workspace_id = ?2",
+        (internal.base_url.as_deref(), &workspace.id),
     )
     .unwrap();
     // "Test key" reports the refusal to the admin instead of probing the network.
@@ -250,4 +268,149 @@ async fn sftp_and_smtp_hosts_resolve_only_to_allowed_addresses() {
     );
     let addrs = ssrf_guard::allowed_addrs(ALLOWED, 2222).await.unwrap();
     assert_eq!(addrs, ["127.0.0.3:2222".parse().unwrap()]);
+}
+
+#[tokio::test]
+async fn admins_see_a_refused_address_when_they_save_it() {
+    // Covers: REQ-PRE-019 (WP-0191 AC-1)
+    use lanesra_core::models::ai::{AiObservabilitySettingsInput, AiProviderInput};
+    use lanesra_core::models::ai_mcp::McpServerInput;
+    use lanesra_core::models::integration::{ConnectionInput, ConnectionUpdate};
+    use lanesra_core::services::{ai_provider_service, connection_service, mcp_client_service};
+
+    declare_team_workspace();
+    let conn = lanesra_core::db::open_in_memory_db().unwrap();
+    let (workspace, admin) = workspace_service::first_run_setup(
+        &conn,
+        &WorkspaceSetup {
+            business_name: "Save Co".into(),
+            legal_name: None,
+            currency_code: "USD".into(),
+            locale: "en-US".into(),
+            timezone: "UTC".into(),
+            default_tax_rate_bp: 0,
+            admin_username: "admin".into(),
+            admin_display_name: "Admin".into(),
+            admin_password: "supersecretpassword".into(),
+            load_sample_data: false,
+        },
+    )
+    .unwrap();
+    let (ws, actor, key) = (workspace.id.as_str(), Some(admin.id.as_str()), [72u8; 32]);
+    let refused_with = |err: lanesra_core::domain::AppError, address: &str| {
+        assert_blocked(&err);
+        let message = err.to_string();
+        assert!(message.contains(address), "{message}");
+        assert!(message.contains(ssrf_guard::ALLOW_LIST_ENV), "{message}");
+    };
+    let connection = |url: &str| ConnectionInput {
+        name: format!("API at {url}"),
+        connection_type: "rest".into(),
+        base_url: Some(url.into()),
+        auth_mode: "none".into(),
+        secret_value: None,
+        config_json: "{}".into(),
+        owner_user_id: None,
+    };
+
+    // A literal internal address, and a name that resolves only to one.
+    refused_with(
+        connection_service::create(&conn, ws, &key, &connection("http://10.1.2.3/api"), actor)
+            .unwrap_err(),
+        "10.1.2.3",
+    );
+    refused_with(
+        connection_service::create(
+            &conn,
+            ws,
+            &key,
+            &connection("http://localhost:9/api"),
+            actor,
+        )
+        .unwrap_err(),
+        "localhost",
+    );
+    // An allow-listed address saves, and cannot then be moved off the list.
+    let saved = connection_service::create(
+        &conn,
+        ws,
+        &key,
+        &connection(&format!("http://{ALLOWED}:9/api")),
+        actor,
+    )
+    .unwrap();
+    let moved = connection_service::update(
+        &conn,
+        ws,
+        &key,
+        &saved.id,
+        &ConnectionUpdate {
+            name: saved.name.clone(),
+            base_url: Some("http://192.168.7.7/api".into()),
+            auth_mode: "none".into(),
+            secret_value: None,
+            config_json: "{}".into(),
+            owner_user_id: None,
+            status: saved.status.clone(),
+        },
+        actor,
+    )
+    .unwrap_err();
+    refused_with(moved, "192.168.7.7");
+    // A name that cannot be resolved now is accepted and checked on use.
+    connection_service::create(
+        &conn,
+        ws,
+        &key,
+        &connection("http://lanesra-save-check.invalid/api"),
+        actor,
+    )
+    .unwrap();
+
+    // MCP servers, model providers and the trace exporter.
+    refused_with(
+        mcp_client_service::create_server(
+            &conn,
+            ws,
+            &key,
+            &McpServerInput {
+                name: "Local MCP".into(),
+                base_url: "http://127.0.0.1:7000/mcp".into(),
+                auth_mode: "none".into(),
+                secret_value: None,
+            },
+            actor,
+        )
+        .unwrap_err(),
+        "127.0.0.1",
+    );
+    refused_with(
+        ai_provider_service::create(
+            &conn,
+            ws,
+            &key,
+            &AiProviderInput {
+                name: "Ollama".into(),
+                provider: "openai_compatible".into(),
+                base_url: Some("http://127.0.0.1:11434/v1".into()),
+                model: "llama3".into(),
+                api_key: None,
+            },
+            actor,
+        )
+        .unwrap_err(),
+        "127.0.0.1",
+    );
+    refused_with(
+        ai_service::set_otlp_endpoint(
+            &conn,
+            ws,
+            &AiObservabilitySettingsInput {
+                otlp_endpoint: Some("http://172.16.0.9:4318/v1/traces".into()),
+            },
+            actor,
+        )
+        .unwrap_err(),
+        "172.16.0.9",
+    );
 }

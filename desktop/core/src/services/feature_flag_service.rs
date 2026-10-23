@@ -39,18 +39,20 @@ pub const PLAYGROUND_SHELL: Flag = Flag {
 
 /// The Agent Identities screen and the identity picker on triggers. Only
 /// the screens: the identity a run acts as is enforced whether or not this
-/// is on (ADR-0012 §4). Built under WP-0109; removed by WP-0160, which adds
-/// the identity picker to the agent editor and ships the screens.
+/// is on (ADR-0012 §4). Built under WP-0109. Released early as `ga` by
+/// WP-0190 (owner decision, RAID Q-24): without the screen an admin cannot
+/// give an unattended run the Administrator role its admin tools need.
+/// Removed by WP-0160, which adds the identity picker to the agent editor.
 pub const AGENT_IDENTITIES_UI: Flag = Flag {
     key: "agents.identities_ui",
     description: "Agent Identities screen and trigger identity picker",
     work_package: "WP-0109",
     remove_by: "WP-0160",
     default: Defaults {
-        desktop: false,
-        workspace: false,
+        desktop: true,
+        workspace: true,
     },
-    stage: Stage::Building,
+    stage: Stage::Ga,
 };
 
 /// Every flag. Add new flags here, with a constant above.
