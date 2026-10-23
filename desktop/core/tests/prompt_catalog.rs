@@ -169,10 +169,25 @@ fn every_prompt_passes_its_evaluation_suite() {
     }
 }
 
+/// The `BANNED` list in `program/tools/check_vocabulary.py` (REQ-CLEAN-003).
+fn clean_room_banned_words() -> Vec<String> {
+    let path = core_dir().join("../../program/tools/check_vocabulary.py");
+    let source = std::fs::read_to_string(path).unwrap();
+    let line = source
+        .lines()
+        .find(|l| l.starts_with("BANNED = ["))
+        .expect("BANNED list");
+    line.split('"')
+        .skip(1)
+        .step_by(2)
+        .map(str::to_string)
+        .collect()
+}
+
 #[test]
 fn active_prompts_follow_the_style_rules() {
     // Covers: REQ-LOOP-016 (WP-0130): calm wording, no pressure language,
-    // no shouting, no other framework's vocabulary (ADR-0011 §4).
+    // no shouting, no clean-room-banned vocabulary (ADR-0011 §4).
     const ALLOWED_CAPS: &[&str] = &["PASS", "FAIL", "REWRITE", "CLARIFY", "JSON"];
     const BANNED: &[&str] = &[
         "your job depends",
@@ -182,16 +197,25 @@ fn active_prompts_follow_the_style_rules() {
         "this is very important",
         "this is critical",
         "under no circumstances",
-        "crewai",
-        "autogen",
-        "langgraph",
-        "langchain",
     ];
+    // The clean-room vocabulary is defined once, in the program's own check.
+    let clean_room = clean_room_banned_words();
+    assert!(
+        !clean_room.is_empty(),
+        "could not read the clean-room word list"
+    );
     for p in prompts::all().iter().filter(|p| p.front.status == "active") {
         let text = format!("{}\n{}", p.front.output_contract, p.template());
         let lower = text.to_lowercase();
         for phrase in BANNED {
             assert!(!lower.contains(phrase), "{}: contains {phrase:?}", p.path);
+        }
+        for word in &clean_room {
+            assert!(
+                !lower.contains(&word.to_lowercase()),
+                "{}: uses clean-room-banned vocabulary {word:?}",
+                p.path
+            );
         }
         for word in text.split(|c: char| !c.is_ascii_alphabetic()) {
             if word.len() >= 4 && word.chars().all(|c| c.is_ascii_uppercase()) {
