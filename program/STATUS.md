@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 18 | 1 | 0 | 0 | 1 | 32 / 36 | `████████░░` 89% |
-| 1 · Foundations | 58 | 16 | 3 | 4 | 0 | 35 | 27 / 162 | `█░░░░░░░░░` 17% |
+| 1 · Foundations | 58 | 16 | 4 | 4 | 0 | 34 | 27 / 162 | `█░░░░░░░░░` 17% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -33,6 +33,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | in_review | muse | `wp/WP-0101-identity-adr` | https://github.com/vikram2409-eng/Lanesra-OS/pull/672 |
 | [WP-0122](work/P1/WP-0122-native-function-calling-and-strict-json-tool-format.md) | Native function calling and strict JSON tool format | in_progress | muse | `wp/WP-0122-tool-calling` | - |
 | [WP-0130](work/P1/WP-0130-prompt-catalog-written-fresh.md) | Prompt catalog, written fresh | in_progress | muse | `wp/WP-0130-prompt-catalog` | - |
+| [WP-0193](work/P1/WP-0193-upgrade-rusqlite.md) | Upgrade rusqlite 0.31 to 0.40 | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
 
 ## Ready to start (all dependencies done)
 
@@ -130,7 +131,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0190](work/P1/WP-0190-release-the-agent-identities-screen.md) | Release the Agent Identities screen and trigger picker ahead of WP-0160 | E1.0 Identity foundation | ✅ done | S | ✓Desktop ✓Team Workspace ✓Online demo | WP-0109 |
 | [WP-0191](work/P1/WP-0191-admin-visible-outbound-refusals.md) | Show outbound-guard refusals to admins with the fix | E1.9 Team Workspace platform | ✅ done | S | ✓Team Workspace | WP-0143 |
 | [WP-0192](work/P1/WP-0192-two-level-outbound-allow-list.md) | Two-level outbound allow-list: operator bound, workspace narrows | E1.9 Team Workspace platform | ⚪ proposed | M | ○Team Workspace | WP-0181, WP-0143 |
-| [WP-0193](work/P1/WP-0193-upgrade-rusqlite.md) | Upgrade rusqlite 0.31 to 0.40 | E0.1 Program and engineering readiness | ⚪ proposed | M | ○Desktop ○Team Workspace | - |
+| [WP-0193](work/P1/WP-0193-upgrade-rusqlite.md) | Upgrade rusqlite 0.31 to 0.40 | E0.1 Program and engineering readiness | 🔨 in progress | M | ○Desktop ○Team Workspace | - |
 | [WP-0194](work/P1/WP-0194-upgrade-axum-and-tower-http.md) | Upgrade axum 0.8 and tower-http 0.6 | E0.1 Program and engineering readiness | ⚪ proposed | M | ○Desktop ○Team Workspace | - |
 | [WP-0195](work/P1/WP-0195-upgrade-react-19.md) | Upgrade the desktop frontend to React 19 | E0.1 Program and engineering readiness | ⚪ proposed | M | ○Desktop ○Team Workspace | - |
 | [WP-0196](work/P1/WP-0196-upgrade-vite-and-vitest.md) | Upgrade vite 8, vitest 5 and plugin-react 6 | E0.1 Program and engineering readiness | ⚪ proposed | S | ○Desktop ○Team Workspace | - |
