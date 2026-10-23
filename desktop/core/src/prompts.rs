@@ -48,6 +48,10 @@ pub const FILES: &[(&str, &str)] = &[
         include_str!("../prompts/loop/memory-section.v1.md"),
     ),
     (
+        "loop/output-repair.v1.md",
+        include_str!("../prompts/loop/output-repair.v1.md"),
+    ),
+    (
         "loop/session-memory-section.v1.md",
         include_str!("../prompts/loop/session-memory-section.v1.md"),
     ),

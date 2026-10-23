@@ -258,6 +258,9 @@ fn no_service_keeps_a_system_prompt_of_its_own() {
         "Respond with only",
         "Answer with only",
         "Output nothing else",
+        "Your last response",
+        "Respond again",
+        "Send your answer",
     ];
     let mut sources = Vec::new();
     files_under(&core_dir().join("src/services"), "rs", &mut sources);

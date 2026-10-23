@@ -458,3 +458,85 @@ async fn ac2_repeated_malformed_calls_stop_the_run() {
     );
     assert!(company_service::list(&conn, &ws).unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn an_answer_that_misses_the_output_schema_gets_the_catalog_repair_prompt() {
+    // Covers: REQ-LOOP-016 (WP-0130): the structured-output repair message
+    // comes from the prompt catalog (`loop/output-repair`).
+    use lanesra_core::models::ai_agent::{AiAgentInput, AiAgentVersionInput};
+    use lanesra_core::models::ai_memory::AgentMemoryContext;
+    use lanesra_core::services::{agent_version_service, ai_agent_service};
+    let (conn, ws, admin) = setup_workspace();
+    let (port, seen) = spawn_recording_stub(vec![
+        json!({"content": [{"type": "text", "text": "Here is the answer: ok"}]}).to_string(),
+        json!({"content": [{"type": "text", "text": "{\"answer\": \"ok\"}"}]}).to_string(),
+    ]);
+    use_anthropic(&conn, &ws, &admin, port);
+    let agent = ai_agent_service::create(
+        &conn,
+        &ws,
+        &AiAgentInput {
+            name: "Summarizer".into(),
+            description: None,
+            icon: "🤖".into(),
+            system_prompt: "Summarise the request.".into(),
+            action_names: vec![],
+            delegate_agent_ids: vec![],
+            skill_ids: vec![],
+            object_type_scopes: vec![],
+            action_type_ids: vec![],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    let draft = agent_version_service::create_draft(
+        &conn,
+        &agent.id,
+        &ws,
+        &AiAgentVersionInput {
+            name: "Summarizer".into(),
+            description: None,
+            icon: "🤖".into(),
+            system_prompt: "Summarise the request.".into(),
+            action_names: vec![],
+            delegate_agent_ids: vec![],
+            skill_ids: vec![],
+            model_routing: None,
+            output_schema: Some(json!({"type": "object", "required": ["answer"], "properties": {"answer": {"type": "string"}}})),
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    for status in ["test", "published"] {
+        agent_version_service::transition_status(
+            &conn,
+            &agent.id,
+            &ws,
+            &draft.id,
+            status,
+            Some(&admin),
+        )
+        .unwrap();
+    }
+    let agent = ai_agent_service::get(&conn, &agent.id).unwrap().unwrap();
+    let outcome = chat_service::run_agent_once_with_text(
+        &conn,
+        &ws,
+        &[91u8; 32],
+        Some(&admin),
+        &agent,
+        "Summarise",
+        &AgentMemoryContext {
+            session_key: None,
+            run_id: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(outcome.final_text, "{\"answer\": \"ok\"}");
+    let second = seen.lock().unwrap()[1].clone();
+    assert!(
+        second.contains("Send your answer again as valid JSON"),
+        "{second}"
+    );
+}

@@ -1933,10 +1933,11 @@ pub async fn run_agent_once(
                         let assistant_msg = synthetic_message("assistant", Some(&text), None, None);
                         history.push(assistant_msg.clone());
                         produced.push(assistant_msg);
-                        let repair_prompt = format!(
-                            "Your last response didn't conform to the required output schema:\n{}\n\nRespond again with ONLY valid JSON matching the schema, no other text.",
-                            violations.join("\n")
-                        );
+                        let (repair_prompt, _) = crate::prompts::render_active(
+                            "loop/output-repair",
+                            &[("violations", &violations.join("\n"))],
+                        )
+                        .map_err(AppError::Validation)?;
                         let repair_msg =
                             synthetic_message("user", Some(&repair_prompt), None, None);
                         history.push(repair_msg.clone());
