@@ -879,15 +879,15 @@ fn tools_for_mode(mode: &str) -> AppResult<Vec<ToolSpec>> {
     }
 }
 
-fn system_prompt(mode: &str) -> String {
+fn system_prompt(mode: &str) -> AppResult<String> {
     let id = match mode {
         "records" => "assistant/records",
         "admin" => "assistant/admin",
-        _ => return String::new(),
+        other => return Err(AppError::Validation(format!("Unknown chat mode '{other}'"))),
     };
-    crate::prompts::get_active(id)
-        .map(|p| crate::prompts::body_only(p.body).to_string())
-        .unwrap_or_default()
+    crate::prompts::render_active(id, &[])
+        .map(|(text, _)| text)
+        .map_err(AppError::Validation)
 }
 
 /// Redacts a `create_connection` tool call's `secret_value` argument out
@@ -990,7 +990,7 @@ pub async fn send_message(
 
     for _round in 0..MAX_ROUNDS {
         let history = chat_repo::list_messages(conn, &conversation.id)?;
-        let sys_prompt = system_prompt(mode);
+        let sys_prompt = system_prompt(mode)?;
         let (outcome, usage) = ai_service::complete_with_tools(
             conn,
             workspace_id,
@@ -1442,12 +1442,9 @@ fn agent_tools(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<Vec<To
 /// structured-retrieval discipline this issue's own scope text asks for;
 /// Render a catalog section template with a single variable (WP-0130, ADR-0011).
 fn render_catalog_section(id: &str, var_name: &str, var_value: &str) -> AppResult<String> {
-    let prompt = crate::prompts::get_active(id)
-        .ok_or_else(|| AppError::Validation(format!("prompt catalog: {id} not found")))?;
-    let body = crate::prompts::body_only(prompt.body);
-    let mut vars = std::collections::HashMap::new();
-    vars.insert(var_name, var_value);
-    crate::prompts::render(body, &vars).map_err(AppError::Validation)
+    crate::prompts::render_active(id, &[(var_name, var_value)])
+        .map(|(text, _)| text)
+        .map_err(AppError::Validation)
 }
 
 /// unlike Session Memory, they aren't naturally singular/small per turn.

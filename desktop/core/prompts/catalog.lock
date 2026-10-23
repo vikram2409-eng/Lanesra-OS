@@ -1,0 +1,14 @@
+# Released prompt bodies (ADR-0011 §4). A body listed here is never edited in place:
+# change a prompt by adding the next version file. tests/prompt_catalog.rs checks every
+# line and prints the line to add for a new released version.
+# id version sha256(template after the front matter)
+assistant/admin 1 cecc1f28c2184e381992f608a964cf3592f15aaae090b5bb762c03d49c658c23
+assistant/records 1 bf0f52ddb29ea3fa84e6d2b541341439494826bd1420402c29fb50ab5986559d
+assistant/report-directive 1 8dade56fd31f10997ea8bc26201d5ce65bcedb14cec6e748ccb5917ba2fba8cb
+eval/judge 1 1671eb47d8857113059b631369bcb3b7f7621e1f989aaf41a1fe890404c4fbc1
+loop/guardrails-section 1 cb23f430bf973d58453c8a9565eb265fbd7af08e56f628b9a2659fbf789c92e1
+loop/memory-section 1 e6f757677963fe901be41fa16f51c976f80ddcbec63e267694f6eee1906b546e
+loop/session-memory-section 1 0c7fb276f3a6dd621bbb2f124f37a0ae45089addb22bd3833876c78c60cf3a91
+loop/skills-section 1 ee431ce124ad0045ff29aab18a763f7218fe5e0a25a9ba72960a3fdb7b465886
+voice/planner 1 3c446b9f7c6495349e3c1548be34dacef69d8bb2a928f32c28a8344557f62257
+voice/planner 2 0c1c71da033e708d6409837903099e939810e1137cd17856946e56cfc0bcde32

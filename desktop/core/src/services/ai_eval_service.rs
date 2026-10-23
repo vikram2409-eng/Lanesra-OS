@@ -130,14 +130,16 @@ pub fn list_runs(conn: &Connection, suite_id: &str, limit: i64) -> AppResult<Vec
 /// Render the judge system prompt from the catalog (WP-0130, ADR-0011).
 /// Returns the full prompt with task/criteria/response substituted.
 pub(crate) fn judge_system_prompt(task: &str, criteria: &str, response: &str) -> AppResult<String> {
-    let prompt = prompts::get_active("eval/judge")
-        .ok_or_else(|| AppError::Validation("prompt catalog: eval/judge not found".into()))?;
-    let body = prompts::body_only(prompt.body);
-    let mut vars = std::collections::HashMap::new();
-    vars.insert("task", task);
-    vars.insert("criteria", criteria);
-    vars.insert("response", response);
-    prompts::render(body, &vars).map_err(AppError::Validation)
+    prompts::render_active(
+        "eval/judge",
+        &[
+            ("task", task),
+            ("criteria", criteria),
+            ("response", response),
+        ],
+    )
+    .map(|(text, _)| text)
+    .map_err(AppError::Validation)
 }
 
 /// `pub(crate)`: also the judge call Workflow Studio 2.0's `evaluate_result`

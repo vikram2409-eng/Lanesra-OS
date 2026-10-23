@@ -81,24 +81,11 @@ fn describe_catalog(conn: &Connection, workspace_id: &str) -> AppResult<String> 
     Ok(lines.join("\n"))
 }
 
-fn system_prompt(catalog: &str) -> String {
-    format!(
-        "You translate a plain-English reporting question into a strict JSON directive for an \
-         existing, deliberately simple report engine. The engine can only do ONE thing: group \
-         every record of ONE object type by ONE field (its built-in group-by field, or one active \
-         custom field), and either count the records in each group or sum one numeric custom field. \
-         It has no filters, no date ranges, no multiple group-bys, and no joins across objects.\n\n\
-         Objects this workspace has, and their valid group-by options:\n{catalog}\n\n\
-         Respond with ONLY a JSON object - no markdown fences, no other text - matching exactly:\n\
-         {{\"entity_type\": \"<one of the object keys above, exactly as written>\", \
-         \"group_by_source\": \"builtin\" or \"custom\", \
-         \"group_by_field\": \"<the built-in field name, or a listed custom field's key>\", \
-         \"aggregate\": \"count\" or \"sum\", \
-         \"sum_field_key\": \"<a listed numeric custom field's key, or null if aggregate is count>\"}}\n\n\
-         If the question cannot be answered with this shape - it needs a filter, a date range, \
-         multiple group-bys, a field not listed above, or anything else this engine can't do - \
-         respond with ONLY: {{\"error\": \"<a short, plain-English reason>\"}}"
-    )
+/// The report-directive prompt (ADR-0011 catalog, `assistant/report-directive`).
+fn system_prompt(catalog: &str) -> AppResult<String> {
+    crate::prompts::render_active("assistant/report-directive", &[("objects", catalog)])
+        .map(|(text, _)| text)
+        .map_err(AppError::Validation)
 }
 
 fn strip_code_fence(s: &str) -> &str {
@@ -163,7 +150,7 @@ pub async fn ask_report(
         )));
     }
     let catalog = describe_catalog(conn, workspace_id)?;
-    let prompt = system_prompt(&catalog);
+    let prompt = system_prompt(&catalog)?;
     let raw =
         super::ai_service::complete(conn, workspace_id, master_key, &prompt, question).await?;
     let report = parse_directive(&raw, question)?;

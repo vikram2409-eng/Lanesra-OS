@@ -1,0 +1,15 @@
+{
+  "prompt": "loop/session-memory-section",
+  "note": "Checked by tests/prompt_catalog.rs against the active version: each case renders with its variables and the result must contain, start with, or leave out the listed text.",
+  "cases": [
+    {
+      "name": "wraps this conversation's remembered items",
+      "variables": {
+        "items": "- The user works in EMEA sales\n"
+      },
+      "expect_contains": [
+        "The user works in EMEA sales"
+      ]
+    }
+  ]
+}
