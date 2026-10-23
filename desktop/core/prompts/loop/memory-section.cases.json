@@ -1,0 +1,16 @@
+{
+  "prompt": "loop/memory-section",
+  "note": "Checked by tests/prompt_catalog.rs against the active version: each case renders with its variables and the result must contain, start with, or leave out the listed text.",
+  "cases": [
+    {
+      "name": "wraps the agent's memory and names update_memory",
+      "variables": {
+        "memory_md": "Prefers weekly summaries."
+      },
+      "expect_contains": [
+        "Prefers weekly summaries.",
+        "update_memory"
+      ]
+    }
+  ]
+}

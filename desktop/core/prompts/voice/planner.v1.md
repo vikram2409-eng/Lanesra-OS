@@ -1,7 +1,7 @@
 ---
 id: voice/planner
 version: 1
-status: active
+status: retired
 work_package: WP-0130
 variables:
   catalog_summary: { type: text, required: true }

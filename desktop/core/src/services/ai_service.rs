@@ -589,6 +589,156 @@ pub struct RequestedToolCall {
     pub id: String,
     pub name: String,
     pub arguments: serde_json::Value,
+    /// Why this call's arguments cannot be used (WP-0122). Such a call is
+    /// never run: the model is told what was wrong and may try again.
+    pub malformed: Option<String>,
+}
+
+/// How a provider asks for tools (WP-0122). Every adapter here uses the
+/// provider's native tool calling. `StrictJson` is the fallback for a model
+/// without it: tools are described by the `loop/json-tool-format` prompt and
+/// the reply is read by `parse_strict_json_reply`. Which models need it comes
+/// from the model catalog (WP-0146); until then no provider is mapped to it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolCallFormat {
+    Native,
+    StrictJson,
+}
+
+/// The capability matrix: (provider, tool-call format, parallel calls).
+pub const TOOL_CALL_CAPABILITIES: &[(&str, ToolCallFormat, bool)] = &[
+    ("anthropic", ToolCallFormat::Native, true),
+    ("openai_compatible", ToolCallFormat::Native, true),
+    ("google_gemini", ToolCallFormat::Native, true),
+];
+
+/// The tool-call format for `provider`; an unknown provider gets the strict
+/// JSON format rather than free-text parsing.
+pub fn tool_call_format(provider: &str) -> ToolCallFormat {
+    TOOL_CALL_CAPABILITIES
+        .iter()
+        .find(|(p, _, _)| *p == provider)
+        .map_or(ToolCallFormat::StrictJson, |(_, f, _)| *f)
+}
+
+/// Checks a requested call before anything runs (WP-0122 AC-2): its
+/// arguments must have parsed, be a JSON object, and hold every required
+/// parameter with the declared JSON type. `Err` is the message the model
+/// gets back instead of a result. A call to a tool not in `tools` passes
+/// here; the loop refuses it as an unknown tool.
+pub fn check_tool_call(call: &RequestedToolCall, tools: &[ToolSpec]) -> Result<(), String> {
+    if let Some(problem) = &call.malformed {
+        return Err(problem.clone());
+    }
+    let Some(spec) = tools.iter().find(|t| t.name == call.name) else {
+        return Ok(());
+    };
+    let Some(args) = call.arguments.as_object() else {
+        return Err(format!(
+            "The arguments for '{}' must be a JSON object",
+            call.name
+        ));
+    };
+    let schema = &spec.input_schema;
+    for name in schema["required"].as_array().into_iter().flatten() {
+        let Some(name) = name.as_str() else { continue };
+        if !args.contains_key(name) {
+            return Err(format!(
+                "'{}' needs the parameter '{name}', which is missing",
+                call.name
+            ));
+        }
+    }
+    if let Some(properties) = schema["properties"].as_object() {
+        for (name, value) in args {
+            let Some(expected) = properties.get(name).and_then(|p| p["type"].as_str()) else {
+                continue;
+            };
+            let ok = match expected {
+                "string" => value.is_string(),
+                "number" => value.is_number(),
+                "integer" => value.is_i64() || value.is_u64(),
+                "boolean" => value.is_boolean(),
+                "array" => value.is_array(),
+                "object" => value.is_object(),
+                _ => true,
+            };
+            if !ok && !value.is_null() {
+                return Err(format!(
+                    "'{}': parameter '{name}' must be {expected}",
+                    call.name
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The system-prompt section that describes `tools` for the strict JSON
+/// format (catalog prompt `loop/json-tool-format`).
+pub fn json_tool_format_section(tools: &[ToolSpec]) -> AppResult<String> {
+    let listed: Vec<serde_json::Value> = tools
+        .iter()
+        .map(|t| {
+            serde_json::json!({
+                "name": t.name,
+                "description": t.description,
+                "parameters": t.input_schema,
+            })
+        })
+        .collect();
+    let listed = serde_json::to_string_pretty(&listed)
+        .map_err(|e| AppError::Validation(format!("could not describe the tools: {e}")))?;
+    crate::prompts::render_active("loop/json-tool-format", &[("tools", &listed)])
+        .map(|(text, _)| text)
+        .map_err(AppError::Validation)
+}
+
+/// Reads a reply in the strict JSON tool format (the `loop/json-tool-format`
+/// prompt): exactly one JSON object and nothing else, either
+/// `{"answer": "..."}` or `{"tool_calls": [{"name": "...", "arguments": {...}}]}`.
+/// Nothing is repaired: no fences are stripped and no partial JSON is
+/// accepted, so a malformed reply is an error the model is told about.
+pub fn parse_strict_json_reply(text: &str) -> Result<CompletionOutcome, String> {
+    let value: serde_json::Value = serde_json::from_str(text.trim())
+        .map_err(|e| format!("The reply must be one JSON object and nothing else: {e}"))?;
+    let object = value
+        .as_object()
+        .ok_or("The reply must be one JSON object")?;
+    if let Some(answer) = object.get("answer") {
+        return answer
+            .as_str()
+            .map(|a| CompletionOutcome::Text(a.to_string()))
+            .ok_or_else(|| "\"answer\" must be a string".to_string());
+    }
+    let calls = object
+        .get("tool_calls")
+        .and_then(|c| c.as_array())
+        .filter(|c| !c.is_empty())
+        .ok_or("The reply needs either \"answer\" or a non-empty \"tool_calls\" list")?;
+    let mut requested = Vec::new();
+    for (i, call) in calls.iter().enumerate() {
+        let name = call["name"]
+            .as_str()
+            .filter(|n| !n.is_empty())
+            .ok_or_else(|| format!("tool_calls[{i}] needs a \"name\""))?;
+        let arguments = call
+            .get("arguments")
+            .cloned()
+            .unwrap_or(serde_json::json!({}));
+        let malformed = (!arguments.is_object())
+            .then(|| format!("The arguments for '{name}' must be a JSON object"));
+        requested.push(RequestedToolCall {
+            id: format!("call_{}", i + 1),
+            name: name.to_string(),
+            arguments,
+            malformed,
+        });
+    }
+    Ok(CompletionOutcome::ToolCalls {
+        raw_assistant: value,
+        calls: requested,
+    })
 }
 
 #[derive(Debug, Clone)]
@@ -797,10 +947,15 @@ async fn complete_anthropic_with_tools(
         .iter()
         .filter(|b| b.get("type").and_then(|t| t.as_str()) == Some("tool_use"))
         .filter_map(|b| {
+            let arguments = b.get("input").cloned().unwrap_or(serde_json::json!({}));
+            let name = b.get("name")?.as_str()?.to_string();
+            let malformed = (!arguments.is_object())
+                .then(|| format!("The arguments for '{name}' must be a JSON object"));
             Some(RequestedToolCall {
                 id: b.get("id")?.as_str()?.to_string(),
-                name: b.get("name")?.as_str()?.to_string(),
-                arguments: b.get("input").cloned().unwrap_or(serde_json::json!({})),
+                name,
+                arguments,
+                malformed,
             })
         })
         .collect();
@@ -935,25 +1090,21 @@ async fn complete_openai_with_tools(
                 retry_after_ms: None,
                 http_status: None,
             })?;
-            let arguments_str = function
-                .get("arguments")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| AppError::Classified {
-                    class: crate::domain::ErrorClass::Validation,
-                    code: "validation.arguments",
-                    message: "Tool call 'arguments' must be a JSON string".to_string(),
-                    retry_after_ms: None,
-                    http_status: None,
-                })?;
-            // AC-2: Malformed JSON returns an error, never executes with default args.
-            let arguments: serde_json::Value =
-                serde_json::from_str(arguments_str).map_err(|e| AppError::Classified {
-                    class: crate::domain::ErrorClass::Validation,
-                    code: "validation.arguments",
-                    message: format!("Malformed tool call arguments JSON: {e}"),
-                    retry_after_ms: None,
-                    http_status: None,
-                })?;
+            // WP-0122 AC-2: arguments that are not a JSON object string never
+            // run the tool; the model is told what was wrong instead.
+            let (arguments, malformed) = match function.get("arguments") {
+                Some(serde_json::Value::String(raw)) => match serde_json::from_str(raw) {
+                    Ok(value) => (value, None),
+                    Err(e) => (
+                        serde_json::Value::Null,
+                        Some(format!("The arguments were not valid JSON: {e}")),
+                    ),
+                },
+                _ => (
+                    serde_json::Value::Null,
+                    Some("The arguments must be a JSON string holding an object".to_string()),
+                ),
+            };
             let id = c
                 .get("id")
                 .and_then(|v| v.as_str())
@@ -974,10 +1125,15 @@ async fn complete_openai_with_tools(
                     retry_after_ms: None,
                     http_status: None,
                 })?;
+            let malformed = malformed.or_else(|| {
+                (!arguments.is_object())
+                    .then(|| format!("The arguments for '{name}' must be a JSON object"))
+            });
             calls.push(RequestedToolCall {
                 id: id.to_string(),
                 name: name.to_string(),
                 arguments,
+                malformed,
             });
         }
         if !calls.is_empty() {
@@ -1137,10 +1293,14 @@ async fn complete_gemini_with_tools(
         .filter_map(|p| p.get("functionCall"))
         .filter_map(|fc| {
             let name = fc.get("name")?.as_str()?.to_string();
+            let arguments = fc.get("args").cloned().unwrap_or(serde_json::json!({}));
+            let malformed = (!arguments.is_object())
+                .then(|| format!("The arguments for '{name}' must be a JSON object"));
             Some(RequestedToolCall {
                 id: name.clone(),
                 name,
-                arguments: fc.get("args").cloned().unwrap_or(serde_json::json!({})),
+                arguments,
+                malformed,
             })
         })
         .collect();

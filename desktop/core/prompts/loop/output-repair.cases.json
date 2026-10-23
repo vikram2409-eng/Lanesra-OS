@@ -1,0 +1,19 @@
+{
+  "prompt": "loop/output-repair",
+  "note": "Checked by tests/prompt_catalog.rs against the active version: each case renders with its variables and the result must contain, start with, or leave out the listed text.",
+  "cases": [
+    {
+      "name": "asks for valid JSON first and lists what was wrong",
+      "variables": {
+        "violations": "- missing required field 'total'"
+      },
+      "expect_starts_with": "Send your answer again as valid JSON",
+      "expect_contains": [
+        "missing required field 'total'"
+      ],
+      "expect_not_contains": [
+        "ONLY"
+      ]
+    }
+  ]
+}

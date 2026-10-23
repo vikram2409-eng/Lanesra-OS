@@ -29,18 +29,12 @@ use crate::services::ai_gateway_service::resolve_tier;
 use crate::services::ai_service::{self, CompletionOutcome};
 use crate::services::voice_planner_service::{self, PlanOutcome};
 
-fn system_prompt(catalog_summary: &str) -> String {
-    // WP-0130: render from the prompt catalog (ADR-0011)
-    let prompt = crate::prompts::get_active("voice/planner");
-    match prompt {
-        Some(p) => {
-            let body = crate::prompts::body_only(p.body);
-            let mut vars = std::collections::HashMap::new();
-            vars.insert("catalog_summary", catalog_summary);
-            crate::prompts::render(body, &vars).unwrap_or_default()
-        }
-        None => String::new(),
-    }
+fn system_prompt(catalog_summary: &str) -> AppResult<String> {
+    // WP-0130: render from the prompt catalog (ADR-0011). A missing prompt
+    // is an error, never an empty system prompt.
+    crate::prompts::render_active("voice/planner", &[("catalog_summary", catalog_summary)])
+        .map(|(text, _)| text)
+        .map_err(crate::domain::AppError::Validation)
 }
 
 enum LlmOutcome {
@@ -104,7 +98,7 @@ pub async fn try_plan(
     };
 
     let catalog = voice_planner_service::full_catalog(conn, workspace_id)?;
-    let prompt = system_prompt(&voice_planner_service::catalog_summary(&catalog));
+    let prompt = system_prompt(&voice_planner_service::catalog_summary(&catalog))?;
     let history = vec![ChatMessage {
         id: String::new(),
         conversation_id: String::new(),

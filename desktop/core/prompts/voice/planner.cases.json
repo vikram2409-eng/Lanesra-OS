@@ -1,0 +1,20 @@
+{
+  "prompt": "voice/planner",
+  "note": "Checked by tests/prompt_catalog.rs against the active version: each case renders with its variables and the result must contain, start with, or leave out the listed text.",
+  "cases": [
+    {
+      "name": "offers exactly the two answer shapes without shouting",
+      "variables": {
+        "catalog_summary": "Opportunity: Prospecting, Won, Lost"
+      },
+      "expect_contains": [
+        "REWRITE:",
+        "CLARIFY:",
+        "Opportunity: Prospecting, Won, Lost"
+      ],
+      "expect_not_contains": [
+        "EXACTLY"
+      ]
+    }
+  ]
+}

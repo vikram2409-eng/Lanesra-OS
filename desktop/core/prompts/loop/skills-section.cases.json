@@ -1,0 +1,16 @@
+{
+  "prompt": "loop/skills-section",
+  "note": "Checked by tests/prompt_catalog.rs against the active version: each case renders with its variables and the result must contain, start with, or leave out the listed text.",
+  "cases": [
+    {
+      "name": "lists skills and names use_skill",
+      "variables": {
+        "skills": "- Company research brief: Summarise a company before a call\n"
+      },
+      "expect_contains": [
+        "Company research brief",
+        "use_skill"
+      ]
+    }
+  ]
+}

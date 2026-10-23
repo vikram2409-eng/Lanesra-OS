@@ -1,6 +1,6 @@
 [package]
 name = "lanesra-os"
-version = "0.15.0"
+version = "0.16.0"
 description = "Lanesra OS Desktop - local-first business management application"
 license = "MIT"
 edition = "2021"
@@ -15,7 +15,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-rusqlite = { version = "0.31", features = ["bundled", "chrono", "uuid"] }
+rusqlite = { version = "0.40", features = ["bundled", "chrono", "uuid"] }
 lanesra-core = { path = "../core" }
 serde_json = "1"
 tokio = { version = "1", features = ["rt"] }

@@ -1,0 +1,20 @@
+{
+  "prompt": "eval/judge",
+  "note": "Checked by tests/prompt_catalog.rs against the active version: each case renders with its variables and the result must contain, start with, or leave out the listed text.",
+  "cases": [
+    {
+      "name": "states the verdict format first and includes all three inputs",
+      "variables": {
+        "task": "Summarise the account",
+        "criteria": "Mentions the renewal date",
+        "response": "The renewal is on 1 March."
+      },
+      "expect_starts_with": "First line: PASS or FAIL.",
+      "expect_contains": [
+        "Summarise the account",
+        "Mentions the renewal date",
+        "The renewal is on 1 March."
+      ]
+    }
+  ]
+}

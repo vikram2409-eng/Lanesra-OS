@@ -1,0 +1,30 @@
+{
+  "prompt": "assistant/report-directive",
+  "note": "Checked by tests/prompt_catalog.rs against the active version: each case renders with its variables and the result must contain, start with, or leave out the listed text.",
+  "cases": [
+    {
+      "name": "lists the workspace objects and both answer shapes",
+      "variables": {
+        "objects": "- \"companies\" (Company): built-in group-by field is \"status\"."
+      },
+      "expect_contains": [
+        "\"companies\" (Company)",
+        "\"entity_type\"",
+        "{\"error\":",
+        "Answer with only one JSON object"
+      ]
+    },
+    {
+      "name": "carries the object list through unchanged",
+      "variables": {
+        "objects": "- \"tickets\" (Ticket): built-in group-by field is \"priority\"."
+      },
+      "expect_contains": [
+        "\"tickets\" (Ticket)"
+      ],
+      "expect_not_contains": [
+        "{{"
+      ]
+    }
+  ]
+}

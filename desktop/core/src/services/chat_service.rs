@@ -63,6 +63,28 @@ use crate::services::api_object_service;
 use crate::services::policy_engine_service;
 
 const MAX_ROUNDS: u8 = 8;
+/// Malformed tool calls one run may make before it stops (WP-0122): each
+/// one is answered with what was wrong, never run, and counts toward this.
+pub const MAX_MALFORMED_TOOL_CALLS: u32 = 3;
+
+/// The tool result a malformed call gets instead of running.
+fn malformed_tool_result(problem: &str) -> String {
+    format!(
+        "Error: validation.arguments: {problem}. The tool was not run. Call it again with a JSON object that matches its parameters."
+    )
+}
+
+fn too_many_malformed_calls() -> AppError {
+    AppError::Classified {
+        class: crate::domain::ErrorClass::Validation,
+        code: "validation.arguments",
+        message: format!(
+            "The model sent {MAX_MALFORMED_TOOL_CALLS} malformed tool calls, so the run stopped"
+        ),
+        retry_after_ms: None,
+        http_status: None,
+    }
+}
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
@@ -879,15 +901,15 @@ fn tools_for_mode(mode: &str) -> AppResult<Vec<ToolSpec>> {
     }
 }
 
-fn system_prompt(mode: &str) -> String {
+fn system_prompt(mode: &str) -> AppResult<String> {
     let id = match mode {
         "records" => "assistant/records",
         "admin" => "assistant/admin",
-        _ => return String::new(),
+        other => return Err(AppError::Validation(format!("Unknown chat mode '{other}'"))),
     };
-    crate::prompts::get_active(id)
-        .map(|p| crate::prompts::body_only(p.body).to_string())
-        .unwrap_or_default()
+    crate::prompts::render_active(id, &[])
+        .map(|(text, _)| text)
+        .map_err(AppError::Validation)
 }
 
 /// Redacts a `create_connection` tool call's `secret_value` argument out
@@ -988,9 +1010,10 @@ pub async fn send_message(
         None,
     )?);
 
+    let mut malformed_calls = 0u32;
     for _round in 0..MAX_ROUNDS {
         let history = chat_repo::list_messages(conn, &conversation.id)?;
-        let sys_prompt = system_prompt(mode);
+        let sys_prompt = system_prompt(mode)?;
         let (outcome, usage) = ai_service::complete_with_tools(
             conn,
             workspace_id,
@@ -1050,6 +1073,21 @@ pub async fn send_message(
                     None,
                 )?);
                 for call in calls {
+                    if let Err(problem) = ai_service::check_tool_call(&call, &tools) {
+                        malformed_calls += 1;
+                        appended.push(chat_repo::append_message(
+                            conn,
+                            &conversation.id,
+                            "tool",
+                            Some(&malformed_tool_result(&problem)),
+                            None,
+                            Some(&call.id),
+                        )?);
+                        if malformed_calls >= MAX_MALFORMED_TOOL_CALLS {
+                            return Err(too_many_malformed_calls());
+                        }
+                        continue;
+                    }
                     let result =
                         execute_tool(conn, workspace_id, master_key, Some(user_id), mode, &call)
                             .await;
@@ -1442,12 +1480,9 @@ fn agent_tools(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<Vec<To
 /// structured-retrieval discipline this issue's own scope text asks for;
 /// Render a catalog section template with a single variable (WP-0130, ADR-0011).
 fn render_catalog_section(id: &str, var_name: &str, var_value: &str) -> AppResult<String> {
-    let prompt = crate::prompts::get_active(id)
-        .ok_or_else(|| AppError::Validation(format!("prompt catalog: {id} not found")))?;
-    let body = crate::prompts::body_only(prompt.body);
-    let mut vars = std::collections::HashMap::new();
-    vars.insert(var_name, var_value);
-    crate::prompts::render(body, &vars).map_err(AppError::Validation)
+    crate::prompts::render_active(id, &[(var_name, var_value)])
+        .map(|(text, _)| text)
+        .map_err(AppError::Validation)
 }
 
 /// unlike Session Memory, they aren't naturally singular/small per turn.
@@ -1853,6 +1888,7 @@ pub async fn run_agent_once(
     // would-be 3rd repeat, not after, so a runaway destructive call never
     // actually runs a third time.
     let mut repeat_streak: u8 = 0;
+    let mut malformed_calls = 0u32;
     let mut last_call: Option<(String, Value)> = None;
     // AI Agent Platform v2, Phase 6a: counts `AppError::PolicyBlocked`
     // outcomes only, not every tool error - a tool that genuinely fails
@@ -1897,10 +1933,11 @@ pub async fn run_agent_once(
                         let assistant_msg = synthetic_message("assistant", Some(&text), None, None);
                         history.push(assistant_msg.clone());
                         produced.push(assistant_msg);
-                        let repair_prompt = format!(
-                            "Your last response didn't conform to the required output schema:\n{}\n\nRespond again with ONLY valid JSON matching the schema, no other text.",
-                            violations.join("\n")
-                        );
+                        let (repair_prompt, _) = crate::prompts::render_active(
+                            "loop/output-repair",
+                            &[("violations", &violations.join("\n"))],
+                        )
+                        .map_err(AppError::Validation)?;
                         let repair_msg =
                             synthetic_message("user", Some(&repair_prompt), None, None);
                         history.push(repair_msg.clone());
@@ -1948,6 +1985,21 @@ pub async fn run_agent_once(
                 history.push(assistant_msg.clone());
                 produced.push(assistant_msg);
                 for call in calls {
+                    if let Err(problem) = ai_service::check_tool_call(&call, &tools) {
+                        malformed_calls += 1;
+                        let tool_msg = synthetic_message(
+                            "tool",
+                            Some(&malformed_tool_result(&problem)),
+                            None,
+                            Some(&call.id),
+                        );
+                        history.push(tool_msg.clone());
+                        produced.push(tool_msg);
+                        if malformed_calls >= MAX_MALFORMED_TOOL_CALLS {
+                            return Err(too_many_malformed_calls());
+                        }
+                        continue;
+                    }
                     let result = execute_agent_tool(
                         conn,
                         workspace_id,
