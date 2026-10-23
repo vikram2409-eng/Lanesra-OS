@@ -40,6 +40,10 @@ pub const FILES: &[(&str, &str)] = &[
         include_str!("../prompts/loop/guardrails-section.v1.md"),
     ),
     (
+        "loop/json-tool-format.v1.md",
+        include_str!("../prompts/loop/json-tool-format.v1.md"),
+    ),
+    (
         "loop/memory-section.v1.md",
         include_str!("../prompts/loop/memory-section.v1.md"),
     ),

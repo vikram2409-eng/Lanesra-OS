@@ -1,0 +1,18 @@
+{
+  "prompt": "loop/json-tool-format",
+  "note": "Checked by tests/prompt_catalog.rs against the active version: each case renders with its variables and the result must contain, start with, or leave out the listed text.",
+  "cases": [
+    {
+      "name": "states both reply shapes first and lists the tools",
+      "variables": {
+        "tools": "[{\"name\": \"get_record\", \"description\": \"Fetch one record\", \"parameters\": {\"type\": \"object\", \"required\": [\"id\"]}}]"
+      },
+      "expect_starts_with": "Answer with one JSON object and nothing else",
+      "expect_contains": [
+        "{\"answer\":",
+        "{\"tool_calls\":",
+        "\"get_record\""
+      ]
+    }
+  ]
+}

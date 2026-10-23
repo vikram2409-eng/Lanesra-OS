@@ -30,6 +30,7 @@ fn call(id: &str, name: &str) -> RequestedToolCall {
         id: id.to_string(),
         name: name.to_string(),
         arguments: serde_json::json!({"q": "test"}),
+        malformed: None,
     }
 }
 
