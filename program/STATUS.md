@@ -31,8 +31,8 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 |---|---|---|---|---|---|
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
 | [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | in_review | muse | `wp/WP-0101-identity-adr` | https://github.com/vikram2409-eng/Lanesra-OS/pull/672 |
-| [WP-0122](work/P1/WP-0122-native-function-calling-and-strict-json-tool-format.md) | Native function calling and strict JSON tool format | in_progress | muse | `wp/WP-0122-tool-calling` | - |
-| [WP-0130](work/P1/WP-0130-prompt-catalog-written-fresh.md) | Prompt catalog, written fresh | in_progress | muse | `wp/WP-0130-prompt-catalog` | - |
+| [WP-0122](work/P1/WP-0122-native-function-calling-and-strict-json-tool-format.md) | Native function calling and strict JSON tool format | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
+| [WP-0130](work/P1/WP-0130-prompt-catalog-written-fresh.md) | Prompt catalog, written fresh | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
 | [WP-0193](work/P1/WP-0193-upgrade-rusqlite.md) | Upgrade rusqlite 0.31 to 0.40 | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
 
 ## Ready to start (all dependencies done)

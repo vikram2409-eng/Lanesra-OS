@@ -4,7 +4,7 @@ title: Prompt catalog, written fresh
 phase: 1
 epic: E1.4 Task contracts and guardrails
 status: in_progress
-owner: muse
+owner: claude
 depends_on: [WP-0009]
 requirements: [REQ-LOOP-016]
 estimate: L
@@ -13,9 +13,9 @@ delivered: []
 editions_reason: internal engine work with no user-visible surface of its own; the online demo's simulated runs reflect it through the Playground work packages
 docs: []
 docs_reason: internal prompt assets
-branch: wp/WP-0130-prompt-catalog
+branch: claude/enterprise-build-planning-jxy2kq
 pr: 
-updated: 2026-10-18
+updated: 2026-10-23
 ---
 
 # WP-0130 — Prompt catalog, written fresh
@@ -50,3 +50,4 @@ All system prompts become versioned catalog assets written fresh in calm languag
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+- 2026-10-23 claude: Reassigned from Muse to Claude by the owner (Muse is unavailable for about a week). Muse's branch `wp/WP-0130-prompt-catalog` was last updated on 2026-10-18; Claude will build from it where it is usable and record what was kept.
