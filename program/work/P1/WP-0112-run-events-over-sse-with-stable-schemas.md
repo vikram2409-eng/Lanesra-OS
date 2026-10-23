@@ -39,6 +39,7 @@ Stream run events live to the browser over the existing `/api/v1/events/stream`,
 - [ ] AC-1: Each event validates against its JSON Schema in tests
 - [ ] AC-2: A user without access to a run receives none of its events (tested)
 - [ ] AC-3: Event order per run is monotonic by sequence number
+- [ ] AC-4: Publishing a run's events stays within the trace budget agreed for WP-0015: span writes and event publishing together add < 5 ms per round
 
 ## Test plan
 

@@ -2386,8 +2386,40 @@ export interface AiSettings {
   otlp_endpoint: string | null;
   /** Phase 7g: the embeddings model `embed_texts` calls - `null` means "use a sensible per-provider default", not "vector search is off". */
   embedding_model: string | null;
+  /** WP-0111: whether run traces keep prompt and output bodies. */
+  trace_bodies: TraceBodiesMode;
   updated_at: string;
   updated_by: string | null;
+}
+
+/** WP-0111 (ADR-0008 §4): `off` keeps no bodies, `redacted` keeps them after DLP redaction, `full` keeps them as-is. Agent credentials are removed in every mode. */
+export type TraceBodiesMode = "off" | "redacted" | "full";
+
+export interface TraceBodiesInput {
+  trace_bodies: TraceBodiesMode;
+}
+
+/** WP-0111: one span of a run's trace (ADR-0008 §1). */
+export interface RunSpan {
+  span_id: string;
+  trace_id: string;
+  parent_span_id: string | null;
+  run_kind: "pipeline" | "graph";
+  run_id: string;
+  seq: number;
+  kind: "run" | "step" | "context" | "model_call" | "tool_call" | "policy" | "guardrail" | "approval";
+  name: string;
+  status: "ok" | "error" | "cancelled" | null;
+  started_at: string;
+  ended_at: string | null;
+  duration_ms: number | null;
+  attributes: Record<string, unknown>;
+}
+
+export interface RunSpanBody {
+  span_id: string;
+  part: "input" | "output";
+  body: string;
 }
 
 export interface AiSettingsInput {
@@ -4628,4 +4660,41 @@ export interface AgentCredential {
 export interface IssuedAgentCredential {
   credential: AgentCredential;
   token: string;
+}
+
+/** WP-0140: one agent's binding to one tool, with its caps and live state. */
+export interface AgentToolCap {
+  agent_id: string;
+  tool_name: string;
+  max_calls_per_step: number | null;
+  failures_before_disable: number | null;
+  max_result_chars: number | null;
+  consecutive_failures: number;
+  disabled_at: string | null;
+  updated_at: string;
+}
+
+export interface AgentToolCapInput {
+  tool_name: string;
+  max_calls_per_step: number | null;
+  failures_before_disable: number | null;
+  max_result_chars: number | null;
+}
+
+/** WP-0140: at most `max_calls` per `per_seconds`, for a tool, a connector or the whole workspace (`scope_key` "*"). */
+export interface ToolRateLimit {
+  id: string;
+  workspace_id: string;
+  scope: "tool" | "connector" | "workspace";
+  scope_key: string;
+  max_calls: number;
+  per_seconds: number;
+  created_at: string;
+}
+
+export interface ToolRateLimitInput {
+  scope: "tool" | "connector" | "workspace";
+  scope_key: string;
+  max_calls: number;
+  per_seconds: number;
 }

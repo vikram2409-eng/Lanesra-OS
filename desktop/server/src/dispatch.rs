@@ -3762,6 +3762,112 @@ pub fn dispatch(
         // AI & Agentic Layer, Phase 7f: setting the endpoint is plain
         // sync; `push_ai_agent_run_otlp` (a real outbound call) is
         // genuinely async, so it's its own route in `admin_actions.rs`.
+        // WP-0111: trace bodies setting and the run span tree.
+        "set_ai_trace_bodies" => {
+            let input: lanesra_core::models::run_trace::TraceBodiesInput = arg(args, "input")?;
+            to_value(lanesra_core::services::trace_service::set_trace_bodies(
+                conn,
+                &require_workspace_id(conn)?,
+                &input,
+                actor,
+            )?)
+        }
+        "list_run_spans" => {
+            let run_kind: String = arg(args, "runKind")?;
+            let run_id: String = arg(args, "runId")?;
+            to_value(lanesra_core::services::trace_service::spans_for_run(
+                conn,
+                &require_workspace_id(conn)?,
+                &run_kind,
+                &run_id,
+            )?)
+        }
+        "get_run_span_bodies" => {
+            let span_id: String = arg(args, "spanId")?;
+            to_value(lanesra_core::services::trace_service::span_bodies(
+                conn,
+                &require_workspace_id(conn)?,
+                &span_id,
+                actor,
+            )?)
+        }
+        // WP-0140: tool caps and rate limits.
+        "list_agent_tool_caps" => {
+            let agent_id: String = arg(args, "agentId")?;
+            to_value(
+                lanesra_core::services::tool_limits_service::list_agent_tool_caps(
+                    conn,
+                    &require_workspace_id(conn)?,
+                    &agent_id,
+                )?,
+            )
+        }
+        "set_agent_tool_caps" => {
+            let agent_id: String = arg(args, "agentId")?;
+            let caps: Vec<lanesra_core::models::tool_limits::AgentToolCapInput> =
+                arg(args, "caps")?;
+            to_value(
+                lanesra_core::services::tool_limits_service::set_agent_tool_caps(
+                    conn,
+                    &require_workspace_id(conn)?,
+                    &agent_id,
+                    &caps,
+                    actor,
+                )?,
+            )
+        }
+        "reenable_agent_tool" => {
+            let agent_id: String = arg(args, "agentId")?;
+            let tool_name: String = arg(args, "toolName")?;
+            to_value(
+                lanesra_core::services::tool_limits_service::reenable_agent_tool(
+                    conn,
+                    &require_workspace_id(conn)?,
+                    &agent_id,
+                    &tool_name,
+                    actor,
+                )?,
+            )
+        }
+        "list_tool_rate_limits" => to_value(
+            lanesra_core::services::tool_limits_service::list_rate_limits(
+                conn,
+                &require_workspace_id(conn)?,
+            )?,
+        ),
+        "save_tool_rate_limit" => {
+            let input: lanesra_core::models::tool_limits::ToolRateLimitInput = arg(args, "input")?;
+            to_value(
+                lanesra_core::services::tool_limits_service::save_rate_limit(
+                    conn,
+                    &require_workspace_id(conn)?,
+                    &input,
+                    actor,
+                )?,
+            )
+        }
+        "delete_tool_rate_limit" => {
+            let id: String = arg(args, "id")?;
+            to_value(
+                lanesra_core::services::tool_limits_service::delete_rate_limit(
+                    conn,
+                    &require_workspace_id(conn)?,
+                    &id,
+                    actor,
+                )?,
+            )
+        }
+        "get_stored_tool_result" => {
+            let id: String = arg(args, "id")?;
+            to_value(
+                lanesra_core::services::tool_limits_service::get_stored_result(
+                    conn,
+                    &require_workspace_id(conn)?,
+                    &id,
+                    actor,
+                )?,
+            )
+        }
         "set_ai_otlp_endpoint" => {
             let input: AiObservabilitySettingsInput = arg(args, "input")?;
             to_value(ai_service::set_otlp_endpoint(

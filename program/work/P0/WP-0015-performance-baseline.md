@@ -30,7 +30,7 @@ Later phases add a trace event per round, checkpoints and budgets to every run. 
 ## Acceptance criteria
 
 - [x] AC-1: Baseline numbers recorded and reproducible with one command
-- [ ] AC-2: Budgets agreed and written into WP-0111 and WP-0112 acceptance criteria
+- [x] AC-2: Budgets agreed and written into WP-0111 and WP-0112 acceptance criteria
 
 ## Test plan
 
@@ -45,3 +45,4 @@ Later phases add a trace event per round, checkpoints and budgets to every run. 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 
 - 2026-10-17 muse: Building WP-0015. Created desktop/core/tests/perf_baseline.rs (3 ignored tests using scripted provider, Covers: REQ-PRE-012), .github/workflows/perf-baseline.yml (reports numbers, never fails per owner instruction). Baseline recorded in program/testing/REGRESSION.md. AC-2 (budgets agreed) needs owner. Untested locally — see CI.
+- 2026-10-23 claude: AC-2: the owner agreed the proposed Phase 1 budget on 2026-10-23: trace emission adds < 5 ms per round. Written into WP-0111 AC-2 (span writes) and WP-0112 AC-4 (event publishing shares the same per-round budget). Status left as it is; the owner moves it.

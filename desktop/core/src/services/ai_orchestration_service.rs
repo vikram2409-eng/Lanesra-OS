@@ -18,6 +18,7 @@
 //! even from the owner of the API client that triggered a webhook.
 
 use rusqlite::Connection;
+use serde_json::json;
 
 use crate::domain::ids::new_uuid;
 use crate::domain::{AppError, AppResult, ErrorClass};
@@ -385,7 +386,20 @@ async fn run_step(
         session_key: None,
         run_id: Some(run_id.to_string()),
     };
-    match chat_service::run_agent_once_with_text(
+    // WP-0111: one step span per pipeline step.
+    let step_span = super::trace_service::start(
+        conn,
+        "step",
+        &agent.name,
+        json!({
+            "lanesra.step.kind": "pipeline_step",
+            "lanesra.step.order": step_order,
+            "lanesra.agent.id": agent.id,
+            "lanesra.agent.name": agent.name,
+            "lanesra.agent.version_id": agent.current_version_id,
+        }),
+    );
+    let result = chat_service::run_agent_once_with_text(
         conn,
         workspace_id,
         master_key,
@@ -394,8 +408,13 @@ async fn run_step(
         input_text,
         &memory_context,
     )
-    .await
-    {
+    .await;
+    step_span.end_result(
+        conn,
+        &result,
+        json!({"lanesra.stop_reason": result.as_ref().ok().and_then(|o| o.stop_reason)}),
+    );
+    match result {
         Ok(outcome) => {
             let finished_at = crate::domain::ids::now_iso();
             let tool_calls = outcome.produced.iter().filter(|m| m.role == "tool").count() as i64;
@@ -877,12 +896,26 @@ async fn run_internal(
         source_entity_id,
         trigger_input,
     )?;
+    // WP-0111: the run's trace; every step, model and tool call nests in it.
+    let trace = super::trace_service::begin_run(
+        conn,
+        workspace_id,
+        "pipeline",
+        &run_id,
+        &format!("{target_type}:{target_id}"),
+        json!({
+            "lanesra.run.target_type": target_type,
+            "lanesra.run.target_id": target_id,
+            "lanesra.run.topology": topology,
+            "lanesra.run.triggered_by": triggered_by,
+        }),
+    );
 
     // WP-0107: an admin-scoped step runs only when every principal in the
     // run holds Administrator. Checked after `start_run` so a refused run
     // is recorded as failed, like any other failed run.
     if let Err(e) = require_admin_for_steps(conn, workspace_id, identity, &steps) {
-        return finalize_run(conn, &run_id, Err(e));
+        return finalize_run(conn, &run_id, Err(e), trace);
     }
     // Every step, delegation and tool call of this run acts as `identity`.
     let _run_identity = identity.enter_run();
@@ -929,7 +962,7 @@ async fn run_internal(
             .await
         }
     };
-    finalize_run(conn, &run_id, result)
+    finalize_run(conn, &run_id, result, trace)
 }
 
 /// Refuses the run when any step's agent needs Administrator and the
@@ -957,7 +990,20 @@ fn finalize_run(
     conn: &Connection,
     run_id: &str,
     result: AppResult<RunOutcome>,
+    trace: super::trace_service::RunTrace,
 ) -> AppResult<AiAgentRun> {
+    // WP-0111: a paused run keeps its trace open; resuming continues it.
+    match &result {
+        Ok(RunOutcome::Completed) => {
+            trace.finish(conn, Some(super::trace_service::SpanStatus::Ok), json!({}))
+        }
+        Ok(RunOutcome::Paused { .. }) => trace.finish(conn, None, json!({})),
+        Err(e) => trace.finish(
+            conn,
+            Some(super::trace_service::SpanStatus::Error),
+            serde_json::Value::Object(super::trace_service::error_attributes(e)),
+        ),
+    }
     match result {
         Ok(RunOutcome::Completed) => {
             ai_agent_run_repo::finish_run(conn, run_id, "succeeded", None)?
@@ -1007,6 +1053,15 @@ pub async fn approve_pending_step(
             "This run is not awaiting approval".into(),
         ));
     }
+    // WP-0111: the resumed run continues the trace it paused in.
+    let trace = super::trace_service::begin_run(
+        conn,
+        workspace_id,
+        "pipeline",
+        run_id,
+        &format!("{}:{}", run.target_type, run.target_id),
+        json!({"lanesra.run.resumed_by": actor_user_id}),
+    );
     let pipeline = ai_agent_pipeline_repo::get(conn, &run.target_id)?
         .ok_or_else(|| AppError::NotFound("Pipeline".into()))?;
     let topology = pipeline.topology.clone();
@@ -1070,7 +1125,7 @@ pub async fn approve_pending_step(
             .await
         }
     };
-    finalize_run(conn, run_id, result)
+    finalize_run(conn, run_id, result, trace)
 }
 
 /// Human-in-the-loop (Phase 7e): rejects a paused run outright - `reason`
@@ -1206,7 +1261,15 @@ pub async fn drain_pending_runs(
                     item.source_entity_id.as_deref(),
                     &item.resolved_input_text,
                 )?;
-                finalize_run(conn, &run_id, Err(e))?;
+                let trace = super::trace_service::begin_run(
+                    conn,
+                    workspace_id,
+                    "pipeline",
+                    &run_id,
+                    &format!("{}:{}", item.target_type, item.target_id),
+                    json!({"lanesra.run.triggered_by": item.triggered_by}),
+                );
+                finalize_run(conn, &run_id, Err(e), trace)?;
             }
         }
         ai_agent_pending_run_repo::delete(conn, &item.id)?;

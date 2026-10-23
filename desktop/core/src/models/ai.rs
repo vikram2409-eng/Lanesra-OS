@@ -48,6 +48,9 @@ pub struct AiSettings {
     /// switch, since reindexing simply never runs for a workspace with
     /// no provider key configured at all.
     pub embedding_model: Option<String>,
+    /// WP-0111: whether run traces keep prompt and output bodies - `off`
+    /// (the default), `redacted` or `full` (ADR-0008 §4).
+    pub trace_bodies: String,
     pub updated_at: String,
     pub updated_by: Option<String>,
 }
