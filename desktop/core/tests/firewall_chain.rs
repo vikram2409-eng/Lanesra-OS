@@ -433,7 +433,10 @@ async fn ac1_connector_read_and_write_tools_pass_the_chain_in_order() {
     // Covers: REQ-TOOL-001 (WP-0143 AC-1)
     for (prefix, args) in [
         ("connector_action", json!({"id": "7"})),
-        ("connector_write_action", json!({"name": "widget"})),
+        (
+            "connector_write_action",
+            json!({"body": {"name": "widget"}}),
+        ),
     ] {
         let ws = workspace();
         let (port, hits) = spawn_counting_server(json!({"ok": true, "from": "widgets"}));
