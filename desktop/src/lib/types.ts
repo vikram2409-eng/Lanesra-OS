@@ -2437,6 +2437,12 @@ export interface AiAgentModelRouting {
   max_tokens: number | null;
   daily_token_budget: number | null;
   force_air_gapped_for: string[];
+  /** WP-0121: tool-calling rounds per run (default 8, at most 25). */
+  max_rounds?: number | null;
+  /** WP-0121: tokens one run may use, input and output together; `null` is no cap. */
+  run_token_limit?: number | null;
+  /** WP-0121: seconds one model call may take before it moves to the next tier (default 300). */
+  step_timeout_seconds?: number | null;
 }
 
 export interface AiDailyTokenBudgetInput {

@@ -100,6 +100,10 @@ use crate::services::{
 /// workspace.
 const MAX_STEPS_DEFAULT: i64 = 50;
 
+/// Context key an agent step that stopped at a limit leaves for the end of
+/// the run, which then ends `completed_partial` with that stop reason.
+const PARTIAL_STOP_KEY: &str = "__partial_stop_reason";
+
 enum NodeOutcome {
     Continue(String),
     WaitingApproval(String),
@@ -576,8 +580,18 @@ async fn execute_node(
             {
                 Ok(outcome) => {
                     context.insert(node.node_key.clone(), json!({"output": outcome.final_text}));
+                    // WP-0121: an agent that stopped at a limit gave a
+                    // partial answer; the step and, at the end, the run
+                    // say so.
+                    if let Some(reason) = outcome.stop_reason {
+                        context.insert(PARTIAL_STOP_KEY.to_string(), json!(reason));
+                    }
                     record!(
-                        "completed",
+                        if outcome.is_partial() {
+                            "completed_partial"
+                        } else {
+                            "completed"
+                        },
                         Some(&input_text),
                         Some(&json!({"output": outcome.final_text}).to_string()),
                         None
@@ -1061,6 +1075,9 @@ async fn run_from(
         if node.node_type == "end" {
             let mut context = parse_context(&run.context_json);
             context.remove("__parallel_join_results");
+            let partial = context
+                .remove(PARTIAL_STOP_KEY)
+                .and_then(|v| v.as_str().map(str::to_string));
             checkpoint(
                 conn,
                 run_id,
@@ -1068,7 +1085,22 @@ async fn run_from(
                 None,
                 run.steps_executed + 1,
             )?;
-            run_state::transition(conn, run_id, "running", "completed", Some("end_reached"))?;
+            match partial.as_deref() {
+                Some(reason) => run_state::transition(
+                    conn,
+                    run_id,
+                    "running",
+                    "completed_partial",
+                    Some(reason),
+                )?,
+                None => run_state::transition(
+                    conn,
+                    run_id,
+                    "running",
+                    "completed",
+                    Some("end_reached"),
+                )?,
+            };
             break;
         }
         let mut context = parse_context(&run.context_json);

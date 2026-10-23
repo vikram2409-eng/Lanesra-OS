@@ -95,7 +95,16 @@ async fn without_the_feature_a_forced_scripted_row_has_no_dispatch_path() {
     )
     .unwrap();
 
-    let result = ai_service::complete_with_tools(&conn, &ws, &MASTER_KEY, "sys", &[], &[]).await;
+    let result = ai_service::complete_with_tools(
+        &conn,
+        &ws,
+        &MASTER_KEY,
+        "sys",
+        &[],
+        &[],
+        ai_service::CallOptions::default(),
+    )
+    .await;
     assert!(
         matches!(&result, Err(AppError::Validation(m)) if m.contains("No tool-calling completion implemented for provider 'scripted'")),
         "{:?}",

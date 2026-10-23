@@ -45,7 +45,9 @@ use crate::repositories::{
     integration_secret_repo,
 };
 
-use super::ai_service::{self, CompletionOutcome, TokenUsage, ToolSpec};
+use crate::models::ai::AgentRunLimits;
+
+use super::ai_service::{self, CallOptions, CompletionOutcome, TokenUsage, ToolSpec};
 use super::dlp_service;
 use super::retry::{self, RetryPolicy, TokioClock};
 
@@ -143,6 +145,31 @@ pub(crate) fn resolve_tier(
     }
 }
 
+/// The error for a model call that ran past the agent's time limit. The
+/// call's future is dropped, which cancels the request (WP-0121).
+fn step_timed_out(limit: std::time::Duration) -> AppError {
+    AppError::classified(
+        ErrorClass::Transient,
+        "provider.timeout",
+        format!(
+            "The model did not answer within {} seconds, so the call was cancelled",
+            limit.as_secs()
+        ),
+    )
+}
+
+/// A tier that ran out of time: the gateway's own limit, or the provider's
+/// timeout still failing after its retries.
+fn is_timeout(e: &AppError) -> bool {
+    matches!(
+        e,
+        AppError::Classified {
+            code: "provider.timeout",
+            ..
+        }
+    )
+}
+
 /// The single dispatch entry point for every agent run - see this
 /// module's own doc comment for the full budget/air-gap/failover
 /// sequence. `actor` is the same optional acting-user id
@@ -159,8 +186,17 @@ pub async fn dispatch(
     system_prompt: &str,
     tools: &[ToolSpec],
     history: &[ChatMessage],
+    tools_off: bool,
 ) -> AppResult<GatewayOutcome> {
     let user_id = actor.unwrap_or("");
+    // WP-0121: the agent's temperature and output limit apply to every
+    // tier, and each call is cut off at the agent's time limit.
+    let limits = AgentRunLimits::for_routing(agent.model_routing.as_ref());
+    let opts = CallOptions {
+        temperature: agent.model_routing.as_ref().and_then(|r| r.temperature),
+        max_tokens: agent.model_routing.as_ref().and_then(|r| r.max_tokens),
+        tools_off,
+    };
 
     // System tier: applies to every agent run, routed or not.
     let settings = ai_settings_repo::ensure_default(conn, workspace_id)?;
@@ -176,16 +212,22 @@ pub async fn dispatch(
     let routing = match agent.model_routing.clone() {
         Some(r) => r,
         None => {
-            // No routing policy configured - unchanged pre-7a behavior.
-            let (outcome, usage) = ai_service::complete_with_tools(
-                conn,
-                workspace_id,
-                master_key,
-                system_prompt,
-                tools,
-                history,
+            // No routing policy configured - unchanged pre-7a behavior,
+            // within the default time limit. There is no tier to move to.
+            let (outcome, usage) = tokio::time::timeout(
+                limits.step_timeout,
+                ai_service::complete_with_tools(
+                    conn,
+                    workspace_id,
+                    master_key,
+                    system_prompt,
+                    tools,
+                    history,
+                    opts,
+                ),
             )
-            .await?;
+            .await
+            .map_err(|_| step_timed_out(limits.step_timeout))??;
             ai_token_usage_repo::increment(
                 conn,
                 workspace_id,
@@ -250,6 +292,9 @@ pub async fn dispatch(
 
     let mut last_err: Option<AppError> = None;
     let retry_policy = RetryPolicy::default();
+    // WP-0121: a call that runs past the time limit moves to the next tier
+    // once; a second one ends the dispatch.
+    let mut timed_out = false;
 
     for (idx, (tier_name, provider_id)) in tiers.iter().enumerate() {
         let resolved = match resolve_tier(conn, workspace_id, master_key, *provider_id) {
@@ -262,19 +307,25 @@ pub async fn dispatch(
             }
         };
 
-        // Transient failures retry on this tier first (ADR-0009 §1).
-        let dispatch_result = retry::retry(&retry_policy, &TokioClock, || {
-            ai_service::dispatch_with_tools(
-                &resolved.provider,
-                resolved.base_url.as_deref(),
-                &resolved.model,
-                &resolved.api_key,
-                system_prompt,
-                tools,
-                history,
-            )
-        })
-        .await;
+        // Transient failures retry on this tier first (ADR-0009 §1); the
+        // time limit covers the tier's attempts together.
+        let dispatch_result = tokio::time::timeout(
+            limits.step_timeout,
+            retry::retry(&retry_policy, &TokioClock, || {
+                ai_service::dispatch_with_tools(
+                    &resolved.provider,
+                    resolved.base_url.as_deref(),
+                    &resolved.model,
+                    &resolved.api_key,
+                    system_prompt,
+                    tools,
+                    history,
+                    opts,
+                )
+            }),
+        )
+        .await
+        .unwrap_or_else(|_| Err(step_timed_out(limits.step_timeout)));
 
         match dispatch_result {
             Ok((outcome, usage)) => {
@@ -325,6 +376,12 @@ pub async fn dispatch(
                 let error_class = e.class();
                 match error_class {
                     ErrorClass::Transient | ErrorClass::Configuration => {
+                        if is_timeout(&e) {
+                            if timed_out {
+                                return Err(e);
+                            }
+                            timed_out = true;
+                        }
                         if forced_air_gap && error_class == ErrorClass::Configuration {
                             // Under forced air-gap, configuration errors fail closed
                             // with config.not_local (never fall back to cloud)

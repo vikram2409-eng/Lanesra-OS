@@ -649,8 +649,27 @@ function ModelRoutingEditor({
       max_tokens: null,
       daily_token_budget: null,
       force_air_gapped_for: [],
+      max_rounds: null,
+      run_token_limit: null,
+      step_timeout_seconds: null,
     },
   );
+
+  function numberField(label: string, value: number | null | undefined, onChange: (v: number | null) => void, props: { min: number; max?: number; placeholder?: string }) {
+    return (
+      <div className="field">
+        <label>{label}</label>
+        <input
+          type="number"
+          min={props.min}
+          max={props.max}
+          placeholder={props.placeholder}
+          value={value ?? ""}
+          onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}
+        />
+      </div>
+    );
+  }
   const usage = useQuery({ queryKey: ["aiAgentTokenUsage", agent.id], queryFn: () => api.getAiAgentTokenUsage(agent.id) });
 
   function toggleClass(name: string) {
@@ -729,6 +748,17 @@ function ModelRoutingEditor({
               </p>
             )}
           </div>
+          <div className="field full">
+            <label>Limits</label>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 0" }}>
+              A run that reaches its round or token limit is asked once for a final answer with tools switched off, and
+              keeps it as a partial result. A model call that takes longer than its time limit is cancelled and tried
+              once on the fallback provider.
+            </p>
+          </div>
+          {numberField("Max rounds per run", routing.max_rounds, (v) => setRouting({ ...routing, max_rounds: v }), { min: 1, max: 25, placeholder: "8" })}
+          {numberField("Token limit per run (optional)", routing.run_token_limit, (v) => setRouting({ ...routing, run_token_limit: v }), { min: 1000, placeholder: "No limit" })}
+          {numberField("Time limit per model call (seconds)", routing.step_timeout_seconds, (v) => setRouting({ ...routing, step_timeout_seconds: v }), { min: 5, max: 1800, placeholder: "300" })}
           <div className="field full">
             <label>Force air-gapped routing for</label>
             <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 6px" }}>

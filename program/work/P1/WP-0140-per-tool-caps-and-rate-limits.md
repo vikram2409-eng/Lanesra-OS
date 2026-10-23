@@ -49,3 +49,4 @@ Each tool binding caps calls per step, failures before disable, and result size 
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 - 2026-10-19 muse: Refined proposed → ready. Made AC-1 precise: calls-per-step cap → classified error block (ADR-0009); failures-before-disable → binding disabled; result-size cap → store + reference; each traced per ADR-0008. AC-2 unchanged (rate-limited call never reaches tool). Verified: REQ-LOOP-014, REQ-TOOL-008 exist; ADR-0009/0010/0012 Accepted; depends_on WP-0122 merged. No code changed.
+- 2026-10-23 claude: Not started. AC-1 asks for each enforcement to be traced per ADR-0008, and the span store that tracing writes to (`ai_run_spans`) is WP-0111, still proposed. Building the caps now would leave AC-1 open or invent a second trace format. Suggest adding WP-0111 to `depends_on` at the next refinement and building WP-0111 first.

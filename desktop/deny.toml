@@ -23,9 +23,11 @@ yanked = "deny"
 # RUSTSEC-2024-0449 (unsafe-libyaml unmaintained):
 #   Reason: No safe upgrade available (repository archived).
 #   RAID: R-22 | Review: 2026-11-17
-# RUSTSEC-2024-0370 (proc-macro-error), RUSTSEC-2025-0075, 0080, 0081, 0098, 0100 (unic-*):
-#   Reason: unmaintained crates pulled in only by the Tauri and GTK desktop stack
-#     (glib-macros, tauri-utils/urlpattern); not direct dependencies, no upstream replacement yet.
+# RUSTSEC-2024-0370 (proc-macro-error):
+#   Reason: unmaintained crate pulled in only by the GTK desktop stack (glib-macros);
+#     not a direct dependency, no upstream replacement yet. The unic-* advisories
+#     (RUSTSEC-2025-0075, 0080, 0081, 0098, 0100) left with Tauri 2.12, whose
+#     urlpattern no longer uses them.
 #   RAID: R-25 | Review: 2026-11-17
 ignore = [
     "RUSTSEC-2026-0367",
@@ -34,11 +36,6 @@ ignore = [
     "RUSTSEC-2023-0071",
     "RUSTSEC-2024-0449",
     "RUSTSEC-2024-0370",
-    "RUSTSEC-2025-0075",
-    "RUSTSEC-2025-0080",
-    "RUSTSEC-2025-0081",
-    "RUSTSEC-2025-0098",
-    "RUSTSEC-2025-0100",
 ]
 
 [licenses]

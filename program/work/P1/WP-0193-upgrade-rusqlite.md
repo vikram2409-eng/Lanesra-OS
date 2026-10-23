@@ -3,7 +3,7 @@ id: WP-0193
 title: "Upgrade rusqlite 0.31 to 0.40"
 phase: 1
 epic: E0.1 Program and engineering readiness
-status: in_review
+status: done
 owner: claude
 depends_on: []
 requirements: [REQ-PRE-002, REQ-PRE-001]
@@ -52,3 +52,4 @@ Move the core, server and desktop shell to rusqlite 0.40 (closed Dependabot #237
 - 2026-10-22 claude: Written after the owner approved the recommendations in RAID Q-25.
 - 2026-10-23 claude: Refined to ready and claimed: the scope is a version bump whose acceptance criteria are already testable by the existing suite and upgrade fixtures. Bumped rusqlite 0.31 to 0.40.2 in core, server and the desktop shell; `libsqlite3-sys` 0.28 to 0.38.2, so the bundled SQLite goes from 3.45.0 to 3.53.2. The code compiled with no source change; clippy clean; `cargo deny check` passes (advisories, bans, licenses, sources). New lockfile entries `rsqlite-vfs`, `sqlite-wasm-rs` and `hashbrown` 0.16 are not built for the desktop or server targets (`cargo tree -i` on the host target lists none of them).
 - 2026-10-23 claude: In review in #717.
+- 2026-10-23 claude: Merged in #717. Done.

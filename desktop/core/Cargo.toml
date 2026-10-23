@@ -61,3 +61,7 @@ csv = "1"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+# Paused-clock tests for time limits (WP-0121); no extra crate, only a feature.
+tokio = { version = "1", features = ["test-util"] }

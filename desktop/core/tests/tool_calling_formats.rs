@@ -20,7 +20,7 @@ use lanesra_core::models::ai::AiSettingsInput;
 use lanesra_core::models::chat::ChatMessage;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::ai_service::{
-    self, CompletionOutcome, RequestedToolCall, ToolCallFormat, ToolSpec,
+    self, CallOptions, CompletionOutcome, RequestedToolCall, ToolCallFormat, ToolSpec,
 };
 use lanesra_core::services::{chat_service, company_service, workspace_service};
 use serde_json::{json, Value};
@@ -539,4 +539,91 @@ async fn an_answer_that_misses_the_output_schema_gets_the_catalog_repair_prompt(
         second.contains("Send your answer again as valid JSON"),
         "{second}"
     );
+}
+
+/// The request body `provider`'s adapter sends with `opts`.
+async fn request_body(provider: &str, reply: Value, opts: CallOptions) -> Value {
+    let (port, seen) = spawn_recording_stub(vec![reply.to_string()]);
+    ai_service::dispatch_with_options_test(
+        provider,
+        Some(&format!("http://127.0.0.1:{port}")),
+        "test-model",
+        "test-key",
+        "sys",
+        &get_record_tool(),
+        &[message("user", Some("Look up record 123"), None, None)],
+        opts,
+    )
+    .await
+    .unwrap();
+    let body = seen.lock().unwrap()[0].clone();
+    serde_json::from_str(&body).unwrap()
+}
+
+#[tokio::test]
+async fn every_adapter_sends_the_agents_temperature_output_limit_and_tools_off() {
+    // Covers: REQ-LOOP-001, REQ-LOOP-008 (WP-0121): routing temperature and
+    // max tokens take effect, and a final-answer call tells each provider in
+    // its own format not to call a tool.
+    let opts = CallOptions {
+        temperature: Some(0.4),
+        max_tokens: Some(300),
+        tools_off: true,
+    };
+    let anthropic = request_body(
+        "anthropic",
+        json!({"content": [{"type": "text", "text": "ok"}]}),
+        opts,
+    )
+    .await;
+    assert_eq!(anthropic["temperature"], json!(0.4));
+    assert_eq!(anthropic["max_tokens"], json!(300));
+    assert_eq!(anthropic["tool_choice"], json!({"type": "none"}));
+
+    let openai = request_body(
+        "openai_compatible",
+        json!({"choices": [{"message": {"role": "assistant", "content": "ok"}}]}),
+        opts,
+    )
+    .await;
+    assert_eq!(openai["temperature"], json!(0.4));
+    assert_eq!(openai["max_tokens"], json!(300));
+    assert_eq!(openai["tool_choice"], json!("none"));
+
+    let gemini = request_body(
+        "google_gemini",
+        json!({"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}),
+        opts,
+    )
+    .await;
+    assert_eq!(gemini["generationConfig"]["temperature"], json!(0.4));
+    assert_eq!(gemini["generationConfig"]["maxOutputTokens"], json!(300));
+    assert_eq!(
+        gemini["toolConfig"]["functionCallingConfig"]["mode"],
+        json!("NONE")
+    );
+
+    // Without settings: no temperature, the default output limit, tools on.
+    let plain = request_body(
+        "anthropic",
+        json!({"content": [{"type": "text", "text": "ok"}]}),
+        CallOptions::default(),
+    )
+    .await;
+    assert!(plain.get("temperature").is_none() && plain.get("tool_choice").is_none());
+    assert_eq!(
+        plain["max_tokens"],
+        json!(ai_service::DEFAULT_MAX_OUTPUT_TOKENS)
+    );
+    // Anthropic takes 0 to 1, so a higher routing temperature is capped.
+    let hot = request_body(
+        "anthropic",
+        json!({"content": [{"type": "text", "text": "ok"}]}),
+        CallOptions {
+            temperature: Some(1.6),
+            ..CallOptions::default()
+        },
+    )
+    .await;
+    assert_eq!(hot["temperature"], json!(1.0));
 }

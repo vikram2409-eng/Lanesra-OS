@@ -214,9 +214,17 @@ async fn a_model_provider_on_an_internal_address_is_refused() {
         tested.message.contains(ssrf_guard::ALLOW_LIST_ENV),
         "{tested:?}"
     );
-    let err = ai_service::complete_with_tools(&conn, &workspace.id, &key, "sys", &[], &[])
-        .await
-        .unwrap_err();
+    let err = ai_service::complete_with_tools(
+        &conn,
+        &workspace.id,
+        &key,
+        "sys",
+        &[],
+        &[],
+        ai_service::CallOptions::default(),
+    )
+    .await
+    .unwrap_err();
     assert_blocked(&err);
     assert_eq!(hits.load(Ordering::SeqCst), 0);
 }
