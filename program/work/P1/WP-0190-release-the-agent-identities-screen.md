@@ -3,7 +3,7 @@ id: WP-0190
 title: "Release the Agent Identities screen and trigger picker ahead of WP-0160"
 phase: 1
 epic: E1.0 Identity foundation
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0109]
 requirements: [REQ-GOV-003, REQ-GOV-029, REQ-PRE-021]
@@ -55,3 +55,4 @@ Admins cannot give an Agent Identity the Administrator role today: the only scre
 - 2026-10-22 claude: Started, then paused: the session's automatic permission check refused the edit that adds the flag to the demo's `DEMO_RELEASED_FEATURES`, as a feature-flag change. Shipping the desktop and Team Workspace half alone would break REQ-PRE-021 (same release in every edition), so nothing is committed. The flag change, its Rust test and the help-text edits are ready to apply as soon as the owner allows it.
 - 2026-10-22 claude: The owner allowed the flag change. Built: `agents.identities_ui` is `ga`, on by default in desktop and Team Workspace and still switchable off per workspace until WP-0160 removes it; the demo lists it in `DEMO_RELEASED_FEATURES`, so the Agent Identities screen and the action's Runs as picker show there too. Help (`agent-identities`, `access-roles-and-record-scopes`), Releases and llms files updated. The Feature flags admin screen now appears for Administrators, because this flag can be switched. Test: `the_agent_identities_screen_is_released_on_in_every_edition`; the existing `agentIdentities.test.tsx` covers the screen and picker with the flag on and off.
 - 2026-10-22 claude: In review in #705.
+- 2026-10-23 claude: Merged in #705; done.
