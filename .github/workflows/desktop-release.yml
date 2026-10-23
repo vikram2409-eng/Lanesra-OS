@@ -72,6 +72,10 @@ jobs:
           fi
           echo "tauri.conf.json version ($actual) matches release $expected - proceeding."
 
+      - name: Tauri crate and JavaScript API on the same minor release
+        shell: bash
+        run: python3 program/tools/check_tauri_versions.py
+
       - name: Build and publish
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:

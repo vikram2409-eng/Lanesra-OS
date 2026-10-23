@@ -107,6 +107,9 @@ jobs:
         working-directory: desktop
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Tauri crate and JavaScript API on the same minor release (tauri build refuses otherwise)
+        working-directory: .
+        run: python3 program/tools/check_tauri_versions.py
       - name: System libraries for Tauri on Linux
         working-directory: .
         run: |
