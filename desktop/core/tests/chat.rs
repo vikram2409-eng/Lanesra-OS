@@ -334,8 +334,10 @@ async fn a_connections_secret_is_created_for_real_but_never_persisted_in_chat_hi
 async fn the_round_cap_stops_a_pathological_always_tool_calling_stub() {
     let (conn, ws, admin) = setup_workspace();
     // Always answers with the same harmless, argument-free tool call -
-    // never a final text reply - so the loop must give up on its own via
-    // MAX_ROUNDS rather than running forever.
+    // never a final text reply - so the loop must give up on its own at its
+    // round limit rather than running forever. WP-0121: it then asks once
+    // for a final answer with tools off; this stub still asks for a tool,
+    // so nothing runs and the kept answer is empty.
     let (port, count) = spawn_sequence_stub(vec![anthropic_tool_use_body(
         "t",
         "list_objects",
@@ -343,13 +345,17 @@ async fn the_round_cap_stops_a_pathological_always_tool_calling_stub() {
     )]);
     configure_anthropic_key(&conn, &ws, &admin, port);
 
-    let result =
+    let appended =
         chat_service::send_message(&conn, &ws, &master_key(), &admin, "records", "loop forever")
-            .await;
-    let err = result.unwrap_err().to_string();
-    assert!(err.contains("more steps"), "{err}");
-    // One HTTP request per round, capped at MAX_ROUNDS (8) - not unbounded.
-    assert_eq!(*count.lock().unwrap(), 8);
+            .await
+            .unwrap();
+    // One HTTP request per round for the 8 rounds, plus the one final-answer
+    // request - bounded, not unbounded.
+    assert_eq!(*count.lock().unwrap(), 9);
+    assert_eq!(appended.iter().filter(|m| m.role == "tool").count(), 8);
+    let last = appended.last().unwrap();
+    assert_eq!(last.role, "assistant");
+    assert_eq!(last.content.as_deref(), Some(""));
 }
 
 #[tokio::test]
