@@ -1,6 +1,6 @@
 -- Migration 0084: per-agent step limits (WP-0121)
 -- Work package: WP-0121
--- Change: schema (additive nullable columns)
+-- Change: additive (three nullable columns)
 -- Data touched: none; existing routing rows keep NULL, which means the defaults
 -- Re-run safe: no (ALTER TABLE)
 --

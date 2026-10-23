@@ -3,7 +3,7 @@ id: WP-0121
 title: Step limits and partial results
 phase: 1
 epic: E1.3 Agent loop
-status: in_review
+status: in_progress
 owner: claude
 depends_on: [WP-0110, WP-0005]
 requirements: [REQ-LOOP-001, REQ-LOOP-008, REQ-LOOP-009, REQ-LOOP-010]
