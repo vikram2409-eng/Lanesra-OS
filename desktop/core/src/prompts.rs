@@ -36,6 +36,10 @@ pub const FILES: &[(&str, &str)] = &[
         include_str!("../prompts/eval/judge.v1.md"),
     ),
     (
+        "loop/final-answer.v1.md",
+        include_str!("../prompts/loop/final-answer.v1.md"),
+    ),
+    (
         "loop/guardrails-section.v1.md",
         include_str!("../prompts/loop/guardrails-section.v1.md"),
     ),

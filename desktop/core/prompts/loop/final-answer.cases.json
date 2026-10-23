@@ -1,0 +1,19 @@
+{
+  "prompt": "loop/final-answer",
+  "note": "Checked by tests/prompt_catalog.rs against the active version: each case renders with its variables and the result must contain, start with, or leave out the listed text.",
+  "cases": [
+    {
+      "name": "round limit",
+      "expect_starts_with": "This run has reached its limit",
+      "variables": { "reason": "it used all 8 of its tool-calling rounds" },
+      "expect_contains": ["all 8 of its tool-calling rounds", "Tools are switched off", "what is not"],
+      "expect_not_contains": ["{{"]
+    },
+    {
+      "name": "token limit",
+      "variables": { "reason": "it used its 20000-token limit" },
+      "expect_contains": ["20000-token limit", "final answer"],
+      "expect_not_contains": ["{{"]
+    }
+  ]
+}

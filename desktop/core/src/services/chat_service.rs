@@ -37,8 +37,10 @@
 //! The tool-calling loop (`send_message`): append the user's message,
 //! then repeatedly call `ai_service::complete_with_tools` and execute
 //! whatever it requests, feeding results back, until it answers in
-//! plain text - capped at `MAX_ROUNDS` (a runaway-cost/loop guard, not a
-//! real limit any legitimate exchange needs).
+//! plain text - capped at the run's round limit (WP-0121: 8 by default, set
+//! per agent up to 25). A run that reaches its round or token limit is asked
+//! once for a final answer with tools switched off, and that answer is kept
+//! as a partial result instead of being thrown away.
 
 use std::cell::Cell;
 
@@ -46,6 +48,7 @@ use rusqlite::Connection;
 use serde_json::{json, Value};
 
 use crate::domain::{AppError, AppResult, ErrorClass};
+use crate::models::ai::AgentRunLimits;
 use crate::models::ai_agent::{validate_output_schema, AiAgentDefinition};
 use crate::models::ai_agent_policy::PolicyDecision;
 use crate::models::ai_memory::{AgentMemoryContext, MemoryItemInput};
@@ -58,11 +61,48 @@ use crate::services::action_type_service;
 use crate::services::ai_gateway_service;
 use crate::services::ai_knowledge_service;
 use crate::services::ai_memory_service;
-use crate::services::ai_service::{self, CompletionOutcome, RequestedToolCall, ToolSpec};
+use crate::services::ai_service::{
+    self, CallOptions, CompletionOutcome, RequestedToolCall, ToolSpec,
+};
 use crate::services::api_object_service;
 use crate::services::policy_engine_service;
 
-const MAX_ROUNDS: u8 = 8;
+/// Why a run ended early with a partial answer (ADR-0007 §4 stop reasons).
+pub const STOP_LIMIT_ROUNDS: &str = "limit_rounds";
+pub const STOP_LIMIT_TOKENS: &str = "limit_tokens";
+
+/// The system prompt for the one final-answer call a run makes when it
+/// reaches a limit: the run's own prompt plus catalog `loop/final-answer`.
+/// The instruction goes in the system prompt, not the conversation, so no
+/// message the person did not write is added to their history.
+fn final_answer_prompt(
+    system_prompt: &str,
+    stop_reason: &str,
+    limits: &AgentRunLimits,
+) -> AppResult<String> {
+    let reason = match stop_reason {
+        STOP_LIMIT_TOKENS => format!(
+            "it used its {}-token limit",
+            limits.run_token_limit.unwrap_or_default()
+        ),
+        _ => format!(
+            "it used all {} of its tool-calling rounds",
+            limits.max_rounds
+        ),
+    };
+    let (section, _) = crate::prompts::render_active("loop/final-answer", &[("reason", &reason)])
+        .map_err(AppError::Validation)?;
+    Ok(format!("{system_prompt}\n\n{section}"))
+}
+
+/// The text of a final-answer reply. Tools are off for that call, so a
+/// model that still asks for one gets nothing run and its text is empty.
+fn final_answer_text(outcome: CompletionOutcome) -> String {
+    match outcome {
+        CompletionOutcome::Text(text) => text,
+        CompletionOutcome::ToolCalls { .. } => String::new(),
+    }
+}
 /// Malformed tool calls one run may make before it stops (WP-0122): each
 /// one is answered with what was wrong, never run, and counts toward this.
 pub const MAX_MALFORMED_TOOL_CALLS: u32 = 3;
@@ -974,7 +1014,7 @@ fn redact_one_tool_call(item: &Value) -> Value {
 /// Appends the user's message, then loops calling
 /// `ai_service::complete_with_tools` and executing whatever it
 /// requests, feeding results back as `role: "tool"` messages, until a
-/// turn answers in plain text - capped at `MAX_ROUNDS`. Returns every
+/// turn answers in plain text - capped at the round limit, then one final answer (WP-0121). Returns every
 /// message this call appended (the user's own, plus everything the
 /// assistant/tools produced), so the caller can render just the new
 /// turns without re-fetching the whole conversation.
@@ -1011,9 +1051,10 @@ pub async fn send_message(
     )?);
 
     let mut malformed_calls = 0u32;
-    for _round in 0..MAX_ROUNDS {
+    let limits = AgentRunLimits::default();
+    let sys_prompt = system_prompt(mode)?;
+    for _round in 0..limits.max_rounds {
         let history = chat_repo::list_messages(conn, &conversation.id)?;
-        let sys_prompt = system_prompt(mode)?;
         let (outcome, usage) = ai_service::complete_with_tools(
             conn,
             workspace_id,
@@ -1021,6 +1062,7 @@ pub async fn send_message(
             &sys_prompt,
             &tools,
             &history,
+            CallOptions::default(),
         )
         .await?;
         // Phase 7a: recorded for Gateway health-view visibility even on
@@ -1107,7 +1149,39 @@ pub async fn send_message(
             }
         }
     }
-    Err(AppError::Validation("This is taking more steps than expected - try asking again, or break the request into smaller parts.".into()))
+    // WP-0121: the round limit was reached. Ask once for a final answer
+    // with tools off and keep it, rather than discarding the work so far.
+    let history = chat_repo::list_messages(conn, &conversation.id)?;
+    let (outcome, usage) = ai_service::complete_with_tools(
+        conn,
+        workspace_id,
+        master_key,
+        &final_answer_prompt(&sys_prompt, STOP_LIMIT_ROUNDS, &limits)?,
+        &tools,
+        &history,
+        CallOptions {
+            tools_off: true,
+            ..CallOptions::default()
+        },
+    )
+    .await?;
+    let _ = ai_token_usage_repo::increment(
+        conn,
+        workspace_id,
+        "",
+        user_id,
+        usage.input_tokens,
+        usage.output_tokens,
+    );
+    appended.push(chat_repo::append_message(
+        conn,
+        &conversation.id,
+        "assistant",
+        Some(&final_answer_text(outcome)),
+        None,
+        None,
+    )?);
+    Ok(appended)
 }
 
 /// The Tool-Call Firewall: checked by both `execute_tool` and
@@ -1796,6 +1870,7 @@ fn execute_agent_tool<'a>(
 /// `seed_history` - the caller decides whether to persist all of them
 /// (`send_agent_message` does) or just log a summary (a Pipeline/Trigger
 /// run, Phase 6b).
+#[derive(Debug)]
 pub struct AgentRunOutcome {
     pub final_text: String,
     pub produced: Vec<ChatMessage>,
@@ -1805,6 +1880,17 @@ pub struct AgentRunOutcome {
     /// `policy_compliance` evaluator type checks, deterministically, no
     /// judge call needed.
     pub policy_violations: i64,
+    /// WP-0121: `None` when the model finished on its own; otherwise the
+    /// limit it reached (`STOP_LIMIT_ROUNDS` or `STOP_LIMIT_TOKENS`), and
+    /// `final_text` is the partial answer it gave with tools switched off.
+    pub stop_reason: Option<&'static str>,
+}
+
+impl AgentRunOutcome {
+    /// Whether the answer is partial (ADR-0007 `completed_partial`).
+    pub fn is_partial(&self) -> bool {
+        self.stop_reason.is_some()
+    }
 }
 
 /// The tool-calling loop, run once against a single `AiAgentDefinition`,
@@ -1894,8 +1980,12 @@ pub async fn run_agent_once(
     // outcomes only, not every tool error - a tool that genuinely fails
     // (a bad argument, a deleted record) isn't a policy violation.
     let mut policy_violations: i64 = 0;
+    // WP-0121: the agent's limits, and the tokens this run has used so far.
+    let limits = AgentRunLimits::for_routing(agent.model_routing.as_ref());
+    let mut run_tokens: i64 = 0;
+    let mut stop_reason = STOP_LIMIT_ROUNDS;
 
-    for _round in 0..MAX_ROUNDS {
+    for _round in 0..limits.max_rounds {
         // Phase 7a: every agent run goes through the Gateway, not
         // straight to `ai_service::complete_with_tools` - it resolves
         // this agent's `model_routing` policy (primary/fallback/
@@ -1912,8 +2002,10 @@ pub async fn run_agent_once(
             &system_prompt,
             &tools,
             &history,
+            false,
         )
         .await?;
+        run_tokens += gateway_outcome.usage.input_tokens + gateway_outcome.usage.output_tokens;
         let outcome = gateway_outcome.outcome;
         match outcome {
             CompletionOutcome::Text(text) => {
@@ -1950,6 +2042,7 @@ pub async fn run_agent_once(
                     final_text: text,
                     produced,
                     policy_violations,
+                    stop_reason: None,
                 });
             }
             CompletionOutcome::ToolCalls {
@@ -2055,8 +2148,36 @@ pub async fn run_agent_once(
                 }
             }
         }
+        if limits
+            .run_token_limit
+            .is_some_and(|limit| run_tokens >= limit)
+        {
+            stop_reason = STOP_LIMIT_TOKENS;
+            break;
+        }
     }
-    Err(AppError::Validation("This is taking more steps than expected - try asking again, or break the request into smaller parts.".into()))
+    // WP-0121: a limit was reached. Ask once for a final answer with tools
+    // off and keep it as the run's partial result.
+    let gateway_outcome = ai_gateway_service::dispatch(
+        conn,
+        workspace_id,
+        master_key,
+        agent,
+        actor,
+        &final_answer_prompt(&system_prompt, stop_reason, &limits)?,
+        &tools,
+        &history,
+        true,
+    )
+    .await?;
+    let text = final_answer_text(gateway_outcome.outcome);
+    produced.push(synthetic_message("assistant", Some(&text), None, None));
+    Ok(AgentRunOutcome {
+        final_text: text,
+        produced,
+        policy_violations,
+        stop_reason: Some(stop_reason),
+    })
 }
 
 /// Chatting with one specific named Agent - the third `chat_conversations`

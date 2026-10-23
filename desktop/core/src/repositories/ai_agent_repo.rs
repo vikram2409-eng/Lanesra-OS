@@ -74,6 +74,9 @@ fn map_routing_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentModelRouting>
         max_tokens: row.get("max_tokens")?,
         daily_token_budget: row.get("daily_token_budget")?,
         force_air_gapped_for: serde_json::from_str(&force_air_gapped_for_json).unwrap_or_default(),
+        max_rounds: row.get("max_rounds")?,
+        run_token_limit: row.get("run_token_limit")?,
+        step_timeout_seconds: row.get("step_timeout_seconds")?,
     })
 }
 
@@ -105,8 +108,8 @@ pub fn set_routing(
         let force_air_gapped_for_json =
             serde_json::to_string(&r.force_air_gapped_for).unwrap_or_else(|_| "[]".into());
         conn.execute(
-            "INSERT INTO ai_agent_routing (agent_id, primary_provider_id, fallback_provider_id, local_fallback_provider_id, temperature, max_tokens, daily_token_budget, force_air_gapped_for_json)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT INTO ai_agent_routing (agent_id, primary_provider_id, fallback_provider_id, local_fallback_provider_id, temperature, max_tokens, daily_token_budget, force_air_gapped_for_json, max_rounds, run_token_limit, step_timeout_seconds)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             rusqlite::params![
                 agent_id,
                 r.primary_provider_id,
@@ -116,6 +119,9 @@ pub fn set_routing(
                 r.max_tokens,
                 r.daily_token_budget,
                 force_air_gapped_for_json,
+                r.max_rounds,
+                r.run_token_limit,
+                r.step_timeout_seconds,
             ],
         )?;
     }

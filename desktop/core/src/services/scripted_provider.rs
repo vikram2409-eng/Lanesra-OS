@@ -14,7 +14,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::time::Duration;
 
-use super::ai_service::{CompletionOutcome, RequestedToolCall, TokenUsage, ToolSpec};
+use super::ai_service::{CallOptions, CompletionOutcome, RequestedToolCall, TokenUsage, ToolSpec};
 use crate::domain::{AppError, AppResult, ErrorClass};
 use crate::models::chat::ChatMessage;
 
@@ -34,6 +34,9 @@ pub enum ScriptedResponse {
     Failure {
         kind: String,
     },
+    /// Never answer, so a caller's time limit is what ends the call
+    /// (WP-0121). Pair with tokio's paused clock to keep the test instant.
+    Stall,
 }
 
 /// A captured request for test assertions.
@@ -43,6 +46,8 @@ pub struct CapturedRequest {
     pub tools: Vec<ToolSpec>,
     pub history: Vec<ChatMessage>,
     pub model: String,
+    /// Temperature, output limit and whether tools were switched off.
+    pub options: CallOptions,
 }
 
 thread_local! {
@@ -96,6 +101,7 @@ pub async fn dispatch_scripted(
     system_prompt: &str,
     tools: &[ToolSpec],
     history: &[ChatMessage],
+    options: CallOptions,
 ) -> AppResult<(CompletionOutcome, TokenUsage)> {
     // Capture the request first.
     CAPTURED.with(|c| {
@@ -104,6 +110,7 @@ pub async fn dispatch_scripted(
             tools: tools.to_vec(),
             history: history.to_vec(),
             model: model.to_string(),
+            options,
         })
     });
 
@@ -114,6 +121,7 @@ pub async fn dispatch_scripted(
     }
 
     match next_response()? {
+        ScriptedResponse::Stall => std::future::pending().await,
         ScriptedResponse::Text { text, usage } => Ok((CompletionOutcome::Text(text), usage)),
         ScriptedResponse::ToolCalls { calls, usage } => {
             let raw = serde_json::json!({

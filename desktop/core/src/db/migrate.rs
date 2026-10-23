@@ -166,6 +166,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
         include_str!("migrations/0082_trigger_agent_identities.sql"),
     ),
     (83, include_str!("migrations/0083_run_step_schema.sql")),
+    (84, include_str!("migrations/0084_agent_step_limits.sql")),
 ];
 
 /// The newest schema version this build knows about - used to reject

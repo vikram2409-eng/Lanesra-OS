@@ -160,6 +160,61 @@ pub struct AiAgentModelRouting {
     /// `local_fallback_provider_id`, bypassing the normal primary/
     /// fallback order entirely, whenever a request payload matches one.
     pub force_air_gapped_for: Vec<String>,
+    /// WP-0121: tool-calling rounds one run may take (default 8, at most 25).
+    #[serde(default)]
+    pub max_rounds: Option<i64>,
+    /// WP-0121: tokens one run may use, input and output together. `None`
+    /// means no cap beyond the daily budgets.
+    #[serde(default)]
+    pub run_token_limit: Option<i64>,
+    /// WP-0121: seconds one model call may take before it is cancelled and
+    /// tried once on the next tier (default 300).
+    #[serde(default)]
+    pub step_timeout_seconds: Option<i64>,
+}
+
+/// The limits one agent run works within (WP-0121, REQ-LOOP-008 to 010).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AgentRunLimits {
+    pub max_rounds: u32,
+    pub run_token_limit: Option<i64>,
+    pub step_timeout: std::time::Duration,
+}
+
+impl AgentRunLimits {
+    pub const DEFAULT_MAX_ROUNDS: u32 = 8;
+    pub const MAX_ROUNDS_CEILING: u32 = 25;
+    pub const DEFAULT_STEP_TIMEOUT_SECONDS: u64 = 300;
+    pub const STEP_TIMEOUT_RANGE: std::ops::RangeInclusive<i64> = 5..=1800;
+    pub const MIN_RUN_TOKEN_LIMIT: i64 = 1000;
+
+    /// The limits for an agent with this routing, or the defaults without one.
+    pub fn for_routing(routing: Option<&AiAgentModelRouting>) -> Self {
+        let rounds = routing
+            .and_then(|r| r.max_rounds)
+            .map(|n| n.clamp(1, Self::MAX_ROUNDS_CEILING as i64) as u32)
+            .unwrap_or(Self::DEFAULT_MAX_ROUNDS);
+        let timeout = routing
+            .and_then(|r| r.step_timeout_seconds)
+            .map(|s| {
+                s.clamp(
+                    *Self::STEP_TIMEOUT_RANGE.start(),
+                    *Self::STEP_TIMEOUT_RANGE.end(),
+                ) as u64
+            })
+            .unwrap_or(Self::DEFAULT_STEP_TIMEOUT_SECONDS);
+        Self {
+            max_rounds: rounds,
+            run_token_limit: routing.and_then(|r| r.run_token_limit),
+            step_timeout: std::time::Duration::from_secs(timeout),
+        }
+    }
+}
+
+impl Default for AgentRunLimits {
+    fn default() -> Self {
+        Self::for_routing(None)
+    }
 }
 
 /// AI Agent Platform v2, Phase 1: a logical, per-workspace name (e.g.

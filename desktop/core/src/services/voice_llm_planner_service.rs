@@ -117,6 +117,7 @@ pub async fn try_plan(
         &prompt,
         &[],
         &history,
+        ai_service::CallOptions::default(),
     )
     .await
     else {

@@ -348,6 +348,7 @@ async fn no_routing_policy_dispatches_through_the_plain_workspace_default() {
         "system",
         &[],
         &[user_turn("hi")],
+        false,
     )
     .await
     .unwrap();
@@ -399,6 +400,7 @@ async fn a_failed_primary_tier_falls_back_and_records_a_failover_event() {
         "system",
         &[],
         &[user_turn("hi")],
+        false,
     )
     .await
     .unwrap();
@@ -441,6 +443,7 @@ async fn every_tier_failing_surfaces_the_last_real_error() {
         "system",
         &[],
         &[user_turn("hi")],
+        false,
     )
     .await;
     assert!(result.is_err());
@@ -493,6 +496,7 @@ async fn forced_air_gap_routes_straight_to_local_fallback_skipping_primary() {
         "system",
         &[],
         &history,
+        false,
     )
     .await
     .unwrap();
@@ -543,6 +547,7 @@ async fn a_payload_with_no_sensitive_data_does_not_trigger_air_gapping() {
         "system",
         &[],
         &[user_turn("What's our Q3 pipeline look like?")],
+        false,
     )
     .await
     .unwrap();
@@ -580,6 +585,7 @@ async fn the_system_token_budget_blocks_dispatch_once_reached() {
         "system",
         &[],
         &[user_turn("hi")],
+        false,
     )
     .await;
     assert!(result.is_err());
@@ -627,6 +633,7 @@ async fn an_agents_own_budget_is_enforced_independently_of_the_system_one() {
         "system",
         &[],
         &[user_turn("hi")],
+        false,
     )
     .await;
     assert!(result.is_err());
@@ -648,6 +655,7 @@ async fn a_successful_dispatch_records_real_token_usage() {
         "system",
         &[],
         &[user_turn("hi")],
+        false,
     )
     .await
     .unwrap();

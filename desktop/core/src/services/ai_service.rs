@@ -69,6 +69,29 @@ pub struct TokenUsage {
     pub output_tokens: i64,
 }
 
+/// The longest answer a tool-calling call asks for when the agent sets none.
+pub const DEFAULT_MAX_OUTPUT_TOKENS: i64 = 2048;
+
+/// Per-call settings for a tool-calling completion (WP-0121).
+///
+/// `temperature` and `max_tokens` come from the agent's routing; `None` keeps
+/// the provider's own default temperature and `DEFAULT_MAX_OUTPUT_TOKENS`.
+/// `tools_off` asks for a final answer: the tools stay declared, because a
+/// history holding tool calls is only valid next to their definitions, but
+/// the provider is told not to call any.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct CallOptions {
+    pub temperature: Option<f64>,
+    pub max_tokens: Option<i64>,
+    pub tools_off: bool,
+}
+
+impl CallOptions {
+    fn max_tokens(&self) -> i64 {
+        self.max_tokens.unwrap_or(DEFAULT_MAX_OUTPUT_TOKENS)
+    }
+}
+
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
 }
@@ -766,6 +789,7 @@ pub async fn complete_with_tools(
     system_prompt: &str,
     tools: &[ToolSpec],
     history: &[ChatMessage],
+    opts: CallOptions,
 ) -> AppResult<(CompletionOutcome, TokenUsage)> {
     let settings = ai_settings_repo::ensure_default(conn, workspace_id)?;
     let secret_id = ai_settings_repo::get_secret_id(conn, workspace_id)?.ok_or_else(|| {
@@ -790,6 +814,7 @@ pub async fn complete_with_tools(
                 system_prompt,
                 tools,
                 history,
+                opts,
             )
         },
     )
@@ -804,6 +829,7 @@ pub async fn complete_with_tools(
 /// `ai_providers` tier row, or the plain workspace `ai_settings` when an
 /// agent has no routing policy configured - without duplicating this
 /// match arm by arm.
+#[allow(clippy::too_many_arguments)]
 pub(crate) async fn dispatch_with_tools(
     provider: &str,
     base_url: Option<&str>,
@@ -812,23 +838,49 @@ pub(crate) async fn dispatch_with_tools(
     system_prompt: &str,
     tools: &[ToolSpec],
     history: &[ChatMessage],
+    opts: CallOptions,
 ) -> AppResult<(CompletionOutcome, TokenUsage)> {
     match provider {
         "anthropic" => {
-            complete_anthropic_with_tools(base_url, model, api_key, system_prompt, tools, history)
-                .await
+            complete_anthropic_with_tools(
+                base_url,
+                model,
+                api_key,
+                system_prompt,
+                tools,
+                history,
+                opts,
+            )
+            .await
         }
         "openai_compatible" => {
-            complete_openai_with_tools(base_url, model, api_key, system_prompt, tools, history)
-                .await
+            complete_openai_with_tools(
+                base_url,
+                model,
+                api_key,
+                system_prompt,
+                tools,
+                history,
+                opts,
+            )
+            .await
         }
         "google_gemini" => {
-            complete_gemini_with_tools(base_url, model, api_key, system_prompt, tools, history)
-                .await
+            complete_gemini_with_tools(
+                base_url,
+                model,
+                api_key,
+                system_prompt,
+                tools,
+                history,
+                opts,
+            )
+            .await
         }
         #[cfg(any(test, feature = "test-support"))]
         "scripted" => {
-            super::scripted_provider::dispatch_scripted(model, system_prompt, tools, history).await
+            super::scripted_provider::dispatch_scripted(model, system_prompt, tools, history, opts)
+                .await
         }
         other => Err(AppError::Validation(format!(
             "No tool-calling completion implemented for provider '{other}'"
@@ -884,6 +936,7 @@ async fn complete_anthropic_with_tools(
     system_prompt: &str,
     tools: &[ToolSpec],
     history: &[ChatMessage],
+    opts: CallOptions,
 ) -> AppResult<(CompletionOutcome, TokenUsage)> {
     let base = base_url
         .filter(|u| !u.is_empty())
@@ -898,11 +951,18 @@ async fn complete_anthropic_with_tools(
         .timeout(Duration::from_secs(60))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
-    let body = serde_json::json!({
-        "model": model, "max_tokens": 2048, "system": system_prompt,
+    let mut body = serde_json::json!({
+        "model": model, "max_tokens": opts.max_tokens(), "system": system_prompt,
         "tools": anthropic_tools_json(tools),
         "messages": anthropic_messages_json(history),
     });
+    if let Some(t) = opts.temperature {
+        // Anthropic accepts 0 to 1; the routing form allows up to 2.
+        body["temperature"] = serde_json::json!(t.clamp(0.0, 1.0));
+    }
+    if opts.tools_off {
+        body["tool_choice"] = serde_json::json!({"type": "none"});
+    }
     let response = client
         .post(format!("{}/v1/messages", base.trim_end_matches('/')))
         .header("x-api-key", api_key)
@@ -1012,6 +1072,7 @@ async fn complete_openai_with_tools(
     system_prompt: &str,
     tools: &[ToolSpec],
     history: &[ChatMessage],
+    opts: CallOptions,
 ) -> AppResult<(CompletionOutcome, TokenUsage)> {
     let base = base_url.filter(|u| !u.trim().is_empty()).ok_or_else(|| {
         AppError::Validation("An OpenAI-compatible provider needs a base URL".into())
@@ -1026,12 +1087,18 @@ async fn complete_openai_with_tools(
         .timeout(Duration::from_secs(60))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
-    let body = serde_json::json!({
+    let mut body = serde_json::json!({
         "model": model,
         "messages": openai_messages_json(system_prompt, history),
         "tools": openai_tools_json(tools),
-        "max_tokens": 2048,
+        "max_tokens": opts.max_tokens(),
     });
+    if let Some(t) = opts.temperature {
+        body["temperature"] = serde_json::json!(t);
+    }
+    if opts.tools_off {
+        body["tool_choice"] = serde_json::json!("none");
+    }
     let response = client
         .post(format!("{}/chat/completions", base.trim_end_matches('/')))
         .header("Authorization", format!("Bearer {api_key}"))
@@ -1220,6 +1287,7 @@ async fn complete_gemini_with_tools(
     system_prompt: &str,
     tools: &[ToolSpec],
     history: &[ChatMessage],
+    opts: CallOptions,
 ) -> AppResult<(CompletionOutcome, TokenUsage)> {
     let base = base_url
         .filter(|u| !u.is_empty())
@@ -1234,11 +1302,19 @@ async fn complete_gemini_with_tools(
         .timeout(Duration::from_secs(60))
         .build()
         .map_err(|e| AppError::Validation(format!("could not build HTTP client: {e}")))?;
-    let body = serde_json::json!({
+    let mut generation = serde_json::json!({"maxOutputTokens": opts.max_tokens()});
+    if let Some(t) = opts.temperature {
+        generation["temperature"] = serde_json::json!(t);
+    }
+    let mut body = serde_json::json!({
         "contents": gemini_contents_json(history),
         "systemInstruction": {"parts": [{"text": system_prompt}]},
         "tools": gemini_tools_json(tools),
+        "generationConfig": generation,
     });
+    if opts.tools_off {
+        body["toolConfig"] = serde_json::json!({"functionCallingConfig": {"mode": "NONE"}});
+    }
     let response = client
         .post(format!(
             "{}/v1beta/models/{}:generateContent?key={}",
@@ -1719,6 +1795,33 @@ pub async fn dispatch_with_tools_test(
         system_prompt,
         tools,
         history,
+        CallOptions::default(),
+    )
+    .await
+}
+
+/// `dispatch_with_tools_test` with explicit call options (WP-0121).
+#[cfg(any(test, feature = "test-support"))]
+#[allow(clippy::too_many_arguments)]
+pub async fn dispatch_with_options_test(
+    provider: &str,
+    base_url: Option<&str>,
+    model: &str,
+    api_key: &str,
+    system_prompt: &str,
+    tools: &[ToolSpec],
+    history: &[ChatMessage],
+    opts: CallOptions,
+) -> AppResult<(CompletionOutcome, TokenUsage)> {
+    dispatch_with_tools(
+        provider,
+        base_url,
+        model,
+        api_key,
+        system_prompt,
+        tools,
+        history,
+        opts,
     )
     .await
 }

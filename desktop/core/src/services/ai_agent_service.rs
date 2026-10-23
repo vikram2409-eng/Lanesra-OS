@@ -12,7 +12,7 @@ use rusqlite::Connection;
 
 use crate::domain::{AppError, AppResult};
 use crate::models::action_type::ACTION_CAPABILITIES;
-use crate::models::ai::{AiAgentModelRouting, AiTokenUsageSummary};
+use crate::models::ai::{AgentRunLimits, AiAgentModelRouting, AiTokenUsageSummary};
 use crate::models::ai_agent::{AiAgentDefinition, AiAgentInput, AiSkill, AiSkillInput};
 use crate::repositories::{
     action_type_repo, ai_agent_repo, ai_provider_repo, ai_token_usage_repo, audit_repo,
@@ -433,6 +433,39 @@ fn validate_routing(
             return Err(AppError::Validation(
                 "Temperature must be between 0 and 2".into(),
             ));
+        }
+    }
+    if let Some(n) = routing.max_tokens {
+        if !(1..=200_000).contains(&n) {
+            return Err(AppError::Validation(
+                "Max tokens must be between 1 and 200,000".into(),
+            ));
+        }
+    }
+    // WP-0121: step limits.
+    if let Some(n) = routing.max_rounds {
+        if !(1..=AgentRunLimits::MAX_ROUNDS_CEILING as i64).contains(&n) {
+            return Err(AppError::Validation(format!(
+                "Max rounds must be between 1 and {}",
+                AgentRunLimits::MAX_ROUNDS_CEILING
+            )));
+        }
+    }
+    if let Some(n) = routing.run_token_limit {
+        if n < AgentRunLimits::MIN_RUN_TOKEN_LIMIT {
+            return Err(AppError::Validation(format!(
+                "The token limit per run must be at least {}",
+                AgentRunLimits::MIN_RUN_TOKEN_LIMIT
+            )));
+        }
+    }
+    if let Some(s) = routing.step_timeout_seconds {
+        if !AgentRunLimits::STEP_TIMEOUT_RANGE.contains(&s) {
+            return Err(AppError::Validation(format!(
+                "The time limit per model call must be between {} and {} seconds",
+                AgentRunLimits::STEP_TIMEOUT_RANGE.start(),
+                AgentRunLimits::STEP_TIMEOUT_RANGE.end()
+            )));
         }
     }
     Ok(())
