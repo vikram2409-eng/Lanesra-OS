@@ -31,8 +31,8 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 |---|---|---|---|---|---|
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
 | [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | in_review | muse | `wp/WP-0101-identity-adr` | https://github.com/vikram2409-eng/Lanesra-OS/pull/672 |
-| [WP-0126](work/P1/WP-0126-budget-awareness-in-agent-turns.md) | Budget awareness in agent turns | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
-| [WP-0127](work/P1/WP-0127-do-not-persist-state-fields.md) | Do-not-persist state fields | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
+| [WP-0126](work/P1/WP-0126-budget-awareness-in-agent-turns.md) | Budget awareness in agent turns | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | 723 |
+| [WP-0127](work/P1/WP-0127-do-not-persist-state-fields.md) | Do-not-persist state fields | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | 723 |
 
 ## Ready to start (all dependencies done)
 
@@ -93,8 +93,8 @@ None.
 | [WP-0123](work/P1/WP-0123-per-step-model-routing-and-data-boundaries.md) | Per-step model routing and data boundaries | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0121 |
 | [WP-0124](work/P1/WP-0124-retry-with-backoff-and-error-taxonomy.md) | Retry with backoff and error taxonomy | E1.3 Agent loop | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0009, WP-0005 |
 | [WP-0125](work/P1/WP-0125-context-window-handling-and-compaction-policies.md) | Context window handling and compaction policies | E1.3 Agent loop | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0121 |
-| [WP-0126](work/P1/WP-0126-budget-awareness-in-agent-turns.md) | Budget awareness in agent turns | E1.3 Agent loop | 🔨 in progress | S | ✓Desktop ✓Team Workspace ✓Online demo | WP-0121 |
-| [WP-0127](work/P1/WP-0127-do-not-persist-state-fields.md) | Do-not-persist state fields | E1.3 Agent loop | 🔨 in progress | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0111 |
+| [WP-0126](work/P1/WP-0126-budget-awareness-in-agent-turns.md) | Budget awareness in agent turns | E1.3 Agent loop | 👀 in review | S | ✓Desktop ✓Team Workspace ✓Online demo | WP-0121 |
+| [WP-0127](work/P1/WP-0127-do-not-persist-state-fields.md) | Do-not-persist state fields | E1.3 Agent loop | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0111 |
 | [WP-0128](work/P1/WP-0128-policy-hook-points-around-step-model-call-and-tool-call.md) | Policy hook points around step, model call and tool call | E1.3 Agent loop | 🟢 ready | L | ○Desktop ○Team Workspace ○Online demo | WP-0122, WP-0133 |
 | [WP-0130](work/P1/WP-0130-prompt-catalog-written-fresh.md) | Prompt catalog, written fresh | E1.4 Task contracts and guardrails | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0009 |
 | [WP-0131](work/P1/WP-0131-task-contracts-and-context-bindings.md) | Task contracts and context bindings | E1.4 Task contracts and guardrails | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0110 |
