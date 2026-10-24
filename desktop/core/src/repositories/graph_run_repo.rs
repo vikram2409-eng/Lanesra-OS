@@ -156,9 +156,11 @@ pub fn checkpoint(
     current_node_id: Option<&str>,
     steps_executed: i64,
 ) -> rusqlite::Result<()> {
+    // WP-0127: no do-not-persist value reaches stored state.
+    let context_json = crate::do_not_persist::scrub(context_json);
     conn.execute(
         "UPDATE ai_runs SET context_json = ?1, current_node_id = ?2, steps_executed = ?3 WHERE id = ?4",
-        (context_json, current_node_id, steps_executed, id),
+        (&context_json, current_node_id, steps_executed, id),
     )?;
     Ok(())
 }
@@ -172,9 +174,10 @@ pub fn set_pending_approval(
     current_node_id: &str,
     approval_id: &str,
 ) -> rusqlite::Result<()> {
+    let context_json = crate::do_not_persist::scrub(context_json);
     conn.execute(
         "UPDATE ai_runs SET context_json = ?1, current_node_id = ?2, pending_approval_id = ?3 WHERE id = ?4",
-        (context_json, current_node_id, approval_id, id),
+        (&context_json, current_node_id, approval_id, id),
     )?;
     Ok(())
 }
@@ -188,9 +191,10 @@ pub fn set_resume_at(
     current_node_id: &str,
     resume_at: &str,
 ) -> rusqlite::Result<()> {
+    let context_json = crate::do_not_persist::scrub(context_json);
     conn.execute(
         "UPDATE ai_runs SET context_json = ?1, current_node_id = ?2, resume_at = ?3 WHERE id = ?4",
-        (context_json, current_node_id, resume_at, id),
+        (&context_json, current_node_id, resume_at, id),
     )?;
     Ok(())
 }
@@ -200,6 +204,7 @@ pub fn set_error_message(
     id: &str,
     error_message: Option<&str>,
 ) -> rusqlite::Result<()> {
+    let error_message = crate::do_not_persist::scrub_opt(error_message);
     conn.execute(
         "UPDATE ai_runs SET error_message = ?1 WHERE id = ?2",
         (error_message, id),
@@ -223,6 +228,9 @@ pub fn append_run_node(
     finished_at: Option<&str>,
 ) -> rusqlite::Result<String> {
     let id = crate::domain::ids::new_uuid();
+    let input_json = crate::do_not_persist::scrub_opt(input_json);
+    let output_json = crate::do_not_persist::scrub_opt(output_json);
+    let error_message = crate::do_not_persist::scrub_opt(error_message);
     conn.execute(
         "INSERT INTO ai_run_nodes (id, run_id, node_id, node_key, node_type, attempt, status, input_json, output_json, error_message, started_at, finished_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",

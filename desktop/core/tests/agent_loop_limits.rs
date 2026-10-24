@@ -677,3 +677,60 @@ async fn ac1_a_graph_run_whose_agent_hits_a_limit_ends_completed_partial() {
         "the marker is not left in the run's context"
     );
 }
+
+#[tokio::test]
+async fn each_round_tells_the_agent_its_remaining_rounds_and_tokens() {
+    // Covers: REQ-LOOP-020 (WP-0126 AC-1)
+    let (conn, ws, admin) = setup_workspace();
+    let a = agent(
+        &conn,
+        &ws,
+        &admin,
+        AiAgentModelRouting {
+            max_rounds: Some(3),
+            run_token_limit: Some(1000),
+            ..routed(&conn, &ws, &admin)
+        },
+    );
+    let (result, captured) = run(
+        &conn,
+        &ws,
+        &admin,
+        &a,
+        vec![tool_round(1, 100), tool_round(2, 250), text("Done.")],
+    )
+    .await;
+    assert_eq!(result.unwrap().stop_reason, None);
+    let lines: Vec<&str> = captured
+        .iter()
+        .map(|c| {
+            c.system_prompt
+                .split("Budget for the rest of this run: ")
+                .nth(1)
+                .and_then(|rest| rest.split(" Plan to finish").next())
+                .unwrap_or_else(|| panic!("no budget line in {}", c.system_prompt))
+        })
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "3 of 3 tool-calling rounds left. 1,000 of 1,000 tokens left.",
+            "2 of 3 tool-calling rounds left. 900 of 1,000 tokens left.",
+            "1 of 3 tool-calling rounds left. 650 of 1,000 tokens left.",
+        ]
+    );
+}
+
+#[tokio::test]
+async fn without_a_token_limit_the_budget_names_only_rounds() {
+    // Covers: REQ-LOOP-020 (WP-0126 AC-1)
+    let (conn, ws, admin) = setup_workspace();
+    let a = agent(&conn, &ws, &admin, routed(&conn, &ws, &admin));
+    let (_, captured) = run(&conn, &ws, &admin, &a, vec![text("Done.")]).await;
+    let prompt = &captured[0].system_prompt;
+    assert!(
+        prompt.contains("Budget for the rest of this run: 8 of 8 tool-calling rounds left. Plan"),
+        "{prompt}"
+    );
+    assert!(!prompt.contains("tokens left"));
+}

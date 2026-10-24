@@ -3,24 +3,24 @@ id: WP-0126
 title: Budget awareness in agent turns
 phase: 1
 epic: E1.3 Agent loop
-status: proposed
-owner: unassigned
+status: in_progress
+owner: claude
 depends_on: [WP-0121]
 requirements: [REQ-LOOP-020]
 estimate: S
 editions: [desktop, workspace, demo]
-delivered: []
+delivered: [desktop, workspace, demo]
 docs: [agent-limits-and-partial-results]
-branch: 
+branch: claude/enterprise-build-planning-jxy2kq
 pr: 
-updated: 2026-10-16
+updated: 2026-10-24
 ---
 
 # WP-0126 — Budget awareness in agent turns
 
 ## Goal
 
-Tell the agent each turn how many steps, tokens and dollars remain so it wraps up gracefully.
+Tell the agent each turn how many steps, tokens and dollars remain so it wraps up gracefully. Dollars need model prices (WP-0146), so they are split into WP-0199; this package covers steps (tool-calling rounds) and tokens.
 
 ## Scope
 
@@ -28,7 +28,7 @@ Tell the agent each turn how many steps, tokens and dollars remain so it wraps u
 
 ## Acceptance criteria
 
-- [ ] AC-1: Remaining values are correct each round (tested)
+- [x] AC-1: Remaining rounds, and remaining tokens when the agent has a run token limit, are correct each round (tested)
 
 ## Test plan
 
@@ -44,3 +44,5 @@ Tell the agent each turn how many steps, tokens and dollars remain so it wraps u
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+- 2026-10-24 claude: Refined proposed → ready and claimed. Dependencies met (WP-0121 done); ADR-0007, ADR-0008 and ADR-0011 Accepted. Dollars need prices from the model catalog (WP-0146), so they move to WP-0199 (proposed).
+- 2026-10-24 claude: Built. Each round of the agent loop sends the run's own system prompt plus catalog prompt `loop/budget-line`, which states the rounds left of the limit and, when the agent has a run token limit, the tokens left. The final-answer call keeps its own instruction. Two tests in `core/tests/agent_loop_limits.rs` check the exact values each round, with and without a token limit. The help article and the demo's step-limit simulator show it.

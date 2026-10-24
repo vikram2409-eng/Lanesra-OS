@@ -3,17 +3,17 @@ id: WP-0127
 title: Do-not-persist state fields
 phase: 1
 epic: E1.3 Agent loop
-status: proposed
-owner: unassigned
+status: in_progress
+owner: claude
 depends_on: [WP-0111]
 requirements: [REQ-LOOP-021]
 estimate: M
 editions: [desktop, workspace, demo]
-delivered: []
-docs: [task-contracts]
-branch: 
+delivered: [desktop, workspace, demo]
+docs: [execution-graph-agent-teams]
+branch: claude/enterprise-build-planning-jxy2kq
 pr: 
-updated: 2026-10-16
+updated: 2026-10-24
 ---
 
 # WP-0127 — Do-not-persist state fields
@@ -30,8 +30,8 @@ Fields marked memory-only are never written to checkpoints, traces or audit, and
 
 ## Acceptance criteria
 
-- [ ] AC-1: A planted secret value never appears in any table after a run (scan test)
-- [ ] AC-2: Resume after restart re-fetches the field
+- [x] AC-1: A planted secret value never appears in any table after a run (scan test)
+- [x] AC-2: Resume after restart re-fetches the field
 
 ## Test plan
 
@@ -47,3 +47,5 @@ Fields marked memory-only are never written to checkpoints, traces or audit, and
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+- 2026-10-24 claude: Refined proposed → ready and claimed. Dependency met (WP-0111 done). Marking is per node (`"do_not_persist": true` on an agent or transform node), since a node's output is the state field; the help lives in `execution-graph-agent-teams` (there is no `task-contracts` article).
+- 2026-10-24 claude: Built. New `core/src/do_not_persist.rs` registers a marked node's output strings (raw and JSON-escaped) for the run's thread; the graph run repository, the audit repository and the trace persist hook scrub them to `[not persisted]`, and spans opened inside a marked node keep no bodies. The runtime keeps marked outputs in memory only, holds them out of every checkpoint, and on resume runs marked completed nodes again (step span `lanesra.node.refetched`), failing the run with a message if one cannot be fetched again. Publishing a graph that marks any other node type is refused. Tests: `core/tests/do_not_persist.rs` (4), including a scan of every table for a planted secret (AC-1, checked to fail with the mark removed) and a resume re-fetch (AC-2). Desktop and demo Agent Teams panels gain the checkbox.

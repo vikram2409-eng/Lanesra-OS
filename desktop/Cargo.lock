@@ -2772,7 +2772,7 @@ dependencies = [
 
 [[package]]
 name = "lanesra-os"
-version = "0.16.1"
+version = "0.16.2"
 dependencies = [
  "lanesra-core",
  "rusqlite",

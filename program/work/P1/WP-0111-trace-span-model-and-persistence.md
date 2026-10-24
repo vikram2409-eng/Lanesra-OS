@@ -3,7 +3,7 @@ id: WP-0111
 title: Trace span model and persistence
 phase: 1
 epic: E1.2 Run model and trace
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0110]
 requirements: [REQ-OBS-001, REQ-OBS-002]
@@ -62,3 +62,4 @@ Record a span tree for every run: run → step → round → model call and tool
   - Tests: `core/tests/trace_spans.rs` (7): the golden delegation tree, graph steps with a waiting run resumed in the same trace and a cancelled one closed, the overhead budget (about 0.7 ms per round in a debug build), the persist hook, the three body modes, admin-only audited setting, and no spans outside a run.
   - Help article `run-traces` added.
 - 2026-10-24 claude: In review in #720.
+- 2026-10-24 claude: Merged in #720. Done.

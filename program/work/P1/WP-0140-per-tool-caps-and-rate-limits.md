@@ -3,7 +3,7 @@ id: WP-0140
 title: Per-tool caps and rate limits
 phase: 1
 epic: E1.5 Tools and firewall
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0122, WP-0111]
 requirements: [REQ-LOOP-014, REQ-TOOL-008]
@@ -61,3 +61,4 @@ Each tool binding caps calls per step, failures before disable, and result size 
   - Help: two sections in `policy-engine-tool-call-firewall`.
   - Tests: `core/tests/tool_caps.rs` (8), checking side effects on real records.
 - 2026-10-24 claude: In review in #720.
+- 2026-10-24 claude: Merged in #720. Done.

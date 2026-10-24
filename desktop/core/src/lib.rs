@@ -1,4 +1,5 @@
 pub mod db;
+pub mod do_not_persist;
 pub mod domain;
 pub mod models;
 pub mod principals;

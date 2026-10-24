@@ -843,6 +843,22 @@ export function NodePropertyPanel({
                 />
                 <small style={{ display: "block", color: "var(--text-muted)", fontSize: 11 }}>{"{{trigger_input}} or {{node_key.field}} to reference an earlier node's output"}</small>
               </div>
+              <label style={{ fontSize: 13, display: "flex", gap: 6, alignItems: "flex-start" }}>
+                <input
+                  type="checkbox"
+                  disabled={readOnly}
+                  checked={node.config.do_not_persist === true}
+                  onChange={(e) => onConfigChange({ ...node.config, do_not_persist: e.target.checked || undefined })}
+                />
+                <span>
+                  Don't store this step's output
+                  <small style={{ display: "block", color: "var(--text-muted)", fontSize: 11 }}>
+                    For a token, code or personal detail that later steps need but nothing should keep. The output is used in memory only and is
+                    never written to the run's saved state, step history, trace or audit. If the run waits and resumes, this step runs again to
+                    fetch it.
+                  </small>
+                </span>
+              </label>
             </>
           );
         })()}

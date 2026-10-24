@@ -97,6 +97,50 @@ fn final_answer_prompt(
     Ok(format!("{system_prompt}\n\n{section}"))
 }
 
+/// WP-0126: the round's system prompt with the run's remaining budget
+/// (catalog `loop/budget-line`): rounds left, and tokens left when the
+/// agent has a run token limit. No cost yet: prices arrive with the model
+/// catalog (WP-0146).
+fn with_budget_line(
+    system_prompt: &str,
+    limits: &AgentRunLimits,
+    rounds_used: u32,
+    tokens_used: i64,
+) -> AppResult<String> {
+    let rounds_left = limits.max_rounds.saturating_sub(rounds_used);
+    let rounds = format!(
+        "{rounds_left} of {} tool-calling round{} left.",
+        limits.max_rounds,
+        if limits.max_rounds == 1 { "" } else { "s" }
+    );
+    let tokens = match limits.run_token_limit {
+        Some(limit) => format!(
+            " {} of {} tokens left.",
+            group_thousands((limit - tokens_used).max(0)),
+            group_thousands(limit)
+        ),
+        None => String::new(),
+    };
+    let (line, _) = crate::prompts::render_active(
+        "loop/budget-line",
+        &[("rounds_left", &rounds), ("tokens_left", &tokens)],
+    )
+    .map_err(AppError::Validation)?;
+    Ok(format!("{system_prompt}\n\n{line}"))
+}
+
+fn group_thousands(n: i64) -> String {
+    let digits = n.to_string();
+    let mut out = String::new();
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i).is_multiple_of(3) {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    out
+}
+
 /// The text of a final-answer reply. Tools are off for that call, so a
 /// model that still asks for one gets nothing run and its text is empty.
 fn final_answer_text(outcome: CompletionOutcome) -> String {
@@ -2155,13 +2199,14 @@ pub async fn run_agent_once(
         // agent with no routing configured gets exactly its pre-7a
         // behavior back (see `ai_gateway_service`'s own doc comment).
         let call_started = std::time::Instant::now();
+        let round_prompt = with_budget_line(&system_prompt, &limits, round, run_tokens)?;
         let gateway_outcome = match ai_gateway_service::dispatch(
             conn,
             workspace_id,
             master_key,
             agent,
             actor,
-            &system_prompt,
+            &round_prompt,
             &tools,
             &history,
             false,

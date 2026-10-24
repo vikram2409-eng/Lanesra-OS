@@ -217,6 +217,10 @@ impl Span {
     /// workspace's `trace_bodies` setting keeps bodies at all.
     pub fn body(&mut self, part: &'static str, text: &str) {
         let Some(inner) = &mut self.inner else { return };
+        // WP-0127: a do-not-persist node's own spans keep no bodies.
+        if crate::do_not_persist::bodies_suppressed() {
+            return;
+        }
         let mode = TRACES.with(|t| t.borrow().last().map(|a| a.bodies));
         match mode {
             Some(BodyMode::Off) | None => {}
