@@ -31,8 +31,8 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 |---|---|---|---|---|---|
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
 | [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | in_review | muse | `wp/WP-0101-identity-adr` | https://github.com/vikram2409-eng/Lanesra-OS/pull/672 |
-| [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
-| [WP-0140](work/P1/WP-0140-per-tool-caps-and-rate-limits.md) | Per-tool caps and rate limits | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
+| [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/720 |
+| [WP-0140](work/P1/WP-0140-per-tool-caps-and-rate-limits.md) | Per-tool caps and rate limits | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/720 |
 
 ## Ready to start (all dependencies done)
 
@@ -84,7 +84,7 @@ None.
 | [WP-0108](work/P1/WP-0108-agent-identities-and-credentials.md) | Agent Identities and credentials | E1.0 Identity foundation | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0107 |
 | [WP-0109](work/P1/WP-0109-trigger-migration-and-ui.md) | Trigger migration and Agent Identity UI | E1.0 Identity foundation | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0107, WP-0108 |
 | [WP-0110](work/P1/WP-0110-run-and-step-schema-extensions.md) | Run and step schema extensions | E1.2 Run model and trace | ✅ done | M | ✓Desktop ✓Team Workspace | WP-0009, WP-0007, WP-0107 |
-| [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | E1.2 Run model and trace | 🔨 in progress | L | ✓Desktop ✓Team Workspace | WP-0110 |
+| [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | E1.2 Run model and trace | 👀 in review | L | ✓Desktop ✓Team Workspace | WP-0110 |
 | [WP-0112](work/P1/WP-0112-run-events-over-sse-with-stable-schemas.md) | Run events over SSE with stable schemas | E1.2 Run model and trace | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0111 |
 | [WP-0113](work/P1/WP-0113-full-trace-conformance-suite-phase-1-gate-test.md) | Full-trace conformance suite (Phase 1 gate test) | E1.2 Run model and trace | ⚪ proposed | M | — | WP-0112, WP-0122, WP-0150, WP-0100 |
 | [WP-0120](work/P1/WP-0120-agent-persona-limits-and-reasoning-modes.md) | Agent persona, limits and reasoning modes | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0110, WP-0130 |
@@ -100,7 +100,7 @@ None.
 | [WP-0131](work/P1/WP-0131-task-contracts-and-context-bindings.md) | Task contracts and context bindings | E1.4 Task contracts and guardrails | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0110 |
 | [WP-0132](work/P1/WP-0132-output-validation-guardrail-retries-and-on-fail.md) | Output validation, guardrail retries and on_fail | E1.4 Task contracts and guardrails | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0131, WP-0133 |
 | [WP-0133](work/P1/WP-0133-guardrails-as-versioned-policy-objects.md) | Guardrails as versioned policy objects | E1.4 Task contracts and guardrails | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0009 |
-| [WP-0140](work/P1/WP-0140-per-tool-caps-and-rate-limits.md) | Per-tool caps and rate limits | E1.5 Tools and firewall | 🔨 in progress | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0122, WP-0111 |
+| [WP-0140](work/P1/WP-0140-per-tool-caps-and-rate-limits.md) | Per-tool caps and rate limits | E1.5 Tools and firewall | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0122, WP-0111 |
 | [WP-0141](work/P1/WP-0141-idempotency-keys-and-side-effect-safe-resume.md) | Idempotency keys and side-effect-safe resume | E1.5 Tools and firewall | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0110 |
 | [WP-0142](work/P1/WP-0142-gate-on-server-initiated-mcp-requests.md) | Gate on server-initiated MCP requests | E1.5 Tools and firewall | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0150 |
 | [WP-0143](work/P1/WP-0143-tool-catalog-credentials-and-delegation-guard-audit.md) | Tool catalog, credentials and delegation guard audit | E1.5 Tools and firewall | ✅ done | S | — | WP-0008 |

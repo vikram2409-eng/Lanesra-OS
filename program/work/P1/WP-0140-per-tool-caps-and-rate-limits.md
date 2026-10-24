@@ -3,7 +3,7 @@ id: WP-0140
 title: Per-tool caps and rate limits
 phase: 1
 epic: E1.5 Tools and firewall
-status: in_progress
+status: in_review
 owner: claude
 depends_on: [WP-0122, WP-0111]
 requirements: [REQ-LOOP-014, REQ-TOOL-008]
@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: [desktop, workspace, demo]
 docs: [policy-engine-tool-call-firewall]
 branch: claude/enterprise-build-planning-jxy2kq
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/720
 updated: 2026-10-24
 ---
 
@@ -60,3 +60,4 @@ Each tool binding caps calls per step, failures before disable, and result size 
   - Admin APIs: Administrator only, audited; Tauri commands and server dispatch. The desktop gets a **Tool limits** editor on each agent and **Rate limits** in the Policy Engine panel. The online demo has the same panels and rules: its simulated agents are refused when disabled or rate limited, and it can simulate a capped step.
   - Help: two sections in `policy-engine-tool-call-firewall`.
   - Tests: `core/tests/tool_caps.rs` (8), checking side effects on real records.
+- 2026-10-24 claude: In review in #720.

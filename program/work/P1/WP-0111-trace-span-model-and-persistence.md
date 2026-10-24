@@ -3,7 +3,7 @@ id: WP-0111
 title: Trace span model and persistence
 phase: 1
 epic: E1.2 Run model and trace
-status: in_progress
+status: in_review
 owner: claude
 depends_on: [WP-0110]
 requirements: [REQ-OBS-001, REQ-OBS-002]
@@ -13,7 +13,7 @@ delivered: [desktop, workspace]
 editions_reason: internal engine work with no user-visible surface of its own; the online demo's simulated runs reflect it through the Playground work packages
 docs: [run-traces]
 branch: claude/enterprise-build-planning-jxy2kq
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/720
 updated: 2026-10-24
 ---
 
@@ -61,3 +61,4 @@ Record a span tree for every run: run → step → round → model call and tool
   - Readers: `spans_for_run`, `span_bodies`; Tauri commands and server dispatch `set_ai_trace_bodies`, `list_run_spans`, `get_run_span_bodies`; the setting in Admin → LLM & MCP → Gateway → Observability.
   - Tests: `core/tests/trace_spans.rs` (7): the golden delegation tree, graph steps with a waiting run resumed in the same trace and a cancelled one closed, the overhead budget (about 0.7 ms per round in a debug build), the persist hook, the three body modes, admin-only audited setting, and no spans outside a run.
   - Help article `run-traces` added.
+- 2026-10-24 claude: In review in #720.
