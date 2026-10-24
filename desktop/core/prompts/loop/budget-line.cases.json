@@ -1,0 +1,19 @@
+{
+  "prompt": "loop/budget-line",
+  "note": "Checked by tests/prompt_catalog.rs against the active version: each case renders with its variables and the result must contain, start with, or leave out the listed text.",
+  "cases": [
+    {
+      "name": "rounds only",
+      "variables": { "rounds_left": "6 of 8 tool-calling rounds left.", "tokens_left": "" },
+      "expect_starts_with": "Budget for the rest of this run: 6 of 8 tool-calling rounds left.",
+      "expect_contains": ["Plan to finish within it"],
+      "expect_not_contains": ["{{", "tokens left"]
+    },
+    {
+      "name": "rounds and tokens",
+      "variables": { "rounds_left": "1 of 3 tool-calling rounds left.", "tokens_left": " 4,200 of 20,000 tokens left." },
+      "expect_contains": ["1 of 3 tool-calling rounds left. 4,200 of 20,000 tokens left.", "tools switched off"],
+      "expect_not_contains": ["{{"]
+    }
+  ]
+}

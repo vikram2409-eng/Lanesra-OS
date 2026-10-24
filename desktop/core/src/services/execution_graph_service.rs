@@ -430,6 +430,18 @@ pub fn validate_for_publish(graph: &ExecutionGraph) -> AppResult<()> {
         .collect();
 
     for node in &graph.nodes {
+        // WP-0127: only nodes the runtime can safely run again on resume may
+        // keep their output out of storage.
+        let do_not_persist = serde_json::from_str::<serde_json::Value>(&node.config_json)
+            .ok()
+            .and_then(|c| c.get("do_not_persist").and_then(serde_json::Value::as_bool))
+            .unwrap_or(false);
+        if do_not_persist && !matches!(node.node_type.as_str(), "agent" | "transform") {
+            return Err(AppError::Validation(format!(
+                "'{}' cannot be marked do-not-persist: only agent and transform nodes can, because the runtime runs them again to fetch the value on resume",
+                node.node_key
+            )));
+        }
         let outs = outgoing.get(node.id.as_str()).cloned().unwrap_or_default();
         match node.node_type.as_str() {
             "end" => {

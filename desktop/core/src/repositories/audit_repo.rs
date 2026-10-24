@@ -14,6 +14,11 @@ pub fn record(
     summary: &str,
     details_json: Option<&str>,
 ) -> rusqlite::Result<()> {
+    // WP-0127: no do-not-persist value reaches the audit trail.
+    let summary = crate::do_not_persist::scrub(summary);
+    let details_json = crate::do_not_persist::scrub_opt(details_json);
+    let summary = summary.as_str();
+    let details_json = details_json.as_deref();
     conn.execute(
         "INSERT INTO audit_events (id, workspace_id, occurred_at, user_id, event_type, entity_type, entity_id, summary, details_json)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",

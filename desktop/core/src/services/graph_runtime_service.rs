@@ -567,7 +567,9 @@ async fn execute_node(
                 session_key: None,
                 run_id: Some(run.id.clone()),
             };
-            match chat_service::run_agent_once_with_text(
+            // WP-0127: a do-not-persist agent's own spans keep no bodies.
+            let suppression = is_do_not_persist(node).then(crate::do_not_persist::suppress_bodies);
+            let result = chat_service::run_agent_once_with_text(
                 conn,
                 workspace_id,
                 master_key,
@@ -576,10 +578,15 @@ async fn execute_node(
                 &input_text,
                 &memory_context,
             )
-            .await
-            {
+            .await;
+            drop(suppression);
+            match result {
                 Ok(outcome) => {
-                    context.insert(node.node_key.clone(), json!({"output": outcome.final_text}));
+                    let output = json!({"output": outcome.final_text});
+                    if is_do_not_persist(node) {
+                        crate::do_not_persist::mark(&output);
+                    }
+                    context.insert(node.node_key.clone(), output);
                     // WP-0121: an agent that stopped at a limit gave a
                     // partial answer; the step and, at the end, the run
                     // say so.
@@ -664,6 +671,9 @@ async fn execute_node(
                         context,
                     )),
                 );
+            }
+            if is_do_not_persist(node) {
+                crate::do_not_persist::mark(&Value::Object(resolved.clone()));
             }
             context.insert(node.node_key.clone(), Value::Object(resolved.clone()));
             record!(
@@ -1046,6 +1056,32 @@ async fn run_parallel_branches(
     Ok((join_id, branch_oks))
 }
 
+/// WP-0127: a node whose output is used in memory but never stored. Only
+/// agent and transform nodes can be marked: they are the nodes the runtime
+/// can safely run again to fetch the value back on resume.
+fn is_do_not_persist(node: &GraphNode) -> bool {
+    matches!(node.node_type.as_str(), "agent" | "transform")
+        && serde_json::from_str::<Value>(&node.config_json)
+            .ok()
+            .and_then(|c| c.get("do_not_persist").and_then(Value::as_bool))
+            .unwrap_or(false)
+}
+
+/// Moves do-not-persist outputs out of `context` (which is about to be
+/// stored) into the run's in-memory values.
+fn hold_memory_only(
+    graph: &ExecutionGraph,
+    context: &mut HashMap<String, Value>,
+    memory_only: &mut HashMap<String, Value>,
+) {
+    for node in graph.nodes.iter().filter(|n| is_do_not_persist(n)) {
+        if let Some(value) = context.remove(&node.node_key) {
+            crate::do_not_persist::mark(&value);
+            memory_only.insert(node.node_key.clone(), value);
+        }
+    }
+}
+
 async fn run_from(
     conn: &Connection,
     workspace_id: &str,
@@ -1064,6 +1100,60 @@ async fn run_from(
         &graph.name,
         json!({"lanesra.graph.id": graph.id}),
     );
+    // WP-0127: do-not-persist values live here, never in the stored
+    // context. A resumed run has none, so it runs each marked node that
+    // already completed again to fetch its value back.
+    let _do_not_persist = crate::do_not_persist::scope();
+    let mut memory_only: HashMap<String, Value> = HashMap::new();
+    {
+        let run = graph_run_repo::get_run(conn, run_id)?
+            .ok_or_else(|| AppError::NotFound("Run".into()))?;
+        let completed: Vec<String> = graph_run_repo::list_run_nodes(conn, run_id)?
+            .into_iter()
+            .filter(|n| n.status == "completed" || n.status == "completed_partial")
+            .map(|n| n.node_key)
+            .collect();
+        let mut context = parse_context(&run.context_json);
+        for node in graph.nodes.iter().filter(|n| is_do_not_persist(n)) {
+            if !completed.contains(&node.node_key) || context.contains_key(&node.node_key) {
+                continue;
+            }
+            let step_span = super::trace_service::start(
+                conn,
+                "step",
+                &node.node_key,
+                json!({
+                    "lanesra.step.kind": "graph_node",
+                    "lanesra.node.key": node.node_key,
+                    "lanesra.node.type": node.node_type,
+                    "lanesra.node.refetched": true,
+                }),
+            );
+            let refetched = execute_node(
+                conn,
+                workspace_id,
+                master_key,
+                actor,
+                graph,
+                node,
+                &run,
+                &mut context,
+            )
+            .await;
+            step_span.end_result(conn, &refetched, json!({}));
+            if let Err(e) = refetched {
+                fail_run(
+                    conn,
+                    run_id,
+                    "error",
+                    &format!("could not fetch '{}' again on resume: {e}", node.node_key),
+                )?;
+                return graph_run_repo::get_run(conn, run_id)?
+                    .ok_or_else(|| AppError::NotFound("Run".into()));
+            }
+            hold_memory_only(graph, &mut context, &mut memory_only);
+        }
+    }
     let mut current_id = start_node_id.to_string();
     loop {
         let run = graph_run_repo::get_run(conn, run_id)?
@@ -1113,6 +1203,7 @@ async fn run_from(
             break;
         }
         let mut context = parse_context(&run.context_json);
+        context.extend(memory_only.clone());
         // WP-0111: one step span per node attempt.
         let step_span = super::trace_service::start(
             conn,
@@ -1140,6 +1231,7 @@ async fn run_from(
             &executed,
             json!({"lanesra.node.partial": context.contains_key(PARTIAL_STOP_KEY)}),
         );
+        hold_memory_only(graph, &mut context, &mut memory_only);
         match executed {
             Ok(NodeOutcome::Continue(next_id)) => {
                 checkpoint(
