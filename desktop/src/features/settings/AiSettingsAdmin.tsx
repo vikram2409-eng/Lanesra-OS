@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
-import type { AiProvider, AiProviderInput, AiSettingsInput } from "../../lib/types";
+import type { AiProvider, AiProviderInput, AiSettingsInput, TraceBodiesMode } from "../../lib/types";
 
 function apiErrorMessage(err: unknown, fallback: string): string {
   return err instanceof ApiError ? err.message : fallback;
@@ -251,6 +251,10 @@ function GatewayTab() {
       queryClient.invalidateQueries({ queryKey: ["aiSettings"] });
     },
   });
+  const saveTraceBodies = useMutation({
+    mutationFn: (trace_bodies: TraceBodiesMode) => api.setAiTraceBodies({ trace_bodies }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["aiSettings"] }),
+  });
   const saveEmbeddingModel = useMutation({
     mutationFn: (embedding_model: string | null) => api.setAiEmbeddingModel({ embedding_model }),
     onSuccess: () => {
@@ -317,6 +321,23 @@ function GatewayTab() {
           <button className="btn btn-secondary" disabled={saveOtlpEndpoint.isPending} onClick={() => saveOtlpEndpoint.mutate(otlpValue.trim() === "" ? null : otlpValue)}>
             {saveOtlpEndpoint.isPending ? "Saving..." : "Save"}
           </button>
+        </div>
+        <div className="field" style={{ marginTop: 12 }}>
+          <label htmlFor="trace-bodies">Prompts and outputs in run traces</label>
+          <select
+            id="trace-bodies"
+            value={settingsQuery.data?.trace_bodies ?? "off"}
+            disabled={saveTraceBodies.isPending}
+            onChange={(e) => saveTraceBodies.mutate(e.target.value as TraceBodiesMode)}
+          >
+            <option value="off">Off - keep timings, tokens and verdicts only</option>
+            <option value="redacted">Redacted - keep them with sensitive data removed</option>
+            <option value="full">Full - keep them as sent</option>
+          </select>
+          <p style={{ color: "var(--text-muted)", fontSize: 12, margin: "4px 0 0" }}>
+            Every run records a trace of its steps, model calls and tool calls. This decides whether the text sent to and received from models
+            and tools is kept with it. Agent credentials are removed in every mode, and each change is audited.
+          </p>
         </div>
       </div>
 

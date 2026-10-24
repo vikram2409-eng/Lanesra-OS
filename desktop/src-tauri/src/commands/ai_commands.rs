@@ -15,7 +15,13 @@ use lanesra_core::models::ai::{
     AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiSettings,
     AiSettingsInput, AiTestResult, AiTokenUsageSummary, VectorSearchStatus,
 };
-use lanesra_core::services::{ai_service, vector_search_service};
+use lanesra_core::models::run_trace::{RunSpan, SpanBody, TraceBodiesInput};
+use lanesra_core::models::tool_limits::{
+    AgentToolCap, AgentToolCapInput, StoredToolResult, ToolRateLimit, ToolRateLimitInput,
+};
+use lanesra_core::services::{
+    ai_service, tool_limits_service, trace_service, vector_search_service,
+};
 
 #[tauri::command]
 pub fn get_ai_settings(state: State<AppState>) -> AppResult<AiSettings> {
@@ -115,4 +121,140 @@ pub fn set_ai_embedding_model(
 pub fn get_vector_search_status(state: State<AppState>) -> AppResult<VectorSearchStatus> {
     let conn = state.conn.lock().unwrap();
     vector_search_service::status(&conn, &require_workspace_id(&conn)?)
+}
+
+/// WP-0111: whether run traces keep prompt and output bodies (`off`,
+/// `redacted` or `full`). Administrator only, and audited.
+#[tauri::command]
+pub fn set_ai_trace_bodies(
+    state: State<AppState>,
+    input: TraceBodiesInput,
+) -> AppResult<AiSettings> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    trace_service::set_trace_bodies(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0111: a run's span tree, in the order the spans started.
+#[tauri::command]
+pub fn list_run_spans(
+    state: State<AppState>,
+    run_kind: String,
+    run_id: String,
+) -> AppResult<Vec<RunSpan>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    trace_service::spans_for_run(&conn, &workspace_id, &run_kind, &run_id)
+}
+
+/// WP-0111: a span's stored bodies, for an Administrator.
+#[tauri::command]
+pub fn get_run_span_bodies(state: State<AppState>, span_id: String) -> AppResult<Vec<SpanBody>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    trace_service::span_bodies(
+        &conn,
+        &workspace_id,
+        &span_id,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0140: an agent's tool caps (calls per step, failures before
+/// disable, result size).
+#[tauri::command]
+pub fn list_agent_tool_caps(
+    state: State<AppState>,
+    agent_id: String,
+) -> AppResult<Vec<AgentToolCap>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    tool_limits_service::list_agent_tool_caps(&conn, &workspace_id, &agent_id)
+}
+
+#[tauri::command]
+pub fn set_agent_tool_caps(
+    state: State<AppState>,
+    agent_id: String,
+    caps: Vec<AgentToolCapInput>,
+) -> AppResult<Vec<AgentToolCap>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    tool_limits_service::set_agent_tool_caps(
+        &conn,
+        &workspace_id,
+        &agent_id,
+        &caps,
+        current_actor(&state).as_deref(),
+    )
+}
+
+#[tauri::command]
+pub fn reenable_agent_tool(
+    state: State<AppState>,
+    agent_id: String,
+    tool_name: String,
+) -> AppResult<Vec<AgentToolCap>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    tool_limits_service::reenable_agent_tool(
+        &conn,
+        &workspace_id,
+        &agent_id,
+        &tool_name,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0140: tool, connector and workspace rate limits.
+#[tauri::command]
+pub fn list_tool_rate_limits(state: State<AppState>) -> AppResult<Vec<ToolRateLimit>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    tool_limits_service::list_rate_limits(&conn, &workspace_id)
+}
+
+#[tauri::command]
+pub fn save_tool_rate_limit(
+    state: State<AppState>,
+    input: ToolRateLimitInput,
+) -> AppResult<Vec<ToolRateLimit>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    tool_limits_service::save_rate_limit(
+        &conn,
+        &workspace_id,
+        &input,
+        current_actor(&state).as_deref(),
+    )
+}
+
+#[tauri::command]
+pub fn delete_tool_rate_limit(state: State<AppState>, id: String) -> AppResult<Vec<ToolRateLimit>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    tool_limits_service::delete_rate_limit(
+        &conn,
+        &workspace_id,
+        &id,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0140: a tool result too large for the model's context, kept whole.
+#[tauri::command]
+pub fn get_stored_tool_result(state: State<AppState>, id: String) -> AppResult<StoredToolResult> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    tool_limits_service::get_stored_result(
+        &conn,
+        &workspace_id,
+        &id,
+        current_actor(&state).as_deref(),
+    )
 }

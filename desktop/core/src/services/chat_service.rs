@@ -66,6 +66,8 @@ use crate::services::ai_service::{
 };
 use crate::services::api_object_service;
 use crate::services::policy_engine_service;
+use crate::services::tool_limits_service;
+use crate::services::trace_service::{self, SpanStatus};
 
 /// Why a run ended early with a partial answer (ADR-0007 §4 stop reasons).
 pub const STOP_LIMIT_ROUNDS: &str = "limit_rounds";
@@ -1202,7 +1204,44 @@ fn apply_tool_firewall(
     arguments: &Value,
 ) -> AppResult<()> {
     let source = tool_source(name);
-    match policy_engine_service::evaluate(conn, workspace_id, agent_id, name, source)? {
+    let decision = policy_engine_service::evaluate(conn, workspace_id, agent_id, name, source)?;
+    // WP-0140 AC-2: a call the policy allows is checked against the tool,
+    // connector and workspace rate limits before it can run.
+    let rate = match &decision {
+        PolicyDecision::Allow => {
+            super::tool_limits_service::check_and_count_call(conn, workspace_id, name)
+        }
+        _ => Ok(()),
+    };
+    // WP-0111: the firewall's verdict is its own span under the tool call.
+    let (verdict, risk) = match &decision {
+        PolicyDecision::Allow if rate.is_err() => ("rate_limited", None),
+        PolicyDecision::Allow => ("allow", None),
+        PolicyDecision::Deny { risk_level } => ("deny", Some(risk_level.as_str())),
+        PolicyDecision::RequireApproval { risk_level } => {
+            ("require_approval", Some(risk_level.as_str()))
+        }
+    };
+    trace_service::start(
+        conn,
+        "policy",
+        "tool_call_firewall",
+        json!({"lanesra.policy.verdict": verdict, "lanesra.policy.risk": risk, "lanesra.tool.name": name}),
+    )
+    .end(
+        conn,
+        if verdict == "allow" {
+            SpanStatus::Ok
+        } else {
+            SpanStatus::Error
+        },
+        match &rate {
+            Err(e) => Value::Object(trace_service::error_attributes(e)),
+            Ok(()) => json!({}),
+        },
+    );
+    rate?;
+    match decision {
         PolicyDecision::Allow => Ok(()),
         PolicyDecision::Deny { risk_level } => Err(AppError::PolicyBlocked(format!(
             "'{name}' is blocked by this workspace's agent policy (risk level: {}).",
@@ -1405,6 +1444,17 @@ fn synthetic_message(
 /// `use_skill`/`delegate_to_agent` only when this agent actually has
 /// skills/delegates attached (no point offering a tool with nothing
 /// behind it).
+/// The names of every tool `agent` is offered (WP-0140 caps bind to these).
+pub(crate) fn agent_tool_names(
+    conn: &Connection,
+    agent: &AiAgentDefinition,
+) -> AppResult<Vec<String>> {
+    Ok(agent_tools(conn, agent)?
+        .into_iter()
+        .map(|t| t.name)
+        .collect())
+}
+
 fn agent_tools(conn: &Connection, agent: &AiAgentDefinition) -> AppResult<Vec<ToolSpec>> {
     let all_record = record_tools();
     let all_admin = admin_tools();
@@ -1739,6 +1789,19 @@ fn execute_agent_tool<'a>(
                     ))
                 })?;
                 let seed = vec![synthetic_message("user", Some(input), None, None)];
+                // WP-0111: a delegation is a child step of the tool call.
+                let step_span = trace_service::start(
+                    conn,
+                    "step",
+                    &format!("delegate:{}", target.name),
+                    json!({
+                        "lanesra.step.kind": "delegation",
+                        "lanesra.agent.id": target.id,
+                        "lanesra.agent.name": target.name,
+                        "lanesra.agent.version_id": target.current_version_id,
+                        "lanesra.delegated_by": agent.id,
+                    }),
+                );
                 // Delegation preserves the same memory context - a
                 // sub-agent's `remember`/`get_memory` calls scope to the
                 // same session/run its supervisor is already running in.
@@ -1751,7 +1814,13 @@ fn execute_agent_tool<'a>(
                     seed,
                     memory_context,
                 )
-                .await?;
+                .await;
+                step_span.end_result(
+                    conn,
+                    &outcome,
+                    json!({"lanesra.stop_reason": outcome.as_ref().ok().and_then(|o| o.stop_reason)}),
+                );
+                let outcome = outcome?;
                 Ok(json!({"answer": outcome.final_text}))
             }
             "invoke_action" => {
@@ -1870,6 +1939,92 @@ fn execute_agent_tool<'a>(
 /// `seed_history` - the caller decides whether to persist all of them
 /// (`send_agent_message` does) or just log a summary (a Pipeline/Trigger
 /// run, Phase 6b).
+/// WP-0111: the text a trace keeps as a message's body.
+fn message_text(m: &ChatMessage) -> String {
+    match (&m.content, &m.tool_calls) {
+        (Some(c), _) => c.clone(),
+        (None, Some(calls)) => calls.to_string(),
+        (None, None) => String::new(),
+    }
+}
+
+/// Opens a round's model_call span (WP-0111), keeping the newest message
+/// sent as its input body.
+fn start_model_call_span(
+    conn: &Connection,
+    agent: &AiAgentDefinition,
+    round: u32,
+    tools_off: bool,
+    history: &[ChatMessage],
+) -> trace_service::Span {
+    let mut span = trace_service::start(
+        conn,
+        "model_call",
+        "model_call",
+        json!({
+            "lanesra.round": round,
+            "lanesra.agent.id": agent.id,
+            "lanesra.tools_off": tools_off,
+        }),
+    );
+    if span.is_recording() {
+        if let Some(last) = history.last() {
+            span.body("input", &message_text(last));
+        }
+    }
+    span
+}
+
+/// The model call's ADR-0008 attributes: OpenTelemetry GenAI names for the
+/// model and token counts, and which tier answered. No cost: prices come
+/// with the model catalog (WP-0146).
+fn record_model_call(
+    span: &mut trace_service::Span,
+    outcome: &ai_gateway_service::GatewayOutcome,
+    started: std::time::Instant,
+) {
+    if !span.is_recording() {
+        return;
+    }
+    span.set("gen_ai.system", json!(outcome.provider));
+    span.set("gen_ai.request.model", json!(outcome.model));
+    span.set(
+        "gen_ai.usage.input_tokens",
+        json!(outcome.usage.input_tokens),
+    );
+    span.set(
+        "gen_ai.usage.output_tokens",
+        json!(outcome.usage.output_tokens),
+    );
+    span.set("lanesra.served_by", json!(outcome.served_by));
+    span.set(
+        "lanesra.latency_ms",
+        json!(started.elapsed().as_millis() as i64),
+    );
+    match &outcome.outcome {
+        CompletionOutcome::Text(text) => {
+            span.set("lanesra.model.reply", json!("text"));
+            span.body("output", text);
+        }
+        CompletionOutcome::ToolCalls { calls, .. } => {
+            span.set("lanesra.model.reply", json!("tool_calls"));
+            span.set("lanesra.model.tool_calls", json!(calls.len()));
+            let names: Vec<&str> = calls.iter().map(|c| c.name.as_str()).collect();
+            span.body("output", &json!(names).to_string());
+        }
+    }
+}
+
+/// Closes `span` as failed with `e`'s class and code, and hands `e` back.
+fn end_span_with_error(conn: &Connection, span: trace_service::Span, e: AppError) -> AppError {
+    span.end(
+        conn,
+        SpanStatus::Error,
+        Value::Object(trace_service::error_attributes(&e)),
+    );
+    e
+}
+
 #[derive(Debug)]
 pub struct AgentRunOutcome {
     pub final_text: String,
@@ -1980,12 +2135,18 @@ pub async fn run_agent_once(
     // outcomes only, not every tool error - a tool that genuinely fails
     // (a bad argument, a deleted record) isn't a policy violation.
     let mut policy_violations: i64 = 0;
+    // WP-0140: calls per tool in this step, for the binding caps.
+    let mut calls_this_step: std::collections::HashMap<String, i64> =
+        std::collections::HashMap::new();
     // WP-0121: the agent's limits, and the tokens this run has used so far.
     let limits = AgentRunLimits::for_routing(agent.model_routing.as_ref());
     let mut run_tokens: i64 = 0;
     let mut stop_reason = STOP_LIMIT_ROUNDS;
 
-    for _round in 0..limits.max_rounds {
+    for round in 0..limits.max_rounds {
+        // WP-0111: one model_call span per round; the round's tool calls
+        // nest under it, so it closes after them.
+        let mut model_span = start_model_call_span(conn, agent, round + 1, false, &history);
         // Phase 7a: every agent run goes through the Gateway, not
         // straight to `ai_service::complete_with_tools` - it resolves
         // this agent's `model_routing` policy (primary/fallback/
@@ -1993,7 +2154,8 @@ pub async fn run_agent_once(
         // forced air-gapping) and records real token usage itself; an
         // agent with no routing configured gets exactly its pre-7a
         // behavior back (see `ai_gateway_service`'s own doc comment).
-        let gateway_outcome = ai_gateway_service::dispatch(
+        let call_started = std::time::Instant::now();
+        let gateway_outcome = match ai_gateway_service::dispatch(
             conn,
             workspace_id,
             master_key,
@@ -2004,7 +2166,12 @@ pub async fn run_agent_once(
             &history,
             false,
         )
-        .await?;
+        .await
+        {
+            Ok(outcome) => outcome,
+            Err(e) => return Err(end_span_with_error(conn, model_span, e)),
+        };
+        record_model_call(&mut model_span, &gateway_outcome, call_started);
         run_tokens += gateway_outcome.usage.input_tokens + gateway_outcome.usage.output_tokens;
         let outcome = gateway_outcome.outcome;
         match outcome {
@@ -2014,6 +2181,24 @@ pub async fn run_agent_once(
                         Ok(parsed) => validate_output_schema(schema, &parsed),
                         Err(e) => vec![format!("Response is not valid JSON: {e}")],
                     };
+                    trace_service::start(
+                        conn,
+                        "guardrail",
+                        "output_schema",
+                        json!({"lanesra.guardrail.kind": "output_schema"}),
+                    )
+                    .end(
+                        conn,
+                        if violations.is_empty() {
+                            SpanStatus::Ok
+                        } else {
+                            SpanStatus::Error
+                        },
+                        json!({
+                            "lanesra.guardrail.verdict": if violations.is_empty() { "pass" } else { "fail" },
+                            "lanesra.guardrail.violations": violations.len(),
+                        }),
+                    );
                     if !violations.is_empty() && !structured_output_repaired {
                         // One repair retry (spec'd, not indefinite): tell
                         // the model exactly what's wrong and let the next
@@ -2034,10 +2219,12 @@ pub async fn run_agent_once(
                             synthetic_message("user", Some(&repair_prompt), None, None);
                         history.push(repair_msg.clone());
                         produced.push(repair_msg);
+                        model_span.end(conn, SpanStatus::Ok, json!({}));
                         continue;
                     }
                 }
                 produced.push(synthetic_message("assistant", Some(&text), None, None));
+                model_span.end(conn, SpanStatus::Ok, json!({}));
                 return Ok(AgentRunOutcome {
                     final_text: text,
                     produced,
@@ -2057,10 +2244,11 @@ pub async fn run_agent_once(
                     {
                         repeat_streak += 1;
                         if repeat_streak >= 3 {
-                            return Err(AppError::Validation(format!(
+                            let e = AppError::Validation(format!(
                                 "This agent tried to call '{}' with the same input 3 times in a row - stopping to avoid a runaway loop. Escalate to a human if this keeps happening.",
                                 only_call.name
-                            )));
+                            ));
+                            return Err(end_span_with_error(conn, model_span, e));
                         }
                     }
                     Some(only_call) => {
@@ -2078,6 +2266,16 @@ pub async fn run_agent_once(
                 history.push(assistant_msg.clone());
                 produced.push(assistant_msg);
                 for call in calls {
+                    let mut tool_span = trace_service::start(
+                        conn,
+                        "tool_call",
+                        &call.name,
+                        json!({
+                            "lanesra.tool.name": call.name,
+                            "lanesra.tool.source": tool_source(&call.name),
+                        }),
+                    );
+                    tool_span.body("input", &call.arguments.to_string());
                     if let Err(problem) = ai_service::check_tool_call(&call, &tools) {
                         malformed_calls += 1;
                         let tool_msg = synthetic_message(
@@ -2088,11 +2286,46 @@ pub async fn run_agent_once(
                         );
                         history.push(tool_msg.clone());
                         produced.push(tool_msg);
+                        tool_span.end(
+                            conn,
+                            SpanStatus::Error,
+                            json!({"lanesra.tool.outcome": "malformed", "lanesra.error.code": "validation.arguments"}),
+                        );
                         if malformed_calls >= MAX_MALFORMED_TOOL_CALLS {
-                            return Err(too_many_malformed_calls());
+                            return Err(end_span_with_error(
+                                conn,
+                                model_span,
+                                too_many_malformed_calls(),
+                            ));
                         }
                         continue;
                     }
+                    // WP-0140 AC-1: the binding's caps, checked before the call.
+                    let calls_so_far = calls_this_step.entry(call.name.clone()).or_insert(0);
+                    let cap = match tool_limits_service::check_binding(
+                        conn,
+                        &agent.id,
+                        &call.name,
+                        *calls_so_far,
+                    )? {
+                        tool_limits_service::CapCheck::Refuse { kind, error } => {
+                            let tool_msg = synthetic_message(
+                                "tool",
+                                Some(&format!("Error: {error}. The tool was not run.")),
+                                None,
+                                Some(&call.id),
+                            );
+                            history.push(tool_msg.clone());
+                            produced.push(tool_msg);
+                            let mut attrs = trace_service::error_attributes(&error);
+                            attrs.insert("lanesra.tool.outcome".into(), json!("capped"));
+                            attrs.insert("lanesra.tool.cap".into(), json!(kind));
+                            tool_span.end(conn, SpanStatus::Error, Value::Object(attrs));
+                            continue;
+                        }
+                        tool_limits_service::CapCheck::Run(cap) => cap,
+                    };
+                    *calls_so_far += 1;
                     let result = execute_agent_tool(
                         conn,
                         workspace_id,
@@ -2104,13 +2337,48 @@ pub async fn run_agent_once(
                     )
                     .await;
                     let ok = result.is_ok();
-                    if matches!(&result, Err(AppError::PolicyBlocked(_))) {
+                    let blocked = matches!(&result, Err(AppError::PolicyBlocked(_)));
+                    if blocked {
                         policy_violations += 1;
                     }
-                    let content = match result {
+                    // A refusal by policy is not the tool failing.
+                    let refused =
+                        blocked || matches!(&result, Err(e) if e.class() == ErrorClass::Policy);
+                    let tool_outcome = match (&result, refused) {
+                        (Ok(_), _) => "ok",
+                        (Err(_), true) => "blocked",
+                        (Err(_), false) => "error",
+                    };
+                    let tool_error = result.as_ref().err().map(trace_service::error_attributes);
+                    let mut content = match result {
                         Ok(value) => value.to_string(),
                         Err(e) => format!("Error: {e}"),
                     };
+                    if let Some(cap) = &cap {
+                        if !refused && tool_limits_service::record_binding_outcome(conn, cap, ok)? {
+                            tool_span.set("lanesra.tool.cap", json!("disabled_after_failures"));
+                        }
+                        if let Some(max) = cap.max_result_chars {
+                            if ok && content.chars().count() as i64 > max {
+                                let (replacement, stored_id) =
+                                    tool_limits_service::store_large_result(
+                                        conn,
+                                        workspace_id,
+                                        &agent.id,
+                                        &call.name,
+                                        &content,
+                                        max,
+                                    )?;
+                                tool_span.set("lanesra.tool.cap", json!("result_size"));
+                                tool_span.set("lanesra.tool.result_ref", json!(stored_id));
+                                tool_span.set(
+                                    "lanesra.tool.result_chars",
+                                    json!(content.chars().count()),
+                                );
+                                content = replacement;
+                            }
+                        }
+                    }
                     // AI Agent Platform v2, Phase 1: agent identity attached
                     // to the audit trail alongside the initiating user, not
                     // in place of it - the entity-service call this tool
@@ -2142,10 +2410,23 @@ pub async fn run_agent_once(
                             .to_string(),
                         ),
                     );
+                    tool_span.body("output", &content);
+                    let mut tool_attrs = tool_error.unwrap_or_default();
+                    tool_attrs.insert("lanesra.tool.outcome".into(), json!(tool_outcome));
+                    tool_span.end(
+                        conn,
+                        if ok {
+                            SpanStatus::Ok
+                        } else {
+                            SpanStatus::Error
+                        },
+                        Value::Object(tool_attrs),
+                    );
                     let tool_msg = synthetic_message("tool", Some(&content), None, Some(&call.id));
                     history.push(tool_msg.clone());
                     produced.push(tool_msg);
                 }
+                model_span.end(conn, SpanStatus::Ok, json!({}));
             }
         }
         if limits
@@ -2158,7 +2439,10 @@ pub async fn run_agent_once(
     }
     // WP-0121: a limit was reached. Ask once for a final answer with tools
     // off and keep it as the run's partial result.
-    let gateway_outcome = ai_gateway_service::dispatch(
+    let mut model_span = start_model_call_span(conn, agent, limits.max_rounds + 1, true, &history);
+    model_span.set("lanesra.stop_reason", json!(stop_reason));
+    let call_started = std::time::Instant::now();
+    let gateway_outcome = match ai_gateway_service::dispatch(
         conn,
         workspace_id,
         master_key,
@@ -2169,7 +2453,13 @@ pub async fn run_agent_once(
         &history,
         true,
     )
-    .await?;
+    .await
+    {
+        Ok(outcome) => outcome,
+        Err(e) => return Err(end_span_with_error(conn, model_span, e)),
+    };
+    record_model_call(&mut model_span, &gateway_outcome, call_started);
+    model_span.end(conn, SpanStatus::Ok, json!({}));
     let text = final_answer_text(gateway_outcome.outcome);
     produced.push(synthetic_message("assistant", Some(&text), None, None));
     Ok(AgentRunOutcome {

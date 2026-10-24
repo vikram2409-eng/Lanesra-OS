@@ -1,0 +1,150 @@
+[
+  {
+    "attributes": {
+      "lanesra.run.kind": "pipeline",
+      "lanesra.run.target_type": "pipeline",
+      "lanesra.run.topology": "sequential",
+      "lanesra.trace_bodies": "off"
+    },
+    "children": [
+      {
+        "attributes": {
+          "lanesra.agent.name": "Lead",
+          "lanesra.step.kind": "pipeline_step",
+          "lanesra.step.order": 0
+        },
+        "children": [
+          {
+            "attributes": {
+              "gen_ai.request.model": "scripted-model",
+              "gen_ai.system": "scripted",
+              "gen_ai.usage.input_tokens": 100,
+              "gen_ai.usage.output_tokens": 20,
+              "lanesra.model.reply": "tool_calls",
+              "lanesra.round": 1,
+              "lanesra.served_by": "primary",
+              "lanesra.tools_off": false
+            },
+            "children": [
+              {
+                "attributes": {
+                  "lanesra.tool.name": "delegate_to_agent",
+                  "lanesra.tool.outcome": "ok",
+                  "lanesra.tool.source": "agent_internal"
+                },
+                "children": [
+                  {
+                    "attributes": {
+                      "lanesra.policy.risk": null,
+                      "lanesra.policy.verdict": "allow",
+                      "lanesra.tool.name": "delegate_to_agent"
+                    },
+                    "children": [],
+                    "kind": "policy",
+                    "name": "tool_call_firewall",
+                    "status": "ok"
+                  },
+                  {
+                    "attributes": {
+                      "lanesra.agent.name": "Researcher",
+                      "lanesra.step.kind": "delegation"
+                    },
+                    "children": [
+                      {
+                        "attributes": {
+                          "gen_ai.request.model": "scripted-model",
+                          "gen_ai.system": "scripted",
+                          "gen_ai.usage.input_tokens": 100,
+                          "gen_ai.usage.output_tokens": 20,
+                          "lanesra.model.reply": "tool_calls",
+                          "lanesra.round": 1,
+                          "lanesra.served_by": "primary",
+                          "lanesra.tools_off": false
+                        },
+                        "children": [
+                          {
+                            "attributes": {
+                              "lanesra.tool.name": "list_objects",
+                              "lanesra.tool.outcome": "ok",
+                              "lanesra.tool.source": "record"
+                            },
+                            "children": [
+                              {
+                                "attributes": {
+                                  "lanesra.policy.risk": null,
+                                  "lanesra.policy.verdict": "allow",
+                                  "lanesra.tool.name": "list_objects"
+                                },
+                                "children": [],
+                                "kind": "policy",
+                                "name": "tool_call_firewall",
+                                "status": "ok"
+                              }
+                            ],
+                            "kind": "tool_call",
+                            "name": "list_objects",
+                            "status": "ok"
+                          }
+                        ],
+                        "kind": "model_call",
+                        "name": "model_call",
+                        "status": "ok"
+                      },
+                      {
+                        "attributes": {
+                          "gen_ai.request.model": "scripted-model",
+                          "gen_ai.system": "scripted",
+                          "gen_ai.usage.input_tokens": 80,
+                          "gen_ai.usage.output_tokens": 30,
+                          "lanesra.model.reply": "text",
+                          "lanesra.round": 2,
+                          "lanesra.served_by": "primary",
+                          "lanesra.tools_off": false
+                        },
+                        "children": [],
+                        "kind": "model_call",
+                        "name": "model_call",
+                        "status": "ok"
+                      }
+                    ],
+                    "kind": "step",
+                    "name": "delegate:Researcher",
+                    "status": "ok"
+                  }
+                ],
+                "kind": "tool_call",
+                "name": "delegate_to_agent",
+                "status": "ok"
+              }
+            ],
+            "kind": "model_call",
+            "name": "model_call",
+            "status": "ok"
+          },
+          {
+            "attributes": {
+              "gen_ai.request.model": "scripted-model",
+              "gen_ai.system": "scripted",
+              "gen_ai.usage.input_tokens": 80,
+              "gen_ai.usage.output_tokens": 30,
+              "lanesra.model.reply": "text",
+              "lanesra.round": 2,
+              "lanesra.served_by": "primary",
+              "lanesra.tools_off": false
+            },
+            "children": [],
+            "kind": "model_call",
+            "name": "model_call",
+            "status": "ok"
+          }
+        ],
+        "kind": "step",
+        "name": "Lead",
+        "status": "ok"
+      }
+    ],
+    "kind": "run",
+    "name": "<run>",
+    "status": "ok"
+  }
+]

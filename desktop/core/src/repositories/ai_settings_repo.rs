@@ -22,6 +22,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AiSettings> {
         daily_token_budget: row.get("daily_token_budget")?,
         otlp_endpoint: row.get("otlp_endpoint")?,
         embedding_model: row.get("embedding_model")?,
+        trace_bodies: row.get("trace_bodies")?,
         updated_at: row.get("updated_at")?,
         updated_by: row.get("updated_by")?,
     })
@@ -163,6 +164,15 @@ pub fn set_embedding_model(
     conn.execute(
         "UPDATE ai_settings SET embedding_model = ?1 WHERE workspace_id = ?2",
         rusqlite::params![embedding_model, workspace_id],
+    )?;
+    Ok(())
+}
+
+/// WP-0111: `off`, `redacted` or `full`; the service checks the value.
+pub fn set_trace_bodies(conn: &Connection, workspace_id: &str, mode: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE ai_settings SET trace_bodies = ?1 WHERE workspace_id = ?2",
+        rusqlite::params![mode, workspace_id],
     )?;
     Ok(())
 }

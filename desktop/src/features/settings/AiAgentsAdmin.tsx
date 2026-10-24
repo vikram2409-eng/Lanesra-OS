@@ -11,6 +11,8 @@ import { AGENT_TEMPLATES, type AgentTemplateDef } from "../../lib/agentTemplates
 import { RISK_LEVELS, RISK_LEVEL_LABELS } from "../../lib/types";
 import type {
   AgentConnectorToolOption,
+  AgentToolCapInput,
+  ToolRateLimitInput,
   AgentMcpToolOption,
   AiAgentDefinition,
   AiAgentInput,
@@ -201,6 +203,7 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
   const [memoryFor, setMemoryFor] = useState<AiAgentDefinition | null>(null);
   const [guardrailsFor, setGuardrailsFor] = useState<AiAgentDefinition | null>(null);
   const [routingFor, setRoutingFor] = useState<AiAgentDefinition | null>(null);
+  const [toolLimitsFor, setToolLimitsFor] = useState<AiAgentDefinition | null>(null);
   const [actsAsFor, setActsAsFor] = useState<AiAgentDefinition | null>(null);
   const [inspectingAccess, setInspectingAccess] = useState(false);
   const [versionsFor, setVersionsFor] = useState<AiAgentDefinition | null>(null);
@@ -365,6 +368,9 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
                       <button className="btn btn-secondary" onClick={() => setRoutingFor(a)}>
                         Routing{a.model_routing && <span className="badge badge-success" style={{ marginLeft: 4 }}>on</span>}
                       </button>
+                      <button className="btn btn-secondary" onClick={() => setToolLimitsFor(a)}>
+                        Tool limits
+                      </button>
                       <button className="btn btn-secondary" onClick={() => setActsAsFor(a)}>
                         Acts as{a.acts_as_user_id && <span className="badge badge-success" style={{ marginLeft: 4 }}>set</span>}
                       </button>
@@ -435,6 +441,8 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
           pending={saveRouting.isPending}
         />
       )}
+
+      {toolLimitsFor && <ToolLimitsEditor key={toolLimitsFor.id} agent={toolLimitsFor} onClose={() => setToolLimitsFor(null)} />}
 
       {actsAsFor && (
         <ActsAsEditor
@@ -1806,6 +1814,7 @@ function PolicyEnginePanel({ agents }: { agents: AiAgentDefinition[] }) {
           {policyQuery.isLoading && <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Loading...</p>}
           {policyQuery.isSuccess && <PolicyEditor key={agentId} agentId={agentId || null} policy={policyQuery.data ?? null} />}
           <ToolRegistryOverridesSection />
+          <ToolRateLimitsSection />
         </div>
       )}
     </div>
@@ -2469,6 +2478,168 @@ function McpToolsPanel({
           </label>
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * WP-0140: caps on each of an agent's tools - how many times one step may
+ * call it, how many failures in a row disable it, and how much of its
+ * result stays in the model's context (the rest is stored and referenced).
+ */
+function ToolLimitsEditor({ agent, onClose }: { agent: AiAgentDefinition; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const capsQuery = useQuery({ queryKey: ["agentToolCaps", agent.id], queryFn: () => api.listAgentToolCaps(agent.id) });
+  const [draft, setDraft] = useState<Record<string, AgentToolCapInput> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const caps = capsQuery.data ?? [];
+  const tools = Array.from(new Set([...agent.action_names, ...caps.map((c) => c.tool_name)]));
+  const rows: Record<string, AgentToolCapInput> =
+    draft ??
+    Object.fromEntries(
+      tools.map((t) => {
+        const c = caps.find((x) => x.tool_name === t);
+        return [t, { tool_name: t, max_calls_per_step: c?.max_calls_per_step ?? null, failures_before_disable: c?.failures_before_disable ?? null, max_result_chars: c?.max_result_chars ?? null }];
+      }),
+    );
+  const save = useMutation({
+    mutationFn: () =>
+      api.setAgentToolCaps(
+        agent.id,
+        Object.values(rows).filter((r) => r.max_calls_per_step !== null || r.failures_before_disable !== null || r.max_result_chars !== null),
+      ),
+    onSuccess: () => {
+      setDraft(null);
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["agentToolCaps", agent.id] });
+    },
+    onError: (e) => setError(String(e)),
+  });
+  const reenable = useMutation({
+    mutationFn: (tool: string) => api.reenableAgentTool(agent.id, tool),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["agentToolCaps", agent.id] }),
+  });
+  const set = (tool: string, key: keyof AgentToolCapInput, value: string) =>
+    setDraft({ ...rows, [tool]: { ...rows[tool], [key]: value === "" ? null : Number(value) } });
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3 style={{ marginTop: 0 }}>
+        {agent.icon} {agent.name}'s tool limits
+      </h3>
+      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+        Leave a box empty for no limit. A call over the per-step limit, or to a tool disabled after failures, is refused and not run; the agent
+        is told why. A result longer than its size limit is stored whole, and the agent gets its start and a reference.
+      </p>
+      {error && <div className="error">{error}</div>}
+      {tools.length === 0 ? (
+        <p style={{ fontSize: 13 }}>This agent has no tools listed.</p>
+      ) : (
+        <table className="table">
+          <thead>
+            <tr>
+              <th>Tool</th>
+              <th>Calls per step</th>
+              <th>Failures before disable</th>
+              <th>Result size (characters)</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {tools.map((t) => {
+              const live = caps.find((c) => c.tool_name === t);
+              return (
+                <tr key={t}>
+                  <td>
+                    <code>{t}</code>
+                  </td>
+                  <td>
+                    <input type="number" min={1} value={rows[t]?.max_calls_per_step ?? ""} onChange={(e) => set(t, "max_calls_per_step", e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="number" min={1} value={rows[t]?.failures_before_disable ?? ""} onChange={(e) => set(t, "failures_before_disable", e.target.value)} />
+                  </td>
+                  <td>
+                    <input type="number" min={100} value={rows[t]?.max_result_chars ?? ""} onChange={(e) => set(t, "max_result_chars", e.target.value)} />
+                  </td>
+                  <td>
+                    {live?.disabled_at && (
+                      <button className="btn btn-secondary" disabled={reenable.isPending} onClick={() => reenable.mutate(t)}>
+                        Re-enable
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button className="btn btn-primary" disabled={save.isPending} onClick={() => save.mutate()}>
+          {save.isPending ? "Saving..." : "Save tool limits"}
+        </button>
+        <button className="btn btn-secondary" onClick={onClose}>
+          Close
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** WP-0140: tool, connector and workspace rate limits, checked by the Tool-Call Firewall before any call. */
+function ToolRateLimitsSection() {
+  const queryClient = useQueryClient();
+  const limitsQuery = useQuery({ queryKey: ["toolRateLimits"], queryFn: () => api.listToolRateLimits() });
+  const [input, setInput] = useState<ToolRateLimitInput>({ scope: "tool", scope_key: "", max_calls: 10, per_seconds: 60 });
+  const [error, setError] = useState<string | null>(null);
+  const done = { onSuccess: () => { setError(null); queryClient.invalidateQueries({ queryKey: ["toolRateLimits"] }); }, onError: (e: unknown) => setError(String(e)) };
+  const save = useMutation({ mutationFn: () => api.saveToolRateLimit(input), ...done });
+  const remove = useMutation({ mutationFn: (id: string) => api.deleteToolRateLimit(id), ...done });
+  return (
+    <div style={{ marginTop: 16 }}>
+      <h4 style={{ marginBottom: 4 }}>Rate limits</h4>
+      <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0 }}>
+        At most this many calls in the window, for one tool, one connector (any of its actions, by connector id) or every tool call in the
+        workspace. A call over a limit is refused before it runs, from agents and the Assistant chat alike.
+      </p>
+      {error && <div className="error">{error}</div>}
+      {(limitsQuery.data ?? []).length > 0 && (
+        <table className="table">
+          <tbody>
+            {(limitsQuery.data ?? []).map((l) => (
+              <tr key={l.id}>
+                <td>{l.scope === "workspace" ? "Whole workspace" : `${l.scope} ${l.scope_key}`}</td>
+                <td>
+                  {l.max_calls} per {l.per_seconds} s
+                </td>
+                <td>
+                  <button className="btn btn-secondary" disabled={remove.isPending} onClick={() => remove.mutate(l.id)}>
+                    Remove
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <select value={input.scope} onChange={(e) => setInput({ ...input, scope: e.target.value as ToolRateLimitInput["scope"] })}>
+          <option value="tool">Tool</option>
+          <option value="connector">Connector</option>
+          <option value="workspace">Whole workspace</option>
+        </select>
+        {input.scope !== "workspace" && (
+          <input placeholder={input.scope === "tool" ? "Tool name, e.g. create_record" : "Connector id"} value={input.scope_key} onChange={(e) => setInput({ ...input, scope_key: e.target.value })} />
+        )}
+        <input type="number" min={1} style={{ width: 80 }} value={input.max_calls} onChange={(e) => setInput({ ...input, max_calls: Number(e.target.value) })} />
+        calls per
+        <input type="number" min={1} max={86400} style={{ width: 90 }} value={input.per_seconds} onChange={(e) => setInput({ ...input, per_seconds: Number(e.target.value) })} />
+        seconds
+        <button className="btn btn-secondary" disabled={save.isPending} onClick={() => save.mutate()}>
+          Save limit
+        </button>
+      </div>
     </div>
   );
 }

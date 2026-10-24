@@ -1055,6 +1055,15 @@ async fn run_from(
     run_id: &str,
     start_node_id: &str,
 ) -> AppResult<GraphRun> {
+    // WP-0111: the run's trace (reopened when a waiting run resumes).
+    let trace = super::trace_service::begin_run(
+        conn,
+        workspace_id,
+        "graph",
+        run_id,
+        &graph.name,
+        json!({"lanesra.graph.id": graph.id}),
+    );
     let mut current_id = start_node_id.to_string();
     loop {
         let run = graph_run_repo::get_run(conn, run_id)?
@@ -1104,7 +1113,18 @@ async fn run_from(
             break;
         }
         let mut context = parse_context(&run.context_json);
-        match execute_node(
+        // WP-0111: one step span per node attempt.
+        let step_span = super::trace_service::start(
+            conn,
+            "step",
+            &node.node_key,
+            json!({
+                "lanesra.step.kind": "graph_node",
+                "lanesra.node.key": node.node_key,
+                "lanesra.node.type": node.node_type,
+            }),
+        );
+        let executed = execute_node(
             conn,
             workspace_id,
             master_key,
@@ -1114,8 +1134,13 @@ async fn run_from(
             &run,
             &mut context,
         )
-        .await
-        {
+        .await;
+        step_span.end_result(
+            conn,
+            &executed,
+            json!({"lanesra.node.partial": context.contains_key(PARTIAL_STOP_KEY)}),
+        );
+        match executed {
             Ok(NodeOutcome::Continue(next_id)) => {
                 checkpoint(
                     conn,
@@ -1163,7 +1188,21 @@ async fn run_from(
             }
         }
     }
-    graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    let status = match run.status.as_str() {
+        "completed" | "completed_partial" => Some(super::trace_service::SpanStatus::Ok),
+        "failed" => Some(super::trace_service::SpanStatus::Error),
+        "cancelled" => Some(super::trace_service::SpanStatus::Cancelled),
+        // A waiting run keeps its trace open until it resumes.
+        _ => None,
+    };
+    trace.finish(
+        conn,
+        status,
+        json!({"lanesra.run.status": run.status, "lanesra.stop_reason": run.stop_reason}),
+    );
+    Ok(run)
 }
 
 /// Saves where a `running` run is and renews this worker's lease on it.
@@ -1371,6 +1410,14 @@ pub async fn cancel_run(
         "cancelled",
         Some("cancelled_by_user"),
     )?;
+    // WP-0111: a cancelled run's open trace closes as cancelled.
+    if crate::repositories::run_span_repo::root_for_run(conn, "graph", run_id)?.is_some() {
+        super::trace_service::begin_run(conn, workspace_id, "graph", run_id, "", json!({})).finish(
+            conn,
+            Some(super::trace_service::SpanStatus::Cancelled),
+            json!({"lanesra.run.status": "cancelled", "lanesra.stop_reason": "cancelled_by_user"}),
+        );
+    }
     get_owned_run(conn, run_id, workspace_id)
 }
 

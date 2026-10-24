@@ -58,6 +58,9 @@ pub struct GatewayOutcome {
     pub outcome: CompletionOutcome,
     pub usage: TokenUsage,
     pub served_by: &'static str,
+    /// WP-0111: the provider type and model that answered, for the trace.
+    pub provider: String,
+    pub model: String,
 }
 
 pub(crate) struct ResolvedTier {
@@ -240,6 +243,8 @@ pub async fn dispatch(
                 outcome,
                 usage,
                 served_by: "primary",
+                provider: settings.provider.clone(),
+                model: settings.model.clone(),
             });
         }
     };
@@ -366,6 +371,8 @@ pub async fn dispatch(
                     outcome,
                     usage,
                     served_by: tier_name,
+                    provider: resolved.provider.clone(),
+                    model: resolved.model.clone(),
                 });
             }
             Err(e) => {
