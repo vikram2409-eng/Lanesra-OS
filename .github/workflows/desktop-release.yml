@@ -77,6 +77,24 @@ jobs:
         shell: bash
         run: python3 program/tools/check_tauri_versions.py
 
+      - name: Release notes
+        id: notes
+        shell: bash
+        env:
+          VERSION: ${{ steps.tag.outputs.expected_version }}
+        run: |
+          notes="desktop/release-notes/$VERSION.md"
+          {
+            echo "body<<RELEASE_NOTES_EOF"
+            if [ -f "$notes" ]; then
+              cat "$notes"
+            else
+              echo "Early Access Windows build of the Lanesra OS desktop edition."
+              echo "See desktop/README.md for what's included and what's still in progress."
+            fi
+            echo "RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Build and publish
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
@@ -85,8 +103,6 @@ jobs:
           projectPath: desktop
           tagName: ${{ steps.tag.outputs.tag_name }}
           releaseName: "Lanesra OS Desktop ${{ steps.tag.outputs.tag_name }}"
-          releaseBody: |
-            Early Access Windows build of the Lanesra OS desktop edition.
-            See desktop/README.md for what's included and what's still in progress.
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: true
           prerelease: true

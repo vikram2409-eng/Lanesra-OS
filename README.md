@@ -91,7 +91,7 @@ No install, no registration: **[lanesraos.com/demo](https://lanesraos.com/demo)*
 
 ## Download the desktop edition
 
-The Windows desktop edition (Tauri + Rust + SQLite) is in active Early Access. Grab the latest installer from **[GitHub Releases](https://github.com/vikram2409-eng/Lanesra-OS/releases)** (unsigned — Windows will warn on first run) or build it from source.
+The Windows desktop edition (Tauri + Rust + SQLite) is in active Early Access. The latest installer is **[desktop-v0.16.2](https://github.com/vikram2409-eng/Lanesra-OS/releases/tag/desktop-v0.16.2)** (unsigned — Windows will warn on first run), after [desktop-v0.16.1](https://github.com/vikram2409-eng/Lanesra-OS/releases/tag/desktop-v0.16.1). Every installer and its release notes are on **[GitHub Releases](https://github.com/vikram2409-eng/Lanesra-OS/releases)**, or build it from source.
 
 Full architecture, dev setup, and a detailed "what's here / what's deferred" breakdown live in **[`desktop/README.md`](desktop/README.md)** — read that before assuming a feature exists.
 
