@@ -1,0 +1,54 @@
+name: Publish desktop release
+
+# Publishes the draft release that "Desktop Release" created for a version,
+# so the owner does not have to open the draft and click "Publish release".
+# Run it from the Actions tab with the version (e.g. 0.16.2). Publishing
+# creates the `desktop-vX.Y.Z` tag at the commit the installer was built
+# from. The release stays an Early Access prerelease.
+#
+# A tag created with the workflow token does not start other workflows, so
+# publishing does not rebuild the installer or the server image: both were
+# already built when the draft was made.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version whose draft to publish (e.g. 0.16.2)"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: publish the draft
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ github.event.inputs.version }}
+    steps:
+      - name: Publish desktop-v${{ github.event.inputs.version }}
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must look like 0.16.2, got '$VERSION'"
+            exit 1
+          fi
+          tag="desktop-v$VERSION"
+          # A draft has no tag yet, so look it up by its intended tag name.
+          id="$(gh api --paginate "repos/$GH_REPO/releases" \
+            --jq ".[] | select(.draft and .tag_name == \"$tag\") | .id" | head -n 1)"
+          if [ -z "$id" ]; then
+            if gh api "repos/$GH_REPO/releases/tags/$tag" >/dev/null 2>&1; then
+              echo "$tag is already published."
+              exit 0
+            fi
+            echo "::error::No draft release for $tag. Run Desktop Release for $VERSION first."
+            exit 1
+          fi
+          gh api -X PATCH "repos/$GH_REPO/releases/$id" -F draft=false >/dev/null
+          url="$(gh api "repos/$GH_REPO/releases/tags/$tag" --jq .html_url)"
+          echo "Published $tag: $url" | tee -a "$GITHUB_STEP_SUMMARY"

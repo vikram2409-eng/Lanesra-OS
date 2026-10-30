@@ -45,9 +45,12 @@ impl russh::client::Handler for PinnedHostKey {
 
     async fn check_server_key(
         &mut self,
-        server_public_key: &russh::keys::PublicKey,
+        server_public_key: &russh::keys::PublicKeyOrCertificate,
     ) -> Result<bool, Self::Error> {
+        // A host certificate is pinned by the key it certifies: the pin is
+        // one host key, never a certificate authority.
         let seen = server_public_key
+            .public_key()
             .fingerprint(russh::keys::HashAlg::Sha256)
             .to_string();
         let ok = self.expected.as_deref().map(str::trim) == Some(seen.as_str());

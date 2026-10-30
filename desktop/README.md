@@ -1387,7 +1387,9 @@ Producing the actual signed Windows `.exe`/`.msi` installer requires a
 Windows build host. `.github/workflows/desktop-release.yml` builds it on a
 `windows-latest` GitHub Actions runner and attaches it to a draft GitHub
 Release - push a `desktop-v*` tag, or run the workflow manually, to produce
-one. It isn't code-signed yet.
+one. To publish the draft without opening it, run **Publish desktop release**
+(`.github/workflows/publish-release.yml`) from the Actions tab with the same
+version. It isn't code-signed yet.
 
 ## Verification performed this session
 
