@@ -15,6 +15,7 @@ use lanesra_core::models::ai::{
     AiDailyTokenBudgetInput, AiEmbeddingSettingsInput, AiObservabilitySettingsInput, AiSettings,
     AiSettingsInput, AiTestResult, AiTokenUsageSummary, VectorSearchStatus,
 };
+use lanesra_core::models::run_event::RunEvent;
 use lanesra_core::models::run_trace::{RunSpan, SpanBody, TraceBodiesInput};
 use lanesra_core::models::tool_limits::{
     AgentToolCap, AgentToolCapInput, StoredToolResult, ToolRateLimit, ToolRateLimitInput,
@@ -163,6 +164,58 @@ pub fn get_run_span_bodies(state: State<AppState>, span_id: String) -> AppResult
         &span_id,
         current_actor(&state).as_deref(),
     )
+}
+
+/// WP-0112: a run's stored events after `after_seq`, for an
+/// Administrator. Live events arrive on the `run-event` channel.
+#[tauri::command]
+pub fn list_run_events(
+    state: State<AppState>,
+    run_id: String,
+    after_seq: i64,
+) -> AppResult<Vec<RunEvent>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    lanesra_core::services::run_event_service::list_run_events(
+        &conn,
+        &workspace_id,
+        &run_id,
+        after_seq,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0112 (ADR-0008 §5): forwards every published run event to the
+/// window on the `run-event` channel, the same envelope Team Workspace
+/// streams, while the signed-in user is an Administrator. Runs here on its
+/// own thread for the life of the app.
+pub fn forward_run_events(app: tauri::AppHandle) {
+    use tauri::{Emitter, Manager};
+    use tokio::sync::broadcast::error::RecvError;
+    let mut rx = lanesra_core::services::run_event_service::subscribe();
+    loop {
+        match rx.blocking_recv() {
+            Ok(event) => {
+                let state = app.state::<AppState>();
+                let viewer = current_actor(&state);
+                let allowed = {
+                    let conn = state.conn.lock().unwrap();
+                    lanesra_core::services::run_event_service::require_viewer(
+                        &conn,
+                        viewer.as_deref(),
+                    )
+                    .is_ok()
+                };
+                if allowed {
+                    let _ = app.emit("run-event", &*event);
+                }
+            }
+            // Missed events stay stored; the window replays them with
+            // `list_run_events`.
+            Err(RecvError::Lagged(_)) => continue,
+            Err(RecvError::Closed) => return,
+        }
+    }
 }
 
 /// WP-0140: an agent's tool caps (calls per step, failures before

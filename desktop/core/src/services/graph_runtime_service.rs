@@ -1258,6 +1258,10 @@ async fn run_from(
                     &node.id,
                     &approval_id,
                 )?;
+                super::trace_service::emit_approval_requested(
+                    conn,
+                    json!({"subject": "graph_node", "node": node.node_key, "approval_id": approval_id}),
+                );
                 break;
             }
             Ok(NodeOutcome::WaitingScheduled {

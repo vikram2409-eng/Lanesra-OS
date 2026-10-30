@@ -172,6 +172,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
         86,
         include_str!("migrations/0086_tool_caps_and_rate_limits.sql"),
     ),
+    (87, include_str!("migrations/0087_run_events.sql")),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -245,7 +246,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 86);
+        assert_eq!(version, 87);
 
         let table_count: i64 = conn
             .query_row(

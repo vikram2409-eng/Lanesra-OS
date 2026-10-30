@@ -10,6 +10,7 @@ pub mod job_scheduler;
 pub mod mcp;
 pub mod rate_limit;
 pub mod routes;
+pub mod run_events_stream;
 pub mod security;
 pub mod session;
 pub mod state;

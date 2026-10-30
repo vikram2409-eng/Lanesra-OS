@@ -3782,6 +3782,19 @@ pub fn dispatch(
                 &run_id,
             )?)
         }
+        // WP-0112: a run's stored events; live ones stream from
+        // `/api/v1/runs/:id/events`.
+        "list_run_events" => {
+            let run_id: String = arg(args, "runId")?;
+            let after_seq: i64 = arg(args, "afterSeq")?;
+            to_value(lanesra_core::services::run_event_service::list_run_events(
+                conn,
+                &require_workspace_id(conn)?,
+                &run_id,
+                after_seq,
+                actor,
+            )?)
+        }
         "get_run_span_bodies" => {
             let span_id: String = arg(args, "spanId")?;
             to_value(lanesra_core::services::trace_service::span_bodies(

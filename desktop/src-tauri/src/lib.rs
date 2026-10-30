@@ -20,6 +20,8 @@ pub fn run() {
             let db_path = data_dir.join("lanesra.sqlite3");
             let conn = lanesra_core::db::open_workspace_db(&db_path)?;
             app.manage(AppState::new(conn, db_path));
+            let handle = app.handle().clone();
+            std::thread::spawn(move || commands::ai_commands::forward_run_events(handle));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -307,6 +309,7 @@ pub fn run() {
             commands::ai_commands::set_ai_otlp_endpoint,
             commands::ai_commands::set_ai_trace_bodies,
             commands::ai_commands::list_run_spans,
+            commands::ai_commands::list_run_events,
             commands::ai_commands::get_run_span_bodies,
             commands::ai_commands::list_agent_tool_caps,
             commands::ai_commands::set_agent_tool_caps,

@@ -50,6 +50,7 @@ pub mod publisher;
 pub mod quote;
 pub mod relationship;
 pub mod report;
+pub mod run_event;
 pub mod run_trace;
 pub mod saved_view;
 pub mod screen_layout;

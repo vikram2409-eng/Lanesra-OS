@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "approval.requested",
+  "description": "The run waits for a person: a tool call held by the firewall, a graph Approval node, or a pipeline step that needs approval.",
+  "type": "object",
+  "properties": {
+    "subject": {
+      "type": "string",
+      "enum": [
+        "tool_call",
+        "graph_node",
+        "pipeline_step"
+      ]
+    },
+    "tool": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "verdict": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "risk": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "node": {
+      "type": "string"
+    },
+    "approval_id": {
+      "type": "string"
+    },
+    "step_order": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "subject"
+  ],
+  "additionalProperties": false
+}

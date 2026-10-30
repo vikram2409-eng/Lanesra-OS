@@ -2416,6 +2416,34 @@ export interface RunSpan {
   attributes: Record<string, unknown>;
 }
 
+/** WP-0112: one live run event, the `lanesra.run-event` v1 envelope (ADR-0008 §2). */
+export type RunEventType =
+  | "run.started"
+  | "step.started"
+  | "round.completed"
+  | "tool.called"
+  | "tool.denied"
+  | "approval.requested"
+  | "plan.proposed"
+  | "step.completed"
+  | "run.completed"
+  | "run.failed";
+
+export interface RunEvent {
+  schema: "lanesra.run-event";
+  v: 1;
+  seq: number;
+  type: RunEventType;
+  at: string;
+  workspace_id: string;
+  run_kind: "pipeline" | "graph";
+  run_id: string;
+  step_id: string | null;
+  span_id: string | null;
+  parent_span_id: string | null;
+  data: Record<string, unknown>;
+}
+
 export interface RunSpanBody {
   span_id: string;
   part: "input" | "output";

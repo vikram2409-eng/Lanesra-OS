@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "plan.proposed",
+  "description": "Reserved for the planner (Phase 2); not emitted yet.",
+  "type": "object",
+  "properties": {},
+  "required": [],
+  "additionalProperties": true
+}
