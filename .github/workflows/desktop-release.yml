@@ -7,7 +7,8 @@ name: Desktop Release
 #      version number - useful for a test build without cutting a real tag.
 #
 # The release is created as a draft + prerelease so nothing goes public
-# until a maintainer reviews it on GitHub and clicks "Publish release".
+# until a maintainer reviews it on GitHub and clicks "Publish release", or
+# runs "Publish desktop release" (publish-release.yml) with the version.
 
 on:
   push:
