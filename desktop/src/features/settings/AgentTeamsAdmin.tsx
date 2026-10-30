@@ -12,6 +12,7 @@ import type {
   GraphNodeType,
   GraphRun,
   GraphRunStatus,
+  RunEvent,
   WorkflowActionType,
 } from "../../lib/types";
 import { useCanvasZoom } from "../../components/visualBuilder/useCanvasZoom";
@@ -33,6 +34,7 @@ import {
   type EditEdge,
 } from "../../components/visualBuilder/graphNodeMeta";
 import { AGENT_TEAM_PRESETS, agentTeamPreset } from "../../lib/agentTeamPresets";
+import { describeRunEvent, useRunEvents } from "../../lib/runEvents";
 
 // AI Agent Platform v2, Phase 5b (GitHub issue #170, UI half): a genuine
 // free-form canvas authoring Phase 3's Execution Graphs - the node
@@ -349,11 +351,18 @@ function GraphEditor({
 
   const [testTriggerInput, setTestTriggerInput] = useState("{}");
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  // WP-0112: the run's live events drive the refresh; the slow poll is only
+  // a fallback for a dropped connection.
   const activeRunQuery = useQuery({
     queryKey: ["graphRun", activeRunId],
     queryFn: () => api.getGraphRun(activeRunId as string),
     enabled: !!activeRunId,
-    refetchInterval: (query) => (query.state.data && TERMINAL_RUN_STATUSES.has(query.state.data.status) ? false : 2000),
+    refetchInterval: (query) => (query.state.data && TERMINAL_RUN_STATUSES.has(query.state.data.status) ? false : 15000),
+  });
+  const [lastRunEvent, setLastRunEvent] = useState<RunEvent | null>(null);
+  useRunEvents(activeRunId, (event) => {
+    setLastRunEvent(event);
+    qc.invalidateQueries({ queryKey: ["graphRun", activeRunId] });
   });
   const startTestRun = useMutation({
     mutationFn: () => api.startGraphRun(graphMeta.id as string, testTriggerInput),
@@ -523,6 +532,11 @@ function GraphEditor({
             {activeRun && (
               <span className={`badge ${activeRun.status === "completed" ? "badge-success" : activeRun.status === "failed" ? "badge-danger" : ""}`}>
                 {activeRun.status}
+              </span>
+            )}
+            {lastRunEvent && lastRunEvent.run_id === activeRunId && (
+              <span className="muted" style={{ fontSize: 12 }} aria-live="polite">
+                {describeRunEvent(lastRunEvent)}
               </span>
             )}
           </div>

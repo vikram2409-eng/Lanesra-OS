@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "step.started",
+  "description": "A step started: a pipeline step, a graph node, or a delegation to another agent.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "agent": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "name",
+    "agent"
+  ],
+  "additionalProperties": false
+}

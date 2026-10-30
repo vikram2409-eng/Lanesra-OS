@@ -82,6 +82,7 @@ pub mod reference_packages;
 pub mod relationship_service;
 pub mod report_service;
 pub mod retry;
+pub mod run_event_service;
 pub mod run_state;
 pub mod saved_view_service;
 pub mod screen_layout_service;

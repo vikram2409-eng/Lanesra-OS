@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "run.completed",
+  "description": "The run finished. `outcome` is the graph run status (for example completed_partial) when there is one.",
+  "type": "object",
+  "properties": {
+    "status": {
+      "const": "ok"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "outcome": {
+      "type": "string"
+    },
+    "stop_reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "duration_ms"
+  ],
+  "additionalProperties": false
+}

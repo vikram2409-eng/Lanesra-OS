@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "tool.denied",
+  "description": "The Tool-Call Firewall refused a call before it ran: a policy denial or a rate limit.",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "deny",
+        "rate_limited"
+      ]
+    },
+    "risk": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "tool",
+    "verdict",
+    "risk",
+    "reason"
+  ],
+  "additionalProperties": false
+}

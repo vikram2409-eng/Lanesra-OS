@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "run.failed",
+  "description": "The run ended without completing: it failed or was cancelled.",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": [
+        "error",
+        "cancelled"
+      ]
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "error_code": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "message": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "outcome": {
+      "type": "string"
+    },
+    "stop_reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "status",
+    "duration_ms",
+    "error_code",
+    "message"
+  ],
+  "additionalProperties": false
+}

@@ -15,15 +15,21 @@
 //! await inside a value that must itself be `Send + 'static` to be
 //! returned from an axum handler. Auth reuses `api_v1::authorize`
 //! (`events.read` scope) exactly as every other `/api/v1` route does.
+//!
+//! WP-0112: with one or more `run_id` parameters the same route streams
+//! run events instead (`run_events_stream::several_runs`), which also
+//! accepts the UI's session cookie. Without them it is unchanged.
 
 use std::convert::Infallible;
 use std::time::Duration;
 
-use axum::extract::State;
+use axum::extract::{RawQuery, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
+use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
+use axum_extra::extract::cookie::CookieJar;
 use futures_core::Stream;
 use serde_json::{json, Value};
 
@@ -37,6 +43,22 @@ pub fn router() -> Router<SharedState> {
 
 async fn stream_events(
     State(state): State<SharedState>,
+    RawQuery(raw): RawQuery,
+    headers: HeaderMap,
+    jar: CookieJar,
+    caller: Caller,
+) -> Response {
+    let pairs = crate::run_events_stream::query_pairs(raw.as_deref());
+    if pairs.iter().any(|(k, _)| k == "run_id") {
+        return crate::run_events_stream::several_runs(state, pairs, headers, jar, caller)
+            .await
+            .into_response();
+    }
+    integration_events(state, headers, caller).into_response()
+}
+
+fn integration_events(
+    state: SharedState,
     headers: HeaderMap,
     caller: Caller,
 ) -> Result<Sse<impl Stream<Item = Result<Event, Infallible>>>, (StatusCode, Json<Value>)> {

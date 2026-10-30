@@ -32,6 +32,7 @@ pub fn build_router(state: SharedState, frontend_dir: PathBuf) -> Router {
         .merge(crate::api_integration_admin::router())
         .merge(crate::agent_v1::router())
         .merge(crate::events_stream::router())
+        .merge(crate::run_events_stream::router())
         .merge(crate::admin_actions::router())
         .merge(crate::mcp::router())
         .fallback_service(static_service)

@@ -66,6 +66,7 @@ pub mod publisher_repo;
 pub mod quote_repo;
 pub mod record_embedding_repo;
 pub mod relationship_repo;
+pub mod run_event_repo;
 pub mod run_span_repo;
 pub mod saved_view_repo;
 pub mod screen_layout_repo;

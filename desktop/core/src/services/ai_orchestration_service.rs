@@ -997,7 +997,13 @@ fn finalize_run(
         Ok(RunOutcome::Completed) => {
             trace.finish(conn, Some(super::trace_service::SpanStatus::Ok), json!({}))
         }
-        Ok(RunOutcome::Paused { .. }) => trace.finish(conn, None, json!({})),
+        Ok(RunOutcome::Paused { resume_at_step, .. }) => {
+            super::trace_service::emit_approval_requested(
+                conn,
+                json!({"subject": "pipeline_step", "step_order": resume_at_step}),
+            );
+            trace.finish(conn, None, json!({}))
+        }
         Err(e) => trace.finish(
             conn,
             Some(super::trace_service::SpanStatus::Error),

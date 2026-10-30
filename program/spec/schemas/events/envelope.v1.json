@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "lanesra.run-event v1",
+  "description": "The envelope every live run event uses on every transport (ADR-0008 §2). `data` is described by `<type>.v1.json`. Adding an optional field is allowed within v 1.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "v",
+    "seq",
+    "type",
+    "at",
+    "workspace_id",
+    "run_kind",
+    "run_id",
+    "step_id",
+    "span_id",
+    "parent_span_id",
+    "data"
+  ],
+  "properties": {
+    "schema": {
+      "const": "lanesra.run-event"
+    },
+    "v": {
+      "const": 1
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Gapless and increasing within one run; orders its events."
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "run.started",
+        "step.started",
+        "round.completed",
+        "tool.called",
+        "tool.denied",
+        "approval.requested",
+        "plan.proposed",
+        "step.completed",
+        "run.completed",
+        "run.failed"
+      ]
+    },
+    "at": {
+      "type": "string",
+      "description": "RFC 3339 time the event was written."
+    },
+    "workspace_id": {
+      "type": "string"
+    },
+    "run_kind": {
+      "type": "string",
+      "enum": [
+        "pipeline",
+        "graph"
+      ]
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "step_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "span_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "parent_span_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "data": {
+      "type": "object"
+    }
+  }
+}

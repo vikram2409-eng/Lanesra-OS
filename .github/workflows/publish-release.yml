@@ -6,6 +6,10 @@ name: Publish desktop release
 # creates the `desktop-vX.Y.Z` tag at the commit the installer was built
 # from. The release stays an Early Access prerelease.
 #
+# When `desktop/release-notes/X.Y.Z.md` exists on the branch it runs from,
+# its text becomes the release notes. Running it again for a version that
+# is already published only refreshes the notes.
+#
 # A tag created with the workflow token does not start other workflows, so
 # publishing does not rebuild the installer or the server image: both were
 # already built when the draft was made.
@@ -31,6 +35,10 @@ jobs:
       GH_REPO: ${{ github.repository }}
       VERSION: ${{ github.event.inputs.version }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: desktop/release-notes
+
       - name: Publish desktop-v${{ github.event.inputs.version }}
         run: |
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -38,17 +46,24 @@ jobs:
             exit 1
           fi
           tag="desktop-v$VERSION"
+          notes="desktop/release-notes/$VERSION.md"
           # A draft has no tag yet, so look it up by its intended tag name.
           id="$(gh api --paginate "repos/$GH_REPO/releases" \
             --jq ".[] | select(.draft and .tag_name == \"$tag\") | .id" | head -n 1)"
-          if [ -z "$id" ]; then
-            if gh api "repos/$GH_REPO/releases/tags/$tag" >/dev/null 2>&1; then
-              echo "$tag is already published."
-              exit 0
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GH_REPO/releases/$id" -F draft=false >/dev/null
+            echo "Published $tag." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            id="$(gh api "repos/$GH_REPO/releases/tags/$tag" --jq .id 2>/dev/null || true)"
+            if [ -z "$id" ]; then
+              echo "::error::No draft or published release for $tag. Run Desktop Release for $VERSION first."
+              exit 1
             fi
-            echo "::error::No draft release for $tag. Run Desktop Release for $VERSION first."
-            exit 1
+            echo "$tag is already published." | tee -a "$GITHUB_STEP_SUMMARY"
           fi
-          gh api -X PATCH "repos/$GH_REPO/releases/$id" -F draft=false >/dev/null
-          url="$(gh api "repos/$GH_REPO/releases/tags/$tag" --jq .html_url)"
-          echo "Published $tag: $url" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ -f "$notes" ]; then
+            gh api -X PATCH "repos/$GH_REPO/releases/$id" -F "body=@$notes" >/dev/null
+            echo "Release notes set from $notes." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          url="$(gh api "repos/$GH_REPO/releases/$id" --jq .html_url)"
+          echo "$url" | tee -a "$GITHUB_STEP_SUMMARY"

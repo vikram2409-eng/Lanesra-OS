@@ -30,6 +30,15 @@
 //! **Cost of tracing (WP-0111 AC-2).** The time spent writing spans on this
 //! thread is counted (`write_time_on_this_thread`); the budget is 5 ms per
 //! round (WP-0015, agreed by the owner on 2026-10-23).
+//!
+//! **Run events (WP-0112).** Opening and closing spans also writes the run's
+//! live events (ADR-0008 §2): a new root `run.started`, a step
+//! `step.started` and `step.completed`, a model call `round.completed`, a
+//! tool call `tool.called`, a firewall verdict that refuses a call
+//! `tool.denied` (or `approval.requested` when it holds the call for a
+//! person), and a closed root `run.completed` or `run.failed`. Each gets
+//! the run's next gapless `seq` and goes through the same persist hooks as
+//! the span. Writing and publishing them counts towards the same budget.
 
 use std::cell::{Cell, RefCell};
 use std::sync::RwLock;
@@ -40,8 +49,9 @@ use serde_json::{json, Map, Value};
 
 use crate::domain::ids::now_iso;
 use crate::domain::{AppError, AppResult};
+use crate::models::run_event::{RunEvent, RUN_EVENT_SCHEMA, RUN_EVENT_VERSION};
 use crate::models::run_trace::{RunSpan, SpanBody, TraceBodiesInput, TRACE_BODY_MODES};
-use crate::repositories::{ai_settings_repo, audit_repo, run_span_repo};
+use crate::repositories::{ai_settings_repo, audit_repo, run_event_repo, run_span_repo};
 
 /// The longest body kept per span part; the rest is cut.
 pub const MAX_BODY_CHARS: usize = 64 * 1024;
@@ -122,9 +132,16 @@ struct ActiveTrace {
     run_kind: String,
     run_id: String,
     seq: i64,
+    /// The last run event `seq` written (WP-0112).
+    event_seq: i64,
     bodies: BodyMode,
     /// Open spans, innermost last.
-    open: Vec<String>,
+    open: Vec<OpenSpan>,
+}
+
+struct OpenSpan {
+    span_id: String,
+    is_step: bool,
 }
 
 thread_local! {
@@ -187,7 +204,9 @@ pub struct Span {
 
 struct SpanInner {
     span_id: String,
+    parent: Option<String>,
     kind: String,
+    name: String,
     started: Instant,
     attributes: Map<String, Value>,
     bodies: Vec<(&'static str, String)>,
@@ -238,6 +257,7 @@ impl Span {
         }
         let duration_ms = inner.started.elapsed().as_millis() as i64;
         apply_hooks(&inner.kind, &mut inner.attributes, &mut inner.bodies);
+        let event = closing_event(&inner, status, duration_ms);
         let attributes_json = Value::Object(inner.attributes).to_string();
         timed_write(|| {
             run_span_repo::finish(
@@ -251,6 +271,15 @@ impl Span {
         });
         for (part, body) in &inner.bodies {
             timed_write(|| run_span_repo::put_body(conn, &inner.span_id, part, body));
+        }
+        if let Some((event_type, data)) = event {
+            emit(
+                conn,
+                event_type,
+                Some(&inner.span_id),
+                inner.parent.as_deref(),
+                data,
+            );
         }
         pop_span(&inner.span_id);
     }
@@ -298,11 +327,169 @@ pub fn error_attributes(e: &AppError) -> Map<String, Value> {
 fn pop_span(span_id: &str) {
     TRACES.with(|t| {
         if let Some(active) = t.borrow_mut().last_mut() {
-            if let Some(pos) = active.open.iter().rposition(|s| s == span_id) {
+            if let Some(pos) = active.open.iter().rposition(|s| s.span_id == span_id) {
                 active.open.truncate(pos);
             }
         }
     });
+}
+
+/// A short text attribute for an event's `data`: at most 500 characters.
+fn short(value: Option<&Value>) -> Value {
+    match value {
+        Some(Value::String(s)) if s.chars().count() > 500 => {
+            json!(s.chars().take(500).collect::<String>())
+        }
+        Some(v) => v.clone(),
+        None => Value::Null,
+    }
+}
+
+/// The event a closing span produces, if any.
+fn closing_event(
+    inner: &SpanInner,
+    status: SpanStatus,
+    duration_ms: i64,
+) -> Option<(&'static str, Map<String, Value>)> {
+    let a = &inner.attributes;
+    let mut data = Map::new();
+    let event_type = match inner.kind.as_str() {
+        "run" => {
+            let outcome = a
+                .get("lanesra.run.status")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            data.insert("status".into(), json!(status.as_str()));
+            data.insert("duration_ms".into(), json!(duration_ms));
+            if let Some(outcome) = outcome {
+                data.insert("outcome".into(), json!(outcome));
+            }
+            if let Some(Value::String(reason)) = a.get("lanesra.stop_reason") {
+                data.insert("stop_reason".into(), json!(reason));
+            }
+            if status == SpanStatus::Ok {
+                "run.completed"
+            } else {
+                data.insert("error_code".into(), short(a.get("lanesra.error.code")));
+                data.insert("message".into(), short(a.get("lanesra.error.message")));
+                "run.failed"
+            }
+        }
+        "step" => {
+            data.insert("name".into(), json!(inner.name));
+            data.insert("status".into(), json!(status.as_str()));
+            data.insert("duration_ms".into(), json!(duration_ms));
+            if status != SpanStatus::Ok {
+                data.insert("error_code".into(), short(a.get("lanesra.error.code")));
+            }
+            "step.completed"
+        }
+        "model_call" => {
+            data.insert("round".into(), short(a.get("lanesra.round")));
+            data.insert("status".into(), json!(status.as_str()));
+            data.insert("provider".into(), short(a.get("gen_ai.system")));
+            data.insert("model".into(), short(a.get("gen_ai.request.model")));
+            data.insert(
+                "input_tokens".into(),
+                short(a.get("gen_ai.usage.input_tokens")),
+            );
+            data.insert(
+                "output_tokens".into(),
+                short(a.get("gen_ai.usage.output_tokens")),
+            );
+            data.insert("served_by".into(), short(a.get("lanesra.served_by")));
+            data.insert("tools_off".into(), short(a.get("lanesra.tools_off")));
+            data.insert("duration_ms".into(), json!(duration_ms));
+            "round.completed"
+        }
+        "tool_call" => {
+            data.insert("tool".into(), json!(inner.name));
+            data.insert("status".into(), json!(status.as_str()));
+            data.insert("outcome".into(), short(a.get("lanesra.tool.outcome")));
+            data.insert("duration_ms".into(), json!(duration_ms));
+            if status != SpanStatus::Ok {
+                data.insert("error_code".into(), short(a.get("lanesra.error.code")));
+            }
+            "tool.called"
+        }
+        "policy" => {
+            let verdict = a
+                .get("lanesra.policy.verdict")
+                .and_then(Value::as_str)
+                .unwrap_or("allow");
+            data.insert("tool".into(), short(a.get("lanesra.tool.name")));
+            data.insert("verdict".into(), json!(verdict));
+            data.insert("risk".into(), short(a.get("lanesra.policy.risk")));
+            match verdict {
+                "allow" => return None,
+                "require_approval" => {
+                    data.insert("subject".into(), json!("tool_call"));
+                    "approval.requested"
+                }
+                _ => {
+                    data.insert("reason".into(), short(a.get("lanesra.error.code")));
+                    "tool.denied"
+                }
+            }
+        }
+        _ => return None,
+    };
+    Some((event_type, data))
+}
+
+/// Writes and publishes one run event in this thread's trace; does nothing
+/// with no trace open. `step_id` is the innermost open step span.
+fn emit(
+    conn: &Connection,
+    event_type: &'static str,
+    span_id: Option<&str>,
+    parent_span_id: Option<&str>,
+    mut data: Map<String, Value>,
+) {
+    let mut no_bodies = Vec::new();
+    apply_hooks("event", &mut data, &mut no_bodies);
+    let event = TRACES.with(|t| {
+        let traces = t.borrow();
+        let active = traces.last()?;
+        let step_id = active
+            .open
+            .iter()
+            .rev()
+            .find(|s| s.is_step)
+            .map(|s| s.span_id.clone());
+        Some(RunEvent {
+            schema: RUN_EVENT_SCHEMA.into(),
+            v: RUN_EVENT_VERSION,
+            seq: active.event_seq + 1,
+            event_type: event_type.into(),
+            at: now_iso(),
+            workspace_id: active.workspace_id.clone(),
+            run_kind: active.run_kind.clone(),
+            run_id: active.run_id.clone(),
+            step_id,
+            span_id: span_id.map(str::to_string),
+            parent_span_id: parent_span_id.map(str::to_string),
+            data: Value::Object(data),
+            cursor: 0,
+        })
+    });
+    let Some(event) = event else { return };
+    let started = Instant::now();
+    let stored = super::run_event_service::publish(conn, event);
+    WRITE_TIME.with(|t| t.set(t.get() + started.elapsed()));
+    if stored {
+        TRACES.with(|t| {
+            if let Some(active) = t.borrow_mut().last_mut() {
+                active.event_seq += 1;
+            }
+        });
+    }
+}
+
+/// `approval.requested` for a run that now waits for a person: a pipeline
+/// step or an execution-graph Approval node. `data` names what waits.
+pub fn emit_approval_requested(conn: &Connection, data: Value) {
+    emit(conn, "approval.requested", None, None, object(data));
 }
 
 /// Opens a child span under the innermost open span of this thread's
@@ -313,8 +500,11 @@ pub fn start(conn: &Connection, kind: &str, name: &str, attrs: Value) -> Span {
         let active = traces.last_mut()?;
         active.seq += 1;
         let span_id = new_span_id();
-        let parent = active.open.last().cloned();
-        active.open.push(span_id.clone());
+        let parent = active.open.last().map(|s| s.span_id.clone());
+        active.open.push(OpenSpan {
+            span_id: span_id.clone(),
+            is_step: kind == "step",
+        });
         Some((
             span_id,
             parent,
@@ -348,10 +538,24 @@ pub fn start(conn: &Connection, kind: &str, name: &str, attrs: Value) -> Span {
             &attributes_json,
         )
     });
+    if kind == "step" {
+        let mut data = Map::new();
+        data.insert("name".into(), json!(name));
+        data.insert("agent".into(), short(attributes.get("lanesra.agent.name")));
+        emit(
+            conn,
+            "step.started",
+            Some(&span_id),
+            parent.as_deref(),
+            data,
+        );
+    }
     Span {
         inner: Some(SpanInner {
             span_id,
+            parent,
             kind: kind.to_string(),
+            name: name.to_string(),
             started: Instant::now(),
             attributes,
             bodies: Vec::new(),
@@ -413,6 +617,7 @@ pub fn begin_run(
         .ok()
         .flatten();
     let seq = run_span_repo::max_seq(conn, run_kind, run_id).unwrap_or(0);
+    let event_seq = run_event_repo::max_seq(conn, run_kind, run_id).unwrap_or(0);
     let (trace_id, root_id, reopened) = match &existing {
         Some(root) => (root.trace_id.clone(), root.span_id.clone(), true),
         None => (new_trace_id(), new_span_id(), false),
@@ -463,15 +668,35 @@ pub fn begin_run(
             run_kind: run_kind.to_string(),
             run_id: run_id.to_string(),
             seq: if reopened { seq } else { seq + 1 },
+            event_seq,
             bodies: mode,
-            open: vec![root_id.clone()],
+            open: vec![OpenSpan {
+                span_id: root_id.clone(),
+                is_step: false,
+            }],
         })
     });
+    if !reopened {
+        let mut data = Map::new();
+        data.insert("name".into(), json!(name));
+        for (key, field) in [
+            ("lanesra.run.target_type", "target_type"),
+            ("lanesra.run.topology", "topology"),
+            ("lanesra.run.triggered_by", "triggered_by"),
+        ] {
+            if let Some(v) = attributes.get(key) {
+                data.insert(field.into(), short(Some(v)));
+            }
+        }
+        emit(conn, "run.started", Some(&root_id), None, data);
+    }
     RunTrace {
         root: Span {
             inner: Some(SpanInner {
                 span_id: root_id,
+                parent: None,
                 kind: "run".into(),
+                name: name.to_string(),
                 started: Instant::now(),
                 attributes,
                 bodies: Vec::new(),

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "round.completed",
+  "description": "One model call (one round of the agent loop) finished.",
+  "type": "object",
+  "properties": {
+    "round": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "error",
+        "cancelled"
+      ]
+    },
+    "provider": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "model": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "input_tokens": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "output_tokens": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "served_by": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "tools_off": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "round",
+    "status",
+    "provider",
+    "model",
+    "input_tokens",
+    "output_tokens",
+    "served_by",
+    "tools_off",
+    "duration_ms"
+  ],
+  "additionalProperties": false
+}

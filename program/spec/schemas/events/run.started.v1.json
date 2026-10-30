@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "run.started",
+  "description": "A run opened its trace for the first time.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "target_type": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "topology": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "triggered_by": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "additionalProperties": false
+}
