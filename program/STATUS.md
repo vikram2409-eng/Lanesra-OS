@@ -31,7 +31,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 |---|---|---|---|---|---|
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
 | [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | in_review | muse | `wp/WP-0101-identity-adr` | https://github.com/vikram2409-eng/Lanesra-OS/pull/672 |
-| [WP-0112](work/P1/WP-0112-run-events-over-sse-with-stable-schemas.md) | Run events over SSE with stable schemas | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
+| [WP-0112](work/P1/WP-0112-run-events-over-sse-with-stable-schemas.md) | Run events over SSE with stable schemas | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | 728 |
 | [WP-0126](work/P1/WP-0126-budget-awareness-in-agent-turns.md) | Budget awareness in agent turns | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | 723 |
 | [WP-0127](work/P1/WP-0127-do-not-persist-state-fields.md) | Do-not-persist state fields | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | 723 |
 
@@ -86,7 +86,7 @@ None.
 | [WP-0109](work/P1/WP-0109-trigger-migration-and-ui.md) | Trigger migration and Agent Identity UI | E1.0 Identity foundation | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0107, WP-0108 |
 | [WP-0110](work/P1/WP-0110-run-and-step-schema-extensions.md) | Run and step schema extensions | E1.2 Run model and trace | ✅ done | M | ✓Desktop ✓Team Workspace | WP-0009, WP-0007, WP-0107 |
 | [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | E1.2 Run model and trace | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0110 |
-| [WP-0112](work/P1/WP-0112-run-events-over-sse-with-stable-schemas.md) | Run events over SSE with stable schemas | E1.2 Run model and trace | 🔨 in progress | L | ✓Desktop ✓Team Workspace | WP-0111 |
+| [WP-0112](work/P1/WP-0112-run-events-over-sse-with-stable-schemas.md) | Run events over SSE with stable schemas | E1.2 Run model and trace | 👀 in review | L | ✓Desktop ✓Team Workspace | WP-0111 |
 | [WP-0113](work/P1/WP-0113-full-trace-conformance-suite-phase-1-gate-test.md) | Full-trace conformance suite (Phase 1 gate test) | E1.2 Run model and trace | ⚪ proposed | M | — | WP-0112, WP-0122, WP-0150, WP-0100 |
 | [WP-0120](work/P1/WP-0120-agent-persona-limits-and-reasoning-modes.md) | Agent persona, limits and reasoning modes | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0110, WP-0130 |
 | [WP-0121](work/P1/WP-0121-step-limits-and-partial-results.md) | Step limits and partial results | E1.3 Agent loop | ✅ done | L | ✓Desktop ✓Team Workspace ✓Online demo | WP-0110, WP-0005 |
