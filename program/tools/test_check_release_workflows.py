@@ -26,7 +26,7 @@ class CheckReleaseWorkflowsTest(unittest.TestCase):
         files = {
             "desktop-release.yml": tagged("desktop-v*"),
             "publish-release.yml": "name: Publish desktop release\n",
-            "server-image-release.yml": tagged("server-v*") + "# desktop-v is only a comment\n",
+            "server-image-release.yml": tagged("team-workspace-server-v*") + "# desktop-v is only a comment\n",
             "publish-server-release.yml": "name: Publish server\n",
         }
         files.update(overrides)
@@ -46,12 +46,12 @@ class CheckReleaseWorkflowsTest(unittest.TestCase):
         # Covers: REQ-PRE-024 (WP-0200 AC-1)
         self.write(**{"server-image-release.yml": tagged("desktop-v*")})
         errors = crw.check(self.tmp)
-        self.assertTrue(any("server-v*" in e for e in errors), errors)
+        self.assertTrue(any("team-workspace-server-v*" in e for e in errors), errors)
         self.assertTrue(any("must not use desktop-v tags" in e for e in errors), errors)
 
     def test_a_desktop_build_on_the_server_tag_is_reported(self):
         # Covers: REQ-PRE-024 (WP-0200 AC-1)
-        self.write(**{"desktop-release.yml": tagged("server-v*")})
+        self.write(**{"desktop-release.yml": tagged("team-workspace-server-v*")})
         self.assertTrue(any("desktop-v*" in e for e in crw.check(self.tmp)))
 
     def test_the_desktop_publisher_touching_the_image_is_reported(self):

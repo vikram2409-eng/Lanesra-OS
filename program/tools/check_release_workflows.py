@@ -3,7 +3,7 @@
 
 Desktop and Team Workspace are separate releases with separate tags and release pages:
   desktop         `desktop-v*`  -> desktop-release.yml, publish-release.yml
-  Team Workspace  `server-v*`   -> server-image-release.yml, publish-server-release.yml
+  Team Workspace  `team-workspace-server-v*`   -> server-image-release.yml, publish-server-release.yml
 
 A tag push must start exactly one of the two, and the desktop publisher must never touch the
 server image or its `:latest` tag. This reads the workflow files as text (standard library only).
@@ -42,14 +42,14 @@ def check(workflows):
         read(name)
     if desktop_build is not None and tag_patterns(desktop_build) != ["desktop-v*"]:
         errors.append(f"desktop-release.yml must start only on desktop-v* tags, not {tag_patterns(desktop_build)}")
-    if server_build is not None and tag_patterns(server_build) != ["server-v*"]:
-        errors.append(f"server-image-release.yml must start only on server-v* tags, not {tag_patterns(server_build)}")
+    if server_build is not None and tag_patterns(server_build) != ["team-workspace-server-v*"]:
+        errors.append(f"server-image-release.yml must start only on team-workspace-server-v* tags, not {tag_patterns(server_build)}")
 
     for name in DESKTOP:
         text = read(name)
         if text is None:
             continue
-        for needle in ("ghcr.io", "lanesra-os-server", "packages: write", "server-v"):
+        for needle in ("ghcr.io", "lanesra-os-server", "packages: write", "team-workspace-server-v"):
             if needle in re.sub(r"(?m)^\s*#.*$", "", text):
                 errors.append(f"{name} is a desktop workflow and must not mention '{needle}'")
     for name in SERVER:

@@ -1,21 +1,21 @@
-name: Release Team Workspace server
+name: Release Team Workspace Server
 
-# Builds and publishes the Team Workspace server on its own version line
+# Builds and publishes the Team Workspace Server on its own version line
 # (ADR-0019, REQ-PRE-024). Desktop and Team Workspace are separate releases
 # with separate tags, release pages and links:
 #   desktop:         tag `desktop-vX.Y.Z`  (desktop-release.yml)
-#   Team Workspace:  tag `server-vX.Y.Z`   (this workflow)
+#   Team Workspace:  tag `team-workspace-server-vX.Y.Z`   (this workflow)
 #
 # Two ways to start it:
-#   1. Push a tag matching "server-v*" (e.g. server-v0.17.0)
+#   1. Push a tag matching "team-workspace-server-v*" (e.g. team-workspace-server-v0.17.0)
 #   2. Run it from the Actions tab with a version, which is the usual way
 #      here because the AI session cannot push tags.
 #
 # It builds the image from the lockfile, runs the same smoke test CI runs on
 # every pull request, pushes ONLY the version tag (`:X.Y.Z`) to GitHub
-# Container Registry, and creates a DRAFT prerelease `server-vX.Y.Z` with
+# Container Registry, and creates a DRAFT prerelease `team-workspace-server-vX.Y.Z` with
 # the release notes. Nothing is public, and `:latest` does not move, until
-# the owner runs "Publish Team Workspace server release" (or clicks Publish
+# the owner runs "Publish Team Workspace Server release" (or clicks Publish
 # on the draft), so a server that pulls `latest` never gets a build the
 # owner has not released.
 #
@@ -25,7 +25,7 @@ name: Release Team Workspace server
 on:
   push:
     tags:
-      - "server-v*"
+      - "team-workspace-server-v*"
   workflow_dispatch:
     inputs:
       version:
@@ -55,7 +55,7 @@ jobs:
           if [ -n "$INPUT_VERSION" ]; then
             version="$INPUT_VERSION"
           else
-            version="${GITHUB_REF_NAME#server-v}"
+            version="${GITHUB_REF_NAME#team-workspace-server-v}"
           fi
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::Version must look like 0.17.0, got '$version'"
@@ -105,12 +105,12 @@ jobs:
           docker tag lanesra-os-server:release "$IMAGE:$VERSION"
           docker push "$IMAGE:$VERSION"
 
-      - name: Draft the release server-v${{ steps.meta.outputs.version }}
+      - name: Draft the release team-workspace-server-v${{ steps.meta.outputs.version }}
         env:
           IMAGE: ${{ steps.meta.outputs.image }}
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
-          tag="server-v$VERSION"
+          tag="team-workspace-server-v$VERSION"
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "A release for $tag already exists; leaving it as it is." | tee -a "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -119,7 +119,7 @@ jobs:
           if [ ! -f "$notes" ]; then
             notes="$RUNNER_TEMP/notes.md"
             {
-              echo "Early Access build of the Lanesra OS Team Workspace server."
+              echo "Early Access build of the Lanesra OS Team Workspace Server."
               echo
               echo "    docker pull $IMAGE:$VERSION"
               echo
@@ -127,8 +127,8 @@ jobs:
             } > "$notes"
           fi
           gh release create "$tag" --draft --prerelease --target "$GITHUB_SHA" \
-            --title "Lanesra OS Team Workspace $tag" --notes-file "$notes"
-          echo "Drafted $tag. Run 'Publish Team Workspace server release' with $VERSION to publish it and move :latest." | tee -a "$GITHUB_STEP_SUMMARY"
+            --title "Lanesra OS Team Workspace Server $tag" --notes-file "$notes"
+          echo "Drafted $tag. Run 'Publish Team Workspace Server release' with $VERSION to publish it and move :latest." | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Server log
         if: always()
