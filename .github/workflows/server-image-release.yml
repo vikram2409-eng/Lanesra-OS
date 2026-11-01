@@ -5,6 +5,11 @@ name: Release Team Workspace server image
 # desktop release, so desktop and Team Workspace always ship together
 # (owner decision, ADR-0013 #3, REQ-PRE-021). Before the image is published,
 # it must pass the same smoke test that CI runs on every pull request.
+#
+# Only the version tag (`:X.Y.Z`) is pushed here. `:latest` moves to a
+# version when its desktop release is published ("Publish desktop
+# release"), so a server that pulls `latest` never gets a build the owner
+# has not released.
 
 on:
   push:
@@ -66,9 +71,7 @@ jobs:
       - name: Publish
         run: |
           docker tag lanesra-os-server:release "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
-          docker tag lanesra-os-server:release "${{ steps.meta.outputs.image }}:latest"
           docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
-          docker push "${{ steps.meta.outputs.image }}:latest"
 
       - name: Server log
         if: always()
