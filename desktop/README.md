@@ -1391,6 +1391,18 @@ one. To publish the draft without opening it, run **Publish desktop release**
 (`.github/workflows/publish-release.yml`) from the Actions tab with the same
 version. It isn't code-signed yet.
 
+Team Workspace is released separately, on its own version line (ADR-0019).
+**Release Team Workspace server** (`.github/workflows/server-image-release.yml`)
+runs from the Actions tab with a version, builds and smoke-tests the image,
+pushes `ghcr.io/vikram2409-eng/lanesra-os-server:X.Y.Z` and drafts a
+`server-vX.Y.Z` GitHub Release (notes from
+`desktop/server-release-notes/X.Y.Z.md` if present). Bump the version in
+`desktop/server/Cargo.toml` and `desktop/Cargo.lock` first; the workflow
+refuses a mismatch. **Publish Team Workspace server release**
+(`publish-server-release.yml`) then publishes the draft and moves `:latest`.
+Pushing a `server-v*` tag starts the same build. A `desktop-v*` tag never
+builds or publishes the server image.
+
 ## Verification performed this session
 
 - `cargo test` (src-tauri): 30/30 passing, including a full lifecycle

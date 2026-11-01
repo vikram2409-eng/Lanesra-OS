@@ -91,7 +91,7 @@ No install, no registration: **[lanesraos.com/demo](https://lanesraos.com/demo)*
 
 ## Download
 
-Release **0.16.3** (Early Access) ships both editions from the same code:
+Release **0.16.3** (Early Access) shipped both editions from the same code. From the next release they have **separate releases, links and version numbers**: desktop as `desktop-vX.Y.Z`, Team Workspace as `server-vX.Y.Z` (both on [GitHub Releases](https://github.com/vikram2409-eng/Lanesra-OS/releases)).
 
 | Edition | Get it |
 |---|---|

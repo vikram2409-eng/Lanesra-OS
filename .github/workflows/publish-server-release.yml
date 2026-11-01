@@ -1,0 +1,125 @@
+name: Publish Team Workspace server release
+
+# Publishes the draft release that "Release Team Workspace server" created
+# for a version, and moves the image's `:latest` tag to that version, so
+# `latest` only ever names a released version (ADR-0019). Run it from the
+# Actions tab with the version (e.g. 0.17.0). Publishing creates the
+# `server-vX.Y.Z` tag at the commit the image was built from. The release
+# stays an Early Access prerelease.
+#
+# A release published by hand on GitHub moves `latest` too (the `release`
+# trigger). `latest` never moves back to an older version than the newest
+# published server release. Running it again for a published version only
+# refreshes the notes and, unless a newer release exists, moves `latest`.
+#
+# A tag created with the workflow token does not start other workflows, so
+# publishing does not rebuild the image: it was built when the draft was made.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version whose draft to publish (e.g. 0.17.0)"
+        required: true
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: publish the draft and move latest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      INPUT_VERSION: ${{ github.event.inputs.version }}
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: desktop/server-release-notes
+
+      - name: Version
+        id: version
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "release" ]; then
+            case "$RELEASE_TAG" in
+              server-v*) version="${RELEASE_TAG#server-v}" ;;
+              *) echo "Not a Team Workspace server release ($RELEASE_TAG); nothing to do."; version="" ;;
+            esac
+          else
+            version="$INPUT_VERSION"
+          fi
+          if [ -n "$version" ] && ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must look like 0.17.0, got '$version'"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Publish server-v${{ steps.version.outputs.version }}
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tag="server-v$VERSION"
+          notes="desktop/server-release-notes/$VERSION.md"
+          # A draft has no tag yet, so look it up by its intended tag name.
+          id="$(gh api --paginate "repos/$GH_REPO/releases" \
+            --jq ".[] | select(.draft and .tag_name == \"$tag\") | .id" | head -n 1)"
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$GH_REPO/releases/$id" -F draft=false >/dev/null
+            echo "Published $tag." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            id="$(gh api "repos/$GH_REPO/releases/tags/$tag" --jq .id 2>/dev/null || true)"
+            if [ -z "$id" ]; then
+              echo "::error::No draft or published release for $tag. Run 'Release Team Workspace server' for $VERSION first."
+              exit 1
+            fi
+            echo "$tag is already published." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f "$notes" ]; then
+            gh api -X PATCH "repos/$GH_REPO/releases/$id" -F "body=@$notes" >/dev/null
+            echo "Release notes set from $notes." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+          gh api "repos/$GH_REPO/releases/$id" --jq .html_url | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Is this the newest published server release
+        id: newest
+        if: steps.version.outputs.version != ''
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          newest="$(gh api --paginate "repos/$GH_REPO/releases" \
+            --jq '.[] | select((.draft | not) and (.tag_name | startswith("server-v"))) | .tag_name' \
+            | sed 's/^server-v//' | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)"
+          if [ "$newest" = "$VERSION" ]; then
+            echo "move=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "latest stays on $newest, which is newer than $VERSION." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        if: steps.newest.outputs.move == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move the image's latest tag
+        if: steps.newest.outputs.move == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/$owner/lanesra-os-server"
+          if ! docker buildx imagetools inspect "$image:$VERSION" >/dev/null 2>&1; then
+            echo "::error::$image:$VERSION does not exist. Run 'Release Team Workspace server' for $VERSION, then run this again."
+            exit 1
+          fi
+          docker buildx imagetools create --tag "$image:latest" "$image:$VERSION"
+          echo "$image:latest now points at $VERSION." | tee -a "$GITHUB_STEP_SUMMARY"
