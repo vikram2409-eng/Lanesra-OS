@@ -9,7 +9,7 @@
 
 Lanesra OS is a free, open-source, self-hosted platform for building business applications — and for creating, governing, and orchestrating the AI agents that run on them. Shape the workspace itself with no-code tools: your own record types, relationships, screens, business rules, and automations. Define named AI agents with real tool access to your data, guardrailed by a policy engine and tool-call firewall, and chain agents and workflows into orchestrated pipelines with human-in-the-loop approvals. Connect it to everything else you run through an Integration Hub, or expose your data to external agents through a native MCP server. A complete sales app ships out of the box — alongside 11 ready-made industry apps you can install instead of building from scratch. Run it privately on Windows (offline, no cloud account, no licence key), share it with a small team over your local network, or try it instantly online with no install at all.
 
-**[Try the demo](https://lanesraos.com/demo)** · **[Download](#download-the-desktop-edition)** · **[Features](#features)** · **[Docs](desktop/README.md)** · **[Contributing](CONTRIBUTING.md)**
+**[Try the demo](https://lanesraos.com/demo)** · **[Download](#download)** · **[Features](#features)** · **[Docs](desktop/README.md)** · **[Contributing](CONTRIBUTING.md)**
 
 ## Features
 
@@ -89,9 +89,16 @@ The platform ships with a finished sales app, so there is value on day one — a
 
 No install, no registration: **[lanesraos.com/demo](https://lanesraos.com/demo)**
 
-## Download the desktop edition
+## Download
 
-The Windows desktop edition (Tauri + Rust + SQLite) is in active Early Access. The latest installer is **[desktop-v0.16.2](https://github.com/vikram2409-eng/Lanesra-OS/releases/tag/desktop-v0.16.2)** (unsigned — Windows will warn on first run), after [desktop-v0.16.1](https://github.com/vikram2409-eng/Lanesra-OS/releases/tag/desktop-v0.16.1). Every installer and its release notes are on **[GitHub Releases](https://github.com/vikram2409-eng/Lanesra-OS/releases)**, or build it from source.
+Release **0.16.3** (Early Access) ships both editions from the same code:
+
+| Edition | Get it |
+|---|---|
+| **Desktop (Windows)** | Installer on **[GitHub Releases: desktop-v0.16.3](https://github.com/vikram2409-eng/Lanesra-OS/releases/tag/desktop-v0.16.3)** (unsigned, so Windows warns on first run) |
+| **Team Workspace (server)** | `docker pull ghcr.io/vikram2409-eng/lanesra-os-server:0.16.3` ([image page](https://github.com/users/vikram2409-eng/packages/container/package/lanesra-os-server), [setup guide](https://lanesraos.com/help/set-up-team-workspace)); `:latest` points at the newest published release |
+
+Every release and its notes are on **[GitHub Releases](https://github.com/vikram2409-eng/Lanesra-OS/releases)**. You can also build either edition from source.
 
 Full architecture, dev setup, and a detailed "what's here / what's deferred" breakdown live in **[`desktop/README.md`](desktop/README.md)** — read that before assuming a feature exists.
 
