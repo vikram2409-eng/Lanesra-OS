@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 18 | 1 | 0 | 0 | 1 | 32 / 36 | `████████░░` 89% |
-| 1 · Foundations | 60 | 23 | 3 | 2 | 0 | 32 | 51 / 164 | `███░░░░░░░` 31% |
+| 1 · Foundations | 60 | 26 | 0 | 2 | 0 | 32 | 56 / 164 | `███░░░░░░░` 34% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -30,9 +30,6 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
-| [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | in_review | muse | `wp/WP-0101-identity-adr` | https://github.com/vikram2409-eng/Lanesra-OS/pull/672 |
-| [WP-0126](work/P1/WP-0126-budget-awareness-in-agent-turns.md) | Budget awareness in agent turns | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | 723 |
-| [WP-0127](work/P1/WP-0127-do-not-persist-state-fields.md) | Do-not-persist state fields | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | 723 |
 
 ## Ready to start (all dependencies done)
 
@@ -42,7 +39,7 @@ None.
 
 - Spec requirements tracked: **244**
 - Mapped to a work package: **244**
-- Delivered (every mapped work package done): **41**
+- Delivered (every mapped work package done): **42**
 
 ## Phase 0 · Precursors
 
@@ -74,7 +71,7 @@ None.
 | WP | Title | Epic | Status | Est | Editions (✓ delivered) | Depends on |
 |---|---|---|---|---|---|---|
 | [WP-0100](work/P1/WP-0100-principal-and-agent-identity-foundation.md) | Principal model, Agent Identities and agent credentials | E1.0 Identity foundation | ⚪ proposed | XL | ○Desktop ○Team Workspace ○Online demo | WP-0009 |
-| [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | E1.1 Enterprise sign-in | 👀 in review | M | — | WP-0009, WP-0107, WP-0108 |
+| [WP-0101](work/P1/WP-0101-identity-and-sign-in-architecture-adr.md) | Identity and sign-in architecture ADR | E1.1 Enterprise sign-in | ✅ done | M | — | WP-0009, WP-0107, WP-0108 |
 | [WP-0102](work/P1/WP-0102-oidc-sign-in-for-team-workspace.md) | OIDC sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
 | [WP-0103](work/P1/WP-0103-saml-2-0-sign-in-for-team-workspace.md) | SAML 2.0 sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
 | [WP-0104](work/P1/WP-0104-directory-mapping-groups-to-roles-approvers-and-provisioning.md) | Directory mapping: groups to roles, approvers and provisioning | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace | WP-0102, WP-0103 |
@@ -93,8 +90,8 @@ None.
 | [WP-0123](work/P1/WP-0123-per-step-model-routing-and-data-boundaries.md) | Per-step model routing and data boundaries | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0121 |
 | [WP-0124](work/P1/WP-0124-retry-with-backoff-and-error-taxonomy.md) | Retry with backoff and error taxonomy | E1.3 Agent loop | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0009, WP-0005 |
 | [WP-0125](work/P1/WP-0125-context-window-handling-and-compaction-policies.md) | Context window handling and compaction policies | E1.3 Agent loop | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0121 |
-| [WP-0126](work/P1/WP-0126-budget-awareness-in-agent-turns.md) | Budget awareness in agent turns | E1.3 Agent loop | 👀 in review | S | ✓Desktop ✓Team Workspace ✓Online demo | WP-0121 |
-| [WP-0127](work/P1/WP-0127-do-not-persist-state-fields.md) | Do-not-persist state fields | E1.3 Agent loop | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0111 |
+| [WP-0126](work/P1/WP-0126-budget-awareness-in-agent-turns.md) | Budget awareness in agent turns | E1.3 Agent loop | ✅ done | S | ✓Desktop ✓Team Workspace ✓Online demo | WP-0121 |
+| [WP-0127](work/P1/WP-0127-do-not-persist-state-fields.md) | Do-not-persist state fields | E1.3 Agent loop | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0111 |
 | [WP-0128](work/P1/WP-0128-policy-hook-points-around-step-model-call-and-tool-call.md) | Policy hook points around step, model call and tool call | E1.3 Agent loop | 🟢 ready | L | ○Desktop ○Team Workspace ○Online demo | WP-0122, WP-0133 |
 | [WP-0130](work/P1/WP-0130-prompt-catalog-written-fresh.md) | Prompt catalog, written fresh | E1.4 Task contracts and guardrails | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0009 |
 | [WP-0131](work/P1/WP-0131-task-contracts-and-context-bindings.md) | Task contracts and context bindings | E1.4 Task contracts and guardrails | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0110 |
