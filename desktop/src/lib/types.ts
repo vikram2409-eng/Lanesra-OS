@@ -2747,6 +2747,8 @@ export interface AiApproval {
   resolution_notes: string | null;
   created_at: string;
   resolved_at: string | null;
+  /** WP-0150: when an approved tool call was used (a grant runs once). */
+  consumed_at: string | null;
 }
 
 export interface AiApprovalInput {

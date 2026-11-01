@@ -271,6 +271,27 @@ pub async fn submit_command(
                 status,
             )?;
             voice_repo::set_command_status(conn, &command.id, "planned")?;
+            // WP-0150: a plan that needs approval waits in the approvals
+            // inbox like every other pause for a person.
+            if status == "awaiting_approval" {
+                let approval = super::approval_service::create(
+                    conn,
+                    &command.workspace_id,
+                    &crate::models::ai_approval::AiApprovalInput {
+                        subject_type: "voice_plan".into(),
+                        subject_id: plan_row.id.clone(),
+                        proposal: serde_json::json!({
+                            "plan_id": plan_row.id,
+                            "command_id": command.id,
+                            "transcript": command.transcript,
+                            "risk": risk_decision.risk,
+                            "plan": plan,
+                        }),
+                    },
+                    Some(user_id),
+                )?;
+                voice_repo::set_plan_approval(conn, &plan_row.id, &approval.id)?;
+            }
 
             if status == "confirmed" {
                 // No confirmation needed (read-only, or Act-level low risk) -
@@ -1025,5 +1046,42 @@ pub fn undo(conn: &Connection, execution_id: &str, actor_user_id: &str) -> AppRe
         }
     }
     voice_repo::mark_execution_undone(conn, execution_id)?;
+    Ok(())
+}
+
+/// WP-0150: an Administrator decided a voice plan that needed approval.
+/// Approved, it goes back to the person who spoke it, who confirms it as
+/// usual (an approval never runs someone else's plan for them); rejected,
+/// it ends.
+pub fn decide_plan(conn: &Connection, plan_id: &str, approve: bool) -> AppResult<()> {
+    let plan = voice_repo::get_plan(conn, plan_id)?
+        .ok_or_else(|| AppError::NotFound("Voice action plan".into()))?;
+    if plan.status != "awaiting_approval" {
+        return Ok(());
+    }
+    voice_repo::set_plan_status(
+        conn,
+        plan_id,
+        if approve {
+            "awaiting_confirmation"
+        } else {
+            "rejected"
+        },
+    )?;
+    if let Some(command) = voice_repo::get_command(conn, &plan.command_id)? {
+        if let Some(session) = voice_repo::get_session(conn, &command.session_id)? {
+            if session.state == "awaiting_approval" {
+                voice_repo::set_session_state(
+                    conn,
+                    &session.id,
+                    if approve {
+                        "awaiting_confirmation"
+                    } else {
+                        "idle"
+                    },
+                )?;
+            }
+        }
+    }
     Ok(())
 }

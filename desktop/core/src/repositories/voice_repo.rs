@@ -835,3 +835,12 @@ pub fn upsert_llm_settings(
     )?;
     Ok(get_llm_settings(conn, workspace_id)?.expect("just upserted"))
 }
+
+/// WP-0150: links a plan waiting for approval to its `ai_approvals` row.
+pub fn set_plan_approval(conn: &Connection, id: &str, approval_id: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE voice_action_plans SET approval_id = ?1, updated_at = ?2 WHERE id = ?3",
+        (approval_id, now_iso(), id),
+    )?;
+    Ok(())
+}

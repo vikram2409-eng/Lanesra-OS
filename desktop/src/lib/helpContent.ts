@@ -278,7 +278,7 @@ export const HELP_CATEGORIES: HelpCategory[] = [
           {
             heading: "The Approval Service",
             bodyHtml:
-              "<p>A durable, workspace-wide <b>Pending Approvals</b> inbox - \"something needs a human decision,\" generalized beyond one Pipeline step's own pause flag. Anyone can request one; only an Administrator can approve or reject, and a resolved approval can't be re-resolved. Each entry snapshots exactly what was proposed, so deciding later never depends on the record still looking the same.</p>",
+              "<p><b>Pending Approvals</b> is the one inbox for everything that waits on a person, and each entry says what it decides: a pipeline step that needs approval (approving continues the run), an Agent Team approval gate (approving follows its approved branch), a tool call the Policy Engine held (the run pauses on it; approving lets exactly that call, with the same agent and arguments, run once), and a voice command that needs approval (approving sends it back to the person who spoke it to confirm). Deciding here or on a run's own screen is the same decision, so a run never stays stuck. Only an Administrator can decide, a decided approval cannot be decided again, and each entry keeps a snapshot of what was proposed.</p>",
           },
           {
             heading: "Agent identity in the audit trail",

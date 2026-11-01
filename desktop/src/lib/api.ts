@@ -471,7 +471,10 @@ export const api = {
     call<AiAgentVersion>("transition_ai_agent_version_status", { agentId, versionId, newStatus }),
   listAiApprovals: (status: string | null) => call<AiApproval[]>("list_ai_approvals", { status }),
   createAiApproval: (input: AiApprovalInput) => call<AiApproval>("create_ai_approval", { input }),
-  resolveAiApproval: (id: string, resolution: AiApprovalResolution) => call<AiApproval>("resolve_ai_approval", { id, resolution }),
+  // WP-0150: deciding an approval resumes whatever waits on it, which may
+  // run an agent, so it is an async admin action on Team Workspace.
+  resolveAiApproval: (id: string, resolution: AiApprovalResolution) =>
+    callAdminAction<AiApproval>("resolve_ai_approval", { id, resolution }, "POST", `/api/admin/approvals/${encodeURIComponent(id)}/decide`, resolution),
 
   // AI Agent Platform v2, Phase 2: a unified Policy Engine + the Tool
   // Registry risk overrides it checks. `agentId: null` reads/writes the
@@ -495,10 +498,14 @@ export const api = {
   setExecutionGraphDisabled: (id: string, disabled: boolean) => call<ExecutionGraph>("set_execution_graph_disabled", { id, disabled }),
   getGraphRun: (id: string) => call<GraphRun>("get_graph_run", { id }),
   listGraphRuns: (graphId: string) => call<GraphRun[]>("list_graph_runs", { graphId }),
-  startGraphRun: (graphId: string, triggerInput: string) => call<GraphRun>("start_graph_run", { graphId, triggerInput }),
-  resumeGraphRun: (id: string) => call<GraphRun>("resume_graph_run", { id }),
-  resolveGraphRunApproval: (id: string, approve: boolean, notes?: string | null) => call<GraphRun>("resolve_graph_run_approval", { id, approve, notes: notes ?? null }),
-  cancelGraphRun: (id: string) => call<GraphRun>("cancel_graph_run", { id }),
+  // These may run agents, so on Team Workspace they are async admin actions
+  // (`server/src/admin_actions.rs`), not `/api/invoke` commands.
+  startGraphRun: (graphId: string, triggerInput: string) =>
+    callAdminAction<GraphRun>("start_graph_run", { graphId, triggerInput }, "POST", `/api/admin/execution-graphs/${encodeURIComponent(graphId)}/run`, { input: triggerInput }),
+  resumeGraphRun: (id: string) => callAdminAction<GraphRun>("resume_graph_run", { id }, "POST", `/api/admin/execution-graph-runs/${encodeURIComponent(id)}/resume`),
+  resolveGraphRunApproval: (id: string, approve: boolean, notes?: string | null) =>
+    callAdminAction<GraphRun>("resolve_graph_run_approval", { id, approve, notes: notes ?? null }, "POST", `/api/admin/execution-graph-runs/${encodeURIComponent(id)}/approve`, { approve, notes: notes ?? null }),
+  cancelGraphRun: (id: string) => callAdminAction<GraphRun>("cancel_graph_run", { id }, "POST", `/api/admin/execution-graph-runs/${encodeURIComponent(id)}/cancel`),
 
   // Next-Gen program, Domain A (Intelligence Foundation), FND-01: the
   // Lanesra System Graph. Read-only - a node's data always comes from its

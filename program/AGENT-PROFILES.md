@@ -8,6 +8,9 @@ when that runs out — at any point, including in the middle of a work package. 
 What differs between them is only **how** they work, which changes the mechanics of claiming,
 testing and delivering — never which work they may take.
 
+> **Since 2026-11-01 (owner, RAID Q-26): Muse AI is not building. Claude Code takes all build work.**
+> The rest of this file still describes how either agent works, should that change.
+
 > If anything below about an agent's capabilities is wrong, correct this file. Open question for
 > the owner: RAID Q-12.
 

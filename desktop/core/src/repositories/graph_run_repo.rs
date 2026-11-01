@@ -238,3 +238,17 @@ pub fn append_run_node(
     )?;
     Ok(id)
 }
+
+/// WP-0150: the graph run of this workspace waiting on `approval_id`.
+pub fn run_waiting_on(
+    conn: &Connection,
+    workspace_id: &str,
+    approval_id: &str,
+) -> rusqlite::Result<Option<String>> {
+    conn.query_row(
+        "SELECT id FROM ai_runs WHERE workspace_id = ?1 AND pending_approval_id = ?2 AND status = 'waiting_approval'",
+        [workspace_id, approval_id],
+        |r| r.get(0),
+    )
+    .optional()
+}

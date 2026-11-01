@@ -3,8 +3,8 @@ id: WP-0101
 title: Identity and sign-in architecture ADR
 phase: 1
 epic: E1.1 Enterprise sign-in
-status: in_review
-owner: muse
+status: done
+owner: claude
 depends_on: [WP-0009, WP-0107, WP-0108]
 requirements: [REQ-GOV-001]
 threats: [T-03, T-11, T-12, T-18]
@@ -13,7 +13,7 @@ editions: []
 delivered: []
 branch: wp/WP-0101-identity-adr
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/672
-updated: 2026-10-18
+updated: 2026-11-01
 ---
 
 # WP-0101 — Identity and sign-in architecture ADR
@@ -60,3 +60,4 @@ Decide how OIDC and SAML fit both editions - the owner requires SSO on desktop a
 - 2026-10-17 muse: Moved proposed → ready. Depends on WP-0107 (principal model) and WP-0108 (agent identities) for the ADR. AC-1 (ADR accepted) is manual; AC-2 (WP-0102..0104 ACs updated) is verifiable. REQ-GOV-001 listed. Size M. Note: owner decides who builds identity code (per 2026-10-17 instruction).
 - 2026-10-18 claude: Reviewed ADR-0016 and revised it (still Proposed). Blocking fix: the draft stored accounts and sessions per workspace, contradicting ADR-0014 (control database holds accounts, memberships, sessions). Security fixes: account linking by (issuer, subject) with proof of ownership instead of email match; just-in-time creation opt-in and domain-limited with the lowest role; PKCE, state, algorithm allow-list and JWKS rotation for OIDC; SAML signed-assertion, signature-wrapping and replay checks; session id renewal, revocation on membership or role change; per-account plus per-address attempt limits; audit events; API-client principals. AC-1 waits for owner acceptance; AC-2 (update WP-0102..0104 criteria) follows acceptance.
 - 2026-10-18 claude: AC-1: the owner accepted ADR-0016 on 2026-10-18 (as revised in PR #672). Owner decision the same day: Muse builds WP-0107, WP-0108 and WP-0109; Claude reviews every identity PR before merge. Remaining: AC-2, update WP-0102 to WP-0104 criteria from ADR-0016 sections 2 to 5.
+- 2026-11-01 claude: Done. PR #672 merged on 2026-10-18, the owner accepted ADR-0016 the same day (AC-1), and the WP-0102 to WP-0104 criteria reference ADR-0016 (AC-2); the status had not been updated. Owner decision 2026-11-01 (RAID Q-26): Muse is not building; Claude takes all build work, including the identity work earlier assigned to Muse.

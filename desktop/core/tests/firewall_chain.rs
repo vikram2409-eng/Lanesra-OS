@@ -217,6 +217,36 @@ async fn tool_result(ws: &Ws, listed: Vec<String>, tool: &str, args: Value) -> S
     bodies[1].clone()
 }
 
+/// Has the agent call `tool` once under a policy that holds it: the run
+/// pauses on a pending tool-call approval (WP-0150), which is returned.
+async fn held_call(
+    ws: &Ws,
+    listed: Vec<String>,
+    tool: &str,
+    args: Value,
+) -> lanesra_core::models::ai_approval::AiApproval {
+    let seen = use_provider(ws, vec![tool_use(tool, args)]);
+    let id = agent(
+        ws,
+        &format!("Agent {}", seen.lock().unwrap().len() + rand_suffix()),
+        listed,
+        vec![],
+    );
+    let run = run(ws, &id).await;
+    assert_eq!(run.status, "awaiting_approval", "{run:?}");
+    let approval_id = run.pending_approval_id.expect("paused on an approval");
+    let approval = lanesra_core::services::approval_service::get(
+        &ws.conn,
+        &approval_id,
+        &ws.id,
+        Some(&ws.admin),
+    )
+    .unwrap();
+    assert_eq!(approval.subject_type, "tool_call");
+    assert_eq!(approval.status, "pending");
+    approval
+}
+
 fn rand_suffix() -> usize {
     static N: AtomicUsize = AtomicUsize::new(0);
     N.fetch_add(1, Ordering::SeqCst)
@@ -261,17 +291,18 @@ async fn assert_chain_order(
     assert!(body.contains(BLOCKED), "{tool}: {body}");
     assert_eq!(count(), 0, "{tool}: a blocked call was dispatched");
 
-    // 3. Listed, not blocked, but every risk level needs approval: queued,
-    // never dispatched.
+    // 3. Listed, not blocked, but every risk level needs approval: held,
+    // never dispatched. Since WP-0150 the run pauses on the approval
+    // instead of carrying on without the call.
     policy(ws, &[], Some(RiskLevel::Read));
-    let body = tool_result(
+    let approval = held_call(
         ws,
         if internal { vec![] } else { listed.clone() },
         tool,
         args.clone(),
     )
     .await;
-    assert!(body.contains(APPROVAL), "{tool}: {body}");
+    assert_eq!(approval.proposal["tool_name"], tool, "{tool}");
     assert_eq!(
         count(),
         0,

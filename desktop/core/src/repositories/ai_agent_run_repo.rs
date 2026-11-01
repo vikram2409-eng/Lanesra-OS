@@ -24,6 +24,7 @@ fn map_run_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentRun> {
         finished_at: row.get("finished_at")?,
         paused_at_step_order: row.get("paused_at_step_order")?,
         resume_previous_output: row.get("resume_previous_output")?,
+        pending_approval_id: row.get("pending_approval_id")?,
         steps: Vec::new(), // filled in by `hydrate`
     })
 }
@@ -108,7 +109,7 @@ pub fn finish_run(
     error: Option<&str>,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "UPDATE ai_agent_runs SET status = ?1, error = ?2, finished_at = ?3, paused_at_step_order = NULL, resume_previous_output = NULL WHERE id = ?4",
+        "UPDATE ai_agent_runs SET status = ?1, error = ?2, finished_at = ?3, paused_at_step_order = NULL, resume_previous_output = NULL, pending_approval_id = NULL WHERE id = ?4",
         (status, error, now_iso(), id),
     )?;
     Ok(())
@@ -124,10 +125,11 @@ pub fn pause_for_approval(
     id: &str,
     paused_at_step_order: i64,
     resume_previous_output: &str,
+    approval_id: &str,
 ) -> rusqlite::Result<()> {
     conn.execute(
-        "UPDATE ai_agent_runs SET status = 'awaiting_approval', paused_at_step_order = ?1, resume_previous_output = ?2 WHERE id = ?3",
-        (paused_at_step_order, resume_previous_output, id),
+        "UPDATE ai_agent_runs SET status = 'awaiting_approval', paused_at_step_order = ?1, resume_previous_output = ?2, pending_approval_id = ?3 WHERE id = ?4",
+        (paused_at_step_order, resume_previous_output, approval_id, id),
     )?;
     Ok(())
 }
@@ -157,4 +159,18 @@ pub fn list_runs_for_target(
         )?
         .collect::<rusqlite::Result<_>>()?;
     rows.into_iter().map(|r| hydrate(conn, r)).collect()
+}
+
+/// WP-0150: the pipeline run of this workspace waiting on `approval_id`.
+pub fn run_waiting_on(
+    conn: &Connection,
+    workspace_id: &str,
+    approval_id: &str,
+) -> rusqlite::Result<Option<String>> {
+    conn.query_row(
+        "SELECT id FROM ai_agent_runs WHERE workspace_id = ?1 AND pending_approval_id = ?2 AND status = 'awaiting_approval'",
+        [workspace_id, approval_id],
+        |r| r.get(0),
+    )
+    .optional()
 }
