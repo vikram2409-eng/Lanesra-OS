@@ -100,6 +100,10 @@ pub fn router() -> Router<SharedState> {
             post(cancel_graph_run_admin),
         )
         .route(
+            "/api/admin/approvals/:id/decide",
+            post(decide_approval_admin),
+        )
+        .route(
             "/api/admin/knowledge-sources",
             post(create_knowledge_source_admin),
         )
@@ -453,6 +457,32 @@ async fn resolve_graph_run_approval_admin(
             &id,
             body.approve,
             body.notes.as_deref(),
+            Some(&actor),
+        )
+        .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+/// WP-0150: decides an approval and resumes whatever waits on it.
+async fn decide_approval_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(resolution): Json<lanesra_core::models::ai_approval::AiApprovalResolution>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        lanesra_core::services::approval_service::decide(
+            &conn,
+            &id,
+            &workspace_id,
+            &master_key,
+            &resolution,
             Some(&actor),
         )
         .await

@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 18 | 1 | 0 | 0 | 1 | 32 / 36 | `████████░░` 89% |
-| 1 · Foundations | 60 | 26 | 0 | 2 | 0 | 32 | 56 / 164 | `███░░░░░░░` 34% |
+| 1 · Foundations | 60 | 26 | 1 | 2 | 0 | 31 | 56 / 164 | `███░░░░░░░` 34% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -19,9 +19,9 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 121 | 22 | 51 / 404 |
-| Team Workspace | 134 | 27 | 59 / 454 |
-| Online demo | 88 | 11 | 22 / 306 |
+| Desktop | 121 | 23 | 55 / 404 |
+| Team Workspace | 134 | 28 | 63 / 454 |
+| Online demo | 88 | 12 | 26 / 306 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -30,6 +30,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
+| [WP-0150](work/P1/WP-0150-move-every-pause-for-human-onto-ai-approvals.md) | Move every pause-for-human onto ai_approvals | in_progress | claude | `claude/enterprise-build-planning-jxy2kq` | - |
 
 ## Ready to start (all dependencies done)
 
@@ -104,7 +105,7 @@ None.
 | [WP-0144](work/P1/WP-0144-test-button-on-every-model-tool-connector-agent-and-team.md) | Test button on every model, tool, connector, agent and team | E1.5 Tools and firewall | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0010 |
 | [WP-0145](work/P1/WP-0145-minimal-untrusted-content-defence.md) | Minimal untrusted-content defence for tool results | E1.5 Tools and firewall | 🟢 ready | L | ○Desktop ○Team Workspace ○Online demo | WP-0122, WP-0128, WP-0011, WP-0130 |
 | [WP-0146](work/P1/WP-0146-bring-your-own-model-provider-coverage.md) | Bring-your-own-model provider coverage and model catalog | E1.3 Agent loop | ⚪ proposed | XL | ○Desktop ○Team Workspace ○Online demo | WP-0005, WP-0122 |
-| [WP-0150](work/P1/WP-0150-move-every-pause-for-human-onto-ai-approvals.md) | Move every pause-for-human onto ai_approvals | E1.6 Approvals | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0110, WP-0007 |
+| [WP-0150](work/P1/WP-0150-move-every-pause-for-human-onto-ai-approvals.md) | Move every pause-for-human onto ai_approvals | E1.6 Approvals | 🔨 in progress | L | ✓Desktop ✓Team Workspace ✓Online demo | WP-0110, WP-0007 |
 | [WP-0151](work/P1/WP-0151-four-review-responses.md) | Four review responses | E1.6 Approvals | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0150 |
 | [WP-0152](work/P1/WP-0152-approvals-bound-to-exact-arguments.md) | Approvals bound to exact arguments | E1.6 Approvals | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0150 |
 | [WP-0153](work/P1/WP-0153-standing-approvals.md) | Standing approvals | E1.6 Approvals | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0152 |

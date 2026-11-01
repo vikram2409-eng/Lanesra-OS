@@ -569,6 +569,9 @@ async fn execute_node(
             };
             // WP-0127: a do-not-persist agent's own spans keep no bodies.
             let suppression = is_do_not_persist(node).then(crate::do_not_persist::suppress_bodies);
+            // WP-0150: a tool call the policy holds pauses the run on this
+            // node; approving it re-runs the node with the call allowed once.
+            let pausable = crate::approval_hold::pausable();
             let result = chat_service::run_agent_once_with_text(
                 conn,
                 workspace_id,
@@ -579,7 +582,12 @@ async fn execute_node(
                 &memory_context,
             )
             .await;
+            drop(pausable);
             drop(suppression);
+            if let Some(approval_id) = crate::approval_hold::paused_on(&result) {
+                record!("waiting_approval", Some(&input_text), None, None);
+                return Ok(NodeOutcome::WaitingApproval(approval_id));
+            }
             match result {
                 Ok(outcome) => {
                     let output = json!({"output": outcome.final_text});
@@ -1258,9 +1266,14 @@ async fn run_from(
                     &node.id,
                     &approval_id,
                 )?;
+                let subject = if node.node_type == "approval" {
+                    "graph_node"
+                } else {
+                    "tool_call"
+                };
                 super::trace_service::emit_approval_requested(
                     conn,
-                    json!({"subject": "graph_node", "node": node.node_key, "approval_id": approval_id}),
+                    json!({"subject": subject, "node": node.node_key, "approval_id": approval_id}),
                 );
                 break;
             }
@@ -1472,6 +1485,44 @@ pub async fn resolve_approval(
         .current_node_id
         .clone()
         .ok_or_else(|| AppError::Validation("run has no current_node_id".into()))?;
+    // WP-0150: a run paused by a held tool call waits on the agent node
+    // itself. Approving re-runs that node (the call is allowed once);
+    // rejecting fails the run.
+    let waiting_node = graph.nodes.iter().find(|n| n.id == approval_node_id);
+    if waiting_node.is_some_and(|n| n.node_type != "approval") {
+        if !approve {
+            let message = format!(
+                "A held tool call was rejected{}",
+                notes.map(|n| format!(": {n}")).unwrap_or_default()
+            );
+            graph_run_repo::set_error_message(conn, run_id, Some(&message))?;
+            run_state::transition(
+                conn,
+                run_id,
+                "waiting_approval",
+                "failed",
+                Some("approval_rejected"),
+            )?;
+            super::trace_service::begin_run(conn, workspace_id, "graph", run_id, "", json!({}))
+                .finish(
+                    conn,
+                    Some(super::trace_service::SpanStatus::Error),
+                    json!({"lanesra.run.status": "failed", "lanesra.stop_reason": "approval_rejected"}),
+                );
+            return get_owned_run(conn, run_id, workspace_id);
+        }
+        requeue_and_take(conn, run_id, "waiting_approval")?;
+        return run_from(
+            conn,
+            workspace_id,
+            master_key,
+            actor,
+            &graph,
+            run_id,
+            &approval_node_id,
+        )
+        .await;
+    }
     let label = if approve { "approved" } else { "rejected" };
     let next = branch_outgoing(&graph, &approval_node_id, label)?.to_string();
     requeue_and_take(conn, run_id, "waiting_approval")?;

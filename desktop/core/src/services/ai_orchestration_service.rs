@@ -433,6 +433,13 @@ async fn run_step(
             )?;
             Ok(outcome.final_text)
         }
+        // WP-0150: a step paused on a held tool call is not a failed step;
+        // it runs again once the call is approved.
+        Err(e @ AppError::Classified { code, .. })
+            if code == crate::approval_hold::PENDING_CODE =>
+        {
+            Err(e)
+        }
         Err(e) => {
             let finished_at = crate::domain::ids::now_iso();
             let msg = e.to_string();
@@ -465,6 +472,10 @@ enum RunOutcome {
     Paused {
         resume_at_step: i64,
         previous_output: String,
+        /// WP-0150: set when a tool call the policy held paused the step
+        /// (the step re-runs on approval); `None` for a step that needs
+        /// approval of its output.
+        held_call: Option<String>,
     },
 }
 
@@ -493,7 +504,10 @@ async fn run_sequential_from(
             "Step {} names an agent that no longer exists",
             step_order + 1
         );
-        previous_output = run_step(
+        // WP-0150: a tool call the policy holds pauses this step; approving
+        // it re-runs the step with that call allowed once.
+        let pausable = crate::approval_hold::pausable();
+        let result = run_step(
             conn,
             workspace_id,
             master_key,
@@ -504,11 +518,21 @@ async fn run_sequential_from(
             &input_text,
             &msg,
         )
-        .await?;
+        .await;
+        drop(pausable);
+        if let Some(approval_id) = crate::approval_hold::paused_on(&result) {
+            return Ok(RunOutcome::Paused {
+                resume_at_step: step_order as i64,
+                previous_output,
+                held_call: Some(approval_id),
+            });
+        }
+        previous_output = result?;
         if *requires_approval {
             return Ok(RunOutcome::Paused {
                 resume_at_step: (step_order + 1) as i64,
                 previous_output,
+                held_call: None,
             });
         }
     }
@@ -568,6 +592,7 @@ async fn run_consensus(
         return Ok(RunOutcome::Paused {
             resume_at_step: synth_step_order,
             previous_output: candidate_outputs,
+            held_call: None,
         });
     }
     run_consensus_synthesizer(
@@ -704,6 +729,7 @@ async fn run_peer_review_from(
             return Ok(RunOutcome::Paused {
                 resume_at_step: step_order,
                 previous_output: review,
+                held_call: None,
             });
         }
         if review
@@ -992,15 +1018,59 @@ fn finalize_run(
     result: AppResult<RunOutcome>,
     trace: super::trace_service::RunTrace,
 ) -> AppResult<AiAgentRun> {
+    // WP-0150: a pause waits on an `ai_approvals` row, so the approvals
+    // inbox decides it like any other: a step that needs approval gets one
+    // here; a held tool call already has its own.
+    let mut pause_approval = None;
+    if let Ok(RunOutcome::Paused {
+        resume_at_step,
+        previous_output,
+        held_call,
+    }) = &result
+    {
+        pause_approval = Some(match held_call {
+            Some(id) => id.clone(),
+            None => {
+                let run = ai_agent_run_repo::get_run(conn, run_id)?
+                    .ok_or_else(|| AppError::NotFound("Run".into()))?;
+                super::approval_service::create(
+                    conn,
+                    &run.workspace_id,
+                    &crate::models::ai_approval::AiApprovalInput {
+                        subject_type: "pipeline_run".into(),
+                        subject_id: run_id.to_string(),
+                        proposal: json!({
+                            "run_id": run_id,
+                            "pipeline_id": run.target_id,
+                            "step_order": resume_at_step,
+                            "proposed_output": previous_output,
+                        }),
+                    },
+                    crate::principals::current_run_identity()
+                        .and_then(|i| i.record_actor().map(str::to_string))
+                        .as_deref(),
+                )?
+                .id
+            }
+        });
+    }
     // WP-0111: a paused run keeps its trace open; resuming continues it.
     match &result {
         Ok(RunOutcome::Completed) => {
             trace.finish(conn, Some(super::trace_service::SpanStatus::Ok), json!({}))
         }
-        Ok(RunOutcome::Paused { resume_at_step, .. }) => {
+        Ok(RunOutcome::Paused {
+            resume_at_step,
+            held_call,
+            ..
+        }) => {
             super::trace_service::emit_approval_requested(
                 conn,
-                json!({"subject": "pipeline_step", "step_order": resume_at_step}),
+                json!({
+                    "subject": if held_call.is_some() { "tool_call" } else { "pipeline_step" },
+                    "step_order": resume_at_step,
+                    "approval_id": pause_approval,
+                }),
             );
             trace.finish(conn, None, json!({}))
         }
@@ -1017,9 +1087,14 @@ fn finalize_run(
         Ok(RunOutcome::Paused {
             resume_at_step,
             previous_output,
-        }) => {
-            ai_agent_run_repo::pause_for_approval(conn, run_id, resume_at_step, &previous_output)?
-        }
+            ..
+        }) => ai_agent_run_repo::pause_for_approval(
+            conn,
+            run_id,
+            resume_at_step,
+            &previous_output,
+            pause_approval.as_deref().unwrap_or_default(),
+        )?,
         Err(e) => ai_agent_run_repo::finish_run(conn, run_id, "failed", Some(&e.to_string()))?,
     }
     Ok(ai_agent_run_repo::get_run(conn, run_id)?.expect("just finished or paused"))
@@ -1059,6 +1134,15 @@ pub async fn approve_pending_step(
             "This run is not awaiting approval".into(),
         ));
     }
+    // WP-0150: the run's approval row is decided with it. For a held tool
+    // call this is the grant the re-run step uses.
+    resolve_run_approval(
+        conn,
+        &run,
+        true,
+        edited_output.map(|_| "approved with an edited output"),
+        actor_user_id,
+    )?;
     // WP-0111: the resumed run continues the trace it paused in.
     let trace = super::trace_service::begin_run(
         conn,
@@ -1152,8 +1236,39 @@ pub fn reject_pending_run(
             "This run is not awaiting approval".into(),
         ));
     }
+    resolve_run_approval(conn, &run, false, Some(reason), actor_user_id)?;
     ai_agent_run_repo::finish_run(conn, run_id, "rejected", Some(reason))?;
     Ok(ai_agent_run_repo::get_run(conn, run_id)?.expect("just updated"))
+}
+
+/// WP-0150: decides the pending `ai_approvals` row a paused pipeline run
+/// waits on, if it is still pending (the approvals inbox may have decided
+/// it already).
+fn resolve_run_approval(
+    conn: &Connection,
+    run: &AiAgentRun,
+    approve: bool,
+    notes: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
+    let Some(approval_id) = &run.pending_approval_id else {
+        return Ok(());
+    };
+    let pending = crate::repositories::ai_approval_repo::get(conn, approval_id)?
+        .is_some_and(|a| a.status == "pending");
+    if pending {
+        super::approval_service::resolve(
+            conn,
+            approval_id,
+            &run.workspace_id,
+            &crate::models::ai_approval::AiApprovalResolution {
+                approve,
+                resolution_notes: notes.map(str::to_string),
+            },
+            actor_user_id,
+        )?;
+    }
+    Ok(())
 }
 
 /// The one enqueue point for a genuinely-async trigger firing from a

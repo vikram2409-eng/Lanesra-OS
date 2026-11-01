@@ -203,5 +203,9 @@ pub struct AiAgentRun {
     /// output, unless the approver edits it).
     pub paused_at_step_order: Option<i64>,
     pub resume_previous_output: Option<String>,
+    /// WP-0150: the `ai_approvals` row this run waits on, while it is
+    /// `awaiting_approval` - a step that needs approval, or a tool call
+    /// the policy held.
+    pub pending_approval_id: Option<String>,
     pub steps: Vec<AiAgentRunStep>,
 }

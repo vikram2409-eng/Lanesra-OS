@@ -25,6 +25,9 @@ pub struct AiApproval {
     pub resolution_notes: Option<String>,
     pub created_at: String,
     pub resolved_at: Option<String>,
+    /// WP-0150: when an approved tool call was used. A grant lets its exact
+    /// call run once.
+    pub consumed_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

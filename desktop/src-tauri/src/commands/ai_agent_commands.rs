@@ -281,21 +281,35 @@ pub fn create_ai_approval(state: State<AppState>, input: AiApprovalInput) -> App
     )
 }
 
+/// WP-0150: decides an approval and resumes whatever waits on it (a graph
+/// or pipeline run, a voice plan).
 #[tauri::command]
-pub fn resolve_ai_approval(
-    state: State<AppState>,
+pub async fn resolve_ai_approval(
+    state: State<'_, AppState>,
     id: String,
     resolution: AiApprovalResolution,
 ) -> AppResult<AiApproval> {
-    let conn = state.conn.lock().unwrap();
-    let workspace_id = require_workspace_id(&conn)?;
-    approval_service::resolve(
-        &conn,
-        &id,
-        &workspace_id,
-        &resolution,
-        current_actor(&state).as_deref(),
+    let master_key = crate::commands::resolve_master_key(&state)?;
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    crate::commands::integration_commands::run_with_own_connection(
+        db_path,
+        move |conn| async move {
+            approval_service::decide(
+                &conn,
+                &id,
+                &workspace_id,
+                &master_key,
+                &resolution,
+                actor.as_deref(),
+            )
+            .await
+        },
     )
+    .await
 }
 
 // --- AI Agent Platform v2, Phase 2: Policy Engine + Tool Registry -----

@@ -22,6 +22,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AiApproval> {
         resolution_notes: row.get("resolution_notes")?,
         created_at: row.get("created_at")?,
         resolved_at: row.get("resolved_at")?,
+        consumed_at: row.get("consumed_at")?,
     })
 }
 
@@ -83,4 +84,27 @@ pub fn resolve(
         rusqlite::params![status, resolved_by, resolution_notes, now, id],
     )?;
     Ok(get(conn, id)?.expect("just updated"))
+}
+
+/// WP-0150: approved tool calls of this workspace not used yet, oldest
+/// first.
+pub fn unused_tool_call_grants(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<AiApproval>> {
+    let mut stmt = conn.prepare(
+        "SELECT * FROM ai_approvals WHERE workspace_id = ?1 AND subject_type = 'tool_call'
+         AND status = 'approved' AND consumed_at IS NULL ORDER BY created_at",
+    )?;
+    let rows = stmt.query_map([workspace_id], map_row)?;
+    rows.collect()
+}
+
+/// Marks a grant used; false when another run used it first.
+pub fn consume(conn: &Connection, id: &str) -> rusqlite::Result<bool> {
+    let changed = conn.execute(
+        "UPDATE ai_approvals SET consumed_at = ?2 WHERE id = ?1 AND consumed_at IS NULL",
+        rusqlite::params![id, now_iso()],
+    )?;
+    Ok(changed == 1)
 }

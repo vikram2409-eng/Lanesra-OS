@@ -29,7 +29,7 @@ use crate::domain::AppResult;
 use crate::models::ai_agent_policy::{AiAgentPolicy, AiAgentPolicyInput, PolicyDecision};
 use crate::models::ai_approval::AiApprovalInput;
 use crate::models::ai_tool_registry::RiskLevel;
-use crate::repositories::ai_agent_policy_repo;
+use crate::repositories::{ai_agent_policy_repo, ai_approval_repo};
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor_user_id)
@@ -124,14 +124,55 @@ pub fn record_pending_tool_call(
     arguments: &Value,
     risk_level: RiskLevel,
     requested_by: Option<&str>,
-) -> AppResult<()> {
+) -> AppResult<String> {
     let input = AiApprovalInput {
         subject_type: "tool_call".to_string(),
         subject_id: tool_name.to_string(),
         proposal: json!({"agent_id": agent_id, "tool_name": tool_name, "arguments": arguments, "risk_level": risk_level.as_str()}),
     };
-    super::approval_service::create(conn, workspace_id, &input, requested_by)?;
-    Ok(())
+    Ok(super::approval_service::create(conn, workspace_id, &input, requested_by)?.id)
+}
+
+/// `value` with every object's keys sorted, so two equal argument sets
+/// compare equal however their keys were ordered.
+fn canonical(value: &Value) -> Value {
+    match value {
+        Value::Object(map) => {
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            let mut out = serde_json::Map::new();
+            for k in keys {
+                out.insert(k.clone(), canonical(&map[k]));
+            }
+            Value::Object(out)
+        }
+        Value::Array(items) => Value::Array(items.iter().map(canonical).collect()),
+        other => other.clone(),
+    }
+}
+
+/// WP-0150: an approved, unused grant for exactly this call - the same
+/// agent, tool and arguments - is used up and returned; the call may then
+/// run once. Anything else (other arguments, another agent, a used grant)
+/// leaves the call held.
+pub fn take_tool_grant(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: Option<&str>,
+    tool_name: &str,
+    arguments: &Value,
+) -> AppResult<Option<String>> {
+    let wanted = canonical(arguments);
+    for grant in ai_approval_repo::unused_tool_call_grants(conn, workspace_id)? {
+        let p = &grant.proposal;
+        let same = p.get("tool_name").and_then(Value::as_str) == Some(tool_name)
+            && p.get("agent_id").and_then(Value::as_str) == agent_id
+            && p.get("arguments").map(canonical).as_ref() == Some(&wanted);
+        if same && ai_approval_repo::consume(conn, &grant.id)? {
+            return Ok(Some(grant.id));
+        }
+    }
+    Ok(None)
 }
 
 pub fn get_policy(

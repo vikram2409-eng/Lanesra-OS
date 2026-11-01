@@ -2764,7 +2764,7 @@ pub fn dispatch(
         "resolve_ai_approval" => {
             let id: String = arg(args, "id")?;
             let resolution: AiApprovalResolution = arg(args, "resolution")?;
-            to_value(approval_service::resolve(
+            to_value(approval_service::resolve_unless_waiting(
                 conn,
                 &id,
                 &require_workspace_id(conn)?,

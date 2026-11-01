@@ -173,6 +173,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
         include_str!("migrations/0086_tool_caps_and_rate_limits.sql"),
     ),
     (87, include_str!("migrations/0087_run_events.sql")),
+    (
+        88,
+        include_str!("migrations/0088_approvals_unification.sql"),
+    ),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -197,6 +201,12 @@ pub fn migration_versions() -> Vec<i64> {
 }
 
 pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
+    run_migrations_up_to(conn, i64::MAX)
+}
+
+/// Applies pending migrations up to and including `max_version` - the
+/// migration tests use it to build a database as an older release left it.
+pub fn run_migrations_up_to(conn: &Connection, max_version: i64) -> rusqlite::Result<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_migrations (
             version INTEGER PRIMARY KEY,
@@ -211,7 +221,7 @@ pub fn run_migrations(conn: &Connection) -> rusqlite::Result<()> {
     )?;
 
     for (version, sql) in MIGRATIONS {
-        if *version <= current_version {
+        if *version <= current_version || *version > max_version {
             continue;
         }
         // ADR-0010: each migration and its schema_migrations row apply in
@@ -246,7 +256,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 87);
+        assert_eq!(version, 88);
 
         let table_count: i64 = conn
             .query_row(

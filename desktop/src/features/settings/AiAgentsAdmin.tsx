@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ApiError } from "../../lib/api";
+import { describeApproval } from "../../lib/approvals";
 import { ChatPanel } from "../../components/ChatPanel";
 import { AiTriggersPanel } from "./AiTriggersPanel";
 import { AgentAccessInspector } from "./AgentAccessInspector";
@@ -1704,15 +1705,16 @@ function VersionDraftForm({
 }
 
 /**
- * The workspace-wide durable approval inbox (`ai_approvals`) - Phase 1
- * ships the table and this review surface; nothing yet auto-creates an
- * approval (Phase 2's Tool-Call Firewall and later phases are what
- * actually route sensitive actions through it). Collapsed by default,
- * same reasoning as `MemoryHistoryPanel` above.
+ * The workspace-wide approvals inbox (`ai_approvals`). Since WP-0150 every
+ * pause for a person lands here: a pipeline step that needs approval, an
+ * Agent Team Approval node, a tool call the policy holds, and a voice
+ * command that needs approval. Deciding one resumes whatever waits on it.
+ * Collapsed by default, same reasoning as `MemoryHistoryPanel` above.
  */
 function ApprovalsPanel() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const pendingQuery = useQuery({
     queryKey: ["aiApprovals", "pending"],
     queryFn: () => api.listAiApprovals("pending"),
@@ -1722,7 +1724,14 @@ function ApprovalsPanel() {
 
   const resolve = useMutation({
     mutationFn: ({ id, approve }: { id: string; approve: boolean }) => api.resolveAiApproval(id, { approve, resolution_notes: null }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["aiApprovals"] }),
+    onSuccess: () => {
+      setError(null);
+      // Deciding resumes runs, so their lists change too.
+      for (const key of ["aiApprovals", "aiAgentRuns", "graphRuns", "graphRun"]) {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      }
+    },
+    onError: (e) => setError(e instanceof Error ? e.message : String(e)),
   });
 
   return (
@@ -1734,22 +1743,27 @@ function ApprovalsPanel() {
         </button>
       </div>
       <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
-        A durable, workspace-wide queue of proposed actions awaiting a human decision - the foundation the Tool-Call Firewall and other
-        later phases route sensitive actions through.
+        Everything waiting for a person: pipeline steps that need approval, Agent Team approval gates, tool calls held by the
+        Policy Engine and voice commands that need approval. Approving resumes the run; an approved tool call runs exactly once.
       </p>
+      {error && <p style={{ fontSize: 13, color: "var(--danger)" }}>{error}</p>}
       {open && (
         <div>
           {pendingQuery.isLoading && <p style={{ fontSize: 13, color: "var(--text-muted)" }}>Loading...</p>}
           {!pendingQuery.isLoading && approvals.length === 0 && <div className="empty-state">Nothing pending right now.</div>}
           {approvals.map((a: AiApproval) => (
             <div key={a.id} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 10, marginBottom: 8 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>{describeApproval(a)}</div>
               <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 6 }}>
-                {a.subject_type} · {new Date(a.created_at).toLocaleString()}
+                {new Date(a.created_at).toLocaleString()}
                 {a.requested_by && ` · requested by ${a.requested_by}`}
               </div>
-              <pre style={{ margin: "0 0 8px", whiteSpace: "pre-wrap", fontFamily: "ui-monospace, monospace", fontSize: 12 }}>
-                {JSON.stringify(a.proposal, null, 2)}
-              </pre>
+              <details style={{ marginBottom: 8 }}>
+                <summary style={{ fontSize: 12 }}>Details</summary>
+                <pre style={{ margin: "6px 0 0", whiteSpace: "pre-wrap", fontFamily: "ui-monospace, monospace", fontSize: 12 }}>
+                  {JSON.stringify(a.proposal, null, 2)}
+                </pre>
+              </details>
               <div style={{ display: "flex", gap: 6 }}>
                 <button className="btn btn-primary" disabled={resolve.isPending} onClick={() => resolve.mutate({ id: a.id, approve: true })}>
                   Approve

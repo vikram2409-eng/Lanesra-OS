@@ -1248,7 +1248,16 @@ fn apply_tool_firewall(
     arguments: &Value,
 ) -> AppResult<()> {
     let source = tool_source(name);
-    let decision = policy_engine_service::evaluate(conn, workspace_id, agent_id, name, source)?;
+    let mut decision = policy_engine_service::evaluate(conn, workspace_id, agent_id, name, source)?;
+    // WP-0150: an administrator approved exactly this call; it runs once.
+    let mut grant = None;
+    if matches!(decision, PolicyDecision::RequireApproval { .. }) {
+        grant =
+            policy_engine_service::take_tool_grant(conn, workspace_id, agent_id, name, arguments)?;
+        if grant.is_some() {
+            decision = PolicyDecision::Allow;
+        }
+    }
     // WP-0140 AC-2: a call the policy allows is checked against the tool,
     // connector and workspace rate limits before it can run.
     let rate = match &decision {
@@ -1270,7 +1279,7 @@ fn apply_tool_firewall(
         conn,
         "policy",
         "tool_call_firewall",
-        json!({"lanesra.policy.verdict": verdict, "lanesra.policy.risk": risk, "lanesra.tool.name": name}),
+        json!({"lanesra.policy.verdict": verdict, "lanesra.policy.risk": risk, "lanesra.tool.name": name, "lanesra.approval.grant": grant}),
     )
     .end(
         conn,
@@ -1292,7 +1301,7 @@ fn apply_tool_firewall(
             risk_level.as_str()
         ))),
         PolicyDecision::RequireApproval { risk_level } => {
-            policy_engine_service::record_pending_tool_call(
+            let approval_id = policy_engine_service::record_pending_tool_call(
                 conn,
                 workspace_id,
                 agent_id,
@@ -1301,6 +1310,9 @@ fn apply_tool_firewall(
                 risk_level,
                 actor,
             )?;
+            // WP-0150: inside a pipeline step or graph agent node the run
+            // pauses on this approval once the agent has been told.
+            crate::approval_hold::hold(&approval_id);
             Err(AppError::PolicyBlocked(format!(
                 "'{name}' requires administrator approval under this workspace's agent policy (risk level: {}) - a pending approval has been recorded for an administrator to review.",
                 risk_level.as_str()
@@ -2470,6 +2482,18 @@ pub async fn run_agent_once(
                     let tool_msg = synthetic_message("tool", Some(&content), None, Some(&call.id));
                     history.push(tool_msg.clone());
                     produced.push(tool_msg);
+                    // WP-0150: a call held for approval pauses the step.
+                    if let Some(approval_id) = crate::approval_hold::held() {
+                        model_span.end(
+                            conn,
+                            SpanStatus::Ok,
+                            json!({"lanesra.paused_for": approval_id}),
+                        );
+                        return Err(crate::approval_hold::pending_error(
+                            &call.name,
+                            &approval_id,
+                        ));
+                    }
                 }
                 model_span.end(conn, SpanStatus::Ok, json!({}));
             }
