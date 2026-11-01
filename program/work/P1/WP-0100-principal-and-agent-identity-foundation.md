@@ -3,7 +3,7 @@ id: WP-0100
 title: Principal model, Agent Identities and agent credentials
 phase: 1
 epic: E1.0 Identity foundation
-status: proposed
+status: dropped
 owner: unassigned
 depends_on: [WP-0009]
 requirements: [REQ-GOV-002, REQ-GOV-003, REQ-GOV-029]
@@ -13,7 +13,7 @@ delivered: []
 docs: [agent-identities, access-roles-and-record-scopes]
 branch: 
 pr: 
-updated: 2026-10-16
+updated: 2026-11-01
 ---
 
 # WP-0100 — Principal model, Agent Identities and agent credentials
@@ -73,3 +73,4 @@ and Record Scope), and every action is attributed to them.
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+- 2026-11-01 claude: Closed as dropped: split on 2026-10-17 into WP-0107 (principal model and effective identity), WP-0108 (Agent Identities and credentials) and WP-0109 (trigger migration and UI), all done. Work packages that depended on WP-0100 now depend on those three.
