@@ -3,7 +3,7 @@ id: WP-0200
 title: "Release desktop and Team Workspace separately"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: in_progress
+status: in_review
 owner: claude
 depends_on: [WP-0020]
 requirements: [REQ-PRE-024, REQ-PRE-021, REQ-PRE-018]
@@ -14,7 +14,7 @@ editions_reason: Release tooling and documentation only; the online demo has no 
 delivered: []
 docs: [set-up-team-workspace]
 branch: chore/separate-server-release
-pr:
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/731
 updated: 2026-11-01
 ---
 
