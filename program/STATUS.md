@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 18 | 1 | 0 | 0 | 1 | 32 / 36 | `████████░░` 89% |
-| 1 · Foundations | 60 | 26 | 1 | 2 | 0 | 31 | 56 / 164 | `███░░░░░░░` 34% |
+| 1 · Foundations | 61 | 26 | 2 | 2 | 0 | 31 | 56 / 166 | `███░░░░░░░` 34% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -19,8 +19,8 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 121 | 23 | 55 / 404 |
-| Team Workspace | 134 | 28 | 63 / 454 |
+| Desktop | 122 | 23 | 55 / 406 |
+| Team Workspace | 135 | 28 | 63 / 456 |
 | Online demo | 88 | 12 | 26 / 306 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
@@ -31,6 +31,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 |---|---|---|---|---|---|
 | [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
 | [WP-0150](work/P1/WP-0150-move-every-pause-for-human-onto-ai-approvals.md) | Move every pause-for-human onto ai_approvals | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | 730 |
+| [WP-0200](work/P1/WP-0200-release-desktop-and-team-workspace-separately.md) | Release desktop and Team Workspace separately | in_review | claude | `chore/separate-server-release` | https://github.com/vikram2409-eng/Lanesra-OS/pull/731 |
 
 ## Ready to start (all dependencies done)
 
@@ -38,9 +39,9 @@ None.
 
 ## Requirement coverage
 
-- Spec requirements tracked: **244**
-- Mapped to a work package: **244**
-- Delivered (every mapped work package done): **42**
+- Spec requirements tracked: **245**
+- Mapped to a work package: **245**
+- Delivered (every mapped work package done): **41**
 
 ## Phase 0 · Precursors
 
@@ -131,6 +132,7 @@ None.
 | [WP-0197](work/P1/WP-0197-upgrade-tauri-action.md) | Upgrade tauri-action to 1.0 in the desktop release workflow | E0.1 Program and engineering readiness | ⚪ proposed | S | ○Desktop ○Team Workspace | - |
 | [WP-0198](work/P1/WP-0198-per-team-trace-bodies-override.md) | Per-Team override of trace bodies | E1.2 Run model and trace | ⚪ proposed | S | ○Desktop ○Team Workspace | WP-0111 |
 | [WP-0199](work/P1/WP-0199-dollar-budget-in-agent-turns.md) | Dollars remaining in agent turns | E1.3 Agent loop | ⚪ proposed | S | ○Desktop ○Team Workspace ○Online demo | WP-0126, WP-0146 |
+| [WP-0200](work/P1/WP-0200-release-desktop-and-team-workspace-separately.md) | Release desktop and Team Workspace separately | E1.9 Team Workspace platform | 👀 in review | M | ○Desktop ○Team Workspace | WP-0020 |
 
 ## Phase 2 · Playground
 

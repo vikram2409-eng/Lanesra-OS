@@ -29,7 +29,7 @@ export function FeatureFlagsAdmin() {
       <h3 style={{ marginTop: 0 }}>Feature flags</h3>
       <p style={{ color: "var(--text-muted)", fontSize: 13 }}>
         Turn features that are still in preview on or off for this workspace. Every change is recorded in the audit
-        log. Features ship in desktop and Team Workspace together, and appear in the online demo in the same release.
+        log. Features are built for desktop and Team Workspace from the same code, and appear in the online demo once both have released them.
       </p>
       {flags.data?.developer_mode && (
         <p className="callout callout-warning" style={{ fontSize: 13 }}>

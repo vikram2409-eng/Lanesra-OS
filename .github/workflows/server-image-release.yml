@@ -1,24 +1,35 @@
-name: Release Team Workspace server image
+name: Release Team Workspace Server
 
-# Builds and publishes the Team Workspace server image to GitHub Container
-# Registry (WP-0020). It is triggered by the same `desktop-v*` tag as the
-# desktop release, so desktop and Team Workspace always ship together
-# (owner decision, ADR-0013 #3, REQ-PRE-021). Before the image is published,
-# it must pass the same smoke test that CI runs on every pull request.
+# Builds and publishes the Team Workspace Server on its own version line
+# (ADR-0019, REQ-PRE-024). Desktop and Team Workspace are separate releases
+# with separate tags, release pages and links:
+#   desktop:         tag `desktop-vX.Y.Z`  (desktop-release.yml)
+#   Team Workspace:  tag `team-workspace-server-vX.Y.Z`   (this workflow)
 #
-# Only the version tag (`:X.Y.Z`) is pushed here. `:latest` moves to a
-# version when its desktop release is published ("Publish desktop
-# release"), so a server that pulls `latest` never gets a build the owner
-# has not released.
+# Two ways to start it:
+#   1. Push a tag matching "team-workspace-server-v*" (e.g. team-workspace-server-v0.17.0)
+#   2. Run it from the Actions tab with a version, which is the usual way
+#      here because the AI session cannot push tags.
+#
+# It builds the image from the lockfile, runs the same smoke test CI runs on
+# every pull request, pushes ONLY the version tag (`:X.Y.Z`) to GitHub
+# Container Registry, and creates a DRAFT prerelease `team-workspace-server-vX.Y.Z` with
+# the release notes. Nothing is public, and `:latest` does not move, until
+# the owner runs "Publish Team Workspace Server release" (or clicks Publish
+# on the draft), so a server that pulls `latest` never gets a build the
+# owner has not released.
+#
+# Release notes come from `desktop/server-release-notes/X.Y.Z.md` when it
+# exists on the branch this runs from; otherwise a short default is used.
 
 on:
   push:
     tags:
-      - "desktop-v*"
+      - "team-workspace-server-v*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish (e.g. 0.15.0); normally taken from the tag"
+        description: "Version to build and publish (e.g. 0.17.0)"
         required: true
 
 permissions:
@@ -26,25 +37,43 @@ permissions:
 
 jobs:
   publish:
-    name: build, smoke-test and publish
+    name: build, smoke-test, publish the image and draft the release
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      INPUT_VERSION: ${{ github.event.inputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Version and image name
         id: meta
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            version="${{ github.event.inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            version="$INPUT_VERSION"
           else
-            version="${GITHUB_REF_NAME#desktop-v}"
+            version="${GITHUB_REF_NAME#team-workspace-server-v}"
           fi
-          owner="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must look like 0.17.0, got '$version'"
+            exit 1
+          fi
+          owner="$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "image=ghcr.io/$owner/lanesra-os-server" >> "$GITHUB_OUTPUT"
+
+      - name: Server version in Cargo.toml matches the release
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          actual="$(sed -n 's/^version = "\(.*\)"/\1/p' desktop/server/Cargo.toml | head -n 1)"
+          if [ "$actual" != "$VERSION" ]; then
+            echo "::error::Releasing $VERSION but desktop/server/Cargo.toml has '$actual'. The server reports its own version to MCP clients, so bump it (and the lanesra-server entry in desktop/Cargo.lock) to $VERSION first."
+            exit 1
+          fi
 
       - name: Image versions match the repo pins
         run: python3 program/tools/check_toolchain_pins.py
@@ -68,10 +97,38 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Publish
+      - name: Publish the image
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          VERSION: ${{ steps.meta.outputs.version }}
         run: |
-          docker tag lanesra-os-server:release "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
-          docker push "${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}"
+          docker tag lanesra-os-server:release "$IMAGE:$VERSION"
+          docker push "$IMAGE:$VERSION"
+
+      - name: Draft the release team-workspace-server-v${{ steps.meta.outputs.version }}
+        env:
+          IMAGE: ${{ steps.meta.outputs.image }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          tag="team-workspace-server-v$VERSION"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "A release for $tag already exists; leaving it as it is." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          notes="desktop/server-release-notes/$VERSION.md"
+          if [ ! -f "$notes" ]; then
+            notes="$RUNNER_TEMP/notes.md"
+            {
+              echo "Early Access build of the Lanesra OS Team Workspace Server."
+              echo
+              echo "    docker pull $IMAGE:$VERSION"
+              echo
+              echo "Setup guide: https://lanesraos.com/help/set-up-team-workspace"
+            } > "$notes"
+          fi
+          gh release create "$tag" --draft --prerelease --target "$GITHUB_SHA" \
+            --title "Lanesra OS Team Workspace Server $tag" --notes-file "$notes"
+          echo "Drafted $tag. Run 'Publish Team Workspace Server release' with $VERSION to publish it and move :latest." | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Server log
         if: always()
