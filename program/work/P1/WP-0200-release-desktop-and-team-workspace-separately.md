@@ -15,7 +15,7 @@ delivered: []
 docs: [set-up-team-workspace]
 branch: chore/separate-server-release
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/731
-updated: 2026-11-01
+updated: 2026-11-02
 ---
 
 # WP-0200 — Release desktop and Team Workspace separately
@@ -46,7 +46,7 @@ Every GitHub Release page is titled "desktop" and carries the Team Workspace ima
 - [x] AC-2: The desktop publisher no longer references the server image, its registry or `:latest`; the server publisher moves `:latest` only for the newest published `team-workspace-server-v*` release
 - [x] AC-3: The server release refuses a version that differs from `desktop/server/Cargo.toml`, and that file and `Cargo.lock` agree at `0.17.0`
 - [x] AC-4: README, `desktop/README.md`, the help article and the Releases page describe two releases and two links
-- [ ] AC-5: The first real run proves it: "Release Team Workspace Server" with `0.17.0` builds and pushes `:0.17.0` and drafts `team-workspace-server-v0.17.0`; "Publish Team Workspace Server release" publishes it and moves `:latest`; the desktop workflows do not start (owner runs these; needs the Actions tab)
+- [x] AC-5: The first real run proves it: "Release Team Workspace Server" with `0.17.0` builds and pushes `:0.17.0` and drafts `team-workspace-server-v0.17.0`; "Publish Team Workspace Server release" publishes it and moves `:latest`; the desktop workflows do not start (owner runs these; needs the Actions tab)
 
 ## Test plan
 
@@ -64,3 +64,4 @@ Every GitHub Release page is titled "desktop" and carries the Team Workspace ima
 
 <!-- Append dated entries, newest last. -->
 - 2026-11-01 claude: Owner asked for separate releases; chose an own version line. Built ADR-0019, the two server workflows, the desktop publisher cleanup, the check tool and docs. AC-1 to AC-4 proven locally; AC-5 needs a real run.
+- 2026-11-02 claude: AC-5 proven (status stays in_review: dependency WP-0020 is in_review, awaiting the owner's confirmation that /help/set-up-team-workspace is live). Ran "Release Team Workspace Server" with 0.17.0 (run 41384617265): it built, smoke-tested, pushed `ghcr.io/vikram2409-eng/lanesra-os-server:0.17.0` and drafted `team-workspace-server-v0.17.0`, and started no desktop workflow. Then "Publish Team Workspace Server release" (run 41384737043): the release is published (prerelease) and `:latest` now resolves to the 0.17.0 image (verified against the registry). Server release notes added in `desktop/server-release-notes/0.17.0.md`; the website download card, Releases callout, roadmap status, README and llms.txt now name team-workspace-server-v0.17.0. Done.

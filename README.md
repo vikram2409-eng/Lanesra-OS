@@ -91,12 +91,12 @@ No install, no registration: **[lanesraos.com/demo](https://lanesraos.com/demo)*
 
 ## Download
 
-Release **0.16.3** (Early Access) shipped both editions from the same code. From the next release they have **separate releases, links and version numbers**: desktop as `desktop-vX.Y.Z`, Team Workspace as `team-workspace-server-vX.Y.Z` (both on [GitHub Releases](https://github.com/vikram2409-eng/Lanesra-OS/releases)).
+The two editions release **separately**, each with its own tag, page and version line (ADR-0019): the desktop installer as `desktop-vX.Y.Z` and the Team Workspace Server as `team-workspace-server-vX.Y.Z`, all on [GitHub Releases](https://github.com/vikram2409-eng/Lanesra-OS/releases).
 
 | Edition | Get it |
 |---|---|
 | **Desktop (Windows)** | Installer on **[GitHub Releases: desktop-v0.16.3](https://github.com/vikram2409-eng/Lanesra-OS/releases/tag/desktop-v0.16.3)** (unsigned, so Windows warns on first run) |
-| **Team Workspace (server)** | `docker pull ghcr.io/vikram2409-eng/lanesra-os-server:0.16.3` ([image page](https://github.com/users/vikram2409-eng/packages/container/package/lanesra-os-server), [setup guide](https://lanesraos.com/help/set-up-team-workspace)); `:latest` points at the newest published release |
+| **Team Workspace (server)** | `docker pull ghcr.io/vikram2409-eng/lanesra-os-server:0.17.0` ([team-workspace-server-v0.17.0](https://github.com/vikram2409-eng/Lanesra-OS/releases/tag/team-workspace-server-v0.17.0), [image page](https://github.com/users/vikram2409-eng/packages/container/package/lanesra-os-server), [setup guide](https://lanesraos.com/help/set-up-team-workspace)); `:latest` points at the newest published release |
 
 Every release and its notes are on **[GitHub Releases](https://github.com/vikram2409-eng/Lanesra-OS/releases)**. You can also build either edition from source.
 
