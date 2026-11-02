@@ -5,7 +5,7 @@ phase: 1
 epic: E1.9 Team Workspace platform
 status: proposed
 owner: unassigned
-depends_on: [WP-0100, WP-0020, WP-0007]
+depends_on: [WP-0107, WP-0108, WP-0109, WP-0020, WP-0007]
 requirements: [REQ-PRE-022]
 threats: [T-12]
 estimate: XL
@@ -15,7 +15,7 @@ delivered: []
 docs: [set-up-team-workspace]
 branch: 
 pr: 
-updated: 2026-10-16
+updated: 2026-11-01
 ---
 
 # WP-0181 — Several workspaces on one Team Workspace server

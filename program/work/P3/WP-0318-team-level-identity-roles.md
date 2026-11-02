@@ -5,7 +5,7 @@ phase: 3
 epic: E3.4 Identity, budget and memory
 status: proposed
 owner: unassigned
-depends_on: [WP-0100, WP-0104, WP-0304]
+depends_on: [WP-0107, WP-0108, WP-0109, WP-0104, WP-0304]
 requirements: [REQ-GOV-005]
 estimate: L
 editions: [desktop, workspace, demo]
@@ -13,7 +13,7 @@ delivered: []
 docs: [access-roles-and-record-scopes, agent-identities]
 branch: 
 pr: 
-updated: 2026-10-16
+updated: 2026-11-01
 ---
 
 # WP-0318 — Team-level identity: Team Owner and Auditor roles

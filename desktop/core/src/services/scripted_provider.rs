@@ -65,6 +65,18 @@ pub fn script_responses(responses: Vec<ScriptedResponse>) {
     });
 }
 
+/// Responses any thread may take once its own script is empty - for a run
+/// a server executes on a thread of its own (WP-0113: the webhook route).
+static SHARED: std::sync::Mutex<VecDeque<ScriptedResponse>> =
+    std::sync::Mutex::new(VecDeque::new());
+
+/// Queue responses for whichever thread asks next (see `SHARED`).
+pub fn script_shared_responses(responses: Vec<ScriptedResponse>) {
+    let mut q = SHARED.lock().unwrap_or_else(|e| e.into_inner());
+    q.clear();
+    q.extend(responses);
+}
+
 /// Set simulated latency applied to each dispatch.
 pub fn set_latency(d: Duration) {
     LATENCY.with(|l| *l.borrow_mut() = d);
@@ -83,15 +95,20 @@ pub fn reset() {
 }
 
 fn next_response() -> AppResult<ScriptedResponse> {
-    SCRIPT.with(|s| {
-        s.borrow_mut().pop_front().ok_or_else(|| {
+    if let Some(r) = SCRIPT.with(|s| s.borrow_mut().pop_front()) {
+        return Ok(r);
+    }
+    SHARED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .pop_front()
+        .ok_or_else(|| {
             AppError::classified(
                 ErrorClass::Internal,
                 "internal",
                 "scripted provider: no more scripted responses",
             )
         })
-    })
 }
 
 /// The dispatch entry point, called from `ai_service::dispatch_with_tools`

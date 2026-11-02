@@ -32,6 +32,9 @@ async-stream = "0.3"
 futures-core = "0.3"
 
 [dev-dependencies]
+# WP-0113: the conformance suite drives the real command-line tool.
+lanesra-cli = { path = "../cli" }
+clap = { version = "4", features = ["derive", "env"] }
 reqwest = { version = "0.12", features = ["json", "cookies", "stream"] }
 futures-util = "0.3"
 tempfile = "3"
