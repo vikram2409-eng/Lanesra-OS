@@ -16782,6 +16782,7 @@ function modernSitePage(pageId){
   bindHeroIntroSound();
   // Docs hub: search + browse categories
   if(pageId==='docs'){ bindDocsHubSearch(root); renderDocsBrowse(root); }
+  bindAnalyticsClicks();
 window.scrollTo(0, 0);
 }
 // Docs hub search: live-filter HELP_CATEGORIES topics

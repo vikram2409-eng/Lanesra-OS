@@ -109,6 +109,12 @@
 .modern-site .feature{min-height:210px}
 .modern-site .feature .tag{float:right;color:var(--faint);font:500 9px DM Mono,monospace}
 .modern-site .feature h3{margin-top:26px}
+.modern-site a.card.feature{display:flex;flex-direction:column;text-decoration:none;color:inherit;cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease}
+.modern-site a.card.feature .tag{float:none;align-self:flex-end}
+.modern-site a.card.feature h3{margin-top:14px}
+.modern-site a.card.feature:hover{border-color:var(--line-strong);box-shadow:var(--shadow-lg);transform:translateY(-3px)}
+.modern-site a.card.feature:focus-visible{outline:2px solid var(--accent-ink);outline-offset:3px}
+.modern-site .feature .arrow{margin-top:auto;padding-top:16px;color:var(--accent-ink);font-weight:800;font-size:13px}
 .modern-site .split-band{display:grid;grid-template-columns:.9fr 1.1fr;gap:54px;align-items:center}
 .modern-site .code-window{background:var(--code-bg);border:1px solid color-mix(in srgb,var(--line) 70%,#000);color:var(--code-text);border-radius:16px;overflow:hidden;box-shadow:var(--shadow-lg)}
 .modern-site .code-top{min-height:47px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 15px;border-bottom:1px solid #2b2f3c}
