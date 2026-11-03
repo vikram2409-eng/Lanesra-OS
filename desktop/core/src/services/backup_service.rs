@@ -74,8 +74,8 @@ pub fn create_backup(conn: &Connection, actor_user_id: Option<&str>) -> AppResul
     let mut zip_bytes = Vec::new();
     {
         let mut writer = zip::ZipWriter::new(Cursor::new(&mut zip_bytes));
-        let options =
-            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
         writer
             .start_file(MANIFEST_ENTRY, options)
             .map_err(zip_err)?;

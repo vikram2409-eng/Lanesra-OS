@@ -181,8 +181,8 @@ fn tamper_manifest_schema_version(package_base64: &str, new_version: i64) -> Str
     let mut out = Vec::new();
     {
         let mut writer = zip::ZipWriter::new(std::io::Cursor::new(&mut out));
-        let options =
-            zip::write::FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Deflated);
         writer.start_file("manifest.json", options).unwrap();
         writer.write_all(manifest.to_string().as_bytes()).unwrap();
         writer.start_file("workspace.sqlite3", options).unwrap();
