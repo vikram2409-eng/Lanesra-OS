@@ -6,8 +6,8 @@
 
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
-| 0 · Precursors | 20 | 18 | 1 | 0 | 0 | 1 | 32 / 36 | `████████░░` 89% |
-| 1 · Foundations | 60 | 28 | 1 | 2 | 0 | 29 | 62 / 158 | `███░░░░░░░` 39% |
+| 0 · Precursors | 20 | 19 | 0 | 0 | 0 | 1 | 34 / 36 | `█████████░` 94% |
+| 1 · Foundations | 60 | 29 | 0 | 2 | 0 | 29 | 64 / 158 | `████░░░░░░` 41% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -19,18 +19,15 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 121 | 23 | 55 / 398 |
-| Team Workspace | 134 | 28 | 63 / 448 |
+| Desktop | 121 | 24 | 57 / 398 |
+| Team Workspace | 134 | 30 | 67 / 448 |
 | Online demo | 87 | 12 | 26 / 298 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
 ## Active now
 
-| WP | Title | Status | Owner | Branch | PR |
-|---|---|---|---|---|---|
-| [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
-| [WP-0200](work/P1/WP-0200-release-desktop-and-team-workspace-separately.md) | Release desktop and Team Workspace separately | in_review | claude | `chore/separate-server-release` | https://github.com/vikram2409-eng/Lanesra-OS/pull/731 |
+Nothing in progress.
 
 ## Ready to start (all dependencies done)
 
@@ -40,7 +37,7 @@ None.
 
 - Spec requirements tracked: **245**
 - Mapped to a work package: **245**
-- Delivered (every mapped work package done): **44**
+- Delivered (every mapped work package done): **48**
 
 ## Phase 0 · Precursors
 
@@ -65,7 +62,7 @@ None.
 | [WP-0017](work/P0/WP-0017-mirror-work-packages-to-github-issues.md) | Mirror work packages to GitHub Issues | E0.1 Program and engineering readiness | ✅ done | S | — | WP-0001 |
 | [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | E0.1 Program and engineering readiness | ✅ done | S | — | WP-0003 |
 | [WP-0019](work/P0/WP-0019-always-current-program-dashboard.md) | Always-current program dashboard | E0.1 Program and engineering readiness | ✅ done | S | — | - |
-| [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | E0.1 Program and engineering readiness | 👀 in review | M | ○Team Workspace | WP-0003 |
+| [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | E0.1 Program and engineering readiness | ✅ done | M | ✓Team Workspace | WP-0003 |
 
 ## Phase 1 · Foundations
 
@@ -131,7 +128,7 @@ None.
 | [WP-0197](work/P1/WP-0197-upgrade-tauri-action.md) | Upgrade tauri-action to 1.0 in the desktop release workflow | E0.1 Program and engineering readiness | ⚪ proposed | S | ○Desktop ○Team Workspace | - |
 | [WP-0198](work/P1/WP-0198-per-team-trace-bodies-override.md) | Per-Team override of trace bodies | E1.2 Run model and trace | ⚪ proposed | S | ○Desktop ○Team Workspace | WP-0111 |
 | [WP-0199](work/P1/WP-0199-dollar-budget-in-agent-turns.md) | Dollars remaining in agent turns | E1.3 Agent loop | ⚪ proposed | S | ○Desktop ○Team Workspace ○Online demo | WP-0126, WP-0146 |
-| [WP-0200](work/P1/WP-0200-release-desktop-and-team-workspace-separately.md) | Release desktop and Team Workspace separately | E1.9 Team Workspace platform | 👀 in review | M | ○Desktop ○Team Workspace | WP-0020 |
+| [WP-0200](work/P1/WP-0200-release-desktop-and-team-workspace-separately.md) | Release desktop and Team Workspace separately | E1.9 Team Workspace platform | ✅ done | M | ✓Desktop ✓Team Workspace | WP-0020 |
 
 ## Phase 2 · Playground
 
