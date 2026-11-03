@@ -13,6 +13,7 @@ pub mod routes;
 pub mod run_events_stream;
 pub mod security;
 pub mod session;
+pub mod setup_token;
 pub mod state;
 
 pub use routes::build_router;
