@@ -1,4 +1,8 @@
--- WP-0106: Team Workspace first-run and sign-in hardening.
+-- Migration 0089: Team Workspace first-run and sign-in hardening (WP-0106)
+-- Work package: WP-0106
+-- Change: additive (two tables)
+-- Data touched: none; both tables are created empty and filled lazily
+-- Re-run safe: no (CREATE TABLE)
 --
 -- Two one-row-per-workspace style tables, lazily created on first read via
 -- the repos' ensure_default (like integration_settings/ai_settings), so an
