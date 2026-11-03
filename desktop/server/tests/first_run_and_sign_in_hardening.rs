@@ -149,7 +149,7 @@ async fn first_run_requires_the_one_time_setup_token() {
 #[test]
 fn repeated_failed_sign_ins_lock_out_then_expire_and_are_audited() {
     let dir = tempfile::tempdir().unwrap();
-    let conn = open_workspace_db(&dir.path().join("lanesra.sqlite3")).unwrap();
+    let conn = open_workspace_db(dir.path().join("lanesra.sqlite3")).unwrap();
     let (ws, admin) = workspace_service::first_run_setup(&conn, &setup()).unwrap();
 
     // Three failures locks out, for 15 minutes.
@@ -214,7 +214,7 @@ fn repeated_failed_sign_ins_lock_out_then_expire_and_are_audited() {
 #[test]
 fn public_base_url_is_validated_and_exposed_through_one_function() {
     let dir = tempfile::tempdir().unwrap();
-    let conn = open_workspace_db(&dir.path().join("lanesra.sqlite3")).unwrap();
+    let conn = open_workspace_db(dir.path().join("lanesra.sqlite3")).unwrap();
     let (ws, admin) = workspace_service::first_run_setup(&conn, &setup()).unwrap();
 
     assert!(security_settings_service::validate_public_base_url("https://ws.example.com/").is_ok());
@@ -264,7 +264,7 @@ fn set_session_times(conn: &Connection, id: &str, last_seen: &str, expires: &str
 fn sessions_respect_idle_and_absolute_expiry_and_can_all_be_ended() {
     use chrono::{Duration, TimeZone, Utc};
     let dir = tempfile::tempdir().unwrap();
-    let conn = open_workspace_db(&dir.path().join("lanesra.sqlite3")).unwrap();
+    let conn = open_workspace_db(dir.path().join("lanesra.sqlite3")).unwrap();
     let (ws, admin) = workspace_service::first_run_setup(&conn, &setup()).unwrap();
 
     // A 30-minute idle timeout.
