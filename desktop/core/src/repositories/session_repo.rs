@@ -3,14 +3,34 @@ use rusqlite::{Connection, OptionalExtension};
 
 use crate::domain::ids::new_uuid;
 
+/// The default absolute session lifetime, used when a workspace has no
+/// `security_settings` row yet (WP-0106 lets an admin change it).
 pub const SESSION_LIFETIME_HOURS: i64 = 24 * 14;
 
+/// Reads the workspace's configured absolute lifetime (hours) and idle
+/// timeout (minutes); falls back to the default lifetime and no idle
+/// timeout when `security_settings` has no row yet (migration 0089).
+fn configured(conn: &Connection, workspace_id: &str) -> (i64, i64) {
+    conn.query_row(
+        "SELECT session_lifetime_hours, session_idle_minutes
+           FROM security_settings WHERE workspace_id = ?1",
+        [workspace_id],
+        |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)),
+    )
+    .optional()
+    .ok()
+    .flatten()
+    .unwrap_or((SESSION_LIFETIME_HOURS, 0))
+}
+
 /// Creates a new web session for `user_id` and returns its opaque token
-/// (the value to set as the session cookie).
+/// (the value to set as the session cookie). The absolute lifetime is the
+/// workspace's configured one (WP-0106).
 pub fn create(conn: &Connection, workspace_id: &str, user_id: &str) -> rusqlite::Result<String> {
+    let (lifetime_hours, _) = configured(conn, workspace_id);
     let id = new_uuid();
     let now = Utc::now();
-    let expires_at = now + Duration::hours(SESSION_LIFETIME_HOURS);
+    let expires_at = now + Duration::hours(lifetime_hours.max(1));
     conn.execute(
         "INSERT INTO web_sessions (id, workspace_id, user_id, created_at, last_seen_at, expires_at)
          VALUES (?1, ?2, ?3, ?4, ?4, ?5)",
@@ -25,26 +45,97 @@ pub fn create(conn: &Connection, workspace_id: &str, user_id: &str) -> rusqlite:
     Ok(id)
 }
 
-/// Returns the session's user_id if the token exists and has not expired,
-/// bumping last_seen_at. Returns None for a missing or expired session -
-/// callers should treat that as "not logged in", not as an error.
+/// Returns the session's user_id if the token exists and is still valid,
+/// bumping last_seen_at. A session is invalid once it passes its absolute
+/// `expires_at` or, when the workspace sets an idle timeout (WP-0106), once
+/// it has been idle longer than that; an invalid session is deleted and
+/// reported as None ("not logged in"), never as an error.
 pub fn resolve_and_touch(conn: &Connection, session_id: &str) -> rusqlite::Result<Option<String>> {
-    let user_id: Option<String> = conn
+    resolve_and_touch_at(conn, session_id, Utc::now())
+}
+
+/// As [`resolve_and_touch`], with an injected clock for tests.
+pub fn resolve_and_touch_at(
+    conn: &Connection,
+    session_id: &str,
+    now: chrono::DateTime<Utc>,
+) -> rusqlite::Result<Option<String>> {
+    let row: Option<(String, String, String, String)> = conn
         .query_row(
-            "SELECT user_id FROM web_sessions WHERE id = ?1 AND expires_at > ?2",
-            (session_id, Utc::now().to_rfc3339()),
-            |row| row.get(0),
+            "SELECT user_id, workspace_id, last_seen_at, expires_at
+               FROM web_sessions WHERE id = ?1",
+            [session_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
         )
         .optional()?;
+    let Some((user_id, workspace_id, last_seen_at, expires_at)) = row else {
+        return Ok(None);
+    };
 
-    if user_id.is_some() {
-        conn.execute(
-            "UPDATE web_sessions SET last_seen_at = ?1 WHERE id = ?2",
-            (Utc::now().to_rfc3339(), session_id),
-        )?;
+    let parse = |s: &str| {
+        chrono::DateTime::parse_from_rfc3339(s)
+            .map(|d| d.with_timezone(&Utc))
+            .ok()
+    };
+
+    // Absolute expiry.
+    if parse(&expires_at).map(|e| e <= now).unwrap_or(true) {
+        let _ = delete(conn, session_id);
+        return Ok(None);
+    }
+    // Idle timeout, when configured.
+    let (_, idle_minutes) = configured(conn, &workspace_id);
+    if idle_minutes > 0 {
+        if let Some(last) = parse(&last_seen_at) {
+            if last + Duration::minutes(idle_minutes) <= now {
+                let _ = delete(conn, session_id);
+                return Ok(None);
+            }
+        }
     }
 
-    Ok(user_id)
+    conn.execute(
+        "UPDATE web_sessions SET last_seen_at = ?1 WHERE id = ?2",
+        (now.to_rfc3339(), session_id),
+    )?;
+    Ok(Some(user_id))
+}
+
+/// A live session joined with its user, for the admin "active sessions"
+/// list. Sessions already past their absolute expiry are excluded.
+pub fn list_active(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<(String, String, String, String, String, String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT s.id, s.user_id, u.username, u.display_name, s.created_at, s.last_seen_at, s.expires_at
+           FROM web_sessions s JOIN users u ON u.id = s.user_id
+          WHERE s.workspace_id = ?1 AND s.expires_at > ?2
+          ORDER BY s.last_seen_at DESC",
+    )?;
+    let rows = stmt
+        .query_map((workspace_id, Utc::now().to_rfc3339()), |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get(2)?,
+                r.get(3)?,
+                r.get(4)?,
+                r.get(5)?,
+                r.get(6)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(rows)
+}
+
+/// Ends every session in the workspace (admin "sign out all sessions").
+/// Returns how many were ended.
+pub fn delete_all_for_workspace(conn: &Connection, workspace_id: &str) -> rusqlite::Result<usize> {
+    conn.execute(
+        "DELETE FROM web_sessions WHERE workspace_id = ?1",
+        [workspace_id],
+    )
 }
 
 pub fn delete(conn: &Connection, session_id: &str) -> rusqlite::Result<()> {

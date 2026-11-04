@@ -6,8 +6,8 @@
 
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
-| 0 · Precursors | 20 | 18 | 1 | 0 | 0 | 1 | 32 / 36 | `████████░░` 89% |
-| 1 · Foundations | 60 | 27 | 2 | 2 | 0 | 29 | 60 / 158 | `███░░░░░░░` 38% |
+| 0 · Precursors | 20 | 19 | 0 | 0 | 0 | 1 | 34 / 36 | `█████████░` 94% |
+| 1 · Foundations | 60 | 29 | 1 | 2 | 0 | 28 | 64 / 158 | `████░░░░░░` 41% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -19,8 +19,8 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 121 | 23 | 55 / 398 |
-| Team Workspace | 134 | 28 | 63 / 448 |
+| Desktop | 121 | 24 | 57 / 398 |
+| Team Workspace | 134 | 30 | 67 / 448 |
 | Online demo | 87 | 12 | 26 / 298 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
@@ -29,9 +29,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | https://github.com/vikram2409-eng/Lanesra-OS/pull/636 |
-| [WP-0113](work/P1/WP-0113-full-trace-conformance-suite-phase-1-gate-test.md) | Full-trace conformance suite (Phase 1 gate test) | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | 732 |
-| [WP-0200](work/P1/WP-0200-release-desktop-and-team-workspace-separately.md) | Release desktop and Team Workspace separately | in_review | claude | `chore/separate-server-release` | https://github.com/vikram2409-eng/Lanesra-OS/pull/731 |
+| [WP-0106](work/P1/WP-0106-team-workspace-first-run-and-sign-in-hardening.md) | Team Workspace first-run and sign-in hardening | in_review | claude | `claude/enterprise-build-planning-jxy2kq` | pending |
 
 ## Ready to start (all dependencies done)
 
@@ -41,7 +39,7 @@ None.
 
 - Spec requirements tracked: **245**
 - Mapped to a work package: **245**
-- Delivered (every mapped work package done): **42**
+- Delivered (every mapped work package done): **48**
 
 ## Phase 0 · Precursors
 
@@ -66,7 +64,7 @@ None.
 | [WP-0017](work/P0/WP-0017-mirror-work-packages-to-github-issues.md) | Mirror work packages to GitHub Issues | E0.1 Program and engineering readiness | ✅ done | S | — | WP-0001 |
 | [WP-0018](work/P0/WP-0018-tracker-upkeep-and-test-feedback-for-ais-without-a-shell.md) | Tracker upkeep and test feedback for AIs without a shell | E0.1 Program and engineering readiness | ✅ done | S | — | WP-0003 |
 | [WP-0019](work/P0/WP-0019-always-current-program-dashboard.md) | Always-current program dashboard | E0.1 Program and engineering readiness | ✅ done | S | — | - |
-| [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | E0.1 Program and engineering readiness | 👀 in review | M | ○Team Workspace | WP-0003 |
+| [WP-0020](work/P0/WP-0020-team-workspace-server-image-builds-and-ships.md) | Team Workspace server image builds, is pinned, and ships | E0.1 Program and engineering readiness | ✅ done | M | ✓Team Workspace | WP-0003 |
 
 ## Phase 1 · Foundations
 
@@ -78,14 +76,14 @@ None.
 | [WP-0103](work/P1/WP-0103-saml-2-0-sign-in-for-team-workspace.md) | SAML 2.0 sign-in for Team Workspace | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Team Workspace | WP-0101, WP-0010, WP-0106 |
 | [WP-0104](work/P1/WP-0104-directory-mapping-groups-to-roles-approvers-and-provisioning.md) | Directory mapping: groups to roles, approvers and provisioning | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace | WP-0102, WP-0103 |
 | [WP-0105](work/P1/WP-0105-enterprise-sign-in-on-the-desktop-edition.md) | Enterprise sign-in on the desktop edition | E1.1 Enterprise sign-in | ⚪ proposed | L | ○Desktop | WP-0102, WP-0103 |
-| [WP-0106](work/P1/WP-0106-team-workspace-first-run-and-sign-in-hardening.md) | Team Workspace first-run and sign-in hardening | E1.1 Enterprise sign-in | ⚪ proposed | M | ○Team Workspace ○Desktop | WP-0107, WP-0108, WP-0020 |
+| [WP-0106](work/P1/WP-0106-team-workspace-first-run-and-sign-in-hardening.md) | Team Workspace first-run and sign-in hardening | E1.1 Enterprise sign-in | 👀 in review | M | ○Team Workspace ○Desktop | WP-0107, WP-0108, WP-0020 |
 | [WP-0107](work/P1/WP-0107-principal-model-and-effective-identity.md) | Principal model and effective-identity rules | E1.0 Identity foundation | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0009 |
 | [WP-0108](work/P1/WP-0108-agent-identities-and-credentials.md) | Agent Identities and credentials | E1.0 Identity foundation | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0107 |
 | [WP-0109](work/P1/WP-0109-trigger-migration-and-ui.md) | Trigger migration and Agent Identity UI | E1.0 Identity foundation | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0107, WP-0108 |
 | [WP-0110](work/P1/WP-0110-run-and-step-schema-extensions.md) | Run and step schema extensions | E1.2 Run model and trace | ✅ done | M | ✓Desktop ✓Team Workspace | WP-0009, WP-0007, WP-0107 |
 | [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | E1.2 Run model and trace | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0110 |
 | [WP-0112](work/P1/WP-0112-run-events-over-sse-with-stable-schemas.md) | Run events over SSE with stable schemas | E1.2 Run model and trace | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0111 |
-| [WP-0113](work/P1/WP-0113-full-trace-conformance-suite-phase-1-gate-test.md) | Full-trace conformance suite (Phase 1 gate test) | E1.2 Run model and trace | 👀 in review | M | — | WP-0112, WP-0122, WP-0150, WP-0107, WP-0108, WP-0109 |
+| [WP-0113](work/P1/WP-0113-full-trace-conformance-suite-phase-1-gate-test.md) | Full-trace conformance suite (Phase 1 gate test) | E1.2 Run model and trace | ✅ done | M | — | WP-0112, WP-0122, WP-0150, WP-0107, WP-0108, WP-0109 |
 | [WP-0120](work/P1/WP-0120-agent-persona-limits-and-reasoning-modes.md) | Agent persona, limits and reasoning modes | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0110, WP-0130 |
 | [WP-0121](work/P1/WP-0121-step-limits-and-partial-results.md) | Step limits and partial results | E1.3 Agent loop | ✅ done | L | ✓Desktop ✓Team Workspace ✓Online demo | WP-0110, WP-0005 |
 | [WP-0122](work/P1/WP-0122-native-function-calling-and-strict-json-tool-format.md) | Native function calling and strict JSON tool format | E1.3 Agent loop | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0005 |
@@ -132,7 +130,7 @@ None.
 | [WP-0197](work/P1/WP-0197-upgrade-tauri-action.md) | Upgrade tauri-action to 1.0 in the desktop release workflow | E0.1 Program and engineering readiness | ⚪ proposed | S | ○Desktop ○Team Workspace | - |
 | [WP-0198](work/P1/WP-0198-per-team-trace-bodies-override.md) | Per-Team override of trace bodies | E1.2 Run model and trace | ⚪ proposed | S | ○Desktop ○Team Workspace | WP-0111 |
 | [WP-0199](work/P1/WP-0199-dollar-budget-in-agent-turns.md) | Dollars remaining in agent turns | E1.3 Agent loop | ⚪ proposed | S | ○Desktop ○Team Workspace ○Online demo | WP-0126, WP-0146 |
-| [WP-0200](work/P1/WP-0200-release-desktop-and-team-workspace-separately.md) | Release desktop and Team Workspace separately | E1.9 Team Workspace platform | 👀 in review | M | ○Desktop ○Team Workspace | WP-0020 |
+| [WP-0200](work/P1/WP-0200-release-desktop-and-team-workspace-separately.md) | Release desktop and Team Workspace separately | E1.9 Team Workspace platform | ✅ done | M | ✓Desktop ✓Team Workspace | WP-0020 |
 
 ## Phase 2 · Playground
 

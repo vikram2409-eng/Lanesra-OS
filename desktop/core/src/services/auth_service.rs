@@ -28,38 +28,97 @@ pub(crate) fn verify_password(password: &str, hash: &str) -> bool {
     }
 }
 
-pub fn login(conn: &Connection, workspace_id: &str, credentials: &Credentials) -> AppResult<User> {
-    let record = user_repo::find_by_username(conn, workspace_id, &credentials.username)?;
+fn now_ms() -> i64 {
+    chrono::Utc::now().timestamp_millis()
+}
 
-    let record = match record {
-        Some(r) if r.is_active && verify_password(&credentials.password, &r.password_hash) => r,
-        Some(_) => {
+pub fn login(conn: &Connection, workspace_id: &str, credentials: &Credentials) -> AppResult<User> {
+    login_at(conn, workspace_id, credentials, None, now_ms())
+}
+
+/// Sign-in with WP-0106 throttling. `client_addr` lets the server throttle
+/// per source address as well as per account; `now_ms` is injectable so the
+/// lockout timing is unit-testable. A lockout is an ADR-0009 `policy` error.
+pub fn login_at(
+    conn: &Connection,
+    workspace_id: &str,
+    credentials: &Credentials,
+    client_addr: Option<&str>,
+    now_ms: i64,
+) -> AppResult<User> {
+    use super::{security_settings_service, sign_in_throttle_service as throttle};
+
+    let settings = security_settings_service::get_settings(conn, workspace_id)?;
+    let user_key = throttle::user_identifier(&credentials.username);
+    let addr_key = client_addr.map(throttle::addr_identifier);
+
+    // Refuse while locked, before touching the password. A locked refusal
+    // is not re-audited on every attempt; the lockout itself was audited
+    // when it tripped, below.
+    throttle::check_at(conn, workspace_id, &user_key, now_ms)?;
+    if let Some(ak) = &addr_key {
+        throttle::check_at(conn, workspace_id, ak, now_ms)?;
+    }
+
+    let record = user_repo::find_by_username(conn, workspace_id, &credentials.username)?;
+    let authenticated = matches!(&record, Some(r) if r.is_active && verify_password(&credentials.password, &r.password_hash));
+
+    if !authenticated {
+        audit_repo::record(
+            conn,
+            workspace_id,
+            None,
+            "failed_login",
+            Some("user"),
+            None,
+            &format!("Failed login attempt for '{}'", credentials.username),
+            None,
+        )?;
+        let locked = throttle::record_failure_at(conn, workspace_id, &user_key, &settings, now_ms)?;
+        if let Some(ak) = &addr_key {
+            throttle::record_failure_at(conn, workspace_id, ak, &settings, now_ms)?;
+        }
+        if locked.is_some() {
             audit_repo::record(
                 conn,
                 workspace_id,
                 None,
-                "failed_login",
+                "sign_in_locked",
                 Some("user"),
                 None,
-                &format!("Failed login attempt for '{}'", credentials.username),
+                &format!(
+                    "'{}' locked out after {} failed sign-ins",
+                    credentials.username, settings.lockout_max_failures
+                ),
                 None,
             )?;
-            return Err(AppError::Validation("Invalid username or password".into()));
         }
-        None => {
-            audit_repo::record(
-                conn,
-                workspace_id,
-                None,
-                "failed_login",
-                Some("user"),
-                None,
-                &format!("Failed login attempt for '{}'", credentials.username),
-                None,
-            )?;
-            return Err(AppError::Validation("Invalid username or password".into()));
-        }
-    };
+        return Err(AppError::Validation("Invalid username or password".into()));
+    }
+
+    // Successful sign-in clears throttle state; if the account had any, that
+    // is the unlock event.
+    let was_locked = throttle::clear(conn, workspace_id, &user_key)?;
+    if let Some(ak) = &addr_key {
+        throttle::clear(conn, workspace_id, ak)?;
+    }
+
+    let record = record.expect("authenticated implies a record");
+    if was_locked {
+        audit_repo::record(
+            conn,
+            workspace_id,
+            Some(&record.id),
+            "sign_in_unlocked",
+            Some("user"),
+            Some(&record.id),
+            &format!(
+                "'{}' signed in; sign-in lockout cleared",
+                credentials.username
+            ),
+            None,
+        )?;
+    }
 
     let roles = user_repo::roles_for_user(conn, &record.id)?;
     let user_id = record.id.clone();

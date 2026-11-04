@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use axum::extract::{Path, State};
+use axum::extract::{Path as AxumPath, State};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use axum_extra::extract::cookie::CookieJar;
@@ -12,8 +12,11 @@ use lanesra_core::domain::{AppError, AppResult};
 use lanesra_core::models::user::Credentials;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::repositories::session_repo;
-use lanesra_core::services::{auth_service, backup_service, workspace_service};
+use lanesra_core::services::{
+    auth_service, backup_service, web_session_service, workspace_service,
+};
 
+use crate::caller::Caller;
 use crate::dispatch::{arg, dispatch, require_workspace_id, to_value};
 use crate::security::{cors_layer, security_headers};
 use crate::session::{clear_session_cookie, current_actor, set_session_cookie, SESSION_COOKIE};
@@ -50,10 +53,12 @@ pub fn build_router(state: SharedState, frontend_dir: PathBuf) -> Router {
 
 async fn invoke(
     State(state): State<SharedState>,
-    Path(command): Path<String>,
+    AxumPath(command): AxumPath<String>,
+    caller: Caller,
     jar: CookieJar,
     Json(args): Json<Value>,
 ) -> (CookieJar, Json<Value>) {
+    let client_addr = caller.0.map(|ip| ip.to_string());
     // restore_backup replaces the live connection itself (see
     // backup_service::restore_from_package), so it needs mutable access to
     // the mutex slot rather than the shared `&Connection` every other
@@ -78,6 +83,8 @@ async fn invoke(
         jar.clone(),
         state.security.trust_proxy_https,
         &master_key,
+        &state.db_path,
+        client_addr.as_deref(),
     ) {
         Ok((jar, value)) => (jar, Json(json!({"ok": true, "data": value}))),
         Err(err) => (jar, Json(json!({"ok": false, "error": err}))),
@@ -105,6 +112,7 @@ fn handle_restore(
 /// Handles the commands that mutate the session cookie itself; everything
 /// else is delegated to `dispatch`, which only needs read access to the
 /// already-resolved actor. `secure_cookies` is `SecurityConfig::trust_proxy_https`.
+#[allow(clippy::too_many_arguments)]
 fn handle(
     command: &str,
     args: &Value,
@@ -112,6 +120,8 @@ fn handle(
     jar: CookieJar,
     secure_cookies: bool,
     master_key: &[u8; 32],
+    db_path: &Path,
+    client_addr: Option<&str>,
 ) -> AppResult<(CookieJar, Value)> {
     match command {
         "workspace_status" => {
@@ -119,8 +129,16 @@ fn handle(
             Ok((jar, to_value(workspace)?))
         }
         "first_run_setup" => {
+            // WP-0106: a network-reachable server gates first-run behind the
+            // one-time setup token printed at startup. No token file (desktop
+            // or a test that never ran startup) means no gate.
+            let provided = args.get("setup_token").and_then(Value::as_str);
+            let enforced = crate::setup_token::verify(db_path, provided)?;
             let setup: WorkspaceSetup = arg(args, "setup")?;
             let (workspace, user) = workspace_service::first_run_setup(conn, &setup)?;
+            if enforced {
+                crate::setup_token::consume(db_path);
+            }
             let token = session_repo::create(conn, &workspace.id, &user.id)?;
             let jar = set_session_cookie(jar, token, secure_cookies);
             Ok((jar, to_value((workspace, user))?))
@@ -128,10 +146,36 @@ fn handle(
         "login" => {
             let credentials: Credentials = arg(args, "credentials")?;
             let workspace_id = require_workspace_id(conn)?;
-            let user = auth_service::login(conn, &workspace_id, &credentials)?;
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() as i64)
+                .unwrap_or(0);
+            let user =
+                auth_service::login_at(conn, &workspace_id, &credentials, client_addr, now_ms)?;
             let token = session_repo::create(conn, &workspace_id, &user.id)?;
             let jar = set_session_cookie(jar, token, secure_cookies);
             Ok((jar, to_value(user)?))
+        }
+        "list_active_sessions" => {
+            let actor = current_actor(conn, &jar)
+                .ok_or_else(|| AppError::Validation("Not authenticated - please log in".into()))?;
+            let workspace_id = require_workspace_id(conn)?;
+            let current_id = jar.get(SESSION_COOKIE).map(|c| c.value().to_string());
+            let sessions = web_session_service::list_active_sessions(
+                conn,
+                &workspace_id,
+                Some(&actor),
+                current_id.as_deref(),
+            )?;
+            Ok((jar, to_value(sessions)?))
+        }
+        "sign_out_all_sessions" => {
+            let actor = current_actor(conn, &jar)
+                .ok_or_else(|| AppError::Validation("Not authenticated - please log in".into()))?;
+            let workspace_id = require_workspace_id(conn)?;
+            let ended = web_session_service::sign_out_all(conn, &workspace_id, Some(&actor))?;
+            // The caller's own session was just ended; clear its cookie too.
+            Ok((clear_session_cookie(jar), json!({ "ended": ended })))
         }
         "logout" => {
             if let Some(cookie) = jar.get(SESSION_COOKIE) {

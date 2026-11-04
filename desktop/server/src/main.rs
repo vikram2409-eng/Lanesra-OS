@@ -42,6 +42,38 @@ async fn main() {
         .expect("could not open the workspace database");
     tracing::info!(path = %db_path.display(), "opened workspace database");
 
+    // WP-0106: on a fresh install, gate first-run behind a one-time setup
+    // token so a stranger cannot claim a network-reachable server before its
+    // operator does (RAID I-26). The token is printed here and written to
+    // the data directory; the first-run route requires it and deletes it
+    // once setup succeeds.
+    match lanesra_server::setup_token::ensure(&db_path, &conn) {
+        Ok(Some(token)) => tracing::warn!(
+            "No workspace yet — first-run setup requires this one-time token \
+             (also written to {}):\n\n    SETUP TOKEN: {token}\n",
+            lanesra_server::setup_token::path(&db_path).display()
+        ),
+        Ok(None) => {}
+        Err(e) => tracing::error!("could not write the setup token: {e}"),
+    }
+
+    // WP-0106: validate LANESRA_PUBLIC_URL at startup (the stored value is
+    // validated when an admin saves it). Warn when a public URL is plain
+    // http, since an internet-exposed server should terminate TLS.
+    if let Ok(url) = std::env::var("LANESRA_PUBLIC_URL") {
+        if !url.trim().is_empty() {
+            match lanesra_core::services::security_settings_service::validate_public_base_url(&url)
+            {
+                Ok(valid) if valid.starts_with("http://") => tracing::warn!(
+                    url = %valid,
+                    "LANESRA_PUBLIC_URL is plain http; use https behind your reverse proxy for an internet-exposed server"
+                ),
+                Ok(valid) => tracing::info!(url = %valid, "public base URL configured"),
+                Err(e) => panic!("LANESRA_PUBLIC_URL is invalid: {e}"),
+            }
+        }
+    }
+
     let security = SecurityConfig::from_env();
     if security.trust_proxy_https {
         tracing::info!("trusting a reverse proxy for TLS - session cookie will be marked Secure");

@@ -49,8 +49,27 @@ echo "ok: health"
 status=$(invoke workspace_status '{}')
 expect_ok "workspace_status on an empty volume" "$status"
 
-setup=$(invoke first_run_setup '{"setup":{"business_name":"Smoke Co","legal_name":null,"currency_code":"USD","locale":"en-US","timezone":"UTC","default_tax_rate_bp":0,"admin_username":"admin","admin_display_name":"Admin","admin_password":"smoke-test-password","load_sample_data":false}}')
-expect_ok "first_run_setup" "$setup"
+# WP-0106: a network-reachable server gates first-run behind a one-time
+# setup token written to the data directory at startup.
+TOKEN="$(docker exec "$NAME" cat /data/setup-token 2>/dev/null || true)"
+if [ -z "$TOKEN" ]; then
+  echo "FAIL: startup wrote no setup token to the data directory" >&2
+  exit 1
+fi
+echo "ok: setup token present"
+
+SETUP='{"business_name":"Smoke Co","legal_name":null,"currency_code":"USD","locale":"en-US","timezone":"UTC","default_tax_rate_bp":0,"admin_username":"admin","admin_display_name":"Admin","admin_password":"smoke-test-password","load_sample_data":false}'
+
+# The gate: first-run without the token is refused (ok:false at HTTP 200).
+no_token=$(invoke first_run_setup "{\"setup\":${SETUP}}")
+if printf '%s' "$no_token" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("ok") is True else 1)'; then
+  echo "FAIL: first-run without the setup token should be refused -> $no_token" >&2
+  exit 1
+fi
+echo "ok: first-run refused without the setup token"
+
+setup=$(invoke first_run_setup "{\"setup_token\":\"${TOKEN}\",\"setup\":${SETUP}}")
+expect_ok "first_run_setup with the setup token" "$setup"
 
 login=$(invoke login '{"credentials":{"username":"admin","password":"smoke-test-password"}}')
 expect_ok "login" "$login"

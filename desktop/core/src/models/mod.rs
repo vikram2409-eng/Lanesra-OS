@@ -54,6 +54,7 @@ pub mod run_event;
 pub mod run_trace;
 pub mod saved_view;
 pub mod screen_layout;
+pub mod security;
 pub mod semantic;
 pub mod solution;
 pub mod solution_component;

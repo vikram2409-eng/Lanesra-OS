@@ -3,7 +3,7 @@ id: WP-0200
 title: "Release desktop and Team Workspace separately"
 phase: 1
 epic: E1.9 Team Workspace platform
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0020]
 requirements: [REQ-PRE-024, REQ-PRE-021, REQ-PRE-018]
@@ -11,11 +11,11 @@ threats: [T-19]
 estimate: M
 editions: [desktop, workspace]
 editions_reason: Release tooling and documentation only; the online demo has no releases of its own
-delivered: []
+delivered: [desktop, workspace]
 docs: [set-up-team-workspace]
 branch: chore/separate-server-release
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/731
-updated: 2026-11-02
+updated: 2026-11-03
 ---
 
 # WP-0200 — Release desktop and Team Workspace separately
@@ -65,3 +65,4 @@ Every GitHub Release page is titled "desktop" and carries the Team Workspace ima
 <!-- Append dated entries, newest last. -->
 - 2026-11-01 claude: Owner asked for separate releases; chose an own version line. Built ADR-0019, the two server workflows, the desktop publisher cleanup, the check tool and docs. AC-1 to AC-4 proven locally; AC-5 needs a real run.
 - 2026-11-02 claude: AC-5 proven (status stays in_review: dependency WP-0020 is in_review, awaiting the owner's confirmation that /help/set-up-team-workspace is live). Ran "Release Team Workspace Server" with 0.17.0 (run 41384617265): it built, smoke-tested, pushed `ghcr.io/vikram2409-eng/lanesra-os-server:0.17.0` and drafted `team-workspace-server-v0.17.0`, and started no desktop workflow. Then "Publish Team Workspace Server release" (run 41384737043): the release is published (prerelease) and `:latest` now resolves to the 0.17.0 image (verified against the registry). Server release notes added in `desktop/server-release-notes/0.17.0.md`; the website download card, Releases callout, roadmap status, README and llms.txt now name team-workspace-server-v0.17.0. Done.
+- 2026-11-03 claude: Dependency WP-0020 is now done (owner confirmed the help article is live). All ACs were already proven and PR #731 merged, so this moves in_review -> done, delivered to desktop and Team Workspace.

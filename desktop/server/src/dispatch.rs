@@ -69,6 +69,7 @@ use lanesra_core::models::relationship::{
 use lanesra_core::models::report::ReportRange;
 use lanesra_core::models::saved_view::SavedViewInput;
 use lanesra_core::models::screen_layout::{ScreenLayoutInput, ScreenLayoutUpdate};
+use lanesra_core::models::security::SecuritySettingsUpdate;
 use lanesra_core::models::semantic::{
     BusinessGlossaryTermInput, MetricDefinitionInput, SemanticMappingInput,
 };
@@ -103,11 +104,12 @@ use lanesra_core::services::{
     order_service, org_unit_service, organization_service, ownership_service, page_layout_service,
     page_template_service, policy_engine_service, product_service, publisher_service,
     quote_service, relationship_service, report_service, saved_view_service, screen_layout_service,
-    search_service, semantic_mapping_service, solution_component_service, solution_service,
-    status_transition_service, system_graph_service, task_service, test_eval_service,
-    theme_service, tool_registry_service, user_service, vector_search_service, voice_audit_service,
-    voice_execution_service, voice_llm_service, voice_policy_service, voice_provider_service,
-    voice_session_service, webhook_service, work_team_service, workflow_service, workspace_service,
+    search_service, security_settings_service, semantic_mapping_service,
+    solution_component_service, solution_service, status_transition_service, system_graph_service,
+    task_service, test_eval_service, theme_service, tool_registry_service, user_service,
+    vector_search_service, voice_audit_service, voice_execution_service, voice_llm_service,
+    voice_policy_service, voice_provider_service, voice_session_service, webhook_service,
+    work_team_service, workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -2589,6 +2591,19 @@ pub fn dispatch(
         "update_integration_settings" => {
             let input: IntegrationSettingsUpdate = arg(args, "input")?;
             to_value(integration_log_service::update_settings(
+                conn,
+                &require_workspace_id(conn)?,
+                &input,
+                actor,
+            )?)
+        }
+        "get_security_settings" => to_value(security_settings_service::get_settings(
+            conn,
+            &require_workspace_id(conn)?,
+        )?),
+        "update_security_settings" => {
+            let input: SecuritySettingsUpdate = arg(args, "input")?;
+            to_value(security_settings_service::update_settings(
                 conn,
                 &require_workspace_id(conn)?,
                 &input,
