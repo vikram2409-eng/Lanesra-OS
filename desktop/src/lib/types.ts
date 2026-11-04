@@ -3327,6 +3327,37 @@ export interface IntegrationSettingsUpdate {
   allow_insecure_connections: boolean;
 }
 
+// WP-0106: Team Workspace sign-in hardening.
+export interface SecuritySettings {
+  workspace_id: string;
+  lockout_max_failures: number;
+  lockout_minutes: number;
+  session_lifetime_hours: number;
+  session_idle_minutes: number;
+  public_base_url: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface SecuritySettingsUpdate {
+  lockout_max_failures: number;
+  lockout_minutes: number;
+  session_lifetime_hours: number;
+  session_idle_minutes: number;
+  public_base_url: string | null;
+}
+
+export interface ActiveSession {
+  id: string;
+  user_id: string;
+  username: string;
+  display_name: string;
+  created_at: string;
+  last_seen_at: string;
+  expires_at: string;
+  current: boolean;
+}
+
 export interface ConnectorActionParam {
   name: string;
   location: string;

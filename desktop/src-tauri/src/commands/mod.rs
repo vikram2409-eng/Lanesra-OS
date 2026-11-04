@@ -51,6 +51,7 @@ pub mod report_commands;
 pub mod saved_view_commands;
 pub mod screen_layout_commands;
 pub mod search_commands;
+pub mod security_commands;
 pub mod semantic_mapping_commands;
 pub mod solution_commands;
 pub mod status_transition_commands;

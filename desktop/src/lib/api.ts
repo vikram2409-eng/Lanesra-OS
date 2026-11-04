@@ -229,6 +229,9 @@ import type {
   IntegrationOverview,
   IntegrationSettings,
   IntegrationSettingsUpdate,
+  SecuritySettings,
+  SecuritySettingsUpdate,
+  ActiveSession,
   Connector,
   ConnectorImportInput,
   ConnectorExecutionResult,
@@ -1170,4 +1173,11 @@ export const api = {
   updateIntegrationSettings: (input: IntegrationSettingsUpdate) =>
     call<IntegrationSettings>("update_integration_settings", { input }),
   purgeExpiredIntegrationLogs: () => call<number>("purge_expired_integration_logs"),
+
+  // WP-0106: Team Workspace sign-in hardening.
+  getSecuritySettings: () => call<SecuritySettings>("get_security_settings"),
+  updateSecuritySettings: (input: SecuritySettingsUpdate) =>
+    call<SecuritySettings>("update_security_settings", { input }),
+  listActiveSessions: () => call<ActiveSession[]>("list_active_sessions"),
+  signOutAllSessions: () => call<{ ended: number }>("sign_out_all_sessions"),
 };
