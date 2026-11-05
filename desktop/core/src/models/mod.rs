@@ -12,6 +12,7 @@ pub mod ai_agent_pipeline;
 pub mod ai_agent_policy;
 pub mod ai_approval;
 pub mod ai_eval;
+pub mod ai_guardrail;
 pub mod ai_knowledge;
 pub mod ai_mcp;
 pub mod ai_memory;
