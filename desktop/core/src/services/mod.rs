@@ -55,6 +55,7 @@ pub mod external_object_service;
 pub mod feature_flag_service;
 pub mod glossary_service;
 pub mod graph_runtime_service;
+pub mod guardrail_service;
 pub mod industry_package_service;
 pub mod integration_admin_service;
 pub mod integration_job_service;
