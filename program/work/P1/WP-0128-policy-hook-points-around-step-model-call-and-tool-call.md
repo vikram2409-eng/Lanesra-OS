@@ -10,7 +10,7 @@ requirements: [REQ-LOOP-017]
 threats: [T-03]
 estimate: L
 editions: [desktop, workspace, demo]
-delivered: [AC-1, AC-2]
+delivered: [desktop, workspace, demo]
 docs: [policy-engine-tool-call-firewall]
 branch: claude/enterprise-build-planning-jxy2kq
 pr: 739
