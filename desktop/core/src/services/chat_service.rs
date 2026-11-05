@@ -2231,6 +2231,25 @@ pub async fn run_agent_once(
         record_model_call(&mut model_span, &gateway_outcome, call_started);
         run_tokens += gateway_outcome.usage.input_tokens + gateway_outcome.usage.output_tokens;
         let outcome = gateway_outcome.outcome;
+        // WP-0128: the model-call hook runs against the model's output text
+        // before it is acted on; a blocking guardrail stops the run. The
+        // hook's `policy` hook span nests under this open model_call span.
+        let model_output = match &outcome {
+            CompletionOutcome::Text(text) => text.clone(),
+            CompletionOutcome::ToolCalls { raw_assistant, .. } => raw_assistant.to_string(),
+        };
+        let model_hook = match policy_engine_service::evaluate_loop_hook(
+            conn,
+            workspace_id,
+            policy_engine_service::HookPoint::Model,
+            &model_output,
+        ) {
+            Ok(v) => v,
+            Err(e) => return Err(end_span_with_error(conn, model_span, e)),
+        };
+        if let Some(err) = model_hook.into_error() {
+            return Err(end_span_with_error(conn, model_span, err));
+        }
         match outcome {
             CompletionOutcome::Text(text) => {
                 if let Some(schema) = &output_schema {
@@ -2383,16 +2402,32 @@ pub async fn run_agent_once(
                         tool_limits_service::CapCheck::Run(cap) => cap,
                     };
                     *calls_so_far += 1;
-                    let result = execute_agent_tool(
+                    // WP-0128: the tool-call hook runs against the call's
+                    // arguments before dispatch, alongside (and in front of)
+                    // the Tool-Call Firewall inside `execute_agent_tool`. A
+                    // blocking guardrail stands in for the tool's result, the
+                    // same shape a firewall denial takes.
+                    let result = match policy_engine_service::evaluate_loop_hook(
                         conn,
                         workspace_id,
-                        master_key,
-                        actor,
-                        agent,
-                        &call,
-                        memory_context,
-                    )
-                    .await;
+                        policy_engine_service::HookPoint::Tool,
+                        &call.arguments.to_string(),
+                    ) {
+                        Ok(v) if v.is_block() => Err(v.into_error().unwrap()),
+                        Ok(_) => {
+                            execute_agent_tool(
+                                conn,
+                                workspace_id,
+                                master_key,
+                                actor,
+                                agent,
+                                &call,
+                                memory_context,
+                            )
+                            .await
+                        }
+                        Err(e) => Err(e),
+                    };
                     let ok = result.is_ok();
                     let blocked = matches!(&result, Err(AppError::PolicyBlocked(_)));
                     if blocked {

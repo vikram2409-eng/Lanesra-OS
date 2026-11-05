@@ -162,6 +162,7 @@ fn editing_writes_a_new_version_and_runs_record_it() {
             description: None,
             enabled: None,
             config_json: Some(r#"{"mode":"must_contain","text":"DISCLAIMER"}"#.into()),
+            hook_point: None,
         },
         Some(&admin.id),
     )
@@ -198,6 +199,7 @@ fn editing_writes_a_new_version_and_runs_record_it() {
             description: None,
             enabled: None,
             config_json: Some(r#"{"mode":"must_contain","text":"DISCLAIMER"}"#.into()),
+            hook_point: None,
         },
         Some(&admin.id),
     )
@@ -219,6 +221,7 @@ fn creates_a_custom_guardrail() {
             description: None,
             checker_type: "rule".into(),
             config_json: json!({"mode":"forbid_substrings","substrings":["darn"]}).to_string(),
+            hook_point: "off".into(),
         },
         Some(&admin.id),
     )
@@ -235,6 +238,7 @@ fn creates_a_custom_guardrail() {
             description: None,
             checker_type: "nonsense".into(),
             config_json: "{}".into(),
+            hook_point: "off".into(),
         },
         Some(&admin.id),
     )

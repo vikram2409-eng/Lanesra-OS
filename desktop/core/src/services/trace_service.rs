@@ -412,6 +412,22 @@ fn closing_event(
             }
             "tool.called"
         }
+        // WP-0128: a loop hook (step boundary, model call, tool call) shares
+        // the `policy` span kind with the firewall but carries a
+        // `lanesra.policy.hook` attribute. It always emits an auditable
+        // `policy.decided` event, for an allow as well as a block (AC-2) -
+        // unlike the firewall below, which is silent on an allow.
+        "policy" if a.contains_key("lanesra.policy.hook") => {
+            data.insert("hook".into(), short(a.get("lanesra.policy.hook")));
+            data.insert("verdict".into(), short(a.get("lanesra.policy.verdict")));
+            data.insert("guardrail".into(), short(a.get("lanesra.policy.guardrail")));
+            data.insert(
+                "guardrail_id".into(),
+                short(a.get("lanesra.policy.guardrail_id")),
+            );
+            data.insert("reason".into(), short(a.get("lanesra.policy.reason")));
+            "policy.decided"
+        }
         "policy" => {
             let verdict = a
                 .get("lanesra.policy.verdict")

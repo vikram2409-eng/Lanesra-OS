@@ -338,7 +338,11 @@ async fn every_event_matches_its_schema_and_each_run_numbers_its_events_without_
 
     let expected: BTreeSet<String> = RUN_EVENT_TYPES
         .iter()
-        .filter(|t| **t != "plan.proposed")
+        // `plan.proposed` is reserved for the planner; `policy.decided`
+        // (WP-0128) is emitted only when a guardrail is attached at a loop
+        // hook point, which these runs do not do - it is covered in
+        // `policy_hooks.rs`.
+        .filter(|t| **t != "plan.proposed" && **t != "policy.decided")
         .map(|t| t.to_string())
         .collect();
     assert_eq!(seen, expected);

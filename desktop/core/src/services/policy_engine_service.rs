@@ -25,7 +25,7 @@
 use rusqlite::Connection;
 use serde_json::{json, Value};
 
-use crate::domain::AppResult;
+use crate::domain::{AppError, AppResult};
 use crate::models::ai_agent_policy::{AiAgentPolicy, AiAgentPolicyInput, PolicyDecision};
 use crate::models::ai_approval::AiApprovalInput;
 use crate::models::ai_tool_registry::RiskLevel;
@@ -173,6 +173,207 @@ pub fn take_tool_grant(
         }
     }
     Ok(None)
+}
+
+// ---- WP-0128: loop hook points -------------------------------------------
+//
+// The Tool-Call Firewall above (`evaluate`) governs a tool call. WP-0128
+// generalises that into three hook points around the agent loop, each
+// configured as a Policy object (a guardrail attached at that point, no
+// code), evaluated in a fixed order with short-circuit:
+//
+//   1. a step boundary (before a step runs, against the step input),
+//   2. a model call (against the model's output text),
+//   3. a tool call (against the tool's arguments).
+//
+// At each point every enabled guardrail attached there (WP-0133) runs; the
+// first that fails blocks execution. Because the loop reaches the points in
+// order, the first block short-circuits the rest (AC-1). Every verdict -
+// allow as well as block - is recorded on a `policy` trace span carrying a
+// `lanesra.policy.hook` attribute and emitted as a `policy.decided` run
+// event (AC-2). A point with no guardrail attached is a no-op, so a
+// workspace that configures none sees no change.
+
+use crate::models::ai_guardrail::Guardrail;
+use crate::services::trace_service::{self, SpanStatus};
+
+/// One of the three points in the agent loop a policy can govern.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HookPoint {
+    /// Before a step runs, against the step input.
+    Step,
+    /// A model call, against the model's output text.
+    Model,
+    /// A tool call, against the tool's arguments.
+    Tool,
+}
+
+impl HookPoint {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            HookPoint::Step => "step",
+            HookPoint::Model => "model",
+            HookPoint::Tool => "tool",
+        }
+    }
+
+    /// The three points in the order the loop evaluates them; a block at an
+    /// earlier point short-circuits the later ones.
+    pub const ORDER: [HookPoint; 3] = [HookPoint::Step, HookPoint::Model, HookPoint::Tool];
+}
+
+/// What a loop hook decided. `Block` names the guardrail that blocked and
+/// why, for the caller's error message and the audit trail.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HookVerdict {
+    Allow,
+    Block {
+        hook: HookPoint,
+        guardrail_id: String,
+        guardrail_name: String,
+        reason: String,
+    },
+}
+
+impl HookVerdict {
+    pub fn is_block(&self) -> bool {
+        matches!(self, HookVerdict::Block { .. })
+    }
+
+    /// The `AppError::PolicyBlocked` a blocked hook turns into for the run
+    /// loop; `Allow` has none.
+    pub fn into_error(self) -> Option<AppError> {
+        match self {
+            HookVerdict::Allow => None,
+            HookVerdict::Block {
+                hook,
+                guardrail_name,
+                reason,
+                ..
+            } => Some(AppError::PolicyBlocked(format!(
+                "Blocked at the {} hook by guardrail '{}': {}",
+                hook.as_str(),
+                guardrail_name,
+                reason
+            ))),
+        }
+    }
+}
+
+/// A guardrail of a kind the loop can evaluate without a live model - every
+/// kind but `judge`, which needs a separate model verdict the loop does not
+/// have at a hook point yet (named follow-up). A `judge` guardrail attached
+/// at a hook point is skipped, not an error.
+fn runnable_at_hook(g: &Guardrail) -> bool {
+    g.checker_type != "judge"
+}
+
+/// Runs the guardrails attached at `point` against `subject`, in their
+/// stable order. Returns `Block` at the first that fails, else `Allow`.
+/// Records a `policy` hook span and a `policy.decided` event for the
+/// verdict (AC-2); a point with no runnable guardrail attached is a no-op
+/// (no span, no event, `Allow`).
+pub fn evaluate_loop_hook(
+    conn: &Connection,
+    workspace_id: &str,
+    point: HookPoint,
+    subject: &str,
+) -> AppResult<HookVerdict> {
+    let guardrails: Vec<Guardrail> =
+        crate::repositories::ai_guardrail_repo::list_for_hook(conn, workspace_id, point.as_str())?
+            .into_iter()
+            .filter(runnable_at_hook)
+            .collect();
+    if guardrails.is_empty() {
+        return Ok(HookVerdict::Allow);
+    }
+    for g in &guardrails {
+        let config: Value = serde_json::from_str(&g.config_json).unwrap_or(Value::Null);
+        let outcome = super::guardrail_service::evaluate(&g.checker_type, &config, subject, None)?;
+        if !outcome.passed {
+            record_hook_span(
+                conn,
+                point,
+                SpanStatus::Error,
+                "block",
+                Some(g),
+                Some(&outcome.detail),
+            );
+            return Ok(HookVerdict::Block {
+                hook: point,
+                guardrail_id: g.id.clone(),
+                guardrail_name: g.name.clone(),
+                reason: outcome.detail,
+            });
+        }
+    }
+    record_hook_span(conn, point, SpanStatus::Ok, "allow", None, None);
+    Ok(HookVerdict::Allow)
+}
+
+fn record_hook_span(
+    conn: &Connection,
+    point: HookPoint,
+    status: SpanStatus,
+    verdict: &str,
+    guardrail: Option<&Guardrail>,
+    reason: Option<&str>,
+) {
+    // Shares the `policy` span kind with the firewall; the
+    // `lanesra.policy.hook` attribute marks it a loop hook (and drives the
+    // `policy.decided` event in `trace_service`).
+    trace_service::start(
+        conn,
+        "policy",
+        point.as_str(),
+        json!({
+            "lanesra.policy.hook": point.as_str(),
+            "lanesra.policy.verdict": verdict,
+            "lanesra.policy.guardrail": guardrail.map(|g| g.name.as_str()),
+            "lanesra.policy.guardrail_id": guardrail.map(|g| g.id.as_str()),
+            "lanesra.policy.reason": reason,
+        }),
+    )
+    .end(conn, status, json!({}));
+}
+
+/// The subjects available at one loop round, one per hook point. A `None`
+/// subject skips that point (nothing to check there yet).
+#[derive(Debug, Default, Clone)]
+pub struct LoopSubjects<'a> {
+    pub step: Option<&'a str>,
+    pub model: Option<&'a str>,
+    pub tool: Option<&'a str>,
+}
+
+impl<'a> LoopSubjects<'a> {
+    fn subject(&self, point: HookPoint) -> Option<&'a str> {
+        match point {
+            HookPoint::Step => self.step,
+            HookPoint::Model => self.model,
+            HookPoint::Tool => self.tool,
+        }
+    }
+}
+
+/// Evaluates the loop hooks in order (step, then model, then tool),
+/// returning the first `Block` and leaving the remaining points unevaluated
+/// (AC-1). A point with no subject is skipped.
+pub fn evaluate_loop_round(
+    conn: &Connection,
+    workspace_id: &str,
+    subjects: &LoopSubjects,
+) -> AppResult<HookVerdict> {
+    for point in HookPoint::ORDER {
+        let Some(subject) = subjects.subject(point) else {
+            continue;
+        };
+        let verdict = evaluate_loop_hook(conn, workspace_id, point, subject)?;
+        if verdict.is_block() {
+            return Ok(verdict);
+        }
+    }
+    Ok(HookVerdict::Allow)
 }
 
 pub fn get_policy(

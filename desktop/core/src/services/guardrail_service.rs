@@ -18,6 +18,21 @@ use crate::repositories::ai_guardrail_repo as repo;
 
 pub const CHECKER_TYPES: &[&str] = &["rule", "pii", "schema", "judge"];
 
+/// WP-0128: where a guardrail runs in the agent run loop. `off` is not
+/// wired in (the default); the three loop points are `step`, `model` and
+/// `tool`. See `policy_engine_service::HookPoint`.
+pub const HOOK_POINTS: &[&str] = &["off", "step", "model", "tool"];
+
+fn validate_hook_point(hook_point: &str) -> AppResult<()> {
+    if HOOK_POINTS.contains(&hook_point) {
+        Ok(())
+    } else {
+        Err(AppError::Validation(format!(
+            "hook point must be one of {HOOK_POINTS:?}"
+        )))
+    }
+}
+
 fn require_admin(conn: &Connection, actor: Option<&str>) -> AppResult<()> {
     super::user_service::require_admin(conn, actor)
 }
@@ -277,6 +292,7 @@ pub fn ensure_builtins(conn: &Connection, workspace_id: &str) -> AppResult<()> {
                 checker,
                 true,
                 config,
+                "off",
                 None,
             )?;
         }
@@ -341,6 +357,7 @@ pub fn create(
         return Err(AppError::Validation("Name is required".into()));
     }
     validate_config(&input.checker_type, &input.config_json)?;
+    validate_hook_point(&input.hook_point)?;
     let id = repo::create(
         conn,
         workspace_id,
@@ -350,6 +367,7 @@ pub fn create(
         &input.checker_type,
         false,
         &input.config_json,
+        &input.hook_point,
         actor,
     )?;
     get(conn, workspace_id, &id)
@@ -373,6 +391,8 @@ pub fn edit(
             repo::add_version(conn, id, new_config, actor)?;
         }
     }
+    let hook_point = edit.hook_point.as_deref().unwrap_or(&current.hook_point);
+    validate_hook_point(hook_point)?;
     repo::update_meta(
         conn,
         id,
@@ -381,6 +401,7 @@ pub fn edit(
             .as_deref()
             .or(current.description.as_deref()),
         edit.enabled.unwrap_or(current.enabled),
+        hook_point,
         actor,
     )?;
     get(conn, workspace_id, id)

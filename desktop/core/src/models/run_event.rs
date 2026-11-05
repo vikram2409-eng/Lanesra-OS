@@ -17,6 +17,7 @@ pub const RUN_EVENT_TYPES: &[&str] = &[
     "round.completed",
     "tool.called",
     "tool.denied",
+    "policy.decided",
     "approval.requested",
     "plan.proposed",
     "step.completed",

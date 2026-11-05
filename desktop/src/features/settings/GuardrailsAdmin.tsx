@@ -13,6 +13,19 @@ import type { Guardrail } from "../../lib/types";
  */
 const CHECKERS = ["rule", "pii", "schema", "judge"] as const;
 
+/**
+ * WP-0128: where in the agent run loop a guardrail runs. `off` is not wired
+ * in; the three loop hook points are a step boundary, a model call and a
+ * tool call. A failing guardrail at a point blocks the run there.
+ */
+const HOOK_POINTS = ["off", "step", "model", "tool"] as const;
+const HOOK_LABEL: Record<string, string> = {
+  off: "Off (not in loop)",
+  step: "Step boundary",
+  model: "Model call",
+  tool: "Tool call",
+};
+
 export const GUARDRAILS_FLAG = "guardrails.admin";
 
 export function GuardrailsAdmin() {
@@ -24,6 +37,7 @@ export function GuardrailsAdmin() {
   const [newName, setNewName] = useState("");
   const [newChecker, setNewChecker] = useState<(typeof CHECKERS)[number]>("rule");
   const [newConfig, setNewConfig] = useState('{"mode":"must_contain","text":""}');
+  const [newHookPoint, setNewHookPoint] = useState<(typeof HOOK_POINTS)[number]>("off");
 
   const guardrails = useQuery({
     queryKey: ["guardrails"],
@@ -51,14 +65,27 @@ export function GuardrailsAdmin() {
 
   const create = useMutation({
     mutationFn: () =>
-      api.createGuardrail({ name: newName, checker_type: newChecker, config_json: newConfig }),
+      api.createGuardrail({
+        name: newName,
+        checker_type: newChecker,
+        config_json: newConfig,
+        hook_point: newHookPoint,
+      }),
     onSuccess: () => {
       invalidate();
       setCreating(false);
       setNewName("");
       setNewConfig('{"mode":"must_contain","text":""}');
+      setNewHookPoint("off");
     },
     onError: (e) => fail(e, "Could not create the guardrail"),
+  });
+
+  const setHook = useMutation({
+    mutationFn: ({ g, hook_point }: { g: Guardrail; hook_point: string }) =>
+      api.editGuardrail(g.id, { hook_point }),
+    onSuccess: invalidate,
+    onError: (e) => fail(e, "Could not change where the guardrail runs"),
   });
 
   return (
@@ -107,6 +134,20 @@ export function GuardrailsAdmin() {
             </select>
           </div>
           <div className="form-row">
+            <label htmlFor="g-hook">Runs at</label>
+            <select
+              id="g-hook"
+              value={newHookPoint}
+              onChange={(e) => setNewHookPoint(e.target.value as (typeof HOOK_POINTS)[number])}
+            >
+              {HOOK_POINTS.map((h) => (
+                <option key={h} value={h}>
+                  {HOOK_LABEL[h]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-row">
             <label htmlFor="g-config">Configuration (JSON)</label>
             <textarea
               id="g-config"
@@ -133,6 +174,7 @@ export function GuardrailsAdmin() {
             <tr>
               <th style={{ textAlign: "left" }}>Name</th>
               <th style={{ textAlign: "left" }}>Checker</th>
+              <th style={{ textAlign: "left" }}>Runs at</th>
               <th style={{ textAlign: "left" }}>Version</th>
               <th style={{ textAlign: "left" }}>Enabled</th>
               <th></th>
@@ -169,6 +211,23 @@ export function GuardrailsAdmin() {
                   )}
                 </td>
                 <td>{g.checker_type}</td>
+                <td>
+                  <select
+                    aria-label={`Where ${g.name} runs`}
+                    value={g.hook_point}
+                    disabled={setHook.isPending}
+                    onChange={(e) => {
+                      setError(null);
+                      setHook.mutate({ g, hook_point: e.target.value });
+                    }}
+                  >
+                    {HOOK_POINTS.map((h) => (
+                      <option key={h} value={h}>
+                        {HOOK_LABEL[h]}
+                      </option>
+                    ))}
+                  </select>
+                </td>
                 <td>v{g.current_version}</td>
                 <td>{g.enabled ? "Yes" : "No"}</td>
                 <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>

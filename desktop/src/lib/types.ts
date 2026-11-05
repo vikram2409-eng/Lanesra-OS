@@ -3369,6 +3369,8 @@ export interface Guardrail {
   is_builtin: boolean;
   current_version: number;
   enabled: boolean;
+  /** WP-0128: where in the run loop it runs: 'off' | 'step' | 'model' | 'tool'. */
+  hook_point: string;
   config_json: string;
   updated_at: string;
   updated_by: string | null;
@@ -3379,6 +3381,8 @@ export interface GuardrailInput {
   description?: string | null;
   checker_type: string;
   config_json: string;
+  /** WP-0128: hook point to run at; defaults 'off' (not wired into the loop). */
+  hook_point?: string;
 }
 
 export interface GuardrailEdit {
@@ -3386,6 +3390,8 @@ export interface GuardrailEdit {
   description?: string | null;
   enabled?: boolean | null;
   config_json?: string | null;
+  /** WP-0128: change where in the loop it runs. */
+  hook_point?: string | null;
 }
 
 export interface ConnectorActionParam {

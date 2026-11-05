@@ -27,7 +27,7 @@ vi.mock("../lib/api", async (orig) => {
 const pii = {
   id: "g1", workspace_id: "w", builtin_key: "pii_leak", name: "No PII leak",
   description: null, checker_type: "pii", is_builtin: true, current_version: 1,
-  enabled: true, config_json: "{}", updated_at: "", updated_by: null,
+  enabled: true, hook_point: "off", config_json: "{}", updated_at: "", updated_by: null,
 };
 
 function Providers({ children }: { children: ReactNode }) {
@@ -57,6 +57,21 @@ describe("GuardrailsAdmin", () => {
     await waitFor(() =>
       expect(api.createGuardrail).toHaveBeenCalledWith(
         expect.objectContaining({ name: "No profanity", checker_type: "rule" }),
+      ),
+    );
+  });
+
+  it("attaches a guardrail to a loop hook point", async () => {
+    // Covers: REQ-LOOP-017 (WP-0128)
+    render(<Providers><GuardrailsAdmin /></Providers>);
+    await screen.findByText("No PII leak");
+    fireEvent.change(screen.getByLabelText("Where No PII leak runs"), {
+      target: { value: "model" },
+    });
+    await waitFor(() =>
+      expect(api.editGuardrail).toHaveBeenCalledWith(
+        "g1",
+        expect.objectContaining({ hook_point: "model" }),
       ),
     );
   });
