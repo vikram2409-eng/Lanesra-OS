@@ -25,6 +25,7 @@ use lanesra_core::models::ai_agent_pipeline::{AiAgentPipelineInput, AiAgentTrigg
 use lanesra_core::models::ai_agent_policy::AiAgentPolicyInput;
 use lanesra_core::models::ai_approval::{AiApprovalInput, AiApprovalResolution};
 use lanesra_core::models::ai_eval::AiEvalSuiteInput;
+use lanesra_core::models::ai_guardrail::{GuardrailEdit, GuardrailInput};
 use lanesra_core::models::ai_knowledge::KnowledgeCollectionInput;
 use lanesra_core::models::ai_mcp::{McpServerInput, McpServerUpdate};
 use lanesra_core::models::ai_tool_registry::AiToolRegistryOverrideInput;
@@ -98,13 +99,13 @@ use lanesra_core::services::{
     contact_service, contract_service, custom_field_service, custom_object_service,
     custom_record_service, custom_report_service, dashboard_layout_service, dashboard_service,
     dashboard_widget_service, data_exchange_service, execution_graph_service,
-    external_object_service, glossary_service, graph_runtime_service, industry_package_service,
-    integration_job_service, integration_log_service, invoice_service, mapping_service,
-    mcp_client_service, metric_service, numbering_service, ontology_service, opportunity_service,
-    order_service, org_unit_service, organization_service, ownership_service, page_layout_service,
-    page_template_service, policy_engine_service, product_service, publisher_service,
-    quote_service, relationship_service, report_service, saved_view_service, screen_layout_service,
-    search_service, security_settings_service, semantic_mapping_service,
+    external_object_service, glossary_service, graph_runtime_service, guardrail_service,
+    industry_package_service, integration_job_service, integration_log_service, invoice_service,
+    mapping_service, mcp_client_service, metric_service, numbering_service, ontology_service,
+    opportunity_service, order_service, org_unit_service, organization_service, ownership_service,
+    page_layout_service, page_template_service, policy_engine_service, product_service,
+    publisher_service, quote_service, relationship_service, report_service, saved_view_service,
+    screen_layout_service, search_service, security_settings_service, semantic_mapping_service,
     solution_component_service, solution_service, status_transition_service, system_graph_service,
     task_service, test_eval_service, theme_service, tool_registry_service, user_service,
     vector_search_service, voice_audit_service, voice_execution_service, voice_llm_service,
@@ -2607,6 +2608,31 @@ pub fn dispatch(
                 conn,
                 &require_workspace_id(conn)?,
                 &input,
+                actor,
+            )?)
+        }
+        "list_guardrails" => to_value(guardrail_service::list(
+            conn,
+            &require_workspace_id(conn)?,
+            actor,
+        )?),
+        "create_guardrail" => {
+            let input: GuardrailInput = arg(args, "input")?;
+            to_value(guardrail_service::create(
+                conn,
+                &require_workspace_id(conn)?,
+                &input,
+                actor,
+            )?)
+        }
+        "edit_guardrail" => {
+            let id: String = arg(args, "id")?;
+            let edit: GuardrailEdit = arg(args, "edit")?;
+            to_value(guardrail_service::edit(
+                conn,
+                &require_workspace_id(conn)?,
+                &id,
+                &edit,
                 actor,
             )?)
         }

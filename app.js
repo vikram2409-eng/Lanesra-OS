@@ -121,7 +121,7 @@ const storeKey='lanesra-os-demo-v10';
 // List a key here in the release that ships it; every key must be a `ga`
 // flag in desktop/core/src/services/feature_flag_service.rs
 // (program/tools/check_feature_flags.py fails CI otherwise).
-const DEMO_RELEASED_FEATURES=['agents.identities_ui'];
+const DEMO_RELEASED_FEATURES=['agents.identities_ui','guardrails.admin'];
 function demoFeature(key){return DEMO_RELEASED_FEATURES.includes(key);}
 let data = JSON.parse(localStorage.getItem(storeKey)||'null') || structuredClone(seed);
 let current='dashboard';
@@ -827,7 +827,7 @@ let adminTab='profile';
 // Setup Home in Salesforce - a deep link into a specific tool sets 'tool'
 // directly instead (see adminCategoryItemClick).
 let adminView='landing';
-const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['dependencyExplorer','Ontology Graph'],['businessGlossary','Business Glossary'],['metricDefinitions','Metric Definitions'],['testEval','Test & Evaluation Framework'],['objectTypes','Object Types'],['agentBindings','Agent Bindings'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['agentIdentities','Agent Identities'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards']];
+const ADMIN_TAB_DEFS=[['profile','Business profile'],['users','Users & roles'],['organization','Organization'],['orgUnits','Organization Units'],['teams','Work Teams'],['orgHierarchy','Hierarchy'],['accessInspector','Access Inspector'],['voiceMode','Voice Mode'],['voice','Voice Governance & Activity'],['objects','Custom Objects'],['relationships','Relationships'],['fields','Custom fields'],['dependencyExplorer','Ontology Graph'],['businessGlossary','Business Glossary'],['metricDefinitions','Metric Definitions'],['testEval','Test & Evaluation Framework'],['objectTypes','Object Types'],['agentBindings','Agent Bindings'],['rules','Business rules'],['workflow','Workflow automation'],['transitions','Status transitions'],['layouts','Screen layouts'],['pageBuilder','Page Builder'],['themeStudio','Theme Studio'],['apps','Apps'],['packages','App Catalog'],['solutions','Deployment Management'],['integrations','Integrations'],['ai','LLM & MCP'],['assistant','Admin Assistant'],['aiAgents','AI Agents'],['aiSkills','Skills'],['aiAgentPipelines','Orchestration'],['aiEval','Evaluations'],['agentTeams','Agent Teams'],['agentIdentities','Agent Identities'],['numbering','Numbering'],['kpis','Dashboard KPIs'],['dashboards','Dashboards'],['guardrails','Guardrails']];
 // Regrouped along the same lines as the desktop edition's Admin IA
 // reshuffle (Settings.tsx ADMIN_CATEGORIES) - Data Model/Experience split
 // out of the old flat "Customization", Analytics split out of
@@ -845,7 +845,7 @@ const ADMIN_CATEGORIES=[
  {key:'experience',label:'Experience',icon:'▦',note:'How records look on screen',items:['layouts','pageBuilder','themeStudio']},
  {key:'automation',label:'Automation',icon:'⚡',note:'Rules and workflows that run themselves',items:['rules','workflow','transitions']},
  {key:'apps',label:'Apps',icon:'⬡',note:'Package objects into a focused app, or install one ready-made',items:['apps','packages']},
- {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',get items(){return ['aiAgents','aiSkills','aiAgentPipelines','aiEval','agentTeams',...(demoFeature('agents.identities_ui')?['agentIdentities']:[])]}},
+ {key:'ai-agent-foundry',label:'AI Agent Foundry',icon:'🏭',note:'Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other',get items(){return ['aiAgents','aiSkills','aiAgentPipelines','aiEval','agentTeams',...(demoFeature('agents.identities_ui')?['agentIdentities']:[]),...(demoFeature('guardrails.admin')?['guardrails']:[])]}},
  {key:'ai',label:'LLM & MCP',icon:'✦',note:'Bring your own LLM key, and the MCP server that lets agents work with your data',items:['ai']},
  {key:'voice-first',label:'Voice Settings',icon:'🎙️',note:'PIN, preferences and the full voice command log - a role\'s own Voice permissions are still set on the Users & roles screen under Access',items:['voiceMode','voice']},
  {key:'assistant',label:'Admin Assistant',icon:'💬',note:'Chat to build workflows, business rules, integrations and the rest of the admin surface',items:['assistant']},
@@ -5681,7 +5681,7 @@ function adminToolView(){
 function renderAdminTab(){
  document.querySelectorAll('[data-admin-tab]').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===adminTab));
  const body=$('#adminBody');
- ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,dependencyExplorer:dependencyExplorerTab,businessGlossary:businessGlossaryTab,metricDefinitions:metricDefinitionsTab,testEval:testEvalTab,objectTypes:objectTypesTab,agentBindings:agentBindingsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,agentIdentities:agentIdentitiesTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
+ ({profile:profileTab,users:usersTab,organization:organizationTab,orgUnits:orgUnitsTab,teams:teamsTab,orgHierarchy:orgHierarchyTab,accessInspector:accessInspectorTab,voiceMode:voiceModeTab,voice:voiceTab,objects:objectsTab,relationships:relationshipsTab,fields:fieldsTab,dependencyExplorer:dependencyExplorerTab,businessGlossary:businessGlossaryTab,metricDefinitions:metricDefinitionsTab,testEval:testEvalTab,objectTypes:objectTypesTab,agentBindings:agentBindingsTab,rules:rulesTab,workflow:workflowTab,transitions:transitionsTab,layouts:layoutsTab,pageBuilder:pageBuilderTab,themeStudio:themeStudioTab,apps:appsTab,packages:packagesTab,solutions:solutionsTab,integrations:integrationsTab,ai:llmMcpTab,assistant:chatAssistantTab,aiAgents:aiAgentsTab,aiSkills:aiSkillsTab,aiAgentPipelines:aiAgentPipelinesTab,aiEval:aiEvalTab,agentTeams:agentTeamsTab,agentIdentities:agentIdentitiesTab,guardrails:guardrailsTab,numbering:numberingTab,kpis:kpisTab,dashboards:dashboardsTab}[adminTab])(body);
 }
 function profileTab(body){
  const w=data.workspace;
@@ -5694,6 +5694,19 @@ function profileTab(body){
  <div class="field full"><button class="btn btn-primary" type="submit">Save business profile</button></div>
  </form></div>`;
  $('#profileForm').onsubmit=e=>{e.preventDefault();const obj=Object.fromEntries(new FormData(e.target).entries());Object.assign(data.workspace,obj);save();toast('Business profile updated');renderView()};
+}
+// WP-0133: output guardrails (REQ-GOV-007). The online demo has no backend,
+// so it shows the built-in library read-only; create/edit and versioning run
+// in the desktop app and Team Workspace.
+function guardrailsTab(body){
+ const rows=[
+  ['No PII leak','pii','Fails when the output contains an email, phone number, card or other PII.'],
+  ['Required disclaimer','rule','The output must contain a required disclaimer.'],
+  ['External domain allow-list','rule','Every linked domain must be on the allow-list.'],
+  ['Schema conformance','schema','The output must be JSON matching a configured schema.'],
+  ['Professional tone','judge','An LLM judge checks the output is professional and courteous.'],
+ ];
+ body.innerHTML=`<div class="panel"><h3 style="margin-top:0">Guardrails</h3><p class="muted">Reusable, versioned output checks. Editing a guardrail's configuration saves a new version, and a run records the version it checked against.</p><table><thead><tr><th>Name</th><th>Checker</th><th>Version</th><th>What it checks</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r[0]} <span class="badge">Built-in</span></td><td>${r[1]}</td><td>v1</td><td class="muted">${r[2]}</td></tr>`).join('')}</tbody></table></div>`;
 }
 // Voice-First Mode: its own dedicated admin tab (Admin → Voice Settings →
 // Voice Mode) for PIN setup/reset + preferences - previously tacked onto
@@ -15836,6 +15849,14 @@ const HELP_CATEGORIES=[
      {heading:'Temperature and output length',bodyHtml:`<p>The <b>Temperature</b> and <b>Max tokens</b> set in an agent's routing are sent with every model call in its runs, on every tier. Anthropic accepts a temperature from 0 to 1, so a higher setting is sent as 1 to Anthropic models. Without a setting, the provider's own temperature applies and an answer may be up to 2,048 tokens long.</p>`},
      {heading:'Still being built',bodyHtml:`<p>A retry policy set per workflow step, context compaction for long conversations, and agents that see their remaining token budget are planned and are not in the product yet. This article will cover them when they ship.</p>`},
      {heading:'In the online demo',bodyHtml:`<p>The demo has no real model provider, so it shows the same rules as simulations under <b>Admin → LLM &amp; MCP → Gateway</b>. In <b>Retries and failure handling</b>, pick a failure and see each attempt, the wait before it and the outcome; the waits are calculated, not slept. In <b>Step limits and partial results</b>, pick an agent and a task and see each round, which limit it reaches and how the run ends. An agent's limits are set in its <b>Routing</b> panel, as in the desktop app.</p>`},
+    ]},
+   {slug:'guardrails',title:'Guardrails: versioned output policy objects',
+    summary:'Reusable checks on an output - PII leak, required disclaimer, external domain allow-list, JSON schema conformance, and an LLM tone judge - kept as versioned policy objects you edit and reuse.',
+    wps:'WP-0133',
+    sections:[
+     {heading:'What a guardrail is',bodyHtml:`<p>A guardrail is a named, reusable check on some output. Each is one of four kinds: a <b>rule</b> (the text must or must not contain something, or every linked domain must be on an allow-list), <b>PII</b> (the text leaks no email, phone number, card or other personal data), <b>schema</b> (the text is JSON matching a small schema), or <b>judge</b> (an LLM decides from an instruction you write). Lanesra ships five built-ins - No PII leak, Required disclaimer, External domain allow-list, Schema conformance and Professional tone - which you edit for your workspace.</p>`},
+     {heading:'Versioned, and recorded on a run',bodyHtml:`<p>Editing a guardrail's configuration saves a new <b>version</b> rather than overwriting it, and when a run checks output against a guardrail it records exactly which version it used - so a result is always traceable to the rule that produced it.</p>`},
+     {heading:'Where to manage them',bodyHtml:`<p><b>Admin &rarr; AI Agent Foundry &rarr; Guardrails</b> lists the built-in library and any custom guardrails, and lets an Administrator add one, edit a configuration, or turn one off. The online demo shows the built-in library read-only.</p>`},
     ]},
    {slug:'run-traces',title:'Run traces: what every agent run records',
     summary:'Each pipeline and execution-graph run records a trace of its steps, model calls, tool calls and firewall verdicts, with tokens and timings; prompts and outputs are kept only if an Administrator turns that on.', wps:'WP-0111, WP-0112',

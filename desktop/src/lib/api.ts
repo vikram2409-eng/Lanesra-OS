@@ -232,6 +232,9 @@ import type {
   SecuritySettings,
   SecuritySettingsUpdate,
   ActiveSession,
+  Guardrail,
+  GuardrailInput,
+  GuardrailEdit,
   Connector,
   ConnectorImportInput,
   ConnectorExecutionResult,
@@ -1180,4 +1183,9 @@ export const api = {
     call<SecuritySettings>("update_security_settings", { input }),
   listActiveSessions: () => call<ActiveSession[]>("list_active_sessions"),
   signOutAllSessions: () => call<{ ended: number }>("sign_out_all_sessions"),
+
+  // WP-0133: output guardrails.
+  listGuardrails: () => call<Guardrail[]>("list_guardrails"),
+  createGuardrail: (input: GuardrailInput) => call<Guardrail>("create_guardrail", { input }),
+  editGuardrail: (id: string, edit: GuardrailEdit) => call<Guardrail>("edit_guardrail", { id, edit }),
 };

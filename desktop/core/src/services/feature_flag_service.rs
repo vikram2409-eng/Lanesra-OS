@@ -55,8 +55,26 @@ pub const AGENT_IDENTITIES_UI: Flag = Flag {
     stage: Stage::Ga,
 };
 
+/// The Guardrails screen: list, create and edit output guardrails (versioned
+/// policy objects) and test one against sample output. Built under WP-0133.
+/// Shipped `ga` in all three editions with the capability, so the demo may
+/// show it (REQ-PRE-021). Enforcing guardrails inside a run is governed by
+/// the run path, not this screen flag (ADR-0012 §4). Removed with the other
+/// early-access flags at Playground GA (WP-0223).
+pub const GUARDRAILS_ADMIN: Flag = Flag {
+    key: "guardrails.admin",
+    description: "Guardrails screen: versioned output policy objects",
+    work_package: "WP-0133",
+    remove_by: "WP-0223",
+    default: Defaults {
+        desktop: true,
+        workspace: true,
+    },
+    stage: Stage::Ga,
+};
+
 /// Every flag. Add new flags here, with a constant above.
-pub const REGISTRY: &[&Flag] = &[&PLAYGROUND_SHELL, &AGENT_IDENTITIES_UI];
+pub const REGISTRY: &[&Flag] = &[&PLAYGROUND_SHELL, &AGENT_IDENTITIES_UI, &GUARDRAILS_ADMIN];
 
 /// The error a disabled feature's command or route returns. Its kind is
 /// `not_found` (the REST API answers 404) and its message starts with

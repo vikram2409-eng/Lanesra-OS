@@ -3358,6 +3358,36 @@ export interface ActiveSession {
   current: boolean;
 }
 
+// WP-0133: output guardrails as versioned policy objects.
+export interface Guardrail {
+  id: string;
+  workspace_id: string;
+  builtin_key: string | null;
+  name: string;
+  description: string | null;
+  checker_type: string;
+  is_builtin: boolean;
+  current_version: number;
+  enabled: boolean;
+  config_json: string;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface GuardrailInput {
+  name: string;
+  description?: string | null;
+  checker_type: string;
+  config_json: string;
+}
+
+export interface GuardrailEdit {
+  name?: string | null;
+  description?: string | null;
+  enabled?: boolean | null;
+  config_json?: string | null;
+}
+
 export interface ConnectorActionParam {
   name: string;
   location: string;
