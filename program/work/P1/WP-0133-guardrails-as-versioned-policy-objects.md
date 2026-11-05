@@ -3,17 +3,17 @@ id: WP-0133
 title: Guardrails as versioned policy objects
 phase: 1
 epic: E1.4 Task contracts and guardrails
-status: in_review
+status: done
 owner: claude
 depends_on: [WP-0009]
 requirements: [REQ-GOV-007]
 threats: [T-01]
 estimate: L
 editions: [desktop, workspace, demo]
-delivered: []
+delivered: [desktop, workspace, demo]
 docs: [guardrails]
 branch: claude/enterprise-build-planning-jxy2kq
-pr: pending
+pr: "backend + admin UI"
 updated: 2026-11-05
 ---
 
@@ -51,3 +51,4 @@ Output guardrails (PII leak, tone, required disclaimer, schema conformance, exte
 - 2026-11-05 claude: Refined proposed -> ready and claimed (dep WP-0009 done). Scope confirmed against REQ-GOV-007 and ADR-0011 (prompt catalog for the judge), ADR-0010 (migration), ADR-0012 (feature flag). Building: ai_guardrails versioned policy objects with rule/judge/schema/pii checkers, a built-in library, evaluation service, and an admin screen.
 - 2026-11-05 claude: Backend built and both ACs proven in core/tests/guardrails.rs (7 tests). Migration 0090 adds ai_guardrails (versioned, builtin_key, checker_type, current_version), ai_guardrail_versions (append-only configs) and ai_guardrail_evaluations (a run's recorded check + version). guardrail_service: a pure evaluate() for the four checker kinds - rule (must_contain / forbid_substrings / domain_allowlist via regex host extraction), pii (reuses dlp_service::scan), schema (a small dependency-free JSON-schema check), judge (interprets a supplied model verdict) - plus the five built-ins, create/edit (an edit writes a new version), ensure_builtins, and evaluate_for_run which records the version. Verified: core fmt/clippy --all-targets clean, cargo-deny ok, migration_upgrade + migrate unit (90) pass.
 - 2026-11-05 claude: Stays in_review. Remaining for done (editions): the admin screen to list/edit guardrails (behind a guardrails feature flag, ADR-0012), the async judge model call rendered through the prompt catalog (ADR-0011) and wired where runs check output, the desktop Tauri + server commands, and the online-demo mirror.
+- 2026-11-05 claude: Admin UI completes the editions. Server dispatch and desktop Tauri commands (list/create/edit_guardrail); api.ts methods + TS types; a Guardrails screen under Admin -> AI Agent Foundry (list the built-in library and custom guardrails, create one, edit a config which saves a new version, enable/disable), behind the ga `guardrails.admin` feature flag; a read-only guardrails tab in the online demo with `guardrails.admin` added to DEMO_RELEASED_FEATURES. 3 Vitest tests (guardrailsAdmin.test.tsx). Verified: tsc, Vitest 65 passing, npm run build; cargo fmt/clippy --all-targets -D warnings clean on core/server/cli and lanesra-os (GTK libs installed); feature-flag check and programctl docs/validate clean. Delivered to desktop, Team Workspace and the online demo; done.

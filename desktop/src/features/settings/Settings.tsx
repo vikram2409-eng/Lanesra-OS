@@ -20,6 +20,7 @@ import { NumberingAdmin } from "./NumberingAdmin";
 import { FeatureFlagsAdmin } from "./FeatureFlagsAdmin";
 import { useFeature, useShowFeatureFlagsAdmin } from "../../lib/useFeature";
 import { AGENT_IDENTITIES_FLAG, AgentIdentitiesAdmin } from "./AgentIdentitiesAdmin";
+import { GUARDRAILS_FLAG, GuardrailsAdmin } from "./GuardrailsAdmin";
 import { DashboardKpiAdmin } from "./DashboardKpiAdmin";
 import { DashboardLayoutsAdmin } from "./DashboardLayoutsAdmin";
 import { AppsAdmin } from "./AppsAdmin";
@@ -106,6 +107,7 @@ export type AdminTab =
   | "assistant"
   | "aiAgents"
   | "agentIdentities"
+  | "guardrails"
   | "aiSkills"
   | "aiAgentPipelines"
   | "aiEvalSuites"
@@ -147,6 +149,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "assistant", label: "Admin Assistant" },
   { key: "aiAgents", label: "AI Agents" },
   { key: "agentIdentities", label: "Agent Identities" },
+  { key: "guardrails", label: "Guardrails" },
   { key: "aiSkills", label: "Skills" },
   { key: "aiAgentPipelines", label: "Orchestration" },
   { key: "aiEvalSuites", label: "Evaluations" },
@@ -375,7 +378,7 @@ const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string
     label: "AI Agent Foundry",
     icon: "🏭",
     note: "Build named AI agents with their own persona, actions, memory and skills, and let them delegate to each other",
-    items: ["aiAgents", "agentIdentities", "aiSkills", "aiAgentPipelines", "aiEvalSuites", "agentTeams"],
+    items: ["aiAgents", "agentIdentities", "aiSkills", "aiAgentPipelines", "aiEvalSuites", "agentTeams", "guardrails"],
   },
   {
     key: "help",
@@ -417,6 +420,7 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
   const showFeatureFlags = useShowFeatureFlagsAdmin();
   // WP-0109: Agent Identities is listed only while its flag is on.
   const showAgentIdentities = useFeature(AGENT_IDENTITIES_FLAG);
+  const showGuardrails = useFeature(GUARDRAILS_FLAG);
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["workspaceStatus"] });
@@ -478,6 +482,7 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
                 {cat.items
                   .filter((key) => key !== "featureFlags" || showFeatureFlags)
                   .filter((key) => key !== "agentIdentities" || showAgentIdentities)
+                  .filter((key) => key !== "guardrails" || showGuardrails)
                   .map((key) => (
                   <button key={key} className="admin-cat-item" onClick={() => openTab(key)}>
                     {tabLabel(key)}
@@ -547,6 +552,7 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
       {tab === "assistant" && <ChatPanel mode="admin" />}
       {tab === "aiAgents" && <AiAgentsAdmin onOpenHelp={openHelpTopic} />}
       {tab === "agentIdentities" && showAgentIdentities && <AgentIdentitiesAdmin />}
+      {tab === "guardrails" && showGuardrails && <GuardrailsAdmin />}
       {tab === "aiSkills" && <AiSkillsAdmin />}
       {tab === "aiAgentPipelines" && <AiAgentPipelinesAdmin />}
       {tab === "aiEvalSuites" && <AiEvalSuitesAdmin />}
