@@ -6,6 +6,7 @@ import { Users } from "../users/Users";
 import { OrganizationAdmin } from "./OrganizationAdmin";
 import { OrgUnitsAdmin } from "./OrgUnitsAdmin";
 import { AccessRolesAdmin } from "./AccessRolesAdmin";
+import { SecurityAdmin } from "./SecurityAdmin";
 import { WorkTeamsAdmin } from "./WorkTeamsAdmin";
 import { CustomObjectsAdmin } from "./CustomObjectsAdmin";
 import { RelationshipsAdmin } from "./RelationshipsAdmin";
@@ -82,6 +83,7 @@ export type AdminTab =
   | "orgUnits"
   | "teams"
   | "accessRoles"
+  | "security"
   | "profile"
   | "objects"
   | "relationships"
@@ -122,6 +124,7 @@ const ADMIN_TABS: { key: AdminTab; label: string }[] = [
   { key: "orgUnits", label: "Organization Units" },
   { key: "teams", label: "Work Teams" },
   { key: "accessRoles", label: "Access Roles" },
+  { key: "security", label: "Security & sign-in" },
   { key: "profile", label: "Business profile" },
   { key: "objects", label: "Custom Objects" },
   { key: "relationships", label: "Relationships" },
@@ -343,7 +346,7 @@ function AdminHomeExtras({ onOpenTab }: { onOpenTab: (key: AdminTab) => void }) 
 // than leaving it out until that consolidation actually happens.
 const ADMIN_CATEGORIES: { key: string; label: string; icon: string; note: string; items: AdminTab[] }[] = [
   { key: "workspace", label: "Workspace", icon: "⚙", note: "How the workspace looks and is identified", items: ["profile", "numbering", "featureFlags"] },
-  { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users", "organization", "orgUnits", "teams", "accessRoles"] },
+  { key: "access", label: "Access", icon: "👤", note: "Who can sign in and what they can do", items: ["users", "organization", "orgUnits", "teams", "accessRoles", "security"] },
   { key: "data-model", label: "Data Model", icon: "🧩", note: "Objects, relationships and fields", items: ["objects", "relationships", "fields", "dependencyExplorer", "businessGlossary"] },
   {
     key: "ontology",
@@ -505,6 +508,7 @@ export function AdminPanel({ openAdminTab }: { openAdminTab?: { tab: AdminTab; k
       {tab === "orgUnits" && <OrgUnitsAdmin onOpenHelp={openHelpTopic} />}
       {tab === "teams" && <WorkTeamsAdmin />}
       {tab === "accessRoles" && <AccessRolesAdmin />}
+      {tab === "security" && <SecurityAdmin />}
 
       {tab === "profile" && workspace.data && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, alignItems: "start" }}>
