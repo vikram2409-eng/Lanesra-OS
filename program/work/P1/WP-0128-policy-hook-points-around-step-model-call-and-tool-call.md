@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: [AC-1, AC-2]
 docs: [policy-engine-tool-call-firewall]
 branch: claude/enterprise-build-planning-jxy2kq
-pr: 
+pr: 739
 updated: 2026-11-05
 ---
 
