@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: [desktop, workspace, demo]
 docs: [prompt-injection-defence]
 branch: claude/enterprise-build-planning-jxy2kq
-pr: 
+pr: 740
 updated: 2026-11-06
 ---
 
