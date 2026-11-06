@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "policy.decided",
+  "description": "A policy hook (WP-0128) at a loop point - a step boundary, a model call or a tool call - decided whether execution may continue. Emitted for an allow as well as a block, so every verdict is auditable (ADR-0008).",
+  "type": "object",
+  "properties": {
+    "hook": {
+      "type": "string",
+      "enum": [
+        "step",
+        "model",
+        "tool"
+      ]
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "block"
+      ]
+    },
+    "guardrail": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "guardrail_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "hook",
+    "verdict",
+    "guardrail",
+    "guardrail_id",
+    "reason"
+  ],
+  "additionalProperties": false
+}

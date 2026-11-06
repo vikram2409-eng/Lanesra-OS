@@ -399,16 +399,33 @@ async fn run_step(
             "lanesra.agent.version_id": agent.current_version_id,
         }),
     );
-    let result = chat_service::run_agent_once_with_text(
+    // WP-0128: the step-boundary hook runs against the step input before
+    // the agent runs; a blocking guardrail fails the step, short-circuiting
+    // the model- and tool-call hooks the agent would otherwise reach. Its
+    // `policy` hook span nests under this open step span.
+    let result = match super::policy_engine_service::evaluate_loop_round(
         conn,
         workspace_id,
-        master_key,
-        actor,
-        &agent,
-        input_text,
-        &memory_context,
-    )
-    .await;
+        &super::policy_engine_service::LoopSubjects {
+            step: Some(input_text),
+            ..Default::default()
+        },
+    ) {
+        Ok(v) if v.is_block() => Err(v.into_error().unwrap()),
+        Ok(_) => {
+            chat_service::run_agent_once_with_text(
+                conn,
+                workspace_id,
+                master_key,
+                actor,
+                &agent,
+                input_text,
+                &memory_context,
+            )
+            .await
+        }
+        Err(e) => Err(e),
+    };
     step_span.end_result(
         conn,
         &result,

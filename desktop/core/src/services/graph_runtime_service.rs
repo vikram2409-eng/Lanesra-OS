@@ -1223,17 +1223,36 @@ async fn run_from(
                 "lanesra.node.type": node.node_type,
             }),
         );
-        let executed = execute_node(
+        // WP-0128: the step-boundary hook runs against the step input before
+        // the node executes; a blocking guardrail fails the step (and so the
+        // run), short-circuiting the model- and tool-call hooks the node
+        // would otherwise reach. Its `policy` hook span nests under this
+        // open step span.
+        let step_subject = dump_context(&context);
+        let executed = match super::policy_engine_service::evaluate_loop_round(
             conn,
             workspace_id,
-            master_key,
-            actor,
-            graph,
-            node,
-            &run,
-            &mut context,
-        )
-        .await;
+            &super::policy_engine_service::LoopSubjects {
+                step: Some(&step_subject),
+                ..Default::default()
+            },
+        ) {
+            Ok(v) if v.is_block() => Err(v.into_error().unwrap()),
+            Ok(_) => {
+                execute_node(
+                    conn,
+                    workspace_id,
+                    master_key,
+                    actor,
+                    graph,
+                    node,
+                    &run,
+                    &mut context,
+                )
+                .await
+            }
+            Err(e) => Err(e),
+        };
         step_span.end_result(
             conn,
             &executed,
