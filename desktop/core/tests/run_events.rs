@@ -297,6 +297,7 @@ async fn every_event_matches_its_schema_and_each_run_numbers_its_events_without_
             blocked_tool_names: vec!["list_objects".into()],
             exclude_restricted_memory: true,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&ws.admin),
     )

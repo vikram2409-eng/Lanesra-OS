@@ -429,7 +429,11 @@ async fn run_step(
     step_span.end_result(
         conn,
         &result,
-        json!({"lanesra.stop_reason": result.as_ref().ok().and_then(|o| o.stop_reason)}),
+        json!({
+            "lanesra.stop_reason": result.as_ref().ok().and_then(|o| o.stop_reason),
+            // WP-0145: the step span records whether this step read untrusted content.
+            "lanesra.step.read_untrusted": result.as_ref().ok().map(|o| o.read_untrusted).unwrap_or(false),
+        }),
     );
     match result {
         Ok(outcome) => {

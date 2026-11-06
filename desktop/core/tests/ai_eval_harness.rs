@@ -514,6 +514,7 @@ async fn policy_compliance_evaluator_checks_for_a_blocked_tool_call_with_no_judg
             blocked_tool_names: vec!["list_objects".into()],
             exclude_restricted_memory: true,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&admin),
     )
@@ -547,6 +548,7 @@ async fn policy_compliance_evaluator_checks_for_a_blocked_tool_call_with_no_judg
             blocked_tool_names: vec![],
             exclude_restricted_memory: true,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&admin),
     )

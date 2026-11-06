@@ -177,6 +177,7 @@ fn policy(ws: &Ws, blocked: &[&str], approval_at: Option<RiskLevel>) {
             blocked_tool_names: blocked.iter().map(|s| s.to_string()).collect(),
             exclude_restricted_memory: true,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&ws.admin),
     )

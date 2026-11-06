@@ -130,6 +130,7 @@ fn no_op_policy() -> AiAgentPolicyInput {
         blocked_tool_names: vec![],
         exclude_restricted_memory: true,
         enforce_record_access: false,
+        taint_exempt_tool_names: vec![],
     }
 }
 
@@ -332,6 +333,7 @@ async fn enforce_record_access_on_actually_blocks_a_write_access_control_v1_woul
         Some(&agent.id),
         &AiAgentPolicyInput {
             enforce_record_access: true,
+            taint_exempt_tool_names: vec![],
             ..no_op_policy()
         },
         Some(&admin),
@@ -428,6 +430,7 @@ async fn enforce_record_access_on_still_allows_a_write_a_real_role_grants() {
         Some(&agent.id),
         &AiAgentPolicyInput {
             enforce_record_access: true,
+            taint_exempt_tool_names: vec![],
             ..no_op_policy()
         },
         Some(&admin),
@@ -623,6 +626,7 @@ fn the_inspector_traces_the_real_access_control_decision_once_enforced() {
         Some(&agent.id),
         &AiAgentPolicyInput {
             enforce_record_access: true,
+            taint_exempt_tool_names: vec![],
             ..no_op_policy()
         },
         Some(&admin),

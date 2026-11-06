@@ -179,6 +179,7 @@ fn hold_every_tool(ws: &Ws) {
             blocked_tool_names: vec![],
             exclude_restricted_memory: true,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&ws.admin),
     )

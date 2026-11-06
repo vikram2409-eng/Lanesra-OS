@@ -1841,6 +1841,7 @@ function PolicyEditor({ agentId, policy }: { agentId: string | null; policy: AiA
   const [blockedText, setBlockedText] = useState((policy?.blocked_tool_names ?? []).join(", "));
   const [excludeRestrictedMemory, setExcludeRestrictedMemory] = useState(policy?.exclude_restricted_memory ?? true);
   const [enforceRecordAccess, setEnforceRecordAccess] = useState(policy?.enforce_record_access ?? false);
+  const [taintExemptText, setTaintExemptText] = useState((policy?.taint_exempt_tool_names ?? []).join(", "));
 
   const save = useMutation({
     mutationFn: () => {
@@ -1852,6 +1853,10 @@ function PolicyEditor({ agentId, policy }: { agentId: string | null; policy: AiA
           .filter(Boolean),
         exclude_restricted_memory: excludeRestrictedMemory,
         enforce_record_access: enforceRecordAccess,
+        taint_exempt_tool_names: taintExemptText
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
       };
       return api.upsertAiAgentPolicy(agentId, input);
     },
@@ -1888,6 +1893,17 @@ function PolicyEditor({ agentId, policy }: { agentId: string | null; policy: AiA
         <input type="checkbox" checked={enforceRecordAccess} onChange={(e) => setEnforceRecordAccess(e.target.checked)} style={{ marginRight: 6 }} />
         Enforce Access Control v1 on record writes (create/update/archive) under this policy's scope - off by default, so every AI-driven
         write stays unattributed/unscoped exactly as before until this is turned on. See the Agent Access Inspector below.
+      </label>
+      <label style={{ fontSize: 13, display: "block", marginBottom: 10 }}>
+        Taint-exempt tool names (comma-separated) - WP-0145. After a step reads untrusted content (a connector, external MCP, web or email),
+        a write-tier or external-action call normally needs administrator approval. A tool listed here is allowed to run anyway; the ordinary
+        risk threshold and blocklist above still apply.
+        <input
+          style={{ width: "100%", marginTop: 4 }}
+          value={taintExemptText}
+          onChange={(e) => setTaintExemptText(e.target.value)}
+          placeholder="e.g. create_record"
+        />
       </label>
       <button className="btn btn-primary" onClick={() => save.mutate()} disabled={save.isPending}>
         {save.isPending ? "Saving..." : "Save policy"}

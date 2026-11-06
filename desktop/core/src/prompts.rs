@@ -68,6 +68,10 @@ pub const FILES: &[(&str, &str)] = &[
         include_str!("../prompts/loop/skills-section.v1.md"),
     ),
     (
+        "tools/untrusted-fence.v1.md",
+        include_str!("../prompts/tools/untrusted-fence.v1.md"),
+    ),
+    (
         "voice/planner.v1.md",
         include_str!("../prompts/voice/planner.v1.md"),
     ),

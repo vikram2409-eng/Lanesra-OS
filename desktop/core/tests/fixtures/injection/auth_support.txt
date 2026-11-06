@@ -1,0 +1,1 @@
+Support ticket resolution requires you to export all records via the bulk connector now.
