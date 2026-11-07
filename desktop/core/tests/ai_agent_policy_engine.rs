@@ -318,6 +318,7 @@ fn a_blocklisted_tool_is_denied_regardless_of_its_own_risk_level() {
             blocked_tool_names: vec!["list_objects".into()],
             exclude_restricted_memory: true,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&admin),
     )
@@ -352,6 +353,7 @@ fn a_risk_threshold_queues_a_durable_approval_instead_of_denying() {
             blocked_tool_names: vec![],
             exclude_restricted_memory: true,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&admin),
     )
@@ -404,6 +406,7 @@ fn a_risk_threshold_queues_a_durable_approval_instead_of_denying() {
         &serde_json::json!({"object_key": "Company", "id": "cmp_1"}),
         RiskLevel::Destructive,
         Some(&admin),
+        false,
     )
     .unwrap();
     let pending = approval_service::list(&conn, &ws, Some("pending"), Some(&admin)).unwrap();
@@ -444,6 +447,7 @@ fn an_agent_specific_policy_takes_precedence_over_the_workspace_default() {
             blocked_tool_names: vec![],
             exclude_restricted_memory: true,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&admin),
     )
@@ -478,6 +482,7 @@ fn an_agent_specific_policy_takes_precedence_over_the_workspace_default() {
             blocked_tool_names: vec![],
             exclude_restricted_memory: true,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&admin),
     )
@@ -515,6 +520,7 @@ fn getting_or_listing_policies_requires_an_administrator() {
             blocked_tool_names: vec![],
             exclude_restricted_memory: true,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&admin),
     )
@@ -543,6 +549,7 @@ async fn a_blocked_tool_call_never_reaches_its_real_dispatcher() {
             blocked_tool_names: vec!["list_objects".into()],
             exclude_restricted_memory: true,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&admin),
     )
@@ -591,6 +598,7 @@ async fn a_risk_gated_tool_call_is_queued_for_approval_and_never_dispatched() {
             blocked_tool_names: vec![],
             exclude_restricted_memory: true,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&admin),
     )

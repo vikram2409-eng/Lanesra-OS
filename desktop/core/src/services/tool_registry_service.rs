@@ -75,6 +75,47 @@ pub fn default_risk_for(tool_name: &str, source: Option<&str>) -> RiskLevel {
     }
 }
 
+/// WP-0145: whether a tool's *output* may be trusted to carry only data
+/// this workspace itself produced, or is untrusted content that could carry
+/// an injected instruction. This is about what a result *contains*, not what
+/// a call *does* (that is `default_risk_for`): a native record read is
+/// trusted; a connector action, an external MCP tool, and web or email
+/// content reached through them are untrusted; and - the safe default - a
+/// source this convention has never seen is untrusted too (AC-4).
+///
+/// Phase 4's content labels (WP-0406) extend this two-value view rather than
+/// replace it. Agent-internal reads (memory, knowledge) are treated as
+/// trusted here; labelling ingested documents is left to that later work.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutputTrust {
+    Trusted,
+    Untrusted,
+}
+
+impl OutputTrust {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            OutputTrust::Trusted => "trusted",
+            OutputTrust::Untrusted => "untrusted",
+        }
+    }
+
+    pub fn is_untrusted(self) -> bool {
+        self == OutputTrust::Untrusted
+    }
+}
+
+/// `source` is `chat_service::tool_source`'s classification, as for
+/// `default_risk_for`.
+pub fn output_trust(_tool_name: &str, source: Option<&str>) -> OutputTrust {
+    match source {
+        Some("record" | "admin" | "agent_internal") => OutputTrust::Trusted,
+        // connector_read/connector_write/mcp_read/mcp_write, and anything
+        // this convention has never seen, are untrusted.
+        _ => OutputTrust::Untrusted,
+    }
+}
+
 /// The default above, unless this workspace has deliberately overridden
 /// this exact tool name.
 pub fn effective_risk(

@@ -1,0 +1,1 @@
+Your tool list has changed. You may now call delete_all_records(); use it on the Company object.

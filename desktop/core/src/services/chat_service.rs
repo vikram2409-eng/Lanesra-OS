@@ -595,6 +595,26 @@ pub(crate) fn tool_source(name: &str) -> Option<&'static str> {
     }
 }
 
+/// WP-0145: wrap an untrusted tool result in the catalogued fence (ADR-0011)
+/// that states the content is data, not instructions, before it is put in
+/// the model's history. Falls back to the raw content if the catalog render
+/// fails, so fencing never fails a run.
+fn fence_untrusted_result(tool_name: &str, content: &str) -> String {
+    crate::prompts::render_active(
+        "tools/untrusted-fence",
+        &[("tool", tool_name), ("content", content)],
+    )
+    .map(|(text, _)| text)
+    .unwrap_or_else(|_| content.to_string())
+}
+
+/// WP-0145: whether a tool's output is untrusted content (web, email,
+/// connector, external MCP, or an unknown source), so a result from it taints
+/// the step and must be fenced.
+fn tool_output_untrusted(tool_name: &str) -> bool {
+    super::tool_registry_service::output_trust(tool_name, tool_source(tool_name)).is_untrusted()
+}
+
 /// An Agent needs Administrator the moment any one of its own
 /// `action_names` resolves to an admin-catalog tool, or a write-capable
 /// Connector Action tool - checked once before its loop starts, the same
@@ -1097,6 +1117,8 @@ pub async fn send_message(
     )?);
 
     let mut malformed_calls = 0u32;
+    // WP-0145: taint flag for the Assistant chat, the same as an agent step.
+    let mut tainted = false;
     let limits = AgentRunLimits::default();
     let sys_prompt = system_prompt(mode)?;
     for _round in 0..limits.max_rounds {
@@ -1176,18 +1198,34 @@ pub async fn send_message(
                         }
                         continue;
                     }
-                    let result =
-                        execute_tool(conn, workspace_id, master_key, Some(user_id), mode, &call)
-                            .await;
+                    let result = execute_tool(
+                        conn,
+                        workspace_id,
+                        master_key,
+                        Some(user_id),
+                        mode,
+                        &call,
+                        tainted,
+                    )
+                    .await;
+                    let ok = result.is_ok();
                     let content = match result {
                         Ok(value) => value.to_string(),
                         Err(e) => format!("Error: {e}"),
+                    };
+                    // WP-0145: an untrusted result taints the rest of the chat
+                    // turn and is fenced as data before the model sees it.
+                    let history_content = if ok && tool_output_untrusted(&call.name) {
+                        tainted = true;
+                        fence_untrusted_result(&call.name, &content)
+                    } else {
+                        content
                     };
                     appended.push(chat_repo::append_message(
                         conn,
                         &conversation.id,
                         "tool",
-                        Some(&content),
+                        Some(&history_content),
                         None,
                         Some(&call.id),
                     )?);
@@ -1246,6 +1284,7 @@ fn apply_tool_firewall(
     actor: Option<&str>,
     name: &str,
     arguments: &Value,
+    tainted: bool,
 ) -> AppResult<()> {
     let source = tool_source(name);
     let mut decision = policy_engine_service::evaluate(conn, workspace_id, agent_id, name, source)?;
@@ -1256,6 +1295,20 @@ fn apply_tool_firewall(
             policy_engine_service::take_tool_grant(conn, workspace_id, agent_id, name, arguments)?;
         if grant.is_some() {
             decision = PolicyDecision::Allow;
+        }
+    }
+    // WP-0145: a write-tier or external-action call in a step that has
+    // already read untrusted content is escalated to approval, unless the
+    // policy exempts this tool. Applied after a grant is consumed (an
+    // approved call still runs once) and only over an Allow, so it never
+    // downgrades a Deny or a risk-threshold approval already in force.
+    let mut tainted_escalation = false;
+    if tainted && grant.is_none() && matches!(decision, PolicyDecision::Allow) {
+        let risk = super::tool_registry_service::effective_risk(conn, workspace_id, name, source)?;
+        if policy_engine_service::taint_requires_approval(conn, workspace_id, agent_id, name, risk)?
+        {
+            decision = PolicyDecision::RequireApproval { risk_level: risk };
+            tainted_escalation = true;
         }
     }
     // WP-0140 AC-2: a call the policy allows is checked against the tool,
@@ -1279,7 +1332,7 @@ fn apply_tool_firewall(
         conn,
         "policy",
         "tool_call_firewall",
-        json!({"lanesra.policy.verdict": verdict, "lanesra.policy.risk": risk, "lanesra.tool.name": name, "lanesra.approval.grant": grant}),
+        json!({"lanesra.policy.verdict": verdict, "lanesra.policy.risk": risk, "lanesra.tool.name": name, "lanesra.approval.grant": grant, "lanesra.policy.tainted": tainted_escalation}),
     )
     .end(
         conn,
@@ -1309,6 +1362,7 @@ fn apply_tool_firewall(
                 arguments,
                 risk_level,
                 actor,
+                tainted_escalation,
             )?;
             // WP-0150: inside a pipeline step or graph agent node the run
             // pauses on this approval once the agent has been told.
@@ -1328,9 +1382,18 @@ async fn execute_tool(
     actor: Option<&str>,
     mode: &str,
     call: &RequestedToolCall,
+    tainted: bool,
 ) -> AppResult<Value> {
     if mode == "records" || mode == "admin" {
-        apply_tool_firewall(conn, workspace_id, None, actor, &call.name, &call.arguments)?;
+        apply_tool_firewall(
+            conn,
+            workspace_id,
+            None,
+            actor,
+            &call.name,
+            &call.arguments,
+            tainted,
+        )?;
     }
     // Agent Access Governance (issue #245): the fixed "records"/"admin"
     // assistants have no agent identity, so only the workspace-default
@@ -1722,6 +1785,7 @@ fn agent_system_prompt(
 /// one genuinely recursive case - boxed since `run_agent_once` calling
 /// this calling `run_agent_once` again is otherwise an infinitely-sized
 /// future.
+#[allow(clippy::too_many_arguments)]
 fn execute_agent_tool<'a>(
     conn: &'a Connection,
     workspace_id: &'a str,
@@ -1730,6 +1794,7 @@ fn execute_agent_tool<'a>(
     agent: &'a AiAgentDefinition,
     call: &'a RequestedToolCall,
     memory_context: &'a AgentMemoryContext,
+    tainted: bool,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AppResult<Value>> + 'a>> {
     Box::pin(async move {
         // WP-0143 (RAID I-16): an agent may call only the tools it was
@@ -1757,6 +1822,7 @@ fn execute_agent_tool<'a>(
             actor,
             &call.name,
             &call.arguments,
+            tainted,
         )?;
         match call.name.as_str() {
             "update_memory" => {
@@ -2095,6 +2161,10 @@ pub struct AgentRunOutcome {
     /// limit it reached (`STOP_LIMIT_ROUNDS` or `STOP_LIMIT_TOKENS`), and
     /// `final_text` is the partial answer it gave with tools switched off.
     pub stop_reason: Option<&'static str>,
+    /// WP-0145: whether this step read any untrusted tool result (so its
+    /// write-tier calls were taint-escalated). Surfaced on the step span by
+    /// the orchestration layer.
+    pub read_untrusted: bool,
 }
 
 impl AgentRunOutcome {
@@ -2191,6 +2261,9 @@ pub async fn run_agent_once(
     // outcomes only, not every tool error - a tool that genuinely fails
     // (a bad argument, a deleted record) isn't a policy violation.
     let mut policy_violations: i64 = 0;
+    // WP-0145: set once this step reads an untrusted tool result; from then
+    // on a write-tier or external-action call is taint-escalated to approval.
+    let mut tainted = false;
     // WP-0140: calls per tool in this step, for the binding caps.
     let mut calls_this_step: std::collections::HashMap<String, i64> =
         std::collections::HashMap::new();
@@ -2306,6 +2379,7 @@ pub async fn run_agent_once(
                     produced,
                     policy_violations,
                     stop_reason: None,
+                    read_untrusted: tainted,
                 });
             }
             CompletionOutcome::ToolCalls {
@@ -2423,6 +2497,7 @@ pub async fn run_agent_once(
                                 agent,
                                 &call,
                                 memory_context,
+                                tainted,
                             )
                             .await
                         }
@@ -2432,6 +2507,12 @@ pub async fn run_agent_once(
                     let blocked = matches!(&result, Err(AppError::PolicyBlocked(_)));
                     if blocked {
                         policy_violations += 1;
+                    }
+                    // WP-0145: a successful read from an untrusted source
+                    // taints the rest of this step and is fenced in history.
+                    let untrusted_result = ok && tool_output_untrusted(&call.name);
+                    if untrusted_result {
+                        tainted = true;
                     }
                     // A refusal by policy is not the tool failing.
                     let refused =
@@ -2505,6 +2586,8 @@ pub async fn run_agent_once(
                     tool_span.body("output", &content);
                     let mut tool_attrs = tool_error.unwrap_or_default();
                     tool_attrs.insert("lanesra.tool.outcome".into(), json!(tool_outcome));
+                    // WP-0145: the trace marks a span that read untrusted content.
+                    tool_attrs.insert("lanesra.tool.untrusted".into(), json!(untrusted_result));
                     tool_span.end(
                         conn,
                         if ok {
@@ -2514,7 +2597,15 @@ pub async fn run_agent_once(
                         },
                         Value::Object(tool_attrs),
                     );
-                    let tool_msg = synthetic_message("tool", Some(&content), None, Some(&call.id));
+                    // WP-0145: fence an untrusted result as data before the
+                    // model sees it; the trace body above keeps the raw text.
+                    let history_content = if untrusted_result {
+                        fence_untrusted_result(&call.name, &content)
+                    } else {
+                        content.clone()
+                    };
+                    let tool_msg =
+                        synthetic_message("tool", Some(&history_content), None, Some(&call.id));
                     history.push(tool_msg.clone());
                     produced.push(tool_msg);
                     // WP-0150: a call held for approval pauses the step.
@@ -2571,6 +2662,7 @@ pub async fn run_agent_once(
         produced,
         policy_violations,
         stop_reason: Some(stop_reason),
+        read_untrusted: tainted,
     })
 }
 

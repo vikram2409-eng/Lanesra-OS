@@ -22,6 +22,12 @@ pub struct AiAgentPolicy {
     /// Tool names always denied outright under this policy, regardless
     /// of risk level.
     pub blocked_tool_names: Vec<String>,
+    /// WP-0145: tool names exempt from the taint-driven approval - a tool
+    /// here may run a write-tier or external-action call in a step that has
+    /// read untrusted content without the extra approval that step would
+    /// otherwise force. The ordinary risk threshold and blocklist still
+    /// apply. Empty by default (nothing exempt).
+    pub taint_exempt_tool_names: Vec<String>,
     /// AI Agent Platform v2, Phase 4 (migration 0063): whether a
     /// `'restricted'`-classified `ai_memory_service::remember` write under
     /// this policy's scope is excluded from durable persistence rather
@@ -46,6 +52,10 @@ pub struct AiAgentPolicy {
 pub struct AiAgentPolicyInput {
     pub require_approval_at_or_above: Option<RiskLevel>,
     pub blocked_tool_names: Vec<String>,
+    /// WP-0145: tool names exempt from the taint-driven approval (see
+    /// [`AiAgentPolicy::taint_exempt_tool_names`]). Defaults empty.
+    #[serde(default)]
+    pub taint_exempt_tool_names: Vec<String>,
     #[serde(default = "default_exclude_restricted_memory")]
     pub exclude_restricted_memory: bool,
     #[serde(default)]

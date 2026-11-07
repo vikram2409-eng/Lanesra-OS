@@ -115,7 +115,9 @@ pub fn evaluate_memory_write(
 
 /// Records the durable, auditable paper trail for a `RequireApproval`
 /// decision - see this module's own doc comment for why this doesn't
-/// (yet) pause and resume the calling run.
+/// (yet) pause and resume the calling run. `tainted` (WP-0145) records on
+/// the approval that the call was escalated because its step had already
+/// read untrusted content, so a reviewer sees why it waits.
 pub fn record_pending_tool_call(
     conn: &Connection,
     workspace_id: &str,
@@ -124,13 +126,35 @@ pub fn record_pending_tool_call(
     arguments: &Value,
     risk_level: RiskLevel,
     requested_by: Option<&str>,
+    tainted: bool,
 ) -> AppResult<String> {
     let input = AiApprovalInput {
         subject_type: "tool_call".to_string(),
         subject_id: tool_name.to_string(),
-        proposal: json!({"agent_id": agent_id, "tool_name": tool_name, "arguments": arguments, "risk_level": risk_level.as_str()}),
+        proposal: json!({"agent_id": agent_id, "tool_name": tool_name, "arguments": arguments, "risk_level": risk_level.as_str(), "tainted": tainted, "reason": if tainted { "untrusted_content" } else { "risk_threshold" }}),
     };
     Ok(super::approval_service::create(conn, workspace_id, &input, requested_by)?.id)
+}
+
+/// WP-0145: whether a tool call made in a step that has already read
+/// untrusted content must be escalated to approval. True when the call is a
+/// write-tier or external-action tool (effective risk above `Read`) and the
+/// governing policy does not list it as taint-exempt. A pure decision over
+/// the resolved policy and the effective risk the firewall supplies.
+pub fn taint_requires_approval(
+    conn: &Connection,
+    workspace_id: &str,
+    agent_id: Option<&str>,
+    tool_name: &str,
+    risk_level: RiskLevel,
+) -> AppResult<bool> {
+    if risk_level <= RiskLevel::Read {
+        return Ok(false);
+    }
+    let exempt = resolve_policy(conn, workspace_id, agent_id)?
+        .map(|p| p.taint_exempt_tool_names.iter().any(|n| n == tool_name))
+        .unwrap_or(false);
+    Ok(!exempt)
 }
 
 /// `value` with every object's keys sorted, so two equal argument sets

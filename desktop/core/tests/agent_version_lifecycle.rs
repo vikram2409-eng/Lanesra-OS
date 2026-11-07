@@ -454,6 +454,7 @@ async fn publishing_is_blocked_by_a_failing_policy_compliance_eval_run() {
             blocked_tool_names: vec!["list_objects".into()],
             exclude_restricted_memory: true,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&admin),
     )
@@ -517,6 +518,7 @@ async fn publishing_is_blocked_by_a_failing_policy_compliance_eval_run() {
             blocked_tool_names: vec![],
             exclude_restricted_memory: true,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&admin),
     )

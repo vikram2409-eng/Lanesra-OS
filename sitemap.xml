@@ -62,6 +62,7 @@
   <url><loc>https://lanesraos.com/help/multi-target-architecture</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lanesraos.com/help/agent-versioning-and-approvals</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lanesraos.com/help/policy-engine-tool-call-firewall</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://lanesraos.com/help/prompt-injection-defence</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lanesraos.com/help/execution-graph-agent-teams</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lanesraos.com/help/memory-architecture-document-rag</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://lanesraos.com/help/mcp-client-connect-external-server</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>

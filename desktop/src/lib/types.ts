@@ -2815,6 +2815,11 @@ export interface AiAgentPolicy {
   // policy's scope makes is checked for real against Access Control v1.
   // Defaults false - zero behavior change until an admin opts in.
   enforce_record_access: boolean;
+  // WP-0145: tool names exempt from the taint-driven approval - a tool here
+  // may run a write-tier or external-action call in a step that read
+  // untrusted content without the extra approval that step would otherwise
+  // force. Empty by default.
+  taint_exempt_tool_names: string[];
   created_at: string;
   created_by: string | null;
   updated_at: string;
@@ -2826,6 +2831,8 @@ export interface AiAgentPolicyInput {
   blocked_tool_names: string[];
   exclude_restricted_memory: boolean;
   enforce_record_access: boolean;
+  // WP-0145: see AiAgentPolicy.taint_exempt_tool_names. Optional; defaults [].
+  taint_exempt_tool_names?: string[];
 }
 
 // What policy_engine_service::evaluate decided for one tool call -

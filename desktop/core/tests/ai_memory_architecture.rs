@@ -292,6 +292,7 @@ fn restricted_classification_is_allowed_once_a_policy_relaxes_the_exclusion() {
             blocked_tool_names: vec![],
             exclude_restricted_memory: false,
             enforce_record_access: false,
+            taint_exempt_tool_names: vec![],
         },
         Some(&admin),
     )

@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 19 | 0 | 0 | 0 | 1 | 34 / 36 | `█████████░` 94% |
-| 1 · Foundations | 60 | 32 | 0 | 1 | 0 | 27 | 74 / 158 | `████░░░░░░` 47% |
+| 1 · Foundations | 60 | 33 | 0 | 0 | 0 | 27 | 78 / 158 | `████░░░░░░` 49% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -19,9 +19,9 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 121 | 27 | 67 / 398 |
-| Team Workspace | 134 | 33 | 77 / 448 |
-| Online demo | 87 | 14 | 34 / 298 |
+| Desktop | 121 | 28 | 71 / 398 |
+| Team Workspace | 134 | 34 | 81 / 448 |
+| Online demo | 87 | 15 | 38 / 298 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -31,17 +31,13 @@ Nothing in progress.
 
 ## Ready to start (all dependencies done)
 
-Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXXX-*` branch or a draft PR means claimed). Hand it over with `programctl brief WP-XXXX`.
-
-| WP | Title | Phase | Estimate |
-|---|---|---|---|
-| [WP-0145](work/P1/WP-0145-minimal-untrusted-content-defence.md) | Minimal untrusted-content defence for tool results | 1 | L |
+None.
 
 ## Requirement coverage
 
 - Spec requirements tracked: **245**
 - Mapped to a work package: **245**
-- Delivered (every mapped work package done): **50**
+- Delivered (every mapped work package done): **51**
 
 ## Phase 0 · Precursors
 
@@ -104,7 +100,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0142](work/P1/WP-0142-gate-on-server-initiated-mcp-requests.md) | Gate on server-initiated MCP requests | E1.5 Tools and firewall | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0150 |
 | [WP-0143](work/P1/WP-0143-tool-catalog-credentials-and-delegation-guard-audit.md) | Tool catalog, credentials and delegation guard audit | E1.5 Tools and firewall | ✅ done | S | — | WP-0008 |
 | [WP-0144](work/P1/WP-0144-test-button-on-every-model-tool-connector-agent-and-team.md) | Test button on every model, tool, connector, agent and team | E1.5 Tools and firewall | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0010 |
-| [WP-0145](work/P1/WP-0145-minimal-untrusted-content-defence.md) | Minimal untrusted-content defence for tool results | E1.5 Tools and firewall | 🟢 ready | L | ○Desktop ○Team Workspace ○Online demo | WP-0122, WP-0128, WP-0011, WP-0130 |
+| [WP-0145](work/P1/WP-0145-minimal-untrusted-content-defence.md) | Minimal untrusted-content defence for tool results | E1.5 Tools and firewall | ✅ done | L | ✓Desktop ✓Team Workspace ✓Online demo | WP-0122, WP-0128, WP-0011, WP-0130 |
 | [WP-0146](work/P1/WP-0146-bring-your-own-model-provider-coverage.md) | Bring-your-own-model provider coverage and model catalog | E1.3 Agent loop | ⚪ proposed | XL | ○Desktop ○Team Workspace ○Online demo | WP-0005, WP-0122 |
 | [WP-0150](work/P1/WP-0150-move-every-pause-for-human-onto-ai-approvals.md) | Move every pause-for-human onto ai_approvals | E1.6 Approvals | ✅ done | L | ✓Desktop ✓Team Workspace ✓Online demo | WP-0110, WP-0007 |
 | [WP-0151](work/P1/WP-0151-four-review-responses.md) | Four review responses | E1.6 Approvals | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0150 |

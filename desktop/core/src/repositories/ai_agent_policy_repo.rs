@@ -13,12 +13,14 @@ use crate::models::ai_tool_registry::RiskLevel;
 fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentPolicy> {
     let require_approval: Option<String> = row.get("require_approval_at_or_above")?;
     let blocked_json: String = row.get("blocked_tool_names_json")?;
+    let taint_exempt_json: String = row.get("taint_exempt_tool_names_json")?;
     Ok(AiAgentPolicy {
         id: row.get("id")?,
         workspace_id: row.get("workspace_id")?,
         agent_id: row.get("agent_id")?,
         require_approval_at_or_above: require_approval.and_then(|s| RiskLevel::from_str(&s)),
         blocked_tool_names: serde_json::from_str(&blocked_json).unwrap_or_default(),
+        taint_exempt_tool_names: serde_json::from_str(&taint_exempt_json).unwrap_or_default(),
         exclude_restricted_memory: row.get::<_, i64>("exclude_restricted_memory")? != 0,
         enforce_record_access: row.get::<_, i64>("enforce_record_access")? != 0,
         created_at: row.get("created_at")?,
@@ -72,20 +74,22 @@ pub fn upsert(
     let require_approval = input.require_approval_at_or_above.map(|r| r.as_str());
     let blocked_json =
         serde_json::to_string(&input.blocked_tool_names).unwrap_or_else(|_| "[]".into());
+    let taint_exempt_json =
+        serde_json::to_string(&input.taint_exempt_tool_names).unwrap_or_else(|_| "[]".into());
     let exclude_restricted_memory = input.exclude_restricted_memory as i64;
     let enforce_record_access = input.enforce_record_access as i64;
     let existing = get(conn, workspace_id, agent_id)?;
     if let Some(existing) = existing {
         conn.execute(
-            "UPDATE ai_agent_policies SET require_approval_at_or_above = ?1, blocked_tool_names_json = ?2, exclude_restricted_memory = ?3, enforce_record_access = ?4, updated_at = ?5, updated_by = ?6 WHERE id = ?7",
-            rusqlite::params![require_approval, blocked_json, exclude_restricted_memory, enforce_record_access, now, actor_user_id, existing.id],
+            "UPDATE ai_agent_policies SET require_approval_at_or_above = ?1, blocked_tool_names_json = ?2, exclude_restricted_memory = ?3, enforce_record_access = ?4, taint_exempt_tool_names_json = ?5, updated_at = ?6, updated_by = ?7 WHERE id = ?8",
+            rusqlite::params![require_approval, blocked_json, exclude_restricted_memory, enforce_record_access, taint_exempt_json, now, actor_user_id, existing.id],
         )?;
     } else {
         let id = new_uuid();
         conn.execute(
-            "INSERT INTO ai_agent_policies (id, workspace_id, agent_id, require_approval_at_or_above, blocked_tool_names_json, exclude_restricted_memory, enforce_record_access, created_at, created_by, updated_at, updated_by)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?8, ?9)",
-            rusqlite::params![id, workspace_id, agent_id, require_approval, blocked_json, exclude_restricted_memory, enforce_record_access, now, actor_user_id],
+            "INSERT INTO ai_agent_policies (id, workspace_id, agent_id, require_approval_at_or_above, blocked_tool_names_json, exclude_restricted_memory, enforce_record_access, taint_exempt_tool_names_json, created_at, created_by, updated_at, updated_by)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?9, ?10)",
+            rusqlite::params![id, workspace_id, agent_id, require_approval, blocked_json, exclude_restricted_memory, enforce_record_access, taint_exempt_json, now, actor_user_id],
         )?;
     }
     Ok(get(conn, workspace_id, agent_id)?.expect("just upserted"))
