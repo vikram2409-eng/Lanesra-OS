@@ -1,0 +1,12 @@
+{
+  "prompt": "loop/ontology-section",
+  "note": "Checked by tests/prompt_catalog.rs against the active version.",
+  "cases": [
+    {
+      "name": "lists the scoped object types",
+      "variables": { "objects": "Company, Contact" },
+      "expect_contains": ["scoped to these object types", "Company, Contact"],
+      "expect_not_contains": ["{{"]
+    }
+  ]
+}

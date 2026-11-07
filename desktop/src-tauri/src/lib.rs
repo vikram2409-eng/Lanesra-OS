@@ -359,6 +359,8 @@ pub fn run() {
             commands::ai_agent_commands::create_ai_skill,
             commands::ai_agent_commands::update_ai_skill,
             commands::ai_agent_commands::set_ai_skill_active,
+            commands::ai_agent_commands::set_ai_agent_persona,
+            commands::ai_agent_commands::compiled_ai_agent_prompt,
             commands::ai_agent_commands::set_ai_agent_model_routing,
             commands::ai_agent_commands::set_ai_agent_acts_as,
             commands::ai_agent_commands::get_ai_agent_token_usage,

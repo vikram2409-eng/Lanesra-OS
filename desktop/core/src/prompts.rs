@@ -56,8 +56,24 @@ pub const FILES: &[(&str, &str)] = &[
         include_str!("../prompts/loop/memory-section.v1.md"),
     ),
     (
+        "loop/ontology-section.v1.md",
+        include_str!("../prompts/loop/ontology-section.v1.md"),
+    ),
+    (
         "loop/output-repair.v1.md",
         include_str!("../prompts/loop/output-repair.v1.md"),
+    ),
+    (
+        "loop/persona-section.v1.md",
+        include_str!("../prompts/loop/persona-section.v1.md"),
+    ),
+    (
+        "loop/plan-first.v1.md",
+        include_str!("../prompts/loop/plan-first.v1.md"),
+    ),
+    (
+        "loop/reflect.v1.md",
+        include_str!("../prompts/loop/reflect.v1.md"),
     ),
     (
         "loop/session-memory-section.v1.md",

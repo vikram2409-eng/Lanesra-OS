@@ -543,6 +543,12 @@ async fn execute_node(
                     description: None,
                     icon: "🧩".to_string(),
                     system_prompt: persona.to_string(),
+                    // WP-0120: an embedded graph-node agent has no persona of
+                    // its own and runs in the default reasoning mode.
+                    role: String::new(),
+                    goal: String::new(),
+                    background: String::new(),
+                    reasoning_mode: "direct".to_string(),
                     memory_md: String::new(),
                     guardrails_md: String::new(),
                     action_names,

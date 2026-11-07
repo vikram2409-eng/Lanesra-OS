@@ -2615,6 +2615,12 @@ export interface AiAgentDefinition {
   description: string | null;
   icon: string;
   system_prompt: string;
+  /** WP-0120: persona compiled into the system prompt; each defaults "". */
+  role: string;
+  goal: string;
+  background: string;
+  /** WP-0120: 'direct' (default), 'plan_first' or 'reflect'. */
+  reasoning_mode: string;
   memory_md: string;
   /** Phase 7c: an operational-boundary statement injected into this agent's system prompt - advisory/prompted, not independently enforced. */
   guardrails_md: string;
@@ -2636,6 +2642,15 @@ export interface AiAgentDefinition {
   created_by: string | null;
   updated_at: string;
   updated_by: string | null;
+}
+
+/** WP-0120: the agent persona and reasoning mode, set by its own admin action. */
+export interface PersonaInput {
+  role: string;
+  goal: string;
+  background: string;
+  /** 'direct' | 'plan_first' | 'reflect' */
+  reasoning_mode: string;
 }
 
 /** Ontology Layer epic, issue #344: see `AiAgentDefinition.object_type_scopes`'s own doc comment. `capabilities` is the same plain validated string vocabulary `ActionCapability` already uses. */

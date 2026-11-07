@@ -1,0 +1,12 @@
+{
+  "prompt": "loop/reflect",
+  "note": "Checked by tests/prompt_catalog.rs against the active version.",
+  "cases": [
+    {
+      "name": "includes the draft and asks for one improved answer",
+      "variables": { "answer": "The total due is 400 dollars." },
+      "expect_contains": ["The total due is 400 dollars.", "single improved final answer"],
+      "expect_not_contains": ["{{"]
+    }
+  ]
+}

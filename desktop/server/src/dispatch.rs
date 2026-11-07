@@ -2732,6 +2732,16 @@ pub fn dispatch(
                 actor,
             )?)
         }
+        // WP-0120: persona and reasoning mode, and the read-only compiled prompt.
+        "set_ai_agent_persona" => {
+            let id: String = arg(args, "id")?;
+            let input: lanesra_core::models::ai_agent::PersonaInput = arg(args, "input")?;
+            to_value(ai_agent_service::set_persona(conn, &id, &input, actor)?)
+        }
+        "compiled_ai_agent_prompt" => {
+            let id: String = arg(args, "id")?;
+            to_value(ai_agent_service::compiled_prompt(conn, &id, actor)?)
+        }
 
         // AI Agent Platform v2, Phase 1: the Draft -> Test -> Published ->
         // Deprecated -> Disabled lifecycle for an agent's versions, and

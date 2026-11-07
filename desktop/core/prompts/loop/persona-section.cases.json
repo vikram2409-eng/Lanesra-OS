@@ -1,0 +1,13 @@
+{
+  "prompt": "loop/persona-section",
+  "note": "Checked by tests/prompt_catalog.rs against the active version.",
+  "cases": [
+    {
+      "name": "renders the persona text under the header",
+      "variables": { "persona": "Role: Billing specialist\nGoal: resolve invoice disputes\nBackground: works from the finance playbook" },
+      "expect_starts_with": "Your persona for this work:",
+      "expect_contains": ["Role: Billing specialist", "Goal: resolve invoice disputes", "Background: works from the finance playbook"],
+      "expect_not_contains": ["{{"]
+    }
+  ]
+}
