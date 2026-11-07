@@ -12,7 +12,7 @@ editions: [desktop, workspace, demo]
 delivered: [desktop, workspace, demo]
 docs: [build-your-first-agent]
 branch: claude/enterprise-build-planning-jxy2kq
-pr: 
+pr: 742
 updated: 2026-11-07
 ---
 
