@@ -32,6 +32,7 @@ import type {
   AiAgentMemoryUpdate,
   AiAgentMemorySnapshot,
   AiAgentGuardrailsUpdate,
+  PersonaInput,
   AiAgentVersion,
   AiAgentVersionInput,
   AiApproval,
@@ -465,6 +466,8 @@ export const api = {
   setAiAgentMemory: (id: string, input: AiAgentMemoryUpdate) => call<AiAgentDefinition>("set_ai_agent_memory", { id, input }),
   listAiAgentMemoryHistory: (id: string) => call<AiAgentMemorySnapshot[]>("list_ai_agent_memory_history", { id }),
   setAiAgentGuardrails: (id: string, input: AiAgentGuardrailsUpdate) => call<AiAgentDefinition>("set_ai_agent_guardrails", { id, input }),
+  setAiAgentPersona: (id: string, input: PersonaInput) => call<AiAgentDefinition>("set_ai_agent_persona", { id, input }),
+  compiledAiAgentPrompt: (id: string) => call<string>("compiled_ai_agent_prompt", { id }),
 
   // AI Agent Platform v2, Phase 1: the Draft -> Test -> Published ->
   // Deprecated -> Disabled version lifecycle, and the durable approval

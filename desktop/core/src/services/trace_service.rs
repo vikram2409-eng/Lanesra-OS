@@ -508,6 +508,12 @@ pub fn emit_approval_requested(conn: &Connection, data: Value) {
     emit(conn, "approval.requested", None, None, object(data));
 }
 
+/// WP-0120: `plan.proposed` for a Plan-first agent run - the plan it wrote
+/// before taking any action, shown in the run's events (REQ-LOOP-015).
+pub fn emit_plan_proposed(conn: &Connection, data: Value) {
+    emit(conn, "plan.proposed", None, None, object(data));
+}
+
 /// Opens a child span under the innermost open span of this thread's
 /// trace. Does nothing when no trace is open.
 pub fn start(conn: &Connection, kind: &str, name: &str, attrs: Value) -> Span {

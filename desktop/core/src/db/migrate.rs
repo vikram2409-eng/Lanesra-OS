@@ -184,6 +184,10 @@ const MIGRATIONS: &[(i64, &str)] = &[
         92,
         include_str!("migrations/0092_policy_taint_exempt_tools.sql"),
     ),
+    (
+        93,
+        include_str!("migrations/0093_agent_persona_and_reasoning.sql"),
+    ),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -263,7 +267,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 92);
+        assert_eq!(version, 93);
 
         let table_count: i64 = conn
             .query_row(

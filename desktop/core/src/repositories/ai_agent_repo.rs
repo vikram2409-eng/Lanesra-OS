@@ -22,6 +22,10 @@ fn map_agent_row(row: &rusqlite::Row) -> rusqlite::Result<AiAgentDefinition> {
         description: row.get("description")?,
         icon: row.get("icon")?,
         system_prompt: row.get("system_prompt")?,
+        role: row.get("role")?,
+        goal: row.get("goal")?,
+        background: row.get("background")?,
+        reasoning_mode: row.get("reasoning_mode")?,
         memory_md: row.get("memory_md")?,
         guardrails_md: row.get("guardrails_md")?,
         action_names: serde_json::from_str(&action_names_json).unwrap_or_default(),
@@ -372,6 +376,23 @@ pub fn set_guardrails(conn: &Connection, id: &str, guardrails_md: &str) -> rusql
     conn.execute(
         "UPDATE ai_agents SET guardrails_md = ?1 WHERE id = ?2",
         (guardrails_md, id),
+    )?;
+    Ok(())
+}
+
+/// WP-0120: the persona and reasoning mode, set its own separate admin
+/// action the same way `set_guardrails` sets `guardrails_md`.
+pub fn set_persona(
+    conn: &Connection,
+    id: &str,
+    role: &str,
+    goal: &str,
+    background: &str,
+    reasoning_mode: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE ai_agents SET role = ?1, goal = ?2, background = ?3, reasoning_mode = ?4 WHERE id = ?5",
+        rusqlite::params![role, goal, background, reasoning_mode, id],
     )?;
     Ok(())
 }

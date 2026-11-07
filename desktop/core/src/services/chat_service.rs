@@ -1729,30 +1729,47 @@ fn render_catalog_section(id: &str, var_name: &str, var_value: &str) -> AppResul
 }
 
 /// unlike Session Memory, they aren't naturally singular/small per turn.
-fn agent_system_prompt(
+/// WP-0120: the agent's persona as plain text, only the parts that are set,
+/// in a fixed order. Empty when the agent has no persona.
+fn compile_persona(agent: &AiAgentDefinition) -> String {
+    let mut parts = Vec::new();
+    if !agent.role.trim().is_empty() {
+        parts.push(format!("Role: {}", agent.role.trim()));
+    }
+    if !agent.goal.trim().is_empty() {
+        parts.push(format!("Goal: {}", agent.goal.trim()));
+    }
+    if !agent.background.trim().is_empty() {
+        parts.push(format!("Background: {}", agent.background.trim()));
+    }
+    parts.join("\n")
+}
+
+/// WP-0120: the deterministic part of an agent's system prompt - persona,
+/// instructions, memory digest, guardrails, skills and ontology context,
+/// compiled from catalog templates (REQ-CORE-002). It takes no run context,
+/// so the same agent always compiles to the same text; the read-only
+/// compiled-prompt view (`ai_agent_service::compiled_prompt`) shows exactly
+/// this. `agent_system_prompt` adds the per-run session memory on top.
+pub(crate) fn compile_agent_prompt(
     conn: &Connection,
     agent: &AiAgentDefinition,
-    memory_context: &AgentMemoryContext,
 ) -> AppResult<String> {
-    let mut prompt = agent.system_prompt.clone();
+    let mut prompt = String::new();
+    let persona = compile_persona(agent);
+    if !persona.is_empty() {
+        prompt.push_str(&render_catalog_section(
+            "loop/persona-section",
+            "persona",
+            &persona,
+        )?);
+        prompt.push_str("\n\n");
+    }
+    prompt.push_str(&agent.system_prompt);
     if !agent.memory_md.trim().is_empty() {
         let section = render_catalog_section("loop/memory-section", "memory_md", &agent.memory_md)?;
         prompt.push_str("\n\n");
         prompt.push_str(&section);
-    }
-    if let Ok(items) =
-        ai_memory_service::list_context(conn, &agent.id, "session", None, None, memory_context)
-    {
-        if !items.is_empty() {
-            let items_text: String = items
-                .iter()
-                .map(|item| format!("- {}\n", item.content))
-                .collect();
-            let section =
-                render_catalog_section("loop/session-memory-section", "items", &items_text)?;
-            prompt.push_str("\n\n");
-            prompt.push_str(&section);
-        }
     }
     if !agent.guardrails_md.trim().is_empty() {
         let section = render_catalog_section(
@@ -1773,6 +1790,40 @@ fn agent_system_prompt(
         let section = render_catalog_section("loop/skills-section", "skills", &skills_text)?;
         prompt.push_str("\n\n");
         prompt.push_str(&section);
+    }
+    if !agent.object_type_scopes.is_empty() {
+        let objects = agent
+            .object_type_scopes
+            .iter()
+            .map(|s| s.object_type.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let section = render_catalog_section("loop/ontology-section", "objects", &objects)?;
+        prompt.push_str("\n\n");
+        prompt.push_str(&section);
+    }
+    Ok(prompt)
+}
+
+fn agent_system_prompt(
+    conn: &Connection,
+    agent: &AiAgentDefinition,
+    memory_context: &AgentMemoryContext,
+) -> AppResult<String> {
+    let mut prompt = compile_agent_prompt(conn, agent)?;
+    if let Ok(items) =
+        ai_memory_service::list_context(conn, &agent.id, "session", None, None, memory_context)
+    {
+        if !items.is_empty() {
+            let items_text: String = items
+                .iter()
+                .map(|item| format!("- {}\n", item.content))
+                .collect();
+            let section =
+                render_catalog_section("loop/session-memory-section", "items", &items_text)?;
+            prompt.push_str("\n\n");
+            prompt.push_str(&section);
+        }
     }
     Ok(prompt)
 }
@@ -2272,6 +2323,45 @@ pub async fn run_agent_once(
     let mut run_tokens: i64 = 0;
     let mut stop_reason = STOP_LIMIT_ROUNDS;
 
+    // WP-0120: Plan-first reasoning mode - before any tool use, produce a
+    // plan, record it as a `plan` step span and a `plan.proposed` event,
+    // and add it to the conversation so the loop follows it (REQ-LOOP-015).
+    if agent.reasoning_mode == "plan_first" {
+        let (plan_prompt, _) =
+            crate::prompts::render_active("loop/plan-first", &[]).map_err(AppError::Validation)?;
+        let mut plan_history = history.clone();
+        plan_history.push(synthetic_message("user", Some(&plan_prompt), None, None));
+        let mut plan_span =
+            trace_service::start(conn, "step", "plan", json!({"lanesra.step.kind": "plan"}));
+        let gateway_outcome = match ai_gateway_service::dispatch(
+            conn,
+            workspace_id,
+            master_key,
+            agent,
+            actor,
+            &system_prompt,
+            &tools,
+            &plan_history,
+            true,
+        )
+        .await
+        {
+            Ok(outcome) => outcome,
+            Err(e) => return Err(end_span_with_error(conn, plan_span, e)),
+        };
+        run_tokens += gateway_outcome.usage.input_tokens + gateway_outcome.usage.output_tokens;
+        let plan_text = final_answer_text(gateway_outcome.outcome);
+        plan_span.body("output", &plan_text);
+        plan_span.end(conn, SpanStatus::Ok, json!({}));
+        trace_service::emit_plan_proposed(
+            conn,
+            json!({"plan": plan_text.chars().take(500).collect::<String>()}),
+        );
+        let plan_msg = synthetic_message("assistant", Some(&plan_text), None, None);
+        history.push(plan_msg.clone());
+        produced.push(plan_msg);
+    }
+
     for round in 0..limits.max_rounds {
         // WP-0111: one model_call span per round; the round's tool calls
         // nest under it, so it closes after them.
@@ -2372,10 +2462,54 @@ pub async fn run_agent_once(
                         continue;
                     }
                 }
-                produced.push(synthetic_message("assistant", Some(&text), None, None));
                 model_span.end(conn, SpanStatus::Ok, json!({}));
+                // WP-0120: Reflect - exactly one self-critique model call
+                // before the final answer (REQ-LOOP-015).
+                let final_text = if agent.reasoning_mode == "reflect" {
+                    let (reflect_prompt, _) =
+                        crate::prompts::render_active("loop/reflect", &[("answer", &text)])
+                            .map_err(AppError::Validation)?;
+                    let mut reflect_history = history.clone();
+                    reflect_history.push(synthetic_message(
+                        "user",
+                        Some(&reflect_prompt),
+                        None,
+                        None,
+                    ));
+                    let mut reflect_span =
+                        start_model_call_span(conn, agent, round + 1, true, &reflect_history);
+                    reflect_span.set("lanesra.reasoning", json!("reflect"));
+                    let call_started = std::time::Instant::now();
+                    let gateway_outcome = match ai_gateway_service::dispatch(
+                        conn,
+                        workspace_id,
+                        master_key,
+                        agent,
+                        actor,
+                        &system_prompt,
+                        &tools,
+                        &reflect_history,
+                        true,
+                    )
+                    .await
+                    {
+                        Ok(outcome) => outcome,
+                        Err(e) => return Err(end_span_with_error(conn, reflect_span, e)),
+                    };
+                    record_model_call(&mut reflect_span, &gateway_outcome, call_started);
+                    reflect_span.end(conn, SpanStatus::Ok, json!({}));
+                    final_answer_text(gateway_outcome.outcome)
+                } else {
+                    text
+                };
+                produced.push(synthetic_message(
+                    "assistant",
+                    Some(&final_text),
+                    None,
+                    None,
+                ));
                 return Ok(AgentRunOutcome {
-                    final_text: text,
+                    final_text,
                     produced,
                     policy_violations,
                     stop_reason: None,

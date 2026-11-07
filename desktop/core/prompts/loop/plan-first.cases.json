@@ -1,0 +1,12 @@
+{
+  "prompt": "loop/plan-first",
+  "note": "Checked by tests/prompt_catalog.rs against the active version.",
+  "cases": [
+    {
+      "name": "asks for a plan and no tool call",
+      "variables": {},
+      "expect_contains": ["short numbered plan", "Do not call any tool yet"],
+      "expect_not_contains": ["{{"]
+    }
+  ]
+}

@@ -486,16 +486,17 @@ async fn pauses_waiting_before_the_upgrade_survive_it() {
     conn.pragma_update(None, "foreign_keys", true).unwrap();
     run_migrations_up_to(&conn, 87).unwrap();
     let ws = setup(conn);
-    let a = agent(&ws, "First");
-    let b = agent(&ws, "Second");
-    let id = pipeline(&ws, "sequential", vec![(&a, true), (&b, false)]);
-    // As the previous release left them: a paused run with no approval row,
-    // and a voice plan waiting for approval that nothing could decide.
+    // As the previous release left them: a paused pipeline run with no approval
+    // row, and a voice plan waiting for approval that nothing could decide. Only
+    // these waiting rows predate the approvals-unification upgrade, so they go in
+    // by hand before it runs; the run is linked to its pipeline below, once the
+    // current release has rebuilt that pipeline on the upgraded schema (the agent
+    // repository reads columns a release this old did not yet have).
     ws.conn
         .execute(
             "INSERT INTO ai_agent_runs (id, workspace_id, target_type, target_id, status, triggered_by, trigger_input, started_at, paused_at_step_order, resume_previous_output)
-             VALUES ('legacy-run', ?1, 'pipeline', ?2, 'awaiting_approval', 'manual', 'Brief on Acme', '2026-10-30T00:00:00Z', 1, 'notes')",
-            [&ws.id, &id],
+             VALUES ('legacy-run', ?1, 'pipeline', 'pending-pipeline', 'awaiting_approval', 'manual', 'Brief on Acme', '2026-10-30T00:00:00Z', 1, 'notes')",
+            [&ws.id],
         )
         .unwrap();
     ws.conn
@@ -512,6 +513,19 @@ async fn pauses_waiting_before_the_upgrade_survive_it() {
         .unwrap();
 
     run_migrations(&ws.conn).unwrap();
+
+    // The pipeline and its agents as the current release builds them, on the
+    // upgraded schema; the waiting run now points at this pipeline so its
+    // approval can resume it.
+    let a = agent(&ws, "First");
+    let b = agent(&ws, "Second");
+    let id = pipeline(&ws, "sequential", vec![(&a, true), (&b, false)]);
+    ws.conn
+        .execute(
+            "UPDATE ai_agent_runs SET target_id = ?1 WHERE id = 'legacy-run'",
+            [&id],
+        )
+        .unwrap();
 
     let inbox = pending(&ws);
     let run_approval = inbox

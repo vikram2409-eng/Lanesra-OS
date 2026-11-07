@@ -12,7 +12,7 @@ use lanesra_core::models::agent_access_inspection::AgentAccessInspection;
 use lanesra_core::models::ai::{AiAgentModelRouting, AiTokenUsageSummary};
 use lanesra_core::models::ai_agent::{
     AiAgentDefinition, AiAgentGuardrailsUpdate, AiAgentInput, AiAgentMemorySnapshot,
-    AiAgentMemoryUpdate, AiAgentVersion, AiAgentVersionInput, AiSkill, AiSkillInput,
+    AiAgentMemoryUpdate, AiAgentVersion, AiAgentVersionInput, AiSkill, AiSkillInput, PersonaInput,
 };
 use lanesra_core::models::ai_agent_policy::{AiAgentPolicy, AiAgentPolicyInput};
 use lanesra_core::models::ai_approval::{AiApproval, AiApprovalInput, AiApprovalResolution};
@@ -131,6 +131,24 @@ pub fn set_ai_agent_guardrails(
         &input.guardrails_md,
         current_actor(&state).as_deref(),
     )
+}
+
+/// WP-0120: an agent's persona (role, goal, background) and reasoning mode.
+#[tauri::command]
+pub fn set_ai_agent_persona(
+    state: State<AppState>,
+    id: String,
+    input: PersonaInput,
+) -> AppResult<AiAgentDefinition> {
+    let conn = state.conn.lock().unwrap();
+    ai_agent_service::set_persona(&conn, &id, &input, current_actor(&state).as_deref())
+}
+
+/// WP-0120: the agent's read-only compiled system prompt.
+#[tauri::command]
+pub fn compiled_ai_agent_prompt(state: State<AppState>, id: String) -> AppResult<String> {
+    let conn = state.conn.lock().unwrap();
+    ai_agent_service::compiled_prompt(&conn, &id, current_actor(&state).as_deref())
 }
 
 /// Phase 7a: an agent's Gateway routing policy - `routing: None` clears
