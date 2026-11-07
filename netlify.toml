@@ -30,6 +30,11 @@
   status = 301
 
 [[redirects]]
+  from = "/github"
+  to = "https://github.com/vikram2409-eng/Lanesra-OS"
+  status = 301
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
