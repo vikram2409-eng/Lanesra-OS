@@ -22,6 +22,7 @@ import type {
   AiAgentPolicyInput,
   AiAgentVersion,
   AiAgentVersionInput,
+  PersonaInput,
   AiApproval,
   AiEvalRun,
   AiEvalSuite,
@@ -203,6 +204,7 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
   const [applyingTemplate, setApplyingTemplate] = useState<string | null>(null);
   const [memoryFor, setMemoryFor] = useState<AiAgentDefinition | null>(null);
   const [guardrailsFor, setGuardrailsFor] = useState<AiAgentDefinition | null>(null);
+  const [personaFor, setPersonaFor] = useState<AiAgentDefinition | null>(null);
   const [routingFor, setRoutingFor] = useState<AiAgentDefinition | null>(null);
   const [toolLimitsFor, setToolLimitsFor] = useState<AiAgentDefinition | null>(null);
   const [actsAsFor, setActsAsFor] = useState<AiAgentDefinition | null>(null);
@@ -250,6 +252,14 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
       setGuardrailsFor(null);
       invalidate();
     },
+  });
+  const savePersona = useMutation({
+    mutationFn: ({ id, input }: { id: string; input: PersonaInput }) => api.setAiAgentPersona(id, input),
+    onSuccess: () => {
+      setPersonaFor(null);
+      invalidate();
+    },
+    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this persona"),
   });
   const saveRouting = useMutation({
     mutationFn: ({ id, routing }: { id: string; routing: AiAgentModelRouting | null }) => api.setAiAgentModelRouting(id, routing),
@@ -366,6 +376,9 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
                       <button className="btn btn-secondary" onClick={() => setGuardrailsFor(a)}>
                         Guardrails
                       </button>
+                      <button className="btn btn-secondary" onClick={() => setPersonaFor(a)}>
+                        Persona
+                      </button>
                       <button className="btn btn-secondary" onClick={() => setRoutingFor(a)}>
                         Routing{a.model_routing && <span className="badge badge-success" style={{ marginLeft: 4 }}>on</span>}
                       </button>
@@ -430,6 +443,15 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
           onCancel={() => setGuardrailsFor(null)}
           onSave={(guardrails_md) => saveGuardrails.mutate({ id: guardrailsFor.id, guardrails_md })}
           pending={saveGuardrails.isPending}
+        />
+      )}
+
+      {personaFor && (
+        <PersonaEditor
+          agent={personaFor}
+          onCancel={() => setPersonaFor(null)}
+          onSave={(input) => savePersona.mutate({ id: personaFor.id, input })}
+          pending={savePersona.isPending}
         />
       )}
 
@@ -587,6 +609,87 @@ function MemoryHistoryPanel({ agentId }: { agentId: string }) {
  * code, consecutive-identical-tool-call loop detection, needs no editable
  * field here).
  */
+/**
+ * WP-0120: the agent's persona (role, goal, background) and reasoning mode,
+ * with a read-only view of the compiled system prompt the model is given.
+ */
+const REASONING_MODES: { value: string; label: string }[] = [
+  { value: "direct", label: "Direct (answer straight away)" },
+  { value: "plan_first", label: "Plan-first (write a plan, shown in the trace, before acting)" },
+  { value: "reflect", label: "Reflect (one self-critique pass before the final answer)" },
+];
+
+function PersonaEditor({
+  agent,
+  onCancel,
+  onSave,
+  pending,
+}: {
+  agent: AiAgentDefinition;
+  onCancel: () => void;
+  onSave: (input: PersonaInput) => void;
+  pending: boolean;
+}) {
+  const [role, setRole] = useState(agent.role);
+  const [goal, setGoal] = useState(agent.goal);
+  const [background, setBackground] = useState(agent.background);
+  const [reasoningMode, setReasoningMode] = useState(agent.reasoning_mode || "direct");
+  const [compiled, setCompiled] = useState<string | null>(null);
+  const compiledQuery = useMutation({
+    mutationFn: () => api.compiledAiAgentPrompt(agent.id),
+    onSuccess: (text) => setCompiled(text),
+  });
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3 style={{ marginTop: 0 }}>
+        {agent.icon} {agent.name}'s persona &amp; reasoning
+      </h3>
+      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+        A short role, goal and background are compiled into this agent's system prompt alongside its instructions, memory, guardrails
+        and the object types it is scoped to. The reasoning mode changes how it works through a task.
+      </p>
+      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+        Role
+        <input style={{ width: "100%", marginTop: 4 }} value={role} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Billing specialist" />
+      </label>
+      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+        Goal
+        <input style={{ width: "100%", marginTop: 4 }} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="e.g. resolve invoice disputes quickly and accurately" />
+      </label>
+      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+        Background
+        <textarea style={{ width: "100%", marginTop: 4, minHeight: 70 }} value={background} onChange={(e) => setBackground(e.target.value)} placeholder="e.g. follows the finance team's playbook and escalates anything over $10,000" />
+      </label>
+      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+        Reasoning mode
+        <select style={{ display: "block", marginTop: 4 }} value={reasoningMode} onChange={(e) => setReasoningMode(e.target.value)}>
+          {REASONING_MODES.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <button className="btn btn-primary" onClick={() => onSave({ role, goal, background, reasoning_mode: reasoningMode })} disabled={pending}>
+          {pending ? "Saving..." : "Save persona"}
+        </button>
+        <button className="btn btn-secondary" onClick={() => compiledQuery.mutate()} disabled={compiledQuery.isPending}>
+          {compiledQuery.isPending ? "Loading..." : "View compiled prompt"}
+        </button>
+        <button className="btn btn-secondary" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+      {compiled !== null && (
+        <pre style={{ marginTop: 10, padding: 10, background: "var(--bg-subtle, #f6f6f6)", borderRadius: 6, whiteSpace: "pre-wrap", fontSize: 12, maxHeight: 320, overflow: "auto" }}>
+          {compiled || "(empty)"}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function GuardrailsEditor({
   agent,
   onCancel,

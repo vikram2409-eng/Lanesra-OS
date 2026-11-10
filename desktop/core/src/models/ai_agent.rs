@@ -28,6 +28,16 @@ pub struct AiAgentDefinition {
     pub description: Option<String>,
     pub icon: String,
     pub system_prompt: String,
+    /// WP-0120: the agent's persona - a short role, goal and background
+    /// compiled into its system prompt (REQ-CORE-001/002). Each defaults
+    /// `""`, set by its own admin action (`ai_agent_service::set_persona`),
+    /// the same separate-from-the-create/update-form shape `memory_md` and
+    /// `guardrails_md` use. Empty persona means today's behaviour unchanged.
+    pub role: String,
+    pub goal: String,
+    pub background: String,
+    /// WP-0120: `direct` (default), `plan_first` or `reflect` (REQ-LOOP-015).
+    pub reasoning_mode: String,
     /// A living document this agent reads every run and can revise itself
     /// via the always-available `update_memory` tool - see
     /// `chat_service`'s own doc comment. Never `null`, only ever `""`
@@ -185,6 +195,11 @@ pub struct AiAgentVersion {
     pub description: Option<String>,
     pub icon: String,
     pub system_prompt: String,
+    /// WP-0120: the persona snapshotted into this version.
+    pub role: String,
+    pub goal: String,
+    pub background: String,
+    pub reasoning_mode: String,
     pub memory_md: String,
     pub guardrails_md: String,
     pub action_names: Vec<String>,
@@ -210,6 +225,31 @@ pub struct AiAgentVersionInput {
     pub skill_ids: Vec<String>,
     pub model_routing: Option<AiAgentModelRouting>,
     pub output_schema: Option<serde_json::Value>,
+}
+
+/// WP-0120: the reasoning modes an agent can run in (REQ-LOOP-015).
+/// `direct` is today's behaviour; `plan_first` produces a plan shown in the
+/// trace before any tool use; `reflect` makes one self-critique model call
+/// before the final answer.
+pub const REASONING_MODES: &[&str] = &["direct", "plan_first", "reflect"];
+
+/// WP-0120: the agent persona and reasoning mode, set by its own admin
+/// action (`ai_agent_service::set_persona`) - the same separate-from-the-
+/// create/update-form shape `memory_md`/`guardrails_md`/`model_routing` use.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PersonaInput {
+    #[serde(default)]
+    pub role: String,
+    #[serde(default)]
+    pub goal: String,
+    #[serde(default)]
+    pub background: String,
+    #[serde(default = "default_reasoning_mode")]
+    pub reasoning_mode: String,
+}
+
+fn default_reasoning_mode() -> String {
+    "direct".to_string()
 }
 
 /// A deliberately small JSON Schema subset (`type`, `required`,

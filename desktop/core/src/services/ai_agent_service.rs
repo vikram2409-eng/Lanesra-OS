@@ -387,6 +387,48 @@ pub fn set_guardrails(
     Ok(ai_agent_repo::get(conn, id)?.expect("just updated"))
 }
 
+/// WP-0120: the agent's compiled system prompt - persona, instructions,
+/// memory digest, guardrails, skills and ontology context - shown read-only
+/// so an admin can see exactly what the model is told (REQ-CORE-002). It
+/// omits per-run session memory, so it is deterministic for the same agent.
+pub fn compiled_prompt(
+    conn: &Connection,
+    id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<String> {
+    require_admin(conn, actor_user_id)?;
+    let agent = ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
+    super::chat_service::compile_agent_prompt(conn, &agent)
+}
+
+/// WP-0120: set the agent's persona (role, goal, background) and reasoning
+/// mode. Its own admin action, the same shape as `set_guardrails`.
+pub fn set_persona(
+    conn: &Connection,
+    id: &str,
+    input: &crate::models::ai_agent::PersonaInput,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiAgentDefinition> {
+    require_admin(conn, actor_user_id)?;
+    ai_agent_repo::get(conn, id)?.ok_or_else(|| AppError::NotFound("Agent".into()))?;
+    let mode = input.reasoning_mode.trim();
+    if !crate::models::ai_agent::REASONING_MODES.contains(&mode) {
+        return Err(AppError::Validation(format!(
+            "reasoning_mode must be one of {:?}",
+            crate::models::ai_agent::REASONING_MODES
+        )));
+    }
+    ai_agent_repo::set_persona(
+        conn,
+        id,
+        input.role.trim(),
+        input.goal.trim(),
+        input.background.trim(),
+        mode,
+    )?;
+    Ok(ai_agent_repo::get(conn, id)?.expect("just updated"))
+}
+
 /// Phase 7b: most-recent-first history of this agent's `memory_md`
 /// changes - read-only, Administrator only (same visibility as the rest
 /// of an agent's configuration).
