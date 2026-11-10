@@ -159,7 +159,7 @@ fn tables_containing(conn: &rusqlite::Connection, needle: &str) -> Vec<String> {
     let mut found = Vec::new();
     for table in tables {
         let mut stmt = conn.prepare(&format!("SELECT * FROM \"{table}\"")).unwrap();
-        let columns: Vec<String> = stmt.column_names().iter().map(|c| c.to_string()).collect();
+        let columns: Vec<String> = stmt.column_names().map(|c| c.to_string()).collect();
         let mut rows = stmt.query([]).unwrap();
         while let Some(row) = rows.next().unwrap() {
             for (i, column) in columns.iter().enumerate() {
