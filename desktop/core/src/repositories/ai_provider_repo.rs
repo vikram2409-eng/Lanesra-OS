@@ -20,6 +20,7 @@ fn map_row(row: &rusqlite::Row) -> rusqlite::Result<AiProvider> {
         model: row.get("model")?,
         has_key: secret_id.is_some(),
         is_active: row.get("is_active")?,
+        is_local: row.get("is_local")?,
         created_at: row.get("created_at")?,
         created_by: row.get("created_by")?,
         updated_at: row.get("updated_at")?,
@@ -102,6 +103,22 @@ pub fn set_active(
     conn.execute(
         "UPDATE ai_providers SET is_active = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4",
         rusqlite::params![is_active, now, actor_user_id, id],
+    )?;
+    get(conn, id).map(|p| p.expect("just updated"))
+}
+
+/// WP-0123: mark (or unmark) this provider as local, non-egressing
+/// infrastructure - the only kind the Gateway will route air-gapped data to.
+pub fn set_local(
+    conn: &Connection,
+    id: &str,
+    is_local: bool,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<AiProvider> {
+    let now = now_iso();
+    conn.execute(
+        "UPDATE ai_providers SET is_local = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4",
+        rusqlite::params![is_local, now, actor_user_id, id],
     )?;
     get(conn, id).map(|p| p.expect("just updated"))
 }

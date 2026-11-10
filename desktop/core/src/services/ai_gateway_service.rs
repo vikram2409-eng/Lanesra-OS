@@ -68,6 +68,11 @@ pub(crate) struct ResolvedTier {
     pub(crate) base_url: Option<String>,
     pub(crate) model: String,
     pub(crate) api_key: String,
+    /// WP-0123: whether the resolved `ai_providers` row is marked local.
+    /// The workspace-default resolution (`provider_id == None`) is never a
+    /// designated-local provider, so it is always false there; forced
+    /// air-gap routing requires this to be true before it will dispatch.
+    pub(crate) is_local: bool,
 }
 
 /// `None` resolves to the workspace's plain `ai_settings` row - see this
@@ -117,6 +122,7 @@ pub(crate) fn resolve_tier(
                 base_url: provider.base_url,
                 model: provider.model,
                 api_key,
+                is_local: provider.is_local,
             })
         }
         None => {
@@ -143,9 +149,43 @@ pub(crate) fn resolve_tier(
                 base_url: settings.base_url,
                 model: settings.model,
                 api_key,
+                is_local: false,
             })
         }
     }
+}
+
+/// WP-0123 (gap audit I-17): forced air-gap fails closed. When a step's
+/// outbound payload is sensitive but no genuinely-local provider is
+/// available - none configured for the air-gap tier, or the configured one
+/// is not marked local - the dispatch errors rather than quietly resolving
+/// the workspace default (which may be a cloud provider).
+fn not_local_error() -> AppError {
+    AppError::classified(
+        ErrorClass::Configuration,
+        "config.not_local",
+        "Forced air-gap is enabled but no local provider is available",
+    )
+}
+
+/// The System-tier daily token budget (`ai_settings.daily_token_budget`):
+/// a workspace-wide ceiling checked for every dispatch, agent or not. WP-0123
+/// routes the Assistant chat through here too (gap audit I-15), so the check
+/// lives in one place.
+fn check_system_budget(
+    conn: &Connection,
+    workspace_id: &str,
+    settings: &crate::models::ai::AiSettings,
+) -> AppResult<()> {
+    if let Some(budget) = settings.daily_token_budget {
+        let (input, output) = ai_token_usage_repo::today_totals_for_workspace(conn, workspace_id)?;
+        if input + output >= budget {
+            return Err(AppError::Validation(format!(
+                "This workspace's daily AI token budget ({budget}) has been reached - try again tomorrow, or raise it in Admin -> LLM & MCP -> Gateway."
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// The error for a model call that ran past the agent's time limit. The
@@ -203,14 +243,7 @@ pub async fn dispatch(
 
     // System tier: applies to every agent run, routed or not.
     let settings = ai_settings_repo::ensure_default(conn, workspace_id)?;
-    if let Some(budget) = settings.daily_token_budget {
-        let (input, output) = ai_token_usage_repo::today_totals_for_workspace(conn, workspace_id)?;
-        if input + output >= budget {
-            return Err(AppError::Validation(format!(
-                "This workspace's daily AI token budget ({budget}) has been reached - try again tomorrow, or raise it in Admin -> LLM & MCP -> Gateway."
-            )));
-        }
-    }
+    check_system_budget(conn, workspace_id, &settings)?;
 
     let routing = match agent.model_routing.clone() {
         Some(r) => r,
@@ -280,10 +313,14 @@ pub async fn dispatch(
         .any(|m| routing.force_air_gapped_for.iter().any(|c| c == m));
 
     let tiers: Vec<(&'static str, Option<&str>)> = if forced_air_gap {
-        vec![(
-            "local_fallback",
-            routing.local_fallback_provider_id.as_deref(),
-        )]
+        // WP-0123 (I-17): air-gapped data goes only to an explicitly-set
+        // local provider. With none configured, fail closed here rather than
+        // letting `resolve_tier(None)` fall back to the workspace default
+        // (which may be a cloud provider).
+        match routing.local_fallback_provider_id.as_deref() {
+            Some(pid) => vec![("local_fallback", Some(pid))],
+            None => return Err(not_local_error()),
+        }
     } else {
         vec![
             ("primary", routing.primary_provider_id.as_deref()),
@@ -311,6 +348,14 @@ pub async fn dispatch(
                 continue;
             }
         };
+
+        // WP-0123 (I-17): under forced air-gap the tier must be a provider an
+        // administrator marked local. A resolvable but non-local provider -
+        // say `local_fallback` was pointed at a cloud endpoint by mistake -
+        // never receives the sensitive payload; fail closed instead.
+        if forced_air_gap && !resolved.is_local {
+            return Err(not_local_error());
+        }
 
         // Transient failures retry on this tier first (ADR-0009 §1); the
         // time limit covers the tier's attempts together.
@@ -392,11 +437,7 @@ pub async fn dispatch(
                         if forced_air_gap && error_class == ErrorClass::Configuration {
                             // Under forced air-gap, configuration errors fail closed
                             // with config.not_local (never fall back to cloud)
-                            return Err(AppError::classified(
-                                ErrorClass::Configuration,
-                                "config.not_local",
-                                "Forced air-gap is enabled but no local provider is available",
-                            ));
+                            return Err(not_local_error());
                         }
                         // Move to next tier
                         last_err = Some(e);
@@ -414,6 +455,50 @@ pub async fn dispatch(
     Err(last_err.unwrap_or_else(|| {
         AppError::Validation("No AI provider tier is configured for this agent".into())
     }))
+}
+
+/// WP-0123 (gap audit I-15): the Assistant chat (records and admin modes,
+/// `chat_service::send_message`) has no agent and therefore no
+/// `AiAgentModelRouting`, so it cannot have per-agent failover or forced
+/// air-gap. It used to call `ai_service::complete_with_tools` directly,
+/// skipping the Gateway entirely - which also skipped the System-tier daily
+/// budget. It now goes through here: the workspace-wide daily budget is
+/// enforced and the call's real token usage is recorded on the same single
+/// path every agent run already uses. `usage_agent_id` is the `agent_id`
+/// column the usage row is keyed by (the empty-string "not an agent run"
+/// sentinel for the Assistant).
+pub async fn dispatch_workspace_default(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    usage_agent_id: &str,
+    actor: Option<&str>,
+    system_prompt: &str,
+    tools: &[ToolSpec],
+    history: &[ChatMessage],
+    opts: CallOptions,
+) -> AppResult<(CompletionOutcome, TokenUsage)> {
+    let settings = ai_settings_repo::ensure_default(conn, workspace_id)?;
+    check_system_budget(conn, workspace_id, &settings)?;
+    let (outcome, usage) = ai_service::complete_with_tools(
+        conn,
+        workspace_id,
+        master_key,
+        system_prompt,
+        tools,
+        history,
+        opts,
+    )
+    .await?;
+    ai_token_usage_repo::increment(
+        conn,
+        workspace_id,
+        usage_agent_id,
+        actor.unwrap_or(""),
+        usage.input_tokens,
+        usage.output_tokens,
+    )?;
+    Ok((outcome, usage))
 }
 
 /// The Gateway health view's own data source (Admin -> LLM & MCP ->

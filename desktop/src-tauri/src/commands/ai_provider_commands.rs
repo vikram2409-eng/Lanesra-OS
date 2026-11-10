@@ -64,6 +64,16 @@ pub fn set_ai_provider_active(
 }
 
 #[tauri::command]
+pub fn set_ai_provider_local(
+    state: State<AppState>,
+    id: String,
+    is_local: bool,
+) -> AppResult<AiProvider> {
+    let conn = state.conn.lock().unwrap();
+    ai_provider_service::set_local(&conn, &id, is_local, current_actor(&state).as_deref())
+}
+
+#[tauri::command]
 pub async fn test_ai_provider_key(
     state: State<'_, AppState>,
     id: String,

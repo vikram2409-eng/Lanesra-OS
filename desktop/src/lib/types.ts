@@ -2475,6 +2475,9 @@ export interface AiProvider {
   model: string;
   has_key: boolean;
   is_active: boolean;
+  /** WP-0123: runs on local, non-egressing infrastructure, so a step with
+   * air-gapped (force_air_gapped_for) data may be routed to it. */
+  is_local: boolean;
   created_at: string;
   created_by: string | null;
   updated_at: string;

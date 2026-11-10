@@ -1123,28 +1123,26 @@ pub async fn send_message(
     let sys_prompt = system_prompt(mode)?;
     for _round in 0..limits.max_rounds {
         let history = chat_repo::list_messages(conn, &conversation.id)?;
-        let (outcome, usage) = ai_service::complete_with_tools(
+        // WP-0123 (gap audit I-15): the Assistant chat now goes through the
+        // Gateway's workspace-default path instead of calling
+        // `ai_service::complete_with_tools` directly, so the System-tier
+        // daily budget is enforced and token usage is recorded on the one
+        // shared path. agent_id "" is the "not an agent run" sentinel
+        // `ai_token_usage_repo`'s own doc comment describes, matching
+        // `chat_conversations.agent_id`'s convention. There is no agent
+        // here, so there is no per-agent failover or forced air-gap to apply.
+        let (outcome, _usage) = ai_gateway_service::dispatch_workspace_default(
             conn,
             workspace_id,
             master_key,
+            "",
+            Some(user_id),
             &sys_prompt,
             &tools,
             &history,
             CallOptions::default(),
         )
         .await?;
-        // Phase 7a: recorded for Gateway health-view visibility even on
-        // this plain (no-agent) path - agent_id "" is the same "not an
-        // agent run" sentinel `ai_token_usage_repo`'s own doc comment
-        // describes, matching `chat_conversations.agent_id`'s convention.
-        let _ = ai_token_usage_repo::increment(
-            conn,
-            workspace_id,
-            "",
-            user_id,
-            usage.input_tokens,
-            usage.output_tokens,
-        );
         match outcome {
             CompletionOutcome::Text(text) => {
                 appended.push(chat_repo::append_message(
