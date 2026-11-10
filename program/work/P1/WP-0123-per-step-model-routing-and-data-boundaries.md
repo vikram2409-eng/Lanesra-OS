@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: [desktop, workspace, demo]
 docs: [unified-ai-gateway]
 branch: claude/enterprise-build-planning-jxy2kq
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/744
 updated: 2026-11-10
 ---
 
