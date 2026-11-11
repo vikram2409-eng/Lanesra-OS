@@ -197,21 +197,18 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
   const connectorTools = connectorToolsQuery.data ?? [];
   const mcpTools = mcpToolsQuery.data ?? [];
 
-  const [editing, setEditing] = useState<AiAgentDefinition | null>(null);
+  // WP-0160 Stage 1a: the ten per-agent config modals are consolidated into
+  // one grouped AgentSetupPanel, opened by a single "Set up" button. The
+  // panel owns its own save mutations; this component keeps only create,
+  // templates and the active toggle.
+  const [setupForId, setSetupForId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [templateError, setTemplateError] = useState<string | null>(null);
   const [applyingTemplate, setApplyingTemplate] = useState<string | null>(null);
-  const [memoryFor, setMemoryFor] = useState<AiAgentDefinition | null>(null);
-  const [guardrailsFor, setGuardrailsFor] = useState<AiAgentDefinition | null>(null);
-  const [personaFor, setPersonaFor] = useState<AiAgentDefinition | null>(null);
-  const [routingFor, setRoutingFor] = useState<AiAgentDefinition | null>(null);
-  const [toolLimitsFor, setToolLimitsFor] = useState<AiAgentDefinition | null>(null);
-  const [actsAsFor, setActsAsFor] = useState<AiAgentDefinition | null>(null);
   const [inspectingAccess, setInspectingAccess] = useState(false);
-  const [versionsFor, setVersionsFor] = useState<AiAgentDefinition | null>(null);
-  const [triggersFor, setTriggersFor] = useState<AiAgentDefinition | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const setupAgent = setupForId ? agents.find((a) => a.id === setupForId) ?? null : null;
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["aiAgents"] });
@@ -219,63 +216,18 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
 
   const create = useMutation({
     mutationFn: (input: AiAgentInput) => api.createAiAgent(input),
-    onSuccess: () => {
+    onSuccess: (agent) => {
       setCreating(false);
       setError(null);
       invalidate();
+      // Drop straight into the grouped setup for the new agent.
+      setSetupForId(agent.id);
     },
     onError: (err) => setError(err instanceof ApiError ? err.message : "Could not create this agent"),
-  });
-  const update = useMutation({
-    mutationFn: ({ id, input }: { id: string; input: AiAgentInput }) => api.updateAiAgent(id, input),
-    onSuccess: () => {
-      setEditing(null);
-      setError(null);
-      invalidate();
-    },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this agent"),
   });
   const toggleActive = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => api.setAiAgentActive(id, isActive),
     onSuccess: invalidate,
-  });
-  const saveMemory = useMutation({
-    mutationFn: ({ id, memory_md }: { id: string; memory_md: string }) => api.setAiAgentMemory(id, { memory_md }),
-    onSuccess: () => {
-      setMemoryFor(null);
-      invalidate();
-    },
-  });
-  const saveGuardrails = useMutation({
-    mutationFn: ({ id, guardrails_md }: { id: string; guardrails_md: string }) => api.setAiAgentGuardrails(id, { guardrails_md }),
-    onSuccess: () => {
-      setGuardrailsFor(null);
-      invalidate();
-    },
-  });
-  const savePersona = useMutation({
-    mutationFn: ({ id, input }: { id: string; input: PersonaInput }) => api.setAiAgentPersona(id, input),
-    onSuccess: () => {
-      setPersonaFor(null);
-      invalidate();
-    },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this persona"),
-  });
-  const saveRouting = useMutation({
-    mutationFn: ({ id, routing }: { id: string; routing: AiAgentModelRouting | null }) => api.setAiAgentModelRouting(id, routing),
-    onSuccess: () => {
-      setRoutingFor(null);
-      invalidate();
-    },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this agent's routing"),
-  });
-  const saveActsAs = useMutation({
-    mutationFn: ({ id, actsAsUserId }: { id: string; actsAsUserId: string | null }) => api.setAiAgentActsAs(id, actsAsUserId),
-    onSuccess: () => {
-      setActsAsFor(null);
-      invalidate();
-    },
-    onError: (err) => setError(err instanceof ApiError ? err.message : "Could not save this agent's Acts As identity"),
   });
 
   // Agent Studio 2.0 (issue #196): "preconfigured starting tool/policy/
@@ -296,7 +248,7 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
       }
       invalidate();
       setShowTemplates(false);
-      setEditing(agent);
+      setSetupForId(agent.id);
     } catch (err) {
       setTemplateError(err instanceof ApiError ? err.message : "Could not create this agent from the template");
     } finally {
@@ -366,34 +318,12 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
                     <span className={`badge${a.is_active ? " badge-success" : ""}`}>{a.is_active ? "Active" : "Inactive"}</span>
                   </td>
                   <td>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button className="btn btn-secondary" onClick={() => setEditing(a)}>
-                        Edit
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                      <button className="btn btn-primary" onClick={() => setSetupForId(a.id)}>
+                        Set up
                       </button>
-                      <button className="btn btn-secondary" onClick={() => setMemoryFor(a)}>
-                        Memory
-                      </button>
-                      <button className="btn btn-secondary" onClick={() => setGuardrailsFor(a)}>
-                        Guardrails
-                      </button>
-                      <button className="btn btn-secondary" onClick={() => setPersonaFor(a)}>
-                        Persona
-                      </button>
-                      <button className="btn btn-secondary" onClick={() => setRoutingFor(a)}>
-                        Routing{a.model_routing && <span className="badge badge-success" style={{ marginLeft: 4 }}>on</span>}
-                      </button>
-                      <button className="btn btn-secondary" onClick={() => setToolLimitsFor(a)}>
-                        Tool limits
-                      </button>
-                      <button className="btn btn-secondary" onClick={() => setActsAsFor(a)}>
-                        Acts as{a.acts_as_user_id && <span className="badge badge-success" style={{ marginLeft: 4 }}>set</span>}
-                      </button>
-                      <button className="btn btn-secondary" onClick={() => setVersionsFor(a)}>
-                        Versions
-                      </button>
-                      <button className="btn btn-secondary" onClick={() => setTriggersFor(triggersFor?.id === a.id ? null : a)}>
-                        Triggers
-                      </button>
+                      {a.model_routing && <span className="badge badge-success" title="Model routing is configured">Routing</span>}
+                      {a.acts_as_user_id && <span className="badge badge-success" title="Runs as an Agent Identity">Acts as</span>}
                       <button className="btn btn-secondary" onClick={() => toggleActive.mutate({ id: a.id, isActive: !a.is_active })}>
                         {a.is_active ? "Deactivate" : "Reactivate"}
                       </button>
@@ -407,76 +337,36 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
         </div>
       </div>
 
-      {(creating || editing) && (
+      {creating && (
         <AiAgentForm
-          initial={editing ?? undefined}
+          initial={undefined}
           agents={agents}
           skills={skills}
           connectorTools={connectorTools}
           mcpTools={mcpTools}
-          onOpenRouting={() => editing && setRoutingFor(editing)}
-          onOpenMemory={() => editing && setMemoryFor(editing)}
-          onOpenGuardrails={() => editing && setGuardrailsFor(editing)}
-          onOpenVersions={() => editing && setVersionsFor(editing)}
-          onOpenTriggers={() => editing && setTriggersFor(editing)}
-          onCancel={() => {
-            setCreating(false);
-            setEditing(null);
-          }}
-          onSubmit={(input) => (editing ? update.mutate({ id: editing.id, input }) : create.mutate(input))}
-          pending={create.isPending || update.isPending}
+          onOpenRouting={() => {}}
+          onOpenMemory={() => {}}
+          onOpenGuardrails={() => {}}
+          onOpenVersions={() => {}}
+          onOpenTriggers={() => {}}
+          onCancel={() => setCreating(false)}
+          onSubmit={(input) => create.mutate(input)}
+          pending={create.isPending}
         />
       )}
 
-      {memoryFor && (
-        <MemoryEditor
-          agent={memoryFor}
-          onCancel={() => setMemoryFor(null)}
-          onSave={(memory_md) => saveMemory.mutate({ id: memoryFor.id, memory_md })}
-          pending={saveMemory.isPending}
-        />
-      )}
-
-      {guardrailsFor && (
-        <GuardrailsEditor
-          agent={guardrailsFor}
-          onCancel={() => setGuardrailsFor(null)}
-          onSave={(guardrails_md) => saveGuardrails.mutate({ id: guardrailsFor.id, guardrails_md })}
-          pending={saveGuardrails.isPending}
-        />
-      )}
-
-      {personaFor && (
-        <PersonaEditor
-          agent={personaFor}
-          onCancel={() => setPersonaFor(null)}
-          onSave={(input) => savePersona.mutate({ id: personaFor.id, input })}
-          pending={savePersona.isPending}
-        />
-      )}
-
-      {routingFor && (
-        <ModelRoutingEditor
-          agent={routingFor}
+      {setupAgent && (
+        <AgentSetupPanel
+          agent={setupAgent}
+          agents={agents}
+          skills={skills}
           providers={providers}
-          onCancel={() => setRoutingFor(null)}
-          onSave={(routing) => saveRouting.mutate({ id: routingFor.id, routing })}
-          pending={saveRouting.isPending}
+          connectorTools={connectorTools}
+          mcpTools={mcpTools}
+          onClose={() => setSetupForId(null)}
+          onOpenHelp={onOpenHelp}
         />
       )}
-
-      {toolLimitsFor && <ToolLimitsEditor key={toolLimitsFor.id} agent={toolLimitsFor} onClose={() => setToolLimitsFor(null)} />}
-
-      {actsAsFor && (
-        <ActsAsEditor
-          agent={actsAsFor}
-          onCancel={() => setActsAsFor(null)}
-          onSave={(actsAsUserId) => saveActsAs.mutate({ id: actsAsFor.id, actsAsUserId })}
-          pending={saveActsAs.isPending}
-        />
-      )}
-
-      {versionsFor && <VersionsPanel agent={versionsFor} agents={agents} skills={skills} connectorTools={connectorTools} mcpTools={mcpTools} />}
 
       <ApprovalsPanel />
 
@@ -501,23 +391,142 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
 
       <McpServersPanel />
 
-      {triggersFor && (
-        <div className="card" style={{ marginTop: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h3 style={{ margin: 0 }}>
-              {triggersFor.icon} {triggersFor.name}'s triggers
-            </h3>
-            <button className="btn btn-secondary" onClick={() => setTriggersFor(null)}>
-              Close
-            </button>
-          </div>
-          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
-            Runs unattended (schedule or webhook) have no human actor - see this agent's own Actions: only a record-only agent can run this
-            way, unless the trigger runs with a real Administrator behind it.
-          </p>
-          <AiTriggersPanel targetType="agent" targetId={triggersFor.id} />
+    </div>
+  );
+}
+
+// WP-0160 Stage 1a: one grouped home for an existing agent's whole setup,
+// replacing the ten separate per-row modal buttons. Each group reuses the
+// existing editor inline and saves through its own endpoint; the panel owns
+// those mutations so a save refreshes the list without closing the panel.
+// Persona lives under the Job group (REQ-SETUP-001; the Persona -> Job
+// merge). Stage 1b splits Basics into the Identity/Job/Tools/Data groups and
+// unifies the Job save; Stage 2 adds risk/cost badges, effect notes and
+// "Using defaults" states.
+type SetupGroup = "basics" | "persona" | "knowledge" | "safety" | "model" | "identity" | "publish" | "run";
+
+export function AgentSetupPanel({
+  agent,
+  agents,
+  skills,
+  providers,
+  connectorTools,
+  mcpTools,
+  onClose,
+  onOpenHelp,
+}: {
+  agent: AiAgentDefinition;
+  agents: AiAgentDefinition[];
+  skills: AiSkill[];
+  providers: AiProvider[];
+  connectorTools: AgentConnectorToolOption[];
+  mcpTools: AgentMcpToolOption[];
+  onClose: () => void;
+  onOpenHelp: (slug: string) => void;
+}) {
+  const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["aiAgents"] });
+  const [tab, setTab] = useState<SetupGroup>("basics");
+  const [error, setError] = useState<string | null>(null);
+  const onErr = (fallback: string) => (err: unknown) => setError(err instanceof ApiError ? err.message : fallback);
+
+  const update = useMutation({
+    mutationFn: (input: AiAgentInput) => api.updateAiAgent(agent.id, input),
+    onSuccess: () => {
+      setError(null);
+      invalidate();
+    },
+    onError: onErr("Could not save this agent"),
+  });
+  const saveMemory = useMutation({ mutationFn: (memory_md: string) => api.setAiAgentMemory(agent.id, { memory_md }), onSuccess: invalidate, onError: onErr("Could not save memory") });
+  const saveGuardrails = useMutation({ mutationFn: (guardrails_md: string) => api.setAiAgentGuardrails(agent.id, { guardrails_md }), onSuccess: invalidate, onError: onErr("Could not save guardrails") });
+  const savePersona = useMutation({ mutationFn: (input: PersonaInput) => api.setAiAgentPersona(agent.id, input), onSuccess: invalidate, onError: onErr("Could not save this persona") });
+  const saveRouting = useMutation({ mutationFn: (routing: AiAgentModelRouting | null) => api.setAiAgentModelRouting(agent.id, routing), onSuccess: invalidate, onError: onErr("Could not save this agent's routing") });
+  const saveActsAs = useMutation({ mutationFn: (actsAsUserId: string | null) => api.setAiAgentActsAs(agent.id, actsAsUserId), onSuccess: invalidate, onError: onErr("Could not save this agent's Acts As identity") });
+
+  const GROUPS: [SetupGroup, string, string][] = [
+    ["basics", "Agent", "Identity, job, tools and data access"],
+    ["persona", "Persona", "Role, goal, background and reasoning mode — part of the agent's job"],
+    ["knowledge", "Knowledge & memory", "What the agent remembers between runs"],
+    ["safety", "Safety", "Guardrails, approval thresholds and per-tool caps"],
+    ["model", "Model & cost", "Model routing, budgets and air-gapped data boundaries"],
+    ["identity", "Identity", "Which identity the agent acts as when it runs unattended"],
+    ["publish", "Test & publish", "Versions and the draft → published lifecycle"],
+    ["run", "Run & triggers", "Schedules and webhooks that invoke the agent"],
+  ];
+  const note = GROUPS.find(([k]) => k === tab)?.[2];
+
+  return (
+    <div className="card" style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <h3 style={{ margin: 0 }}>
+          {agent.icon} {agent.name} — set up
+        </h3>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button className="btn btn-secondary" onClick={() => onOpenHelp("build-your-first-agent")}>
+            Guide
+          </button>
+          <button className="btn btn-secondary" onClick={onClose}>
+            Close
+          </button>
         </div>
-      )}
+      </div>
+      {error && <div className="error-banner">{error}</div>}
+      <div className="tab-row" style={{ flexWrap: "wrap", marginTop: 8 }}>
+        {GROUPS.map(([k, label]) => (
+          <button key={k} type="button" className={`tab${tab === k ? " active" : ""}`} onClick={() => setTab(k)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {note && <p style={{ fontSize: 12.5, color: "var(--text-muted)", margin: "8px 2px 0" }}>{note}</p>}
+
+      <div style={{ marginTop: 12 }}>
+        {tab === "basics" && (
+          <AiAgentForm
+            initial={agent}
+            agents={agents}
+            skills={skills}
+            connectorTools={connectorTools}
+            mcpTools={mcpTools}
+            onOpenRouting={() => setTab("model")}
+            onOpenMemory={() => setTab("knowledge")}
+            onOpenGuardrails={() => setTab("safety")}
+            onOpenVersions={() => setTab("publish")}
+            onOpenTriggers={() => setTab("run")}
+            onCancel={onClose}
+            onSubmit={(input) => update.mutate(input)}
+            pending={update.isPending}
+          />
+        )}
+        {tab === "persona" && (
+          <PersonaEditor agent={agent} onCancel={() => setTab("basics")} onSave={(input) => savePersona.mutate(input)} pending={savePersona.isPending} />
+        )}
+        {tab === "knowledge" && (
+          <MemoryEditor agent={agent} onCancel={() => setTab("basics")} onSave={(memory_md) => saveMemory.mutate(memory_md)} pending={saveMemory.isPending} />
+        )}
+        {tab === "safety" && (
+          <>
+            <GuardrailsEditor agent={agent} onCancel={() => setTab("basics")} onSave={(guardrails_md) => saveGuardrails.mutate(guardrails_md)} pending={saveGuardrails.isPending} />
+            <ToolLimitsEditor key={agent.id} agent={agent} onClose={() => setTab("basics")} />
+          </>
+        )}
+        {tab === "model" && (
+          <ModelRoutingEditor agent={agent} providers={providers} onCancel={() => setTab("basics")} onSave={(routing) => saveRouting.mutate(routing)} pending={saveRouting.isPending} />
+        )}
+        {tab === "identity" && (
+          <ActsAsEditor agent={agent} onCancel={() => setTab("basics")} onSave={(actsAsUserId) => saveActsAs.mutate(actsAsUserId)} pending={saveActsAs.isPending} />
+        )}
+        {tab === "publish" && <VersionsPanel agent={agent} agents={agents} skills={skills} connectorTools={connectorTools} mcpTools={mcpTools} />}
+        {tab === "run" && (
+          <div>
+            <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0 }}>
+              An unattended run (schedule or webhook) has no human actor: only a record-only agent can run this way, unless the trigger runs with a real Administrator behind it.
+            </p>
+            <AiTriggersPanel targetType="agent" targetId={agent.id} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
