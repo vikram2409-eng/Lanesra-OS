@@ -1,6 +1,6 @@
 # When a work package finishes
 
-Every AI (Claude Code or Muse AI) and every person runs this list before a work package goes to
+Every AI (Claude Code, Codex or Muse AI) and every person runs this list before a work package goes to
 review, and again after it merges. The program dashboard shows the same list; `programctl brief`
 puts it on every task card. Steps are grouped by when they happen.
 
@@ -29,6 +29,7 @@ Format (parsed by `programctl export`, keep it): `## Group` headings, then `- [ 
 - [ ] **Work package file updated** — `status: in_review`, `owner`, `pr`, `updated`; a final Progress log entry (done, state, next, gotchas)
 - [ ] **Session log written** — `programctl new-log`; include points completed and tokens used if visible
 - [ ] **Decisions captured** — an ADR in `program/decisions/` for any design choice others must follow
+- [ ] **Design kept current** — if the work fixed or changed a table, endpoint, event, state or rule described in `program/design/SOLUTION-DESIGN.md`, that section is updated in the same pull request (the dashboard Design tab renders it)
 - [ ] **Risks and questions logged** — new risks, issues or owner questions in `program/RAID.md`; resolved ones closed with a date
 - [ ] **Repo docs updated** — `README.md` feature list, `desktop/README.md` ("What's here") and the API reference where behaviour changed
 - [ ] **Licences and security** — `THIRD_PARTY_NOTICES` for any new dependency; threat model updated if tools, approvals, auth or data access changed
@@ -39,11 +40,11 @@ Format (parsed by `programctl export`, keep it): `## Group` headings, then `- [ 
 - [ ] **Tracker regenerated** — `programctl status` and `programctl validate` pass; `STATUS.md` committed
 - [ ] **Pushed** — everything committed and pushed to the work package branch, after checking its PR is still open (a merged PR's branch never reaches `main`)
 - [ ] **Pull request ready** — PR titled `[WP-XXXX] Title`, template filled (requirements, criteria, clean-room and security checks), marked ready for review
-- [ ] **Review requested** — from the other AI if it has usage left, otherwise the owner
+- [ ] **Review requested** — from a different AI if one has usage left, otherwise the owner; a Muse change to code is reviewed by an AI that can run the tests (ADR-0021)
 
 ## After merge
 
 - [ ] **Marked done** — `status: done` and the PR link in the work package file; claim branch deleted
-- [ ] **Unblocked work checked** — the "Unblocks" list on the dashboard: dependants that are now ready are moved from `proposed` to `ready` if they meet the Definition of Ready
+- [ ] **Unblocked work checked** — the "Unblocks" list on the dashboard: dependants that are now ready are moved from `proposed` to `ready` if they meet the Definition of Ready; their `planned_for:` says which AI they are planned for
 - [ ] **Gate checked** — if this was the last work package of a phase, the gate file in `program/gates/` is filled with evidence for the owner to sign
 - [ ] **Dashboard refreshed** — GitHub Issues and the dashboard at https://vikram2409-eng.github.io/Lanesra-OS/ update automatically on merge; Claude Code also republishes the claude.ai copy at its next session (`program/dashboard/README.md`)

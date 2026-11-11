@@ -260,6 +260,18 @@ class BriefTest(Base):
         self.add(wp_text().replace("owner: unassigned\n", "owner: unassigned\nplanned_for: gemini\n"))
         self.assertTrue(any("planned_for" in e for e in self.check()[0]))
 
+    def test_requirements_carry_area_title_and_extension_flag(self):
+        # Covers: ADR-0020 (extension requirements are marked for the dashboard)
+        pc.REQS.write_text("# R\n## AAA — First area (note)\n- **REQ-AAA-001** [P0] one\n"
+                           "## Platform extension (added)\n## BBB — New area\n- **REQ-BBB-001** [P5] two\n"
+                           "## NFR — Bars\n- **REQ-NFR-001** [P4] three\n- **REQ-NFR-002** [P5] four (added by ADR-0020)\n")
+        reqs, _ = pc.load_requirements()
+        self.assertEqual(reqs["REQ-AAA-001"]["area_title"], "First area")
+        self.assertFalse(reqs["REQ-AAA-001"]["extension"])
+        self.assertTrue(reqs["REQ-BBB-001"]["extension"])
+        self.assertFalse(reqs["REQ-NFR-001"]["extension"])
+        self.assertTrue(reqs["REQ-NFR-002"]["extension"])
+
 
 if __name__ == "__main__":
     unittest.main()

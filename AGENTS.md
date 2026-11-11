@@ -7,7 +7,10 @@ Code reads `CLAUDE.md` and Gemini reads `GEMINI.md`; both point here. **Every AI
 
 The repo is building the Agent Playground and Orchestration layer described in
 [`program/spec/agent-playground-design-spec-v1.html`](program/spec/agent-playground-design-spec-v1.html).
-Several AI agents (and people) work on it in turn. **The repo is the only shared memory between
+The plan was extended on 2026-11-11 with Phase 5 (ADR-0020); the design of the whole solution,
+including that extension, is [`program/design/SOLUTION-DESIGN.md`](program/design/SOLUTION-DESIGN.md).
+Several AI agents (and people) work on it; a work package may name the agent it is planned for
+(`planned_for:`, ADR-0021). **The repo is the only shared memory between
 them.** Nothing you know from a previous chat counts unless it is written in `program/`.
 
 Before you change anything, in this order:

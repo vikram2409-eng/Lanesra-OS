@@ -35,3 +35,14 @@ workload for Codex and Muse AI.
 ## Decisions, risks or questions raised
 - ADR-0020, ADR-0021; RAID Q-27, Q-28, R-29, R-30.
 - The platform comparison used the reviewer's knowledge to mid-2026, not fresh research.
+
+## Follow-up, same day (owner: align every tab with the new features and design)
+- Dashboard: Overview gains "Platform extension by area" (packages, points, planned AI, what each
+  area starts after, link to its design section); Build sequence explains that Phase 5 runs beside
+  Phase 4; work package detail links to its design section; Requirements shows area names, marks
+  extension requirements and filters by source; "When work finishes" shows all three AIs from
+  AGENT-PROFILES.md; Gates explains G5.
+- `programctl export` now carries requirement area titles, the extension flag and the agent table;
+  the task card names the planned agent and the design document. Tool tests: 72, all pass.
+- FINISH-CHECKLIST (new "Design kept current" step), BRIEFING, README, dashboard README and AGENTS.md
+  updated for Phase 5, the design document and three agents.

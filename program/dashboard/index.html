@@ -108,7 +108,8 @@ section.view { display: grid; gap: 22px; }
 table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
 th, td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--bg); }
-td.num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 0.8rem; }
+[data-design] { white-space: nowrap; }
+td.num { white-space: nowrap; font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 0.8rem; }
 tr.gate-row td { background: var(--accent-bg); color: var(--accent-fg); font-weight: 600; }
 tr.phase-head td { padding-top: 18px; border-bottom: 2px solid var(--line); }
 tr.clickable { cursor: pointer; }
@@ -186,7 +187,7 @@ tr.clickable:hover td { background: var(--surface); }
 <header class="top pad">
   <div class="inner">
     <div>
-      <div class="eyebrow">Lanesra OS · Agent Playground and Orchestration</div>
+      <div class="eyebrow">Lanesra OS · Agent Foundry and Orchestration platform</div>
       <h1>Build program</h1>
     </div>
     <div class="stamp"><span id="stamp">Loading program data…</span><br><a href="https://vikram2409-eng.github.io/Lanesra-OS/" target="_blank" rel="noopener">Always-current copy, updated on every merge</a></div>
@@ -229,9 +230,10 @@ tr.clickable:hover td { background: var(--surface); }
         <select id="rq-area" aria-label="Area"></select>
         <select id="rq-phase" aria-label="Phase"></select>
         <select id="rq-state" aria-label="State"></select>
+        <select id="rq-src" aria-label="Source"></select>
         <span class="count" id="rq-count"></span>
       </div>
-      <div class="table-wrap"><table><thead><tr><th>ID</th><th>Phase</th><th>Requirement</th><th>State</th><th>Work packages</th><th>Tests</th></tr></thead><tbody id="rq-rows"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>ID</th><th>Area</th><th>Phase</th><th>Requirement</th><th>State</th><th>Work packages</th><th>Tests</th></tr></thead><tbody id="rq-rows"></tbody></table></div>
     </section>
     <section class="view" id="view-design" hidden></section>
     <section class="view" id="view-finish" hidden></section>
@@ -312,6 +314,17 @@ tr.clickable:hover td { background: var(--surface); }
   }
   function phaseName(id) { var p = D.phases.filter(function (x) { return x.id === id; })[0]; return (id === "v2" ? "v2" : "Phase " + id) + " · " + (p ? p.title : ""); }
   var GATE_FOR = { "0": "G0", "1": "G1", "2": "G2", "3": "G3", "4": "G4", "5": "G5" };
+  var PHASE_NOTE = { "5": "Added by the platform extension (ADR-0020). Runs beside Phase 4 once the Phase 3 gate has passed." };
+  // Design document section (its "## N." heading) for each lane of the platform extension.
+  var DESIGN_FOR = { "E5.1": 8, "E5.2": 6, "E5.3": 9, "E5.4": 11, "E5.5": 11, "E5.6": 10, "E5.7": 4, "E5.8": 12, "E5.9": 14, "E5.10": 13, "E5.11": 18, "WP-0114": 8, "WP-0147": 6 };
+  function designSection(w) { return DESIGN_FOR[w.id] || DESIGN_FOR[String(w.epic || "").split(" ")[0]] || 0; }
+  function designBtn(n, label) { return n ? '<button class="wp-link" data-design="' + n + '" style="font-family:inherit">' + esc(label || ("Design §" + n)) + "</button>" : ""; }
+  function openDesign(n) {
+    show("design");
+    try { history.replaceState(null, "", "#design"); } catch (e) {}
+    var t = document.getElementById("design-" + (n - 1));
+    if (t) t.scrollIntoView({ block: "start" }); else window.scrollTo(0, 0);
+  }
 
   // ------------------------------------------------------------- overview
   function renderOverview() {
@@ -336,11 +349,27 @@ tr.clickable:hover td { background: var(--surface); }
       var t = ws.reduce(function (a, w) { return a + w.points; }, 0);
       var d = ws.filter(function (w) { return w.status === "done"; }).reduce(function (a, w) { return a + w.points; }, 0);
       var g = D.gates.filter(function (x) { return x.id === GATE_FOR[p.id]; })[0];
-      h.push('<div class="phase-row"><div><b>' + esc(phaseName(p.id)) + '</b><div class="muted" style="font-size:.8rem">' + (g ? esc(g.title.replace(/^G\d — /, "Gate: ")) : "") + '</div></div>' +
+      h.push('<div class="phase-row"><div><b>' + esc(phaseName(p.id)) + '</b><div class="muted" style="font-size:.8rem">' + (g ? esc(g.title.replace(/^G\d — /, "Gate: ")) : "") + (PHASE_NOTE[p.id] ? " · runs beside Phase 4" : "") + '</div></div>' +
         '<div class="meter"><i style="width:' + (t ? Math.round(100 * d / t) : 0) + '%"></i></div>' +
         '<div class="nums">' + d + " / " + t + ' pts</div><div class="nums">' + ws.filter(function (w) { return w.status === "done"; }).length + " / " + ws.length + " WPs</div></div>");
     });
     h.push("</div></div>");
+
+    var ext = wps.filter(function (w) { return designSection(w) && w.status !== "dropped"; }), areas = [], byArea = {};
+    ext.forEach(function (w) { var k = w.phase === "5" ? w.epic : "E1 Design decisions (Phase 1)"; if (!byArea[k]) { byArea[k] = []; areas.push(k); } byArea[k].push(w); });
+    if (areas.length) {
+      areas.sort(function (a, b) { return (a.indexOf("E1 ") === 0 ? 0 : parseFloat(a.slice(1).replace("5.", "")) || 99) - (b.indexOf("E1 ") === 0 ? 0 : parseFloat(b.slice(1).replace("5.", "")) || 99); });
+      h.push('<div class="block"><h2>Platform extension by area</h2><p class="muted" style="font-size:.85rem">The ten areas added on 2026-11-11 (ADR-0020), with the two design decisions that come first. Each area links to its section of the design.</p><div class="table-wrap"><table><thead><tr><th>Area</th><th>Work packages</th><th>Done</th><th>Points</th><th>Planned for</th><th>Starts after</th><th>Design</th></tr></thead><tbody>');
+      areas.forEach(function (k) {
+        var ws = byArea[k], ids = {}; ws.forEach(function (w) { ids[w.id] = 1; });
+        var who = []; ws.forEach(function (w) { var a = AGENT_LABEL[w.planned_for] || "any"; if (who.indexOf(a) < 0) who.push(a); });
+        var entry = []; ws.forEach(function (w) { w.depends_on.forEach(function (d) { if (!ids[d] && entry.indexOf(d) < 0) entry.push(d); }); });
+        var open = entry.filter(function (d) { return WP[d] && WP[d].status !== "done" && WP[d].status !== "dropped"; });
+        h.push("<tr><td><b>" + esc(k.replace(/^E[\d.]+ /, "")) + "</b></td><td>" + ws.map(function (w) { return wpBtn(w.id); }).join(" ") + '</td><td class="num">' + ws.filter(function (w) { return w.status === "done"; }).length + " / " + ws.length + '</td><td class="num">' + ws.reduce(function (a, w) { return a + w.points; }, 0) + "</td><td>" + esc(who.join(", ")) + "</td><td>" +
+          (open.length ? open.slice(0, 5).map(wpBtn).join(" ") + (open.length > 5 ? " +" + (open.length - 5) : "") : '<span class="pill st-ready">can start</span>') + "</td><td>" + designBtn(designSection(ws[0])) + "</td></tr>");
+      });
+      h.push("</tbody></table></div></div>");
+    }
 
     h.push('<div class="block"><h2>Edition coverage</h2><p class="muted" style="font-size:.85rem">Every capability ships in each edition it applies to. On the online demo it is simulated on sample data. A work package is done only when every one of its editions is delivered.</p><div class="edition-rows">');
     EDITIONS.forEach(function (e) {
@@ -397,7 +426,7 @@ tr.clickable:hover td { background: var(--surface); }
 
   // ------------------------------------------------------------- sequence
   function renderSequence() {
-    var h = ['<div class="block"><h2>Build sequence</h2><p class="muted">Every work package in build order: by phase, then dependency wave (a wave can start once the waves before it are done), then id. A gate closes each phase. Work packages in the same wave can be built in parallel.</p></div>'];
+    var h = ['<div class="block"><h2>Build sequence</h2><p class="muted">Every work package in build order: by phase, then dependency wave (a wave can start once the waves before it are done), then id. A gate closes each phase. Work packages in the same wave can be built in parallel, and each shows the AI it is planned for. Phase 5 is the platform extension: it runs beside Phase 4 once the Phase 3 gate has passed, so its place below Phase 4 is not a wait.</p></div>'];
     h.push('<div class="table-wrap"><table><thead><tr><th>Seq</th><th>Wave</th><th>WP</th><th>Title</th><th>Status</th><th>Editions</th><th>Planned for</th><th>Built by</th><th>Est</th><th>Depends on</th><th>Unblocks</th></tr></thead><tbody>');
     var lastPhase = null;
     D.work_packages.forEach(function (w) {
@@ -406,7 +435,7 @@ tr.clickable:hover td { background: var(--surface); }
           var g = D.gates.filter(function (x) { return x.id === GATE_FOR[lastPhase]; })[0];
           if (g) h.push('<tr class="gate-row"><td colspan="11">◆ ' + esc(g.title) + " · " + esc(g.status) + "</td></tr>");
         }
-        h.push('<tr class="phase-head"><td colspan="11"><h3>' + esc(phaseName(w.phase)) + "</h3></td></tr>");
+        h.push('<tr class="phase-head"><td colspan="11"><h3>' + esc(phaseName(w.phase)) + "</h3>" + (PHASE_NOTE[w.phase] ? '<div class="muted" style="font-size:.85rem">' + esc(PHASE_NOTE[w.phase]) + " " + designBtn(18, "Build order in the design") + "</div>" : "") + "</td></tr>");
         lastPhase = w.phase;
       }
       h.push('<tr class="clickable" data-wp="' + esc(w.id) + '"><td class="num">' + w.seq + '</td><td class="num">' + w.wave + "</td><td>" + wpBtn(w.id) + "</td><td>" + esc(w.title) + (w.critical ? ' <span class="pill crit">critical</span>' : "") + "</td><td>" + pill(w.status) + "</td><td>" + eds(w) + "</td><td>" + planned(w) + "</td><td>" + agents(w.built_by) + '</td><td class="num">' + esc(w.estimate) + "</td><td>" + (w.depends_on.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td><td>" + (w.unblocks.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td></tr>");
@@ -446,6 +475,7 @@ tr.clickable:hover td { background: var(--surface); }
     h.push('<div class="facts">' +
       '<div class="fact"><div class="k">Built by</div><div class="v">' + agents(w.built_by) + "</div></div>" +
       '<div class="fact"><div class="k">Planned for</div><div class="v">' + planned(w) + "</div></div>" +
+      (designSection(w) ? '<div class="fact"><div class="k">Design</div><div class="v">' + designBtn(designSection(w), "Open design section " + designSection(w)) + "</div></div>" : "") +
       '<div class="fact"><div class="k">Current owner</div><div class="v">' + esc(w.owner || "unassigned") + "</div></div>" +
       '<div class="fact"><div class="k">Estimate</div><div class="v">' + esc(w.estimate) + " · " + w.points + " pts</div></div>" +
       '<div class="fact"><div class="k">Criteria proven</div><div class="v">' + doneCrit + " / " + w.criteria.length + "</div></div>" +
@@ -506,18 +536,19 @@ tr.clickable:hover td { background: var(--surface); }
   // --------------------------------------------------------- requirements
   function renderReqs() {
     var q = document.getElementById("rq-q").value.trim().toLowerCase();
-    var ar = document.getElementById("rq-area").value, ph = document.getElementById("rq-phase").value, st = document.getElementById("rq-state").value;
+    var ar = document.getElementById("rq-area").value, ph = document.getElementById("rq-phase").value, st = document.getElementById("rq-state").value, sr = document.getElementById("rq-src").value;
     var rows = D.requirements.filter(function (r) {
       if (ar && r.area !== ar) return false;
       if (ph && r.phase !== ph) return false;
       if (st && r.state !== st) return false;
-      if (q && (r.id + " " + r.text).toLowerCase().indexOf(q) < 0) return false;
+      if (sr && (sr === "ext") !== !!r.extension) return false;
+      if (q && (r.id + " " + r.text + " " + (r.area_title || "")).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
     document.getElementById("rq-count").textContent = rows.length + " of " + D.requirements.length;
     document.getElementById("rq-rows").innerHTML = rows.map(function (r) {
-      return '<tr><td class="mono" style="white-space:nowrap">' + esc(r.id) + '</td><td class="num">' + esc(r.phase) + "</td><td>" + esc(r.text) + '</td><td><span class="pill rq-' + esc(r.state).replace(" ", "-") + '">' + esc(r.state) + "</span></td><td>" + (r.wps.map(wpBtn).join(" ") || '<span class="muted">—</span>') + '</td><td class="num">' + (r.tests.length ? r.tests.length + " file" + (r.tests.length > 1 ? "s" : "") : "—") + "</td></tr>";
-    }).join("") || '<tr><td colspan="6" class="empty">No requirement matches these filters.</td></tr>';
+      return '<tr><td class="mono" style="white-space:nowrap">' + esc(r.id) + "</td><td>" + esc(r.area_title || r.area) + (r.extension ? ' <span class="pill new">New</span>' : "") + '</td><td class="num">' + esc(r.phase) + "</td><td>" + esc(r.text) + '</td><td><span class="pill rq-' + esc(r.state).replace(" ", "-") + '">' + esc(r.state) + "</span></td><td>" + (r.wps.map(wpBtn).join(" ") || '<span class="muted">—</span>') + '</td><td class="num">' + (r.tests.length ? r.tests.length + " file" + (r.tests.length > 1 ? "s" : "") : "—") + "</td></tr>";
+    }).join("") || '<tr><td colspan="7" class="empty">No requirement matches these filters.</td></tr>';
   }
 
   // ---------------------------------------------------------------- design
@@ -583,15 +614,21 @@ tr.clickable:hover td { background: var(--surface); }
       h.push('<div class="check-group"><h3>' + esc(g.group) + "</h3><ol>" + g.items.map(function (it) { return "<li><b>" + inline(it.name) + "</b><span>" + inline(it.detail) + "</span></li>"; }).join("") + "</ol></div>");
     });
     h.push("</div>");
-    h.push('<div class="two"><div class="block who"><h3>If the AI is Claude Code</h3><p>It runs every step itself: the full test suite, <code>programctl status</code>, the push and the pull request. At its next session it also republishes this page.</p></div>' +
-      '<div class="block who"><h3>If the AI is Muse AI</h3><p>It works through GitHub: it reads the repo, commits on the work package branch and opens the pull request. It cannot run tests or <code>programctl</code>, so it marks criteria "untested locally – see CI". CI runs the suite, regenerates <code>STATUS.md</code> on the branch and posts the results on the pull request (WP-0018).</p></div></div>');
-    h.push('<div class="block"><h3>Switching AI part-way</h3><p>Stopping mid-way is normal when a weekly limit runs out. Push everything, leave the status as in progress, and write a Progress log entry precise enough for the other AI to continue on the same branch tomorrow. The other AI starts from that entry, using <code>programctl brief WP-XXXX</code>.</p></div>');
+    h.push('<div class="block"><h2>How each AI works</h2><p class="muted" style="font-size:.85rem">From <code>program/AGENT-PROFILES.md</code>. Each open work package names the AI it is planned for; the plan is a default, not a lock (ADR-0021).</p></div><div class="lanes3">');
+    (D.agents || []).forEach(function (a) {
+      var key = PLANNED.filter(function (k) { return AGENT_LABEL[k] === a.name; })[0];
+      var open = D.work_packages.filter(function (w) { return key && w.planned_for === key && w.status !== "done" && w.status !== "dropped"; });
+      h.push('<div class="check-group"><h3>' + esc(a.name) + '</h3><div class="muted" style="font-size:.82rem">' + (open.length ? open.length + " open work packages planned" + (key === "claude" ? ", plus every package with no plan" : "") : "") + '</div><div class="who">' +
+        a.facts.map(function (f) { return '<div><div class="eyebrow">' + esc(f.k) + '</div><div style="font-size:.9rem;overflow-wrap:anywhere">' + inline(f.v) + "</div></div>"; }).join("") + "</div></div>");
+    });
+    h.push("</div>");
+    h.push('<div class="block"><h3>Switching AI part-way</h3><p>Stopping mid-way is normal when a usage limit runs out. Push everything, leave the status as in progress, and write a Progress log entry precise enough for another AI to continue on the same branch tomorrow. The AI that takes over starts from that entry, using <code>programctl brief WP-XXXX</code>, and sets <code>owner:</code> to itself. The three AIs can work in parallel on different work packages, so the pushed <code>wp/</code> branch is the claim.</p></div>');
     document.getElementById("view-finish").innerHTML = h.join("");
   }
 
   // ----------------------------------------------------------------- gates
   function renderGates() {
-    var h = ['<div class="block"><h2>Phase gates</h2><p class="muted">Each phase ends with a gate. The owner signs it once every check has evidence. The next phase\'s work stays planned until then.</p></div><div class="gates">'];
+    var h = ['<div class="block"><h2>Phase gates</h2><p class="muted">Each phase ends with a gate. The owner signs it once every check has evidence. The next phase\'s work stays planned until then. One exception: Phase 5, the platform extension, opens once the Phase 3 gate has passed and runs beside Phase 4, so G5 does not hold back general availability (ADR-0020).</p></div><div class="gates">'];
     D.gates.forEach(function (g) {
       h.push('<div class="gate"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><h3>' + esc(g.title) + '</h3><span class="pill ' + (/pass|signed|done/i.test(g.status) ? "st-done" : "st-proposed") + '">' + esc(g.status) + "</span></div><ul>" + g.checks.map(function (c) { return "<li>" + (c.done ? "✓ " : "") + inline(c.text) + "</li>"; }).join("") + '</ul><a href="' + esc(repoUrl(g.file)) + '" target="_blank" rel="noopener">Gate file</a></div>');
     });
@@ -618,6 +655,8 @@ tr.clickable:hover td { background: var(--surface); }
   }
 
   document.addEventListener("click", function (ev) {
+    var d = ev.target.closest("[data-design]");
+    if (d) { ev.preventDefault(); openDesign(parseInt(d.getAttribute("data-design"), 10)); return; }
     var b = ev.target.closest("[data-wp]");
     if (b && !ev.target.closest("a")) { ev.preventDefault(); openWP(b.getAttribute("data-wp")); }
   });
@@ -632,13 +671,15 @@ tr.clickable:hover td { background: var(--surface); }
     fillSelect(document.getElementById("pk-phase"), "All phases", D.phases.map(function (p) { return p.id; }), phaseName);
     fillSelect(document.getElementById("pk-status"), "All statuses", STATUS_ORDER, function (s) { return STATUS_LABEL[s]; });
     var areas = []; D.requirements.forEach(function (r) { if (areas.indexOf(r.area) < 0) areas.push(r.area); });
-    fillSelect(document.getElementById("rq-area"), "All areas", areas);
+    var areaTitle = {}; D.requirements.forEach(function (r) { areaTitle[r.area] = r.area_title || r.area; });
+    fillSelect(document.getElementById("rq-area"), "All areas", areas, function (a) { return a + " · " + areaTitle[a]; });
+    fillSelect(document.getElementById("rq-src"), "Spec and extension", ["spec", "ext"], function (v) { return v === "ext" ? "Platform extension only" : "October spec and plan only"; });
     fillSelect(document.getElementById("rq-phase"), "All phases", D.phases.map(function (p) { return p.id; }), function (v) { return v === "v2" ? "v2" : "Phase " + v; });
     fillSelect(document.getElementById("rq-state"), "All states", ["delivered", "in progress", "planned"]);
     fillSelect(document.getElementById("pk-edition"), "All editions", EDITIONS.map(function (e) { return e[0]; }), function (v) { return EDITIONS.filter(function (e) { return e[0] === v; })[0][1]; });
     fillSelect(document.getElementById("pk-planned"), "Planned for anyone", PLANNED.concat(["none"]), function (v) { return v === "none" ? "No plan" : AGENT_LABEL[v]; });
     ["pk-q", "pk-phase", "pk-status", "pk-edition", "pk-planned"].forEach(function (id) { document.getElementById(id).addEventListener("input", renderPackageList); });
-    ["rq-q", "rq-area", "rq-phase", "rq-state"].forEach(function (id) { document.getElementById(id).addEventListener("input", renderReqs); });
+    ["rq-q", "rq-area", "rq-phase", "rq-state", "rq-src"].forEach(function (id) { document.getElementById(id).addEventListener("input", renderReqs); });
     renderOverview(); renderSequence(); renderPackageList(); renderReqs(); renderDesign(); renderFinish(); renderGates();
     document.getElementById("loading").hidden = true;
     route();
