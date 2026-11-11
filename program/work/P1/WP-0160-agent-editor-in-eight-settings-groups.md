@@ -12,7 +12,7 @@ editions: [desktop, workspace, demo]
 delivered: []
 docs: [build-your-first-agent]
 branch: claude/enterprise-build-planning-jxy2kq
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/746
 updated: 2026-11-11
 ---
 
@@ -62,3 +62,4 @@ Rebuild the agent editor around the eight plain-language groups with essentials,
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 - 2026-11-11 claude: Gate-0 refine with the owner. Confirmed deps WP-0120 and WP-0014 are done and REQ-SETUP-001..005 exist. Produced a design proposal (eight-group mapping of today's ten per-row buttons, three-field minimum, screen uplift) and settled four decisions (above): Persona folds into Job, a ninth Run & triggers area, the demo mirrors the layout, and delivery is staged in one PR. Status set to ready. Next: build Stage 1 — rebuild the agent editor (`desktop/src/features/settings/AiAgentsAdmin.tsx`) from the Core/Advanced tabs + per-row modals into the grouped sections, reusing existing APIs, with the Persona→Job merge; then Stage 2 for badges/effect notes/'Using defaults'.
+- 2026-11-11 claude: Stage 1a shipped on PR #746. Replaced the ten per-agent row buttons (Edit/Memory/Guardrails/Persona/Routing/Tool limits/Acts as/Versions/Triggers/Deactivate) with one "Set up" button that opens a grouped `AgentSetupPanel` (exported) with eight group tabs — Agent, Persona, Knowledge & memory, Safety, Model & cost, Identity, Test & publish, Run & triggers — reusing the existing editors inline; the panel owns its own save mutations (invalidate without closing). Persona now lives under the agent's job (the Persona→Job merge). Create/template drops into the panel. Row keeps read-only Routing/Acts-as badges. Tests: `desktop/src/__tests__/agentSetup.test.tsx` (2); `test-setup.ts` gains a jsdom scrollTo stub. tsc + 68 vitest + build green. Not done: Stage 1b (split the Agent tab into Identity/Job/Tools/Data groups + unify the Job save), Stage 2 (risk/cost badges, effect notes, "Using defaults", RiskBadge/LifecyclePill), the online-demo mirror, and the create-and-run E2E. Status stays ready until the WP is fully delivered across editions.
