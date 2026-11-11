@@ -232,6 +232,10 @@ function GatewayTab() {
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => api.setAiProviderActive(id, isActive),
     onSuccess: invalidateProviders,
   });
+  const toggleLocal = useMutation({
+    mutationFn: ({ id, isLocal }: { id: string; isLocal: boolean }) => api.setAiProviderLocal(id, isLocal),
+    onSuccess: invalidateProviders,
+  });
   const test = useMutation({
     mutationFn: (id: string) => api.testAiProviderKey(id),
     onSuccess: (result, id) => setTestResults((prev) => ({ ...prev, [id]: result.ok ? `Valid (${result.latency_ms}ms)` : `Failed: ${result.message}` })),
@@ -400,6 +404,7 @@ function GatewayTab() {
                 <th>Model</th>
                 <th>Key</th>
                 <th>Status</th>
+                <th>Local</th>
                 <th></th>
               </tr>
             </thead>
@@ -413,6 +418,9 @@ function GatewayTab() {
                   <td>
                     <span className={`badge${p.is_active ? " badge-success" : ""}`}>{p.is_active ? "Active" : "Inactive"}</span>
                   </td>
+                  <td title="Only a provider marked Local may receive a step's air-gapped (sensitive) data.">
+                    <span className={`badge${p.is_local ? " badge-success" : ""}`}>{p.is_local ? "Local" : "—"}</span>
+                  </td>
                   <td>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                       <button className="btn btn-secondary" onClick={() => setEditing(p)}>
@@ -423,6 +431,13 @@ function GatewayTab() {
                       </button>
                       <button className="btn btn-secondary" onClick={() => toggleActive.mutate({ id: p.id, isActive: !p.is_active })}>
                         {p.is_active ? "Deactivate" : "Reactivate"}
+                      </button>
+                      <button
+                        className="btn btn-secondary"
+                        title="Mark whether this provider runs on local, non-egressing infrastructure. Air-gapped data is routed only to a Local provider."
+                        onClick={() => toggleLocal.mutate({ id: p.id, isLocal: !p.is_local })}
+                      >
+                        {p.is_local ? "Unmark local" : "Mark local"}
                       </button>
                       {testResults[p.id] && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{testResults[p.id]}</span>}
                     </div>

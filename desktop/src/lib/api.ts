@@ -406,6 +406,7 @@ export const api = {
   createAiProvider: (input: AiProviderInput) => call<AiProvider>("create_ai_provider", { input }),
   updateAiProvider: (id: string, input: AiProviderInput) => call<AiProvider>("update_ai_provider", { id, input }),
   setAiProviderActive: (id: string, isActive: boolean) => call<AiProvider>("set_ai_provider_active", { id, isActive }),
+  setAiProviderLocal: (id: string, isLocal: boolean) => call<AiProvider>("set_ai_provider_local", { id, isLocal }),
   testAiProviderKey: (id: string) =>
     callAdminAction<AiTestResult>("test_ai_provider_key", { id }, "POST", `/api/admin/ai-providers/${encodeURIComponent(id)}/test`),
   setAiAgentModelRouting: (id: string, routing: AiAgentModelRouting | null) => call<AiAgentDefinition>("set_ai_agent_model_routing", { id, routing }),

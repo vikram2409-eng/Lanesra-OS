@@ -324,6 +324,7 @@ pub fn run() {
             commands::ai_provider_commands::create_ai_provider,
             commands::ai_provider_commands::update_ai_provider,
             commands::ai_provider_commands::set_ai_provider_active,
+            commands::ai_provider_commands::set_ai_provider_local,
             commands::ai_provider_commands::test_ai_provider_key,
             commands::ai_provider_commands::list_ai_gateway_failover_events,
             commands::activity_commands::log_activity,

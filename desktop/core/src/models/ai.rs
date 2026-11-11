@@ -126,6 +126,13 @@ pub struct AiProvider {
     pub model: String,
     pub has_key: bool,
     pub is_active: bool,
+    /// WP-0123: this provider runs on local, non-egressing infrastructure,
+    /// so a step whose outbound payload matches an agent's
+    /// `force_air_gapped_for` classes may be routed to it. The Gateway
+    /// sends air-gapped data to a provider only when this is true, and
+    /// fails closed otherwise (gap audit I-17). An administrator sets it
+    /// (`ai_provider_service::set_local`); it defaults to false.
+    pub is_local: bool,
     pub created_at: String,
     pub created_by: Option<String>,
     pub updated_at: String,

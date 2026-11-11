@@ -468,6 +468,8 @@ async fn forced_air_gap_routes_straight_to_local_fallback_skipping_primary() {
         unreachable_port,
     );
     let local_id = make_provider(&conn, &workspace_id, &admin_id, "Local model", local_port);
+    // WP-0123: air-gapped data only goes to a provider marked local.
+    ai_provider_service::set_local(&conn, &local_id, true, Some(&admin_id)).unwrap();
     let routing = AiAgentModelRouting {
         primary_provider_id: Some(primary_id),
         local_fallback_provider_id: Some(local_id),

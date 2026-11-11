@@ -3771,6 +3771,11 @@ pub fn dispatch(
                 conn, &id, is_active, actor,
             )?)
         }
+        "set_ai_provider_local" => {
+            let id: String = arg(args, "id")?;
+            let is_local: bool = arg(args, "isLocal")?;
+            to_value(ai_provider_service::set_local(conn, &id, is_local, actor)?)
+        }
         "set_ai_agent_model_routing" => {
             let id: String = arg(args, "id")?;
             let routing: Option<AiAgentModelRouting> = arg(args, "routing")?;

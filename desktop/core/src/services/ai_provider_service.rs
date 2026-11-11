@@ -154,6 +154,26 @@ pub fn set_active(
     )?)
 }
 
+/// WP-0123: mark whether this provider runs on local, non-egressing
+/// infrastructure. Only a provider marked local may receive a step's
+/// air-gapped data (`AiAgentModelRouting::force_air_gapped_for`); the
+/// Gateway fails closed when the air-gap tier is not a local provider
+/// (gap audit I-17). Administrator only.
+pub fn set_local(
+    conn: &Connection,
+    id: &str,
+    is_local: bool,
+    actor_user_id: Option<&str>,
+) -> AppResult<AiProvider> {
+    require_admin(conn, actor_user_id)?;
+    Ok(ai_provider_repo::set_local(
+        conn,
+        id,
+        is_local,
+        actor_user_id,
+    )?)
+}
+
 /// The one genuinely-async operation on this model - a real outbound
 /// connectivity probe, same reason `ai_service::test_key` is its own
 /// admin-only async route rather than a plain dispatch/Tauri command -

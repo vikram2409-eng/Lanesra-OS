@@ -1,0 +1,14 @@
+-- Migration 0094: mark an AI provider as local for air-gapped data (WP-0123)
+-- Work package: WP-0123
+-- Change: additive (one defaulted column on ai_providers)
+-- Data touched: none; existing providers are treated as not local until an administrator marks one
+-- Re-run safe: no (ALTER TABLE ADD COLUMN)
+--
+-- WP-0123 lets an agent force a step bound to sensitive data onto a local
+-- model (AiAgentModelRouting.force_air_gapped_for). The Gateway must be able
+-- to tell which provider is genuinely local, and fail closed when none is,
+-- rather than quietly resolving the workspace default - which may be a cloud
+-- provider - as the air-gap tier (gap audit I-17). An administrator marks the
+-- providers that run on local, non-egressing infrastructure; only those may
+-- receive air-gapped data.
+ALTER TABLE ai_providers ADD COLUMN is_local INTEGER NOT NULL DEFAULT 0;
