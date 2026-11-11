@@ -33,4 +33,8 @@ if (typeof Element !== "undefined") {
   if (typeof proto.hasPointerCapture !== "function") {
     proto.hasPointerCapture = () => false;
   }
+  // ChatPanel auto-scrolls its message list; jsdom lacks scrollTo.
+  if (typeof proto.scrollTo !== "function") {
+    proto.scrollTo = () => {};
+  }
 }
