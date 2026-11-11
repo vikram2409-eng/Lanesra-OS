@@ -46,3 +46,16 @@ workload for Codex and Muse AI.
   the task card names the planned agent and the design document. Tool tests: 72, all pass.
 - FINISH-CHECKLIST (new "Design kept current" step), BRIEFING, README, dashboard README and AGENTS.md
   updated for Phase 5, the design document and three agents.
+
+## Second follow-up, same day (owner: redesign Admin and the screen builders, then add to the program)
+- Reviewed `Settings.tsx`, `ScreenLayoutsAdmin.tsx`, `PageBuilderAdmin.tsx`, `DashboardLayoutsAdmin.tsx`,
+  `ThemeStudioAdmin.tsx`, `pageComponentLibrary.ts`, `pageTemplates.ts`, `page_layout_service.rs`
+  (source and README only; the app was not run). Mock-ups: https://claude.ai/artifact/EC5GQwxn691RnSpAh4MHYe
+- Owner decisions recorded in ADR-0022 and RAID Q-29: merge the three builders; split AI across
+  three menu areas with findability measures; add as Phase 6, every package shipping in desktop,
+  Team Workspace and the online demo with website help.
+- Added: 30 requirements (REQ-ADM-001..009, REQ-EXP-001..020, REQ-NFR-007), 31 work packages
+  (WP-0601..0699), gate G6, design sections 15 and 16 (later sections renumbered), RAID R-31, R-32.
+- `programctl` knows phase 6. `check_vocabulary.py` now exempts `programctl.py` (separate commit:
+  the check failed on a pre-existing line whenever a pull request touched that file).
+- Next: WP-0601 and WP-0610 (Claude Code) can start now and need nothing else.

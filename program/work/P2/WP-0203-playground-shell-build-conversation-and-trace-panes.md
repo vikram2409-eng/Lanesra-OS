@@ -48,6 +48,7 @@ The three-pane Playground per mockup 5, opening any run read-only.
 ## Notes
 
 - Scoped from the spec; refine into detailed acceptance criteria (and split if larger than L) at the review of the previous phase's gate.
+- ADR-0022: the Playground is listed under AI Studio in the Admin console menu registry (WP-0601).
 
 ## Progress log
 

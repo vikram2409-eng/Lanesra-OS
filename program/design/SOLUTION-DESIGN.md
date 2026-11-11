@@ -1,8 +1,8 @@
 # Lanesra OS — Solution design
 
 The complete design of the Agent Foundry and Orchestration platform: what the October spec already
-defines (the baseline), and what the platform extension of 2026-11-11 adds (marked [NEW], decided
-in ADR-0020). The October spec (`spec/agent-playground-design-spec-v1.html`) stays the source for
+defines (the baseline), and what the extensions of 2026-11-11 add (marked [NEW]): the platform extension (ADR-0020)
+and the Admin console and Experience Studio (ADR-0022). The October spec (`spec/agent-playground-design-spec-v1.html`) stays the source for
 baseline detail; this document is the source for the extension and for how the parts fit together.
 
 Table and endpoint names for [NEW] parts are proposals. The design work packages (WP-0114,
@@ -27,7 +27,7 @@ server and an online demo from one Rust core.
 The platform is ten layers over one core. Items marked with a star are added by the extension.
 
 ```arch
-Experience :: Agent Studio; Playground; Team canvas; Approvals inbox; Work queue*; Fleet view*; Compliance centre*
+Experience :: Admin console*; Experience Studio (pages, blocks, templates, navigation, themes)*; Agent Studio; Playground; Team canvas; Approvals inbox; Work queue*; Fleet view*; Compliance centre*
 Channels and access :: REST API; MCP server; CLI; Team as an endpoint; A2A server*; MCP gateway*; Slack*; Microsoft Teams*; Email*; Web widget*; Python and TypeScript SDKs*
 Control plane :: Lifecycle and versions; Publish gate; Budgets; Kill switch; Feature flags; External agent registry*; Promotion between environments*; Alerts and SLOs*
 Orchestration :: Mode compiler; Run controller; Graph runtime; Checkpoints; Replay and fork; Human seats*; A2A client seats*
@@ -265,7 +265,138 @@ endpoints; several workspaces per server; PostgreSQL; worker pool; remote worker
 | Kubernetes | A Helm chart for server, workers, PostgreSQL and ingress, linted and smoke-tested in CI | WP-0584 |
 | High availability | Stateless replicas; run ownership by lease with takeover from the last checkpoint; a restore drill against documented targets | WP-0585 |
 
-## 15. Data model additions
+## 15. Admin console [NEW]
+
+Decided in ADR-0022. Today Admin is a landing page of 15 cards and 40 tools; opening a tool hides
+the menu, four cards hold one tool each, and one tool is listed twice. The AI card would grow from
+7 tools to about 25 as Phases 2 to 5 ship. The console replaces it with a menu that stays on screen
+and is grouped by what an admin is doing.
+
+```arch
+Build :: Data and ontology; Experience Studio*; Automation; AI Studio
+Run :: AI operations*; Integrations and channels; Apps and deployment
+Govern :: People and access; Governance and compliance*; System
+```
+
+| Area | In one line | Holds |
+|---|---|---|
+| Data and ontology | What the business records and how it connects | Custom Objects, fields, Relationships, Object Types, Glossary, Metric Definitions, Numbering, Status transitions, Dependency Explorer |
+| Experience Studio | How it looks and what people see | Pages, Blocks, Templates, Navigation, Dashboards, Theme Studio, Brand (section 16) |
+| Automation | Rules and work that run themselves | Business rules, Workflow automation, Event Playbooks, triggers and schedules |
+| AI Studio | Design and test agents and teams | Agents, Teams, Skills, Tools, Knowledge and memory, Playground, Evaluations, Optimizer, Red-team suite |
+| AI operations | Watch agents work and respond | Runs, Approvals inbox, Work queue, Budgets and cost, Fleet, Alerts, Kill switch |
+| Integrations and channels | Connections to the outside | Integration Hub, models (LLM and MCP), API clients and webhooks, Channels, MCP registry and gateway, connected accounts |
+| Apps and deployment | Package, install and promote | Apps, App Catalog, Deployment Management, Test and Evaluation Framework, environments and promotion |
+| People and access | Who can sign in and what they can do | Users, Organization, Org Units, Work Teams, Access Roles, Security and sign-in, Agent Identities, single sign-on, directory provisioning |
+| Governance and compliance | The rules agents work under, and the proof | Guardrails, policies and the tool firewall, data boundaries, audit and evidence, retention, AI inventory, risk and control mappings |
+| System | Keeping the workspace healthy | Feature flags, Backup and restore, Help, health and upgrades, keys and secrets, security event export |
+
+### Making the grouping easy to understand
+
+AI is deliberately split across three areas (owner decision, 2026-11-11). These measures keep that
+split obvious:
+
+- **Purpose labels.** The three AI areas are named by what you do there: AI Studio (design and test), AI operations (watch and respond), Governance and compliance (rules and proof). Every area and tool shows a one-line description.
+- **Follow the object.** An agent or Team opens in AI Studio and links to its own runs in AI operations and its own policies in Governance. Nobody has to know the menu to move between them.
+- **Search knows the old names.** Searching "Page Builder", "Orchestration" or "LLM & MCP" opens the new home. A "where did it move" list maps every previous location.
+- **First-visit tour** of the three bands.
+- **Measured.** Before the gate, at least 80% of first-time admins must find each of ten common tasks at the first attempt, including one task in each AI area (REQ-NFR-007).
+
+### Shell and tool pattern
+
+- **Menu registry** (WP-0601). The menu is data: area, tool, description, role, feature flag, previous names. Desktop, Team Workspace and the online demo read the same data, and CI fails if a tool has no home or two homes. A later phase adds a screen by adding a row.
+- **Shell** (WP-0602). Side menu in three bands with a sub-menu per area; an address for every screen; a top bar with search, an environment label and a tray of drafts with unpublished changes. The menu shows only what the role may use, and the server refuses the rest.
+- **Home** (WP-0603). Needs attention with a count on each area, setup progress, pinned and recent tools, recent changes.
+- **Side panels** (WP-0604). The Admin Assistant and Help open beside any screen; Help opens on that screen's article.
+- **One tool pattern** (WP-0605, WP-0606). A list with search, filters and a lifecycle pill; a detail screen with Overview, Configure, Test and History.
+
+## 16. Experience Studio [NEW]
+
+Decided in ADR-0022. Today three tools each build one kind of screen: Screen layouts (create and
+edit forms), Page Builder (record pages, 24 components, 4 templates) and Dashboards. The three
+become one builder (owner decision, 2026-11-11).
+
+### One page model
+
+| Page type | Bound to | Replaces |
+|---|---|---|
+| Record page | One object | Page Builder |
+| Form | One object, create and edit | Screen layouts |
+| List page | An object or a saved view | Fixed list screens, where an admin wants their own |
+| Home page | A role, in an app | — |
+| Dashboard | A role | Dashboards and Dashboard KPIs |
+| Console | Data sources the admin picks | — |
+
+- **One definition format** extending today's `PageDefinition` tree, with a JSON Schema shared with the online demo (WP-0610).
+- **One lifecycle.** Draft → Published with revert, a default, and assignment by role, as today.
+- **Carry-over, not rebuild.** Existing forms and dashboards move into the model automatically and look the same afterwards (WP-0613, WP-0614). The old tools, APIs and Solution exports keep working as aliases until removed after a deprecation notice.
+- **Everywhere.** A published page takes over its screen for every object in both editions; today that is true for only two objects on desktop (WP-0611).
+- **Custom screens** (WP-0615). A standalone page has its own data sources (an object, a saved view, a report, a Glossary metric), page filters and parameters.
+
+### Components
+
+The 24 existing components are finished first: several still show a placeholder (WP-0612).
+
+| Group | Existing | Added |
+|---|---|---|
+| Layout | Section, Grid, Columns, Tabs, Divider, Spacer, Sticky panel | — |
+| Record | Field, Field group, Record header, Status badge, Owner, Record number | Path |
+| Data | Related list, Table, KPI, Chart | Record list, Board, Timeline, Metric tile, Filter bar |
+| Actions | Button, Command bar, Quick action, Agent action | Form |
+| Work and AI | — | Agent chat, Approvals, Work queue, Run activity |
+| Content | Rich text, Anchor link, Note | Image, Link list, Embed (allowed domains) |
+
+Rules that apply to every component:
+
+- **Access is the server's job.** A component never widens access. Data for a hidden component is not sent to the client.
+- **Actions use the real write path**, so Business Rules, status transitions and Action Types apply.
+- **Agent components** act as the signed-in user and go through the tool firewall, approvals and budgets.
+- **One registry**: an allowlist on the server and one library on the client.
+
+### Blocks: reusable components (WP-0624, WP-0625)
+
+- Save any configured component, or a group, as a named block with inputs (for example "which record").
+- Insert it **linked** (a published change reaches every page that uses it) or as a **copy**.
+- Blocks have Draft → Published versions and a where-used list shown before any change. A block in use cannot be deleted, and a block cannot contain itself.
+- Blocks export in a Solution and appear in the Dependency Explorer.
+- Six starter blocks: record summary, my open work, approval strip, KPI row, activity timeline, agent chat.
+
+### Layouts and templates (WP-0630 to WP-0632)
+
+A layout is the frame; a template is a layout with components placed and bound.
+
+| Layouts | Templates | Needs AI features |
+|---|---|---|
+| Single column | List and Detail | No |
+| Main and side panel | Analytics Board | No |
+| Master and detail | Guided Intake | No |
+| Three columns | Workspace Home | Yes |
+| Header, tabs and footer bar | Operations Console | Yes |
+| | Agent Workbench | Yes |
+
+The four existing record-page templates remain. A page made from a template is independent of it.
+An admin can save any page as an Organization Template.
+
+### Builder experience
+
+- Undo and redo, copy and paste, full keyboard operation (WP-0640).
+- Visibility rules per component by role, field condition and device size (WP-0641).
+- Preview as a role with a real record, version compare and restore, and pre-publish checks for broken bindings, contrast and empty states (WP-0642).
+- Describe a page: the Admin Assistant drafts a page for review and can never publish (WP-0643).
+
+### Navigation and theme
+
+- **App menu editor** (WP-0650). Pages, objects, dashboards and links in groups, visible by role, with a home page per role.
+- **Themes** (WP-0651, WP-0652). A theme per app, light and dark pairs, density and corner styles, the contrast check on both modes, and the same theme on print, PDF and system email.
+
+### Every edition, every time
+
+Every work package in sections 15 and 16 ships in the desktop edition, Team Workspace and the
+online demo, and updates the website help with what the feature does, how to set it up and where
+it is in the menu (REQ-ADM-009). When the menu changes, every help article that names an old path
+is rewritten in the same release (WP-0608); the help names an "Admin →" path 138 times today.
+
+## 17. Data model additions
 
 All follow the existing conventions: UUID ids, `workspace_id` on every row, audit columns, JSON
 config columns, migrations numbered by ADR-0003. Names are proposals.
@@ -284,8 +415,11 @@ config columns, migrations numbered by ADR-0003. Names are proposals.
 | `ai_alert_rules`, `ai_alert_events` | Rules and fired alerts |
 | `ai_risk_assessments`, `ai_control_mappings` | Risk class per agent or Team; control mapping data |
 | `ai_promotions` | Who promoted which version between which environments |
+| `pages` (extends `page_layouts`), `page_blocks`, `page_block_versions` | The unified page model with page type and data sources; reusable blocks and their versions |
+| `app_navigation` | Menu groups and entries per app, role visibility, home page per role |
+| `theme_assignments` | Which theme an app uses; light and dark values live in the theme version |
 
-## 16. API and event additions
+## 18. API and event additions
 
 | Surface | Additions |
 |---|---|
@@ -296,7 +430,7 @@ config columns, migrations numbered by ADR-0003. Names are proposals.
 
 Every new endpoint sits behind its own scope with an allow test and a deny test, as ADR-0018 requires.
 
-## 17. Security
+## 19. Security
 
 New surfaces and the control that covers each:
 
@@ -313,7 +447,7 @@ New surfaces and the control that covers each:
 
 The G5 gate includes a security review of all of these (WP-0599).
 
-## 18. Build sequence and workload
+## 20. Build sequence and workload
 
 Phase 5 runs beside Phase 4 once the G3 security gate has passed. Each lane starts when its entry
 dependencies are done. The two design packages run now, in Phase 1.
@@ -333,12 +467,31 @@ dependencies are done. The two design packages run now, in Phase 1.
 | 3 | AI compliance | WP-0590 → WP-0591 → WP-0592 | Registry, audit log | Muse |
 | Last | Gate G5 | WP-0599 | The last package of each security-relevant lane | Claude |
 
-Workload at the time of writing: Codex 34 packages and 120 points (including sign-in, provider
-coverage and toolchain upgrades from the existing plan); Muse AI 16 packages and 40 points; Claude
-Code keeps the critical path of Phases 1 to 4 plus 5 packages in Phase 5. Live numbers are in
+### Phase 6: Admin console and Experience Studio
+
+A parallel track (ADR-0022). It does not wait for any other gate; only a few packages depend on
+AI features. The two ADR packages and the console shell come first because every later phase adds
+screens to the menu.
+
+| Order | Lane | Work packages | Enters after | Planned for |
+|---|---|---|---|---|
+| Now | Decisions | WP-0601, WP-0610 | Nothing | Claude |
+| 1 | Admin console | WP-0602 → WP-0603, WP-0604, WP-0605 → WP-0606; WP-0607; WP-0608 | Menu registry | Claude; Muse for home, panels, findability and help |
+| 1 | One page model | WP-0611 → WP-0613, WP-0615; WP-0612 | Page model ADR | Claude; Codex for components and custom screens |
+| 2 | Components and blocks | WP-0620, WP-0621, WP-0624 → WP-0625 | Custom screens | Codex; Muse for form, content and starter blocks |
+| 2 | Builder experience | WP-0640, WP-0641, WP-0642 | Page store | Codex |
+| 2 | Navigation and theme | WP-0650; WP-0651 → WP-0652 | Custom screens, page store | Codex; Muse for themes |
+| 3 | Layouts and templates | WP-0630 → WP-0631 | Data and form components | Muse |
+| 3 | Dashboards carried over | WP-0614 | Data components | Codex |
+| After AI features | AI components and templates | WP-0622 → WP-0632; WP-0623; WP-0643 | Approvals inbox, run endpoints, human seats | Codex, Muse, Claude |
+| Last | Gate G6 | WP-0699 | Findability test, parity walkthrough, help audit | Claude |
+
+Workload at the time of writing: Codex 45 packages and 158 points (including sign-in, provider
+coverage and toolchain upgrades from the existing plan); Muse AI 28 packages and 74 points; Claude
+Code keeps the critical path of Phases 1 to 4 plus 13 planned packages (40 points). Live numbers are in
 `STATUS.md`. The reasoning for the split is in ADR-0021.
 
-## 19. Deferred
+## 21. Deferred
 
 Not planned; each needs its own ADR before it enters the plan.
 
@@ -349,9 +502,10 @@ Not planned; each needs its own ADR before it enters the plan.
 - Policy as code with what-if simulation
 - Event-stream triggers (queues and streams)
 
-## 20. Open questions for the owner
+## 22. Open questions for the owner
 
 - RAID Q-27: how Codex works on this repo (shell, network, who merges).
 - RAID Q-28: confirm the ten areas and the six deferred ones.
+- When may the Screen layouts and Dashboards aliases be removed: two releases after the unified builder ships, as with Pipelines? (decided in WP-0610)
 - Should the first external-agent protocol be A2A only, or A2A plus a plain HTTP adapter for agents that do not speak it? (decided in WP-0114)
 - Which key management services are required for the first release of WP-0581: all four, or the one the first customer uses?

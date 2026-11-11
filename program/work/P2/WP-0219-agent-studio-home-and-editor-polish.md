@@ -39,6 +39,7 @@ Mockups 1 and 2.
 ## Notes
 
 - Scoped from the spec; refine into detailed acceptance criteria (and split if larger than L) at the review of the previous phase's gate.
+- ADR-0022: Agent Studio lives in the AI Studio area of the Admin console; register its screens in the menu registry (WP-0601) and use the tool scaffolds (WP-0605) if they have shipped.
 
 ## Progress log
 

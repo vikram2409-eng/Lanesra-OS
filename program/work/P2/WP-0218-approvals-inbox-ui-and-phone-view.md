@@ -39,6 +39,7 @@ Mockup 7 including the one-decision-per-screen phone layout.
 ## Notes
 
 - Scoped from the spec; refine into detailed acceptance criteria (and split if larger than L) at the review of the previous phase's gate.
+- ADR-0022: the Approvals inbox is listed under AI operations in the Admin console menu registry (WP-0601); the approvals page component (WP-0622) reuses its list.
 
 ## Progress log
 

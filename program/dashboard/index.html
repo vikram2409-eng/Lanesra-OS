@@ -313,10 +313,11 @@ tr.clickable:hover td { background: var(--surface); }
     return "https://github.com/" + slug + "/blob/" + branch + "/" + file;
   }
   function phaseName(id) { var p = D.phases.filter(function (x) { return x.id === id; })[0]; return (id === "v2" ? "v2" : "Phase " + id) + " · " + (p ? p.title : ""); }
-  var GATE_FOR = { "0": "G0", "1": "G1", "2": "G2", "3": "G3", "4": "G4", "5": "G5" };
-  var PHASE_NOTE = { "5": "Added by the platform extension (ADR-0020). Runs beside Phase 4 once the Phase 3 gate has passed." };
+  var GATE_FOR = { "0": "G0", "1": "G1", "2": "G2", "3": "G3", "4": "G4", "5": "G5", "6": "G6" };
+  var PHASE_NOTE = { "5": "Added by the platform extension (ADR-0020). Runs beside Phase 4 once the Phase 3 gate has passed.", "6": "Admin console and Experience Studio (ADR-0022). A parallel track: it starts now and waits for no other gate. Every package ships in desktop, Team Workspace and the online demo, with website help." };
+  var PHASE_SHORT = { "5": "runs beside Phase 4", "6": "parallel track, starts now" };
   // Design document section (its "## N." heading) for each lane of the platform extension.
-  var DESIGN_FOR = { "E5.1": 8, "E5.2": 6, "E5.3": 9, "E5.4": 11, "E5.5": 11, "E5.6": 10, "E5.7": 4, "E5.8": 12, "E5.9": 14, "E5.10": 13, "E5.11": 18, "WP-0114": 8, "WP-0147": 6 };
+  var DESIGN_FOR = { "E5.1": 8, "E5.2": 6, "E5.3": 9, "E5.4": 11, "E5.5": 11, "E5.6": 10, "E5.7": 4, "E5.8": 12, "E5.9": 14, "E5.10": 13, "E5.11": 20, "WP-0114": 8, "WP-0147": 6, "E6.1": 15, "E6.2": 16, "E6.3": 16, "E6.4": 16, "E6.5": 16, "E6.6": 16, "E6.7": 20 };
   function designSection(w) { return DESIGN_FOR[w.id] || DESIGN_FOR[String(w.epic || "").split(" ")[0]] || 0; }
   function designBtn(n, label) { return n ? '<button class="wp-link" data-design="' + n + '" style="font-family:inherit">' + esc(label || ("Design §" + n)) + "</button>" : ""; }
   function openDesign(n) {
@@ -349,23 +350,24 @@ tr.clickable:hover td { background: var(--surface); }
       var t = ws.reduce(function (a, w) { return a + w.points; }, 0);
       var d = ws.filter(function (w) { return w.status === "done"; }).reduce(function (a, w) { return a + w.points; }, 0);
       var g = D.gates.filter(function (x) { return x.id === GATE_FOR[p.id]; })[0];
-      h.push('<div class="phase-row"><div><b>' + esc(phaseName(p.id)) + '</b><div class="muted" style="font-size:.8rem">' + (g ? esc(g.title.replace(/^G\d — /, "Gate: ")) : "") + (PHASE_NOTE[p.id] ? " · runs beside Phase 4" : "") + '</div></div>' +
+      h.push('<div class="phase-row"><div><b>' + esc(phaseName(p.id)) + '</b><div class="muted" style="font-size:.8rem">' + (g ? esc(g.title.replace(/^G\d — /, "Gate: ")) : "") + (PHASE_SHORT[p.id] ? " · " + PHASE_SHORT[p.id] : "") + '</div></div>' +
         '<div class="meter"><i style="width:' + (t ? Math.round(100 * d / t) : 0) + '%"></i></div>' +
         '<div class="nums">' + d + " / " + t + ' pts</div><div class="nums">' + ws.filter(function (w) { return w.status === "done"; }).length + " / " + ws.length + " WPs</div></div>");
     });
     h.push("</div></div>");
 
     var ext = wps.filter(function (w) { return designSection(w) && w.status !== "dropped"; }), areas = [], byArea = {};
-    ext.forEach(function (w) { var k = w.phase === "5" ? w.epic : "E1 Design decisions (Phase 1)"; if (!byArea[k]) { byArea[k] = []; areas.push(k); } byArea[k].push(w); });
+    ext.forEach(function (w) { var k = (w.phase === "5" || w.phase === "6") ? w.epic : "E1 Design decisions (Phase 1)"; if (!byArea[k]) { byArea[k] = []; areas.push(k); } byArea[k].push(w); });
     if (areas.length) {
-      areas.sort(function (a, b) { return (a.indexOf("E1 ") === 0 ? 0 : parseFloat(a.slice(1).replace("5.", "")) || 99) - (b.indexOf("E1 ") === 0 ? 0 : parseFloat(b.slice(1).replace("5.", "")) || 99); });
-      h.push('<div class="block"><h2>Platform extension by area</h2><p class="muted" style="font-size:.85rem">The ten areas added on 2026-11-11 (ADR-0020), with the two design decisions that come first. Each area links to its section of the design.</p><div class="table-wrap"><table><thead><tr><th>Area</th><th>Work packages</th><th>Done</th><th>Points</th><th>Planned for</th><th>Starts after</th><th>Design</th></tr></thead><tbody>');
+      var rank = function (a) { var m = a.match(/^E(\d+)\.(\d+)/); return a.indexOf("E1 ") === 0 ? 0 : m ? parseInt(m[1], 10) * 100 + parseInt(m[2], 10) : 9999; };
+      areas.sort(function (a, b) { return rank(a) - rank(b); });
+      h.push('<div class="block"><h2>New work by area</h2><p class="muted" style="font-size:.85rem">Added on 2026-11-11: the platform extension (Phase 5, ADR-0020) with its two early design decisions, and the Admin console and Experience Studio (Phase 6, ADR-0022). Each area links to its section of the design.</p><div class="table-wrap"><table><thead><tr><th>Area</th><th>Phase</th><th>Work packages</th><th>Done</th><th>Points</th><th>Planned for</th><th>Starts after</th><th>Design</th></tr></thead><tbody>');
       areas.forEach(function (k) {
         var ws = byArea[k], ids = {}; ws.forEach(function (w) { ids[w.id] = 1; });
         var who = []; ws.forEach(function (w) { var a = AGENT_LABEL[w.planned_for] || "any"; if (who.indexOf(a) < 0) who.push(a); });
         var entry = []; ws.forEach(function (w) { w.depends_on.forEach(function (d) { if (!ids[d] && entry.indexOf(d) < 0) entry.push(d); }); });
         var open = entry.filter(function (d) { return WP[d] && WP[d].status !== "done" && WP[d].status !== "dropped"; });
-        h.push("<tr><td><b>" + esc(k.replace(/^E[\d.]+ /, "")) + "</b></td><td>" + ws.map(function (w) { return wpBtn(w.id); }).join(" ") + '</td><td class="num">' + ws.filter(function (w) { return w.status === "done"; }).length + " / " + ws.length + '</td><td class="num">' + ws.reduce(function (a, w) { return a + w.points; }, 0) + "</td><td>" + esc(who.join(", ")) + "</td><td>" +
+        h.push("<tr><td><b>" + esc(k.replace(/^E[\d.]+ /, "")) + "</b></td><td class=\"num\">" + esc(ws[0].phase) + "</td><td>" + ws.map(function (w) { return wpBtn(w.id); }).join(" ") + '</td><td class="num">' + ws.filter(function (w) { return w.status === "done"; }).length + " / " + ws.length + '</td><td class="num">' + ws.reduce(function (a, w) { return a + w.points; }, 0) + "</td><td>" + esc(who.join(", ")) + "</td><td>" +
           (open.length ? open.slice(0, 5).map(wpBtn).join(" ") + (open.length > 5 ? " +" + (open.length - 5) : "") : '<span class="pill st-ready">can start</span>') + "</td><td>" + designBtn(designSection(ws[0])) + "</td></tr>");
       });
       h.push("</tbody></table></div></div>");
@@ -426,7 +428,7 @@ tr.clickable:hover td { background: var(--surface); }
 
   // ------------------------------------------------------------- sequence
   function renderSequence() {
-    var h = ['<div class="block"><h2>Build sequence</h2><p class="muted">Every work package in build order: by phase, then dependency wave (a wave can start once the waves before it are done), then id. A gate closes each phase. Work packages in the same wave can be built in parallel, and each shows the AI it is planned for. Phase 5 is the platform extension: it runs beside Phase 4 once the Phase 3 gate has passed, so its place below Phase 4 is not a wait.</p></div>'];
+    var h = ['<div class="block"><h2>Build sequence</h2><p class="muted">Every work package in build order: by phase, then dependency wave (a wave can start once the waves before it are done), then id. A gate closes each phase. Work packages in the same wave can be built in parallel, and each shows the AI it is planned for. Phase 5 (the platform extension) runs beside Phase 4 once the Phase 3 gate has passed, and Phase 6 (Admin console and Experience Studio) is a parallel track that starts now, so their place lower in the list is not a wait.</p></div>'];
     h.push('<div class="table-wrap"><table><thead><tr><th>Seq</th><th>Wave</th><th>WP</th><th>Title</th><th>Status</th><th>Editions</th><th>Planned for</th><th>Built by</th><th>Est</th><th>Depends on</th><th>Unblocks</th></tr></thead><tbody>');
     var lastPhase = null;
     D.work_packages.forEach(function (w) {
@@ -435,7 +437,7 @@ tr.clickable:hover td { background: var(--surface); }
           var g = D.gates.filter(function (x) { return x.id === GATE_FOR[lastPhase]; })[0];
           if (g) h.push('<tr class="gate-row"><td colspan="11">◆ ' + esc(g.title) + " · " + esc(g.status) + "</td></tr>");
         }
-        h.push('<tr class="phase-head"><td colspan="11"><h3>' + esc(phaseName(w.phase)) + "</h3>" + (PHASE_NOTE[w.phase] ? '<div class="muted" style="font-size:.85rem">' + esc(PHASE_NOTE[w.phase]) + " " + designBtn(18, "Build order in the design") + "</div>" : "") + "</td></tr>");
+        h.push('<tr class="phase-head"><td colspan="11"><h3>' + esc(phaseName(w.phase)) + "</h3>" + (PHASE_NOTE[w.phase] ? '<div class="muted" style="font-size:.85rem">' + esc(PHASE_NOTE[w.phase]) + " " + designBtn(20, "Build order in the design") + "</div>" : "") + "</td></tr>");
         lastPhase = w.phase;
       }
       h.push('<tr class="clickable" data-wp="' + esc(w.id) + '"><td class="num">' + w.seq + '</td><td class="num">' + w.wave + "</td><td>" + wpBtn(w.id) + "</td><td>" + esc(w.title) + (w.critical ? ' <span class="pill crit">critical</span>' : "") + "</td><td>" + pill(w.status) + "</td><td>" + eds(w) + "</td><td>" + planned(w) + "</td><td>" + agents(w.built_by) + '</td><td class="num">' + esc(w.estimate) + "</td><td>" + (w.depends_on.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td><td>" + (w.unblocks.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td></tr>");
@@ -598,7 +600,7 @@ tr.clickable:hover td { background: var(--surface); }
       i++;
     }
     flush();
-    el.innerHTML = '<div class="block"><h2>' + esc(title || "Solution design") + '</h2><p class="muted" style="font-size:.85rem">Rendered from <a href="' + esc(repoUrl(D.design.file)) + '" target="_blank" rel="noopener"><code>' + esc(D.design.file) + '</code></a>. <span class="pill new">New</span> marks what the platform extension adds (ADR-0020).</p>' +
+    el.innerHTML = '<div class="block"><h2>' + esc(title || "Solution design") + '</h2><p class="muted" style="font-size:.85rem">Rendered from <a href="' + esc(repoUrl(D.design.file)) + '" target="_blank" rel="noopener"><code>' + esc(D.design.file) + '</code></a>. <span class="pill new">New</span> marks what the extensions of 2026-11-11 add (ADR-0020, ADR-0022).</p>' +
       '<nav class="toc" aria-label="Design sections">' + toc.map(function (t) { return '<a href="#' + t.id + '" data-jump="' + t.id + '">' + esc(t.t.replace(/\s*\[NEW\]/, "")) + "</a>"; }).join("") + "</nav></div>" +
       '<div class="doc">' + h.join("") + "</div>";
     el.querySelectorAll("[data-jump]").forEach(function (a) {
@@ -628,7 +630,7 @@ tr.clickable:hover td { background: var(--surface); }
 
   // ----------------------------------------------------------------- gates
   function renderGates() {
-    var h = ['<div class="block"><h2>Phase gates</h2><p class="muted">Each phase ends with a gate. The owner signs it once every check has evidence. The next phase\'s work stays planned until then. One exception: Phase 5, the platform extension, opens once the Phase 3 gate has passed and runs beside Phase 4, so G5 does not hold back general availability (ADR-0020).</p></div><div class="gates">'];
+    var h = ['<div class="block"><h2>Phase gates</h2><p class="muted">Each phase ends with a gate. The owner signs it once every check has evidence. The next phase\'s work stays planned until then. One exception: Phase 5, the platform extension, opens once the Phase 3 gate has passed and runs beside Phase 4, so G5 does not hold back general availability (ADR-0020). Phase 6, the Admin console and Experience Studio, is a parallel track with its own gate G6 (ADR-0022).</p></div><div class="gates">'];
     D.gates.forEach(function (g) {
       h.push('<div class="gate"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><h3>' + esc(g.title) + '</h3><span class="pill ' + (/pass|signed|done/i.test(g.status) ? "st-done" : "st-proposed") + '">' + esc(g.status) + "</span></div><ul>" + g.checks.map(function (c) { return "<li>" + (c.done ? "✓ " : "") + inline(c.text) + "</li>"; }).join("") + '</ul><a href="' + esc(repoUrl(g.file)) + '" target="_blank" rel="noopener">Gate file</a></div>');
     });
@@ -673,7 +675,7 @@ tr.clickable:hover td { background: var(--surface); }
     var areas = []; D.requirements.forEach(function (r) { if (areas.indexOf(r.area) < 0) areas.push(r.area); });
     var areaTitle = {}; D.requirements.forEach(function (r) { areaTitle[r.area] = r.area_title || r.area; });
     fillSelect(document.getElementById("rq-area"), "All areas", areas, function (a) { return a + " · " + areaTitle[a]; });
-    fillSelect(document.getElementById("rq-src"), "Spec and extension", ["spec", "ext"], function (v) { return v === "ext" ? "Platform extension only" : "October spec and plan only"; });
+    fillSelect(document.getElementById("rq-src"), "Spec and extension", ["spec", "ext"], function (v) { return v === "ext" ? "Added on 2026-11-11 only" : "October spec and plan only"; });
     fillSelect(document.getElementById("rq-phase"), "All phases", D.phases.map(function (p) { return p.id; }), function (v) { return v === "v2" ? "v2" : "Phase " + v; });
     fillSelect(document.getElementById("rq-state"), "All states", ["delivered", "in progress", "planned"]);
     fillSelect(document.getElementById("pk-edition"), "All editions", EDITIONS.map(function (e) { return e[0]; }), function (v) { return EDITIONS.filter(function (e) { return e[0] === v; })[0][1]; });

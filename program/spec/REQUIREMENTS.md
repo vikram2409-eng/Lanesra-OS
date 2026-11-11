@@ -385,6 +385,45 @@ in flight accounts for them.
 - **REQ-COMP-003** [P5] Control mappings: platform controls map to EU AI Act obligations, ISO/IEC 42001 and the NIST AI Risk Management Framework, kept as versioned data, each mapping linked to live evidence
 - **REQ-COMP-004** [P5] Compliance report: a signed, dated bundle for an agent, a Team or the workspace showing controls, evidence and gaps, built on evidence export
 
+## Admin console and Experience Studio (added 2026-11-11, owner decision, ADR-0022; design in `program/design/SOLUTION-DESIGN.md` sections 15 and 16)
+
+A parallel track (Phase 6): it does not wait for the Phase 1 to 5 gates.
+
+## ADM — Admin console
+
+- **REQ-ADM-001** [P6] The Admin console has one menu of ten areas in three bands - Build (Data and ontology, Experience Studio, Automation, AI Studio), Run (AI operations, Integrations and channels, Apps and deployment), Govern (People and access, Governance and compliance, System) - defined once as data that desktop, Team Workspace and the online demo all read; every admin tool has exactly one home in it
+- **REQ-ADM-002** [P6] The menu stays on screen while a tool is open, each area has its own sub-menu, and every admin screen has an address so links, bookmarks, the command palette and help articles can open it directly
+- **REQ-ADM-003** [P6] The menu lists only the areas and tools the signed-in role may use, enforced by the server as well as hidden in the menu; feature-flagged tools appear only while their flag is on
+- **REQ-ADM-004** [P6] A top bar on every admin screen carries search (which also finds tools by their previous names), an environment label, and a tray listing every draft with unpublished changes
+- **REQ-ADM-005** [P6] Admin Home shows what needs attention with a count on each menu area, setup progress, pinned and recent tools, and recent changes, all read from real aggregates
+- **REQ-ADM-006** [P6] The Admin Assistant and Help open as side panels beside any admin screen, the Help panel on the article for that screen
+- **REQ-ADM-007** [P6] Every admin tool follows one pattern: a list with search, filters and a lifecycle pill, and a detail screen with the tabs Overview, Configure, Test and History where they apply
+- **REQ-ADM-008** [P6] The grouping is understandable without training: every area and tool shows a one-line plain-language description; the three AI areas are labelled by purpose (AI Studio: design and test; AI operations: watch and respond; Governance and compliance: rules and proof) and an agent or Team links to its own runs and policies across them; a first-visit tour and a "where did it move" list map every previous location to the new one
+- **REQ-ADM-009** [P6] Every work package of the Admin console and Experience Studio track ships in the desktop edition, Team Workspace and the online demo, and updates the website help with what the feature does, how to set it up step by step, and where to find it in the menu; when a menu path changes, every help article, llms file and website page that names the old path is updated in the same release
+
+## EXP — Experience Studio: pages, components, blocks, templates, navigation and theme
+
+- **REQ-EXP-001** [P6] One page model serves every kind of screen: record page, create and edit form, list page, home page, dashboard and console, with one definition format, one builder and one Draft → Published lifecycle with role assignment
+- **REQ-EXP-002** [P6] A published page takes over its screen for every built-in and custom object, in desktop and Team Workspace alike; an object with no published page keeps rendering exactly as before
+- **REQ-EXP-003** [P6] Existing Screen layouts (forms) are carried into the page model automatically with no change in what users see; the Screen layouts tool, its API and its Solution export keep working as aliases until removed after a deprecation notice
+- **REQ-EXP-004** [P6] Existing Dashboards and Dashboard KPI choices are carried into the page model automatically with no change in what users see; role assignment and the Default fallback are kept
+- **REQ-EXP-005** [P6] Custom screens: an admin creates a page that is not tied to one record, gives it data sources (an object, a saved view, a report, a Glossary metric), page filters and parameters, and assigns it by role
+- **REQ-EXP-006** [P6] All 24 existing components render live data and working actions: KPI sums and counts, charts, buttons, command bar, quick actions and agent actions; no component shows a "not wired yet" placeholder
+- **REQ-EXP-007** [P6] Data components: record list, board, timeline, metric tile and filter bar; a filter bar drives every data component on the page that shares its source
+- **REQ-EXP-008** [P6] Form and content components: form (single or multi-step, using the object's field rules), image, link list, path (status steps) and embed (allowed domains only)
+- **REQ-EXP-009** [P6] Work and AI components: agent chat, approvals, work queue and run activity; every agent call from a page goes through the tool firewall, approvals and budgets, and acts as the signed-in user
+- **REQ-EXP-010** [P6] Blocks: any configured component or group can be saved as a named block with inputs, inserted linked (a change reaches every page that uses it) or as a copy, versioned with Draft → Published, shown with a where-used list before any change, and exported in a Solution
+- **REQ-EXP-011** [P6] Six starter blocks ship ready to use: record summary, my open work, approval strip, KPI row, activity timeline and agent chat
+- **REQ-EXP-012** [P6] Five page layouts are offered when starting blank: single column, main and side panel, master and detail, three columns, and header with tabs and footer bar
+- **REQ-EXP-013** [P6] Six screen templates ship with components placed and bound to the chosen object or app: List and Detail, Analytics Board, Guided Intake, Workspace Home, Operations Console and Agent Workbench; the first three need no AI feature; the four existing record-page templates remain; a page made from a template is fully editable and never tied to it
+- **REQ-EXP-014** [P6] The builder supports undo and redo, copy and paste (within and across pages) and full keyboard operation
+- **REQ-EXP-015** [P6] Each component can carry visibility rules by role, by field condition (the same conditions Business Rules use) and by device size; a rule only hides presentation, and record and field access are always enforced by the server
+- **REQ-EXP-016** [P6] Before publishing, an admin can preview a page as a chosen role with a real record, compare any two versions, and sees checks for broken bindings, contrast, empty states and components the role cannot use
+- **REQ-EXP-017** [P6] Describe a page: the Admin Assistant drafts a page from a plain-language description as a draft for review, using only components and blocks that exist
+- **REQ-EXP-018** [P6] Each app has a menu editor: pages, objects, dashboards and links in groups, visibility by role, and a home page per role
+- **REQ-EXP-019** [P6] Themes can be set per app, come as light and dark pairs, and carry component styles (density, corner shape); the contrast check gates both modes
+- **REQ-EXP-020** [P6] The published theme also styles printed and PDF documents and system email
+
 ## NFR — Success metrics and quality bars
 
 - **REQ-NFR-001** [P4] New admin builds a first working multi-agent team in under 15 minutes (measured in usability tests before GA) (phase: plan)
@@ -393,3 +432,4 @@ in flight accounts for them.
 - **REQ-NFR-004** [P3] 100% of runs show a cost estimate before start (phase: plan)
 - **REQ-NFR-005** [P4] Telemetry to measure the share of Playground runs promoted to a published team (target 30%) (phase: plan)
 - **REQ-NFR-006** [P5] An admin registers an external agent, puts it under policy and sees its first governed run in the run history in under 30 minutes (measured before the Phase 5 gate) (added by ADR-0020)
+- **REQ-NFR-007** [P6] In a findability test before the Phase 6 gate, at least 80% of first-time admins locate each of ten common tasks in the new menu at the first attempt, including one task in each of the three AI areas (added by ADR-0022)

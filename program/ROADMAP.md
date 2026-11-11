@@ -15,6 +15,7 @@ flowchart LR
   G3 --> P4["Phase 4 · Enterprise scale<br/>19 WPs · 75 pts"] --> G4{{"G4 · GA"}}
   G3 --> P5["Phase 5 · Platform and ecosystem<br/>42 WPs · 140 pts<br/>runs beside Phase 4"] --> G5{{"G5 · Platform release"}}
   G4 --> V2["v2 · Open interop"]
+  P6["Phase 6 · Admin console and Experience Studio<br/>31 WPs · 96 pts<br/>parallel track, starts now"] --> G6{{"G6 · Admin and Experience"}}
 ```
 
 Live progress per phase is in [`STATUS.md`](STATUS.md).
@@ -95,6 +96,25 @@ the path to G4. The detailed design is [`design/SOLUTION-DESIGN.md`](design/SOLU
 | AI compliance | 0590 → 0591 → 0592 | Muse | new `ai_compliance_*` |
 | Gate | 0599 | Claude | `gates/G5-platform-release.md` |
 
+## Phase 6 · Admin console and Experience Studio (ADR-0022)
+
+Added 2026-11-11. A parallel track: it waits for no gate. The Admin console replaces the 15-card
+landing page with a ten-area menu in three bands (Build, Run, Govern). Experience Studio merges
+Screen layouts, Page Builder and Dashboards into one page builder with custom screens, reusable
+blocks, five layouts and six templates. Every package ships in desktop, Team Workspace and the
+online demo, with website help.
+
+| Lane | Work packages | Planned for | Main code area |
+|---|---|---|---|
+| Decisions | 0601, 0610 | Claude | `decisions/`, menu registry |
+| Admin console | 0602 → 0603, 0604, 0605 → 0606; 0607; 0608 | Claude; Muse for 0603, 0604, 0606, 0607, 0608 | `desktop/src/features/settings/Settings.tsx`, `app.js` help |
+| One page model | 0611 → 0613, 0615; 0612; 0614 | Claude; Codex for 0612, 0614, 0615 | `page_layout_service`, `screen_layout_service`, `PageRenderer.tsx` |
+| Components and blocks | 0620, 0621, 0622 → 0623, 0624 → 0625 | Codex; Muse for 0621, 0625 | `pageComponentLibrary.ts`, new `page_block_*` |
+| Layouts and templates | 0630 → 0631 → 0632 | Muse | `pageTemplates.ts` |
+| Builder experience | 0640, 0641, 0642, 0643 | Codex; Claude for 0643 | `PageBuilderAdmin.tsx` |
+| Navigation and theme | 0650; 0651 → 0652 | Codex; Muse for themes | `AppsAdmin.tsx`, `theme_service` |
+| Gate | 0699 | Claude | `gates/G6-experience-and-admin.md` |
+
 ## Sequencing rationale
 
 1. **Precursors before features.** CI, a green `main`, reproducible installs, a model test double
@@ -130,5 +150,5 @@ measured throughput:
 4. Write the forecast in the gate file. If the budget is short, cut or defer scope explicitly
    (an ADR), never quality.
 
-Rough order of magnitude for planning only: about 640 points in total, 144 of them added by ADR-0020. The spec's own proposal
+Rough order of magnitude for planning only: about 750 points in total, 144 of them added by ADR-0020 and 96 by ADR-0022. The spec's own proposal
 was 28 weeks for Phases 1–4 with a human team; it is not a commitment here.

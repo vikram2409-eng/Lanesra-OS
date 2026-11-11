@@ -10,9 +10,9 @@ under "Switching" below. Agents may work in parallel on different work packages;
 
 | Agent | Planned work (live list: `STATUS.md`, "Planned workload") |
 |---|---|
-| Claude Code | The critical path in Phases 1 to 4; channel framework, Slack and Microsoft Teams; the Phase 5 gate; every package with no `planned_for` |
-| Codex | Enterprise sign-in (WP-0102 to WP-0105), provider coverage (WP-0146), toolchain upgrades (WP-0194 to WP-0197), performance baseline (WP-0015); in Phase 5 the agent control plane, delegated credentials and MCP gateway, knowledge, enterprise operations, Python SDK, custom tools, simulated users, red-team suite, optimizer, human seats |
-| Muse AI | Design ADRs (WP-0114, WP-0147), SaaS architecture plan (WP-0422); in Phase 5 the compliance pack, Teams as code and promotion, TypeScript SDK, email channel, web widget, synthetic cases, annotation queues, model right-sizing, human-seat SLAs, Helm chart |
+| Claude Code | The critical path in Phases 1 to 4; channel framework, Slack and Microsoft Teams; the Phase 5 gate; in Phase 6 the two ADRs, the console shell, the page store, forms carry-over and the gate; every package with no `planned_for` |
+| Codex | Enterprise sign-in (WP-0102 to WP-0105), provider coverage (WP-0146), toolchain upgrades (WP-0194 to WP-0197), performance baseline (WP-0015); in Phase 5 the agent control plane, delegated credentials and MCP gateway, knowledge, enterprise operations, Python SDK, custom tools, simulated users, red-team suite, optimizer, human seats; in Phase 6 components, custom screens, blocks, builder experience, dashboards carry-over and app navigation |
+| Muse AI | Design ADRs (WP-0114, WP-0147), SaaS architecture plan (WP-0422); in Phase 5 the compliance pack, Teams as code and promotion, TypeScript SDK, email channel, web widget, synthetic cases, annotation queues, model right-sizing, human-seat SLAs, Helm chart; in Phase 6 Admin Home, side panels, findability, the website help refresh, form and content components, starter blocks, layouts, templates and themes |
 
 > Muse AI was paused from 2026-11-01 (RAID Q-26) and is building again from 2026-11-11 (ADR-0021).
 > Codex joined on 2026-11-11. How Codex works is assumed below until the owner confirms (RAID Q-27).

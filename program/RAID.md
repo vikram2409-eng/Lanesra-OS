@@ -35,6 +35,7 @@ Questions (`Q-`) are for the program owner; agents keep working on what does not
 | Q-26 | Who builds now that Muse AI is not working on the program? | Open work was still assigned to Muse (WP-0101) and the owner decision of 2026-10-18 had Muse building identity (WP-0107 to WP-0109) with Claude reviewing | Claude takes over | Answered 2026-11-01: Muse is not building anything; Claude Code takes all build work. Identity PRs no longer need a second AI's review; the owner reviews and merges |
 | Q-27 | How does Codex work on this repo: does its sandbox have a shell with network for `cargo` and `npm`, can it push `wp/` branches and open pull requests itself, and who reviews and merges its work? | Decides whether Codex can take sign-in and control-plane work alone (ADR-0021) | Assume a cloud sandbox with a shell that reads `AGENTS.md`, runs the test suite, pushes branches and opens PRs; start it on WP-0196 or WP-0197 to confirm | Open |
 | Q-28 | Phase 5 scope (ADR-0020): confirm the ten areas and the six deferred ones (multimodal and voice, gateway routing and caching, computer use, public hub, policy as code, event-stream triggers) | Sets 144 points of new work | As recommended on 2026-11-11 | Open |
+| Q-29 | Admin console and Experience Studio (ADR-0022): merge the three screen builders? split AI across three menu areas? add to the program? | Sets 96 points of new work and changes every admin path | Merge; split with findability measures; add as Phase 6 | Answered 2026-11-11: merge them; split AI Studio, AI operations and Governance but make the grouping easy to understand; add to the program with the online demo, website help and both editions updated in every package |
 
 ## Risks
 
@@ -70,6 +71,8 @@ Questions (`Q-`) are for the program owner; agents keep working on what does not
 | R-16 | Debug test builds use ~30 GB of disk; agent sandboxes can run out | High | Low | `cargo clean` guidance in AGENT-PROFILES; CI on hosted runners | — | Open |
 | R-29 | Three AIs now build in parallel (ADR-0021): more merge conflicts, migration-number clashes and duplicated work | Medium | Medium | Lanes follow code boundaries (ADR-0020 table); pushed `wp/` branch is the claim; migration rule ADR-0003; `planned_for` on every Phase 5 package | Open |
 | R-30 | Phase 5 adds outward-facing surfaces (A2A, channels, token vault, MCP gateway, custom tools) that widen the attack surface | High | High | Design ADRs first (WP-0114, WP-0147); threat model updated with each; security review in the G5 gate (WP-0599); red-team suite (WP-0533) | Open |
+| R-31 | Carrying Screen layouts and Dashboards into one page model could change a form or dashboard users rely on | Medium | High | Carry-over with snapshot parity per object and role (WP-0613, WP-0614); aliases kept; upgrade tests from the last release; gate check 4 | Open |
+| R-32 | The Admin regrouping breaks links, help paths and habits; the AI split across three areas may confuse | Medium | Medium | Menu registry with previous names, search and a "where did it move" list (WP-0601, WP-0607); CI check on help paths (WP-0608); findability test at the gate (REQ-NFR-007) | Open |
 
 ## Assumptions
 

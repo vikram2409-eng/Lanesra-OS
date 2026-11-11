@@ -12,6 +12,7 @@
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
 | 5 · Platform and ecosystem | 42 | 0 | 0 | 0 | 0 | 42 | 0 / 140 | `░░░░░░░░░░` 0% |
+| 6 · Admin console and Experience Studio | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 96 | `░░░░░░░░░░` 0% |
 | v2 · Open interop | 1 | 0 | 0 | 0 | 0 | 1 | 0 / 4 | `░░░░░░░░░░` 0% |
 
 ## Edition coverage
@@ -20,9 +21,9 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 148 | 30 | 75 / 492 |
-| Team Workspace | 175 | 36 | 85 / 586 |
-| Online demo | 107 | 17 | 42 / 368 |
+| Desktop | 178 | 30 | 75 / 586 |
+| Team Workspace | 205 | 36 | 85 / 680 |
+| Online demo | 136 | 17 | 42 / 460 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -40,14 +41,14 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 
 | Planned for | Open work packages | Points | Work packages |
 |---|---|---|---|
-| claude | 5 | 16 | WP-0520, WP-0521, WP-0522, WP-0525, WP-0599 |
-| codex | 34 | 120 | WP-0015, WP-0102, WP-0103, WP-0104, WP-0105, WP-0146, WP-0194, WP-0195, WP-0196, WP-0197, WP-0501, WP-0502, WP-0503, WP-0504, WP-0505, WP-0510, WP-0511, WP-0512, WP-0513, WP-0530, WP-0533, WP-0540, WP-0550, WP-0551, WP-0552, WP-0553, WP-0560, WP-0572, WP-0574, WP-0580, WP-0581, WP-0582, WP-0583, WP-0585 |
-| muse | 16 | 40 | WP-0114, WP-0147, WP-0422, WP-0523, WP-0524, WP-0531, WP-0532, WP-0541, WP-0561, WP-0570, WP-0571, WP-0573, WP-0584, WP-0590, WP-0591, WP-0592 |
+| claude | 13 | 40 | WP-0520, WP-0521, WP-0522, WP-0525, WP-0599, WP-0601, WP-0602, WP-0605, WP-0610, WP-0611, WP-0613, WP-0643, WP-0699 |
+| codex | 45 | 158 | WP-0015, WP-0102, WP-0103, WP-0104, WP-0105, WP-0146, WP-0194, WP-0195, WP-0196, WP-0197, WP-0501, WP-0502, WP-0503, WP-0504, WP-0505, WP-0510, WP-0511, WP-0512, WP-0513, WP-0530, WP-0533, WP-0540, WP-0550, WP-0551, WP-0552, WP-0553, WP-0560, WP-0572, WP-0574, WP-0580, WP-0581, WP-0582, WP-0583, WP-0585, WP-0612, WP-0614, WP-0615, WP-0620, WP-0622, WP-0623, WP-0624, WP-0640, WP-0641, WP-0642, WP-0650 |
+| muse | 28 | 74 | WP-0114, WP-0147, WP-0422, WP-0523, WP-0524, WP-0531, WP-0532, WP-0541, WP-0561, WP-0570, WP-0571, WP-0573, WP-0584, WP-0590, WP-0591, WP-0592, WP-0603, WP-0604, WP-0606, WP-0607, WP-0608, WP-0621, WP-0625, WP-0630, WP-0631, WP-0632, WP-0651, WP-0652 |
 
 ## Requirement coverage
 
-- Spec requirements tracked: **296**
-- Mapped to a work package: **296**
+- Spec requirements tracked: **326**
+- Mapped to a work package: **326**
 - Delivered (every mapped work package done): **56**
 
 ## Phase 0 · Precursors
@@ -281,6 +282,42 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0591](work/P5/WP-0591-risk-classification-and-control-mappings.md) | Risk classification and control mappings | E5.10 AI compliance | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0590 |
 | [WP-0592](work/P5/WP-0592-compliance-report.md) | Compliance report | E5.10 AI compliance | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0591 |
 | [WP-0599](work/P5/WP-0599-phase-5-gate-platform-readiness.md) | Phase 5 gate: platform readiness | E5.11 Platform gate | ⚪ proposed | M | — | WP-0505, WP-0513, WP-0525, WP-0533, WP-0585, WP-0592 |
+
+## Phase 6 · Admin console and Experience Studio
+
+| WP | Title | Epic | Status | Est | Editions (✓ delivered) | Depends on |
+|---|---|---|---|---|---|---|
+| [WP-0601](work/P6/WP-0601-adr-and-menu-registry-for-the-admin-console.md) | ADR and menu registry for the Admin console | E6.1 Admin console | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | - |
+| [WP-0602](work/P6/WP-0602-admin-console-shell-side-menu-sub-menus-top-bar-and-addresse.md) | Admin console shell: side menu, sub-menus, top bar and addresses | E6.1 Admin console | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0601 |
+| [WP-0603](work/P6/WP-0603-admin-home-with-attention-counts.md) | Admin Home with attention counts | E6.1 Admin console | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0602 |
+| [WP-0604](work/P6/WP-0604-admin-assistant-and-help-as-side-panels.md) | Admin Assistant and Help as side panels | E6.1 Admin console | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0602 |
+| [WP-0605](work/P6/WP-0605-one-pattern-for-admin-tools-list-and-detail-scaffold.md) | One pattern for admin tools: list and detail scaffold | E6.1 Admin console | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0602 |
+| [WP-0606](work/P6/WP-0606-apply-the-tool-pattern-to-the-run-and-govern-areas.md) | Apply the tool pattern to the Run and Govern areas | E6.1 Admin console | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0605 |
+| [WP-0607](work/P6/WP-0607-findability-descriptions-tour-previous-location-map-and-test.md) | Findability: descriptions, tour, previous-location map and test | E6.1 Admin console | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0603 |
+| [WP-0608](work/P6/WP-0608-website-help-and-pages-for-the-new-menu.md) | Website help and pages for the new menu | E6.1 Admin console | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0602 |
+| [WP-0610](work/P6/WP-0610-adr-one-page-model-and-how-existing-layouts-are-carried-over.md) | ADR: one page model and how existing layouts are carried over | E6.2 One page model | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | - |
+| [WP-0611](work/P6/WP-0611-page-store-and-renderer-for-every-page-type-and-every-object.md) | Page store and renderer for every page type and every object | E6.2 One page model | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0610 |
+| [WP-0612](work/P6/WP-0612-finish-the-24-existing-components.md) | Finish the 24 existing components | E6.2 One page model | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0610 |
+| [WP-0613](work/P6/WP-0613-carry-screen-layouts-forms-into-the-page-model.md) | Carry Screen layouts (forms) into the page model | E6.2 One page model | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0611 |
+| [WP-0614](work/P6/WP-0614-carry-dashboards-into-the-page-model.md) | Carry Dashboards into the page model | E6.2 One page model | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0611, WP-0620 |
+| [WP-0615](work/P6/WP-0615-custom-screens-with-data-sources-filters-and-parameters.md) | Custom screens with data sources, filters and parameters | E6.2 One page model | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0611 |
+| [WP-0620](work/P6/WP-0620-data-components-record-list-board-timeline-metric-tile-filte.md) | Data components: record list, board, timeline, metric tile, filter bar | E6.3 Components and blocks | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0615 |
+| [WP-0621](work/P6/WP-0621-form-and-content-components.md) | Form and content components | E6.3 Components and blocks | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0611 |
+| [WP-0622](work/P6/WP-0622-work-and-ai-components-agent-chat-approvals-run-activity.md) | Work and AI components: agent chat, approvals, run activity | E6.3 Components and blocks | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0615, WP-0218, WP-0202 |
+| [WP-0623](work/P6/WP-0623-work-queue-component.md) | Work queue component | E6.3 Components and blocks | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0622, WP-0560 |
+| [WP-0624](work/P6/WP-0624-blocks-reusable-components.md) | Blocks: reusable components | E6.3 Components and blocks | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0611 |
+| [WP-0625](work/P6/WP-0625-six-starter-blocks.md) | Six starter blocks | E6.3 Components and blocks | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0624, WP-0620 |
+| [WP-0630](work/P6/WP-0630-five-page-layouts-and-templates-for-every-page-type.md) | Five page layouts and templates for every page type | E6.4 Layouts and templates | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0615 |
+| [WP-0631](work/P6/WP-0631-screen-templates-list-and-detail-analytics-board-guided-inta.md) | Screen templates: List and Detail, Analytics Board, Guided Intake | E6.4 Layouts and templates | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0630, WP-0620, WP-0621 |
+| [WP-0632](work/P6/WP-0632-screen-templates-workspace-home-operations-console-agent-wor.md) | Screen templates: Workspace Home, Operations Console, Agent Workbench | E6.4 Layouts and templates | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0631, WP-0622 |
+| [WP-0640](work/P6/WP-0640-builder-undo-redo-copy-paste-and-keyboard.md) | Builder: undo, redo, copy, paste and keyboard | E6.5 Builder experience | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0611 |
+| [WP-0641](work/P6/WP-0641-visibility-rules-per-component.md) | Visibility rules per component | E6.5 Builder experience | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0611 |
+| [WP-0642](work/P6/WP-0642-preview-as-a-role-version-compare-and-pre-publish-checks.md) | Preview as a role, version compare and pre-publish checks | E6.5 Builder experience | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0611 |
+| [WP-0643](work/P6/WP-0643-describe-a-page-with-the-admin-assistant.md) | Describe a page with the Admin Assistant | E6.5 Builder experience | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0615, WP-0624 |
+| [WP-0650](work/P6/WP-0650-app-menu-editor-and-home-page-per-role.md) | App menu editor and home page per role | E6.6 Navigation and theme | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0615 |
+| [WP-0651](work/P6/WP-0651-themes-per-app-light-and-dark-pairs-component-styles.md) | Themes per app, light and dark pairs, component styles | E6.6 Navigation and theme | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0611 |
+| [WP-0652](work/P6/WP-0652-theme-on-print-pdf-and-system-email.md) | Theme on print, PDF and system email | E6.6 Navigation and theme | ⚪ proposed | M | ○Desktop ○Team Workspace | WP-0651 |
+| [WP-0699](work/P6/WP-0699-phase-6-gate-findability-parity-and-help-complete.md) | Phase 6 gate: findability, parity and help complete | E6.7 Track gate | ⚪ proposed | M | — | WP-0606, WP-0607, WP-0608, WP-0613, WP-0614, WP-0632, WP-0650, WP-0651 |
 
 ## Phase v2 · Open interop
 
