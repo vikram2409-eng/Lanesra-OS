@@ -34,7 +34,8 @@ LOGS = PROGRAM / "log"
 TEST_DIRS = [ROOT / "desktop", ROOT / "tests", ROOT / "program" / "tools"]
 
 STATUSES = ["proposed", "ready", "in_progress", "in_review", "blocked", "done", "dropped"]
-PHASES = ["0", "1", "2", "3", "4", "v2"]
+PHASES = ["0", "1", "2", "3", "4", "5", "v2"]
+PLANNED_FOR = ["claude", "codex", "muse"]  # optional default lane per work package (ADR-0021)
 ESTIMATES = ["S", "M", "L", "XL"]
 EDITIONS = ["desktop", "workspace", "demo"]  # Tauri desktop app, Team Workspace server, online demo
 EDITION_NAMES = {"desktop": "Desktop", "workspace": "Team Workspace", "demo": "Online demo"}
@@ -167,7 +168,10 @@ def validate(wps, reqs, strict_coverage=True):
         if str(wp.get("phase")) not in PHASES:
             errors.append(f"{where}: phase {wp.get('phase')!r} not in {PHASES}")
         if "agent" in wp:
-            errors.append(f"{where}: remove the 'agent' field - work is not pre-assigned to an AI (ADR-0005)")
+            errors.append(f"{where}: remove the 'agent' field - work is not pre-assigned to an AI (ADR-0005); "
+                          "use 'planned_for:' for a planned lane (ADR-0021)")
+        if wp.get("planned_for") and wp.get("planned_for") not in PLANNED_FOR:
+            errors.append(f"{where}: planned_for {wp.get('planned_for')!r} not in {PLANNED_FOR}")
         eds, dlv = wp.get("editions") or [], wp.get("delivered") or []
         if not isinstance(eds, list) or any(e not in EDITIONS for e in eds):
             errors.append(f"{where}: editions {eds!r} must be a list drawn from {EDITIONS}")
@@ -314,7 +318,7 @@ def render_status(wps, reqs):
               "| Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |",
               "|---|---|---|---|---|---|---|---|---|"]
     names = {"0": "0 · Precursors", "1": "1 · Foundations", "2": "2 · Playground",
-             "3": "3 · Teams and modes", "4": "4 · Enterprise scale", "v2": "v2 · Open interop"}
+             "3": "3 · Teams and modes", "4": "4 · Enterprise scale", "5": "5 · Platform and ecosystem", "v2": "v2 · Open interop"}
     weight = {"S": 1, "M": 2, "L": 4, "XL": 8}
     for ph in PHASES:
         items = [w for w in by_phase.get(ph, []) if w.get("status") != "dropped"]
@@ -360,6 +364,18 @@ def render_status(wps, reqs):
             lines.append(f"| [{wid}]({rel_link(w)}) | {w['title']} | {w['phase']} | {w['estimate']} |")
     else:
         lines.append("None.")
+
+    planned = [w for w in wps.values() if w.get("planned_for") and w.get("status") not in ("done", "dropped")]
+    if planned:
+        lines += ["", "## Planned workload (ADR-0021)", "",
+                  "A planned lane is the default AI for a work package, not a lock: any agent may take it "
+                  "when the planned one has no usage left.", "",
+                  "| Planned for | Open work packages | Points | Work packages |", "|---|---|---|---|"]
+        for who in PLANNED_FOR:
+            ws = sorted((w for w in planned if w.get("planned_for") == who), key=lambda w: w["id"])
+            if ws:
+                lines.append(f"| {who} | {len(ws)} | {sum(weight.get(w.get('estimate'), 2) for w in ws)} | "
+                             + ", ".join(w["id"] for w in ws) + " |")
 
     covered = {}
     for w in wps.values():
@@ -491,7 +507,7 @@ Help articles to create or update: {", ".join(HELP_BASE + d for d in (w.get("doc
 
 WEIGHT = {"S": 1, "M": 2, "L": 4, "XL": 8}
 PHASE_TITLES = {"0": "Precursors", "1": "Foundations", "2": "Playground", "3": "Teams and modes",
-                "4": "Enterprise scale", "v2": "Open interop"}
+                "4": "Enterprise scale", "5": "Platform and ecosystem", "v2": "Open interop"}
 LOG_HEAD = re.compile(r"^(\d{4}-\d{2}-\d{2})\s+(.+)$")
 
 
@@ -591,6 +607,14 @@ def load_raid_open():
     return out
 
 
+def load_design():
+    """The solution design document, shown on the dashboard's Design tab."""
+    doc = PROGRAM / "design" / "SOLUTION-DESIGN.md"
+    if not doc.exists():
+        return {"file": "", "markdown": ""}
+    return {"file": rel(doc), "markdown": doc.read_text(encoding="utf-8")}
+
+
 def git_info():
     def run(*a):
         try:
@@ -623,7 +647,7 @@ def export_data(wps, reqs):
         out_wps.append({
             "seq": i, "wave": wave[w], "critical": w in critical, "id": w, "title": wp.get("title"),
             "phase": str(wp.get("phase")), "epic": wp.get("epic"), "status": wp.get("status"),
-            "owner": owner, "estimate": wp.get("estimate"), "points": WEIGHT.get(wp.get("estimate"), 2),
+            "owner": owner, "planned_for": wp.get("planned_for") or "", "estimate": wp.get("estimate"), "points": WEIGHT.get(wp.get("estimate"), 2),
             "depends_on": wp.get("depends_on") or [], "unblocks": sorted(unblocks[w]),
             "requirements": wp.get("requirements") or [], "branch": wp.get("branch") or "",
             "editions": wp.get("editions") or [], "delivered": wp.get("delivered") or [],
@@ -659,6 +683,7 @@ def export_data(wps, reqs):
         "git": git_info(), "phases": [{"id": p, "title": PHASE_TITLES[p]} for p in PHASES],
         "critical_path": critical, "work_packages": out_wps, "requirements": out_reqs,
         "checklist": load_checklist(), "gates": load_gates(), "raid_open": load_raid_open(),
+        "design": load_design(),
     }
 
 

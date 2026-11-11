@@ -253,6 +253,13 @@ class BriefTest(Base):
         self.add(wp_text().replace("owner: unassigned\n", "owner: unassigned\nagent: muse\n"))
         self.assertTrue(any("not pre-assigned" in e for e in self.check()[0]))
 
+    def test_planned_for_accepts_known_agents_only(self):
+        # Covers: ADR-0021 (planned workload lanes)
+        self.add(wp_text().replace("owner: unassigned\n", "owner: unassigned\nplanned_for: codex\n"))
+        self.assertFalse(any("planned_for" in e for e in self.check()[0]))
+        self.add(wp_text().replace("owner: unassigned\n", "owner: unassigned\nplanned_for: gemini\n"))
+        self.assertTrue(any("planned_for" in e for e in self.check()[0]))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -276,6 +276,11 @@ plan adds so the build can be done to enterprise standard by several AI agents i
 - **REQ-EVAL-010** [P2] Impact analysis before Publish lists dependent Teams, Workflows, Solutions, Action Types and suites that will rerun
 - **REQ-EVAL-012** [P2] Provider verification without program-owned API keys: every provider adapter has contract tests from its published API format, suites can run against a local model (Ollama or vLLM) for real-model evidence, recorded runs replay in CI, and a provider conformance suite lets an organisation verify its own model and key from the product (owner decision, ADR-0004)
 - **REQ-EVAL-011** [P4] Shadow mode: a new version runs alongside the published one on real triggers with writes simulated, compared before promotion
+- **REQ-EVAL-013** [P5] Simulated users: a scripted or model-played persona with a goal holds a multi-turn conversation with an agent or Team; graders score the whole conversation (goal reached, turns used, policy breaches) (added by ADR-0020)
+- **REQ-EVAL-014** [P5] Synthetic test cases: draft golden cases are generated from a knowledge collection, sample records or production traces, and a person reviews and accepts each one before it joins a suite (added by ADR-0020)
+- **REQ-EVAL-015** [P5] Annotation queues: sampled or flagged runs enter a queue where reviewers score them against a rubric; the scores calibrate LLM judges (agreement rate reported) and corrected runs become golden cases (added by ADR-0020)
+- **REQ-EVAL-016** [P5] End-user feedback: thumbs and comments on any answer, in the app and in every channel, linked to the run and step and usable as a sampling filter (added by ADR-0020)
+- **REQ-EVAL-017** [P5] Red-team suite: a versioned library of adversarial probes (prompt injection, data exfiltration, privilege escalation, unsafe tool use, jailbreak) runs against an agent or Team with writes simulated; attack success rate is a publish-gate metric (added by ADR-0020)
 
 ## API — Data model, APIs and interop
 
@@ -288,9 +293,9 @@ plan adds so the build can be done to enterprise standard by several AI agents i
 - **REQ-API-007** [P3] Every endpoint is also exposed as MCP tools and `lanesra` CLI commands, with scoped API keys (phase: plan)
 - **REQ-API-008** [P4] Team as an endpoint: OpenAI-compatible chat endpoint and MCP tool per published Team, scoped keys
 - **REQ-API-009** [P3] Desktop bridge `team_commands.rs` replaces `ai_agent_pipeline_commands.rs` (phase: plan)
-- **REQ-API-010** [Pv2] Teams callable over A2A
+- **REQ-API-010** [P5] Teams callable over A2A (moved from v2 by ADR-0020)
 - **REQ-API-011** [Pv2] Playground events available over AG-UI
-- **REQ-API-012** [Pv2] Teams exportable as declarative YAML inside a Solution
+- **REQ-API-012** [P5] Teams exportable as declarative YAML inside a Solution (moved from v2 by ADR-0020)
 - **REQ-API-013** [P3] Workspace gallery over Solutions: reuse approved agents, tools, stop rules and Teams with owner, version and score
 
 ## INT — Integration Hub and API surface (added 2026-10-21, owner decision on RAID Q-18 to Q-20; design in ADR-0018)
@@ -302,6 +307,84 @@ plan adds so the build can be done to enterprise standard by several AI agents i
 - **REQ-INT-005** [P1] Every scope that can be granted to an API client is enforced by at least one endpoint, with an allow test and a deny test per scope, and the scope vocabulary and its endpoints are documented (RAID I-31)
 - **REQ-INT-006** [P1] The REST API offers record search, bulk export and bulk write, webhook management and integration administration (read and operate, never secrets), each behind its own scope (ADR-0018, Q-20)
 
+## Platform extension (added 2026-11-11, owner decision, ADR-0020; design in `program/design/SOLUTION-DESIGN.md`)
+
+These requirements are not in the October spec. They close the gap to agent platforms (not only agent
+frameworks) and are built in Phase 5, except two design requirements placed in Phase 1 so that work
+in flight accounts for them.
+
+## FLEET — Agent control plane for external agents
+
+- **REQ-FLEET-001** [P1] The identity, trust and trace model for agents built outside Lanesra (A2A peers, MCP-hosted agents and ingested traces) is fixed in an ADR before Phase 3 team tools are built, so external agents reuse Agent Identities and the tool-call firewall instead of a parallel path
+- **REQ-FLEET-002** [P5] An admin registers an external agent (name, owner, framework, endpoint, protocol, data classes, risk tier) in one registry beside Lanesra agents; a Team cannot call an endpoint that is not registered and approved
+- **REQ-FLEET-003** [P5] A registered external agent can fill a seat or be called as a tool over A2A; every call passes schema → permission → policy → approval → execute → audit, counts against budgets, and its reply is fenced as untrusted content
+- **REQ-FLEET-004** [P5] External agent runs received as OpenTelemetry traces are mapped onto the run → step → round span model and shown in the same run history with tokens and cost, marked as externally reported
+- **REQ-FLEET-005** [P5] Policies, budgets, data boundaries and the kill switch apply to external agents: a paused, unapproved or over-budget external agent is refused at the firewall and at the A2A endpoint with a readable reason
+- **REQ-FLEET-006** [P5] A fleet view lists every agent, Lanesra-built and external, with owner, version, lifecycle state, risk tier, last run, success rate, cost and open findings
+
+## CRED — Delegated credentials and MCP gateway
+
+- **REQ-CRED-001** [P1] The design for per-user delegated credentials, the token vault and the MCP gateway is fixed in an ADR before Phase 3 connector and MCP work, including how a grant joins the effective identity of a run
+- **REQ-CRED-002** [P5] A user connects their own account to a connector or MCP server with OAuth 2.1 (authorisation code with PKCE); tokens are stored in a token vault encrypted under the workspace data key, are never shown again and are never placed in a model's context
+- **REQ-CRED-003** [P5] The token vault refreshes, rotates and revokes grants; a user lists and revokes their own grants and an admin any grant; every use is audited with user, agent, tool and scope but never the token
+- **REQ-CRED-004** [P5] In an interactive run a call to a delegated connector uses the starting user's grant; an unattended run uses the Agent Identity's own grant or is refused with a readable reason; a call never uses another user's grant
+- **REQ-CRED-005** [P5] MCP servers are admitted through a registry: only approved servers are callable, each tool definition is pinned by hash, and a changed definition is quarantined until an admin approves it again
+- **REQ-CRED-006** [P5] Tool descriptions from MCP servers are scanned for instruction-like content when registered and whenever they change; a finding blocks approval by default and is shown to the admin with the offending text
+- **REQ-CRED-007** [P5] MCP gateway: one Lanesra endpoint offers the approved tools of several MCP servers to external MCP clients under scoped keys, with the same firewall, rate limits and audit as agent tool calls
+
+## CHAN — Channels
+
+- **REQ-CHAN-001** [P5] A channel binds a published Team or agent to an outside conversation surface; each conversation is a session with its own history, linked runs and stop rules
+- **REQ-CHAN-002** [P5] Channel users map to Lanesra principals through the directory where one exists; an unmapped sender gets only what the channel's guest policy allows (nothing by default); inbound requests are signature-verified and replay-protected
+- **REQ-CHAN-003** [P5] Slack channel: mentions, direct messages and threads start or continue a conversation; answers stream and interactive output cards render as Slack blocks
+- **REQ-CHAN-004** [P5] Microsoft Teams channel: personal, group and channel conversations start or continue a conversation; answers stream and interactive output cards render as adaptive cards
+- **REQ-CHAN-005** [P5] Email channel: mail to a channel address starts a run per thread and replies continue it; attachments are bound as untrusted content; outbound mail follows the approval policy
+- **REQ-CHAN-006** [P5] Embeddable web chat widget: a script snippet with an allowed-origins list, signed visitor tokens issued by the host site, per-visitor rate limits and Theme Studio styling
+- **REQ-CHAN-007** [P5] An approver can give any of the four review responses from Slack or Microsoft Teams; the decision is bound to the exact arguments and to the approver's mapped identity, and recorded exactly as one made in the approvals inbox
+
+## OPT — Agent optimizer
+
+- **REQ-OPT-001** [P5] The optimizer turns failing or low-scoring evaluation cases into proposed changes to instructions, examples, tool descriptions or reasoning mode, each shown as a diff with the cases that motivated it
+- **REQ-OPT-002** [P5] A proposal is re-scored on the full suite and on a held-out set it never saw; it is applied only as a new draft version on the owner's approval and is never published automatically
+- **REQ-OPT-003** [P5] Model right-sizing: for each step the optimizer reports the cheapest configured model that still passes the suite, with the cost and quality difference
+
+## KNOW — Ontology-grounded knowledge
+
+- **REQ-KNOW-001** [P5] Knowledge search combines full-text and vector results and reranks them with a configured model (a local model is allowed), reports the score parts for each chunk, and falls back to full-text search alone when no embedding or reranking model is configured
+- **REQ-KNOW-002** [P5] Graph retrieval: a query can expand along Link Types from a bound record (its Object 360 neighbourhood) within a hop and row limit, returning records as cited context under the caller's record-level access
+- **REQ-KNOW-003** [P5] Source sync: a Knowledge Source syncs from a connector on a schedule and keeps each document's source permissions; a chunk is returned only to an effective identity allowed to read its source document
+- **REQ-KNOW-004** [P5] Ask the data: a tool answers numeric questions only through Glossary Metric definitions (metric, grain, filters, time range), never free-form SQL; the answer cites the metric version and is limited by the caller's Record Scope
+
+## HUM — Humans as seats
+
+- **REQ-HUM-001** [P5] A seat can be filled by a person or a Work Team; a step assigned to a human seat creates a work item with the task contract, its inputs and a form generated from the output schema, and the run waits durably
+- **REQ-HUM-002** [P5] Human work items appear in one queue with claim, reassign and return; a submitted result is validated against the output schema and guardrails exactly like an agent's output
+- **REQ-HUM-003** [P5] Human seats carry SLA timers, escalation and out-of-office routing; team metrics report human and agent time, cost and rework separately
+
+## DEV — Developer surface
+
+- **REQ-DEV-001** [P5] Teams as code: a Team with its agents, tasks, playbook, policies and suites exports to and imports from a declarative, versioned document with a published schema; import validates the document and shows a diff before anything is applied
+- **REQ-DEV-002** [P5] Promotion between environments (for example development, test and production workspaces) from a Git repository or the CLI; the target runs the suite before accepting, and records who promoted which version
+- **REQ-DEV-003** [P5] Python SDK over the public API: typed clients for agents, Teams, runs, streamed run events, approvals and evaluations, generated from the API description and tested against the scripted model provider
+- **REQ-DEV-004** [P5] TypeScript SDK with the same coverage as the Python SDK
+- **REQ-DEV-005** [P5] Custom tools: a builder packages a Python tool with a manifest (schema, risk tier, data classes, network needs); it runs only in the sandbox, only when signed by a publisher the workspace trusts, and every call goes through the firewall
+
+## OPS — Enterprise operations
+
+- **REQ-OPS-001** [P5] SCIM 2.0 provisioning: users and groups are created, updated and deactivated from the directory; deactivation ends sessions, revokes delegated grants and reassigns open approvals and work items
+- **REQ-OPS-002** [P5] The server master key can be held in an external key management service (AWS KMS, Azure Key Vault, Google Cloud KMS or HashiCorp Vault) and connector secrets can be read from an external secrets manager; keys rotate without downtime
+- **REQ-OPS-003** [P5] Audit and security events stream to a SIEM over syslog and HTTPS with a documented schema, delivered at least once, with a gap detector based on the audit hash chain
+- **REQ-OPS-004** [P5] Alerts and service-level objectives: rules on run success, latency, cost, approval wait, guardrail failures and tool denials per Team; notifications go to email, webhooks and channels with de-duplication and quiet hours
+- **REQ-OPS-005** [P5] A Helm chart and reference deployment for Kubernetes: server, workers, PostgreSQL, ingress with TLS, health probes and resource limits, linted and smoke-tested in CI
+- **REQ-OPS-006** [P5] High availability and disaster recovery: several server replicas behind a load balancer, no run lost when a replica fails, and recovery point and recovery time targets that are documented and tested
+
+## COMP — AI compliance pack
+
+- **REQ-COMP-001** [P5] AI inventory: every agent, Team, model, tool and external agent is listed with owner, purpose, data classes, risk tier and versions; each published agent and Team has a generated agent card
+- **REQ-COMP-002** [P5] Risk classification: a questionnaire assigns each agent or Team a risk class; high-risk classes require named controls (human oversight, logging, evaluation thresholds) before Publish
+- **REQ-COMP-003** [P5] Control mappings: platform controls map to EU AI Act obligations, ISO/IEC 42001 and the NIST AI Risk Management Framework, kept as versioned data, each mapping linked to live evidence
+- **REQ-COMP-004** [P5] Compliance report: a signed, dated bundle for an agent, a Team or the workspace showing controls, evidence and gaps, built on evidence export
+
 ## NFR — Success metrics and quality bars
 
 - **REQ-NFR-001** [P4] New admin builds a first working multi-agent team in under 15 minutes (measured in usability tests before GA) (phase: plan)
@@ -309,3 +392,4 @@ plan adds so the build can be done to enterprise standard by several AI agents i
 - **REQ-NFR-003** [P1] 100% of tool calls have a complete audit trail (enforced by test from Phase 1) (phase: plan)
 - **REQ-NFR-004** [P3] 100% of runs show a cost estimate before start (phase: plan)
 - **REQ-NFR-005** [P4] Telemetry to measure the share of Playground runs promoted to a published team (target 30%) (phase: plan)
+- **REQ-NFR-006** [P5] An admin registers an external agent, puts it under policy and sees its first governed run in the run history in under 30 minutes (measured before the Phase 5 gate) (added by ADR-0020)

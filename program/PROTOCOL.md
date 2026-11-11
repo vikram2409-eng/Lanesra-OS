@@ -39,8 +39,9 @@ python3 program/tools/programctl.py next          # ready + dependencies done + 
 1. Read `AGENTS.md`, this file, `AGENT-PROFILES.md` and `STATUS.md`. The agents work in sequence,
    so also open the program dashboard (https://vikram2409-eng.github.io/Lanesra-OS/, rebuilt on every merge) to see where the
    previous AI stopped. Claude Code: refresh the dashboard now and again at the end of the session.
-   Work is not pre-assigned to an AI (ADR-0005): take the next ready item, or continue the work
-   package you are handed. Muse AI: the owner gives you `BRIEFING.md` and the task card; you work
+   A work package may name a planned agent in `planned_for:` (ADR-0021). Take the ready items planned
+   for you first; one planned for another agent is yours only if that agent has no usage left or the
+   owner says so. Packages with no `planned_for` go to whoever is free. Or continue the work package you are handed. Muse AI: the owner gives you `BRIEFING.md` and the task card; you work
    through GitHub, so treat CI as your test run and say "untested locally — see CI" in your entries.
 2. **Resuming a work package?** Check out its branch, run `programctl show WP-XXXX`, read its
    **Progress log** (newest last), the latest session log for it in `log/`, and every unresolved
@@ -167,7 +168,8 @@ any unmerged commits across) and a new PR. This happened once, on PR #492 (RAID 
 - **Refinement:** at each gate review, the next phase's WPs are refined (acceptance criteria made
   precise, split to L or smaller) and moved from `proposed` to `ready`.
 - **Spec change or requirement meaning change:** ADR + owner acceptance, then update REQUIREMENTS.md.
-- Work package id ranges: Phase 0 `WP-00xx`, 1 `WP-01xx`, 2 `WP-02xx`, 3 `WP-03xx`, 4 `WP-04xx`, v2 `WP-09xx`.
+- Work package id ranges: Phase 0 `WP-00xx`, 1 `WP-01xx`, 2 `WP-02xx`, 3 `WP-03xx`, 4 `WP-04xx`, 5 `WP-05xx`, v2 `WP-09xx`.
+- Phase 5 (ADR-0020) runs beside Phase 4: a Phase 5 work package may start once its `depends_on` are done and G3 has passed.
 
 ## 9. Gates
 
@@ -175,7 +177,7 @@ Each phase closes with a gate (`gates/G<n>-*.md`). The next phase's WPs stay `pr
 gate passes. To run a gate: fill in every check with evidence (CI run links, test names, `trace`
 output, demo notes), list open RAID items, and ask the owner to sign. Gates come from the spec's
 roadmap: G1 every run produces a full trace; G2 templates pass their evaluation suites; G3 security
-review signed off; G4 GA. G0 (engineering readiness) is added by this plan.
+review signed off; G4 GA. G0 (engineering readiness) is added by this plan. G5 (platform release) closes Phase 5 and is added by ADR-0020.
 
 ## 10. What to update, when
 

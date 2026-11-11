@@ -2,8 +2,8 @@
 
 Five phases, each closed by a gate. Phases 1–4 and their gates come from the spec's roadmap
 diagram; **Phase 0 (Precursors) is added by this plan** because the repo is not yet ready for a
-long, multi-agent enterprise build (see "Why Phase 0" below). The build is done by Claude Code and
-Muse AI (ADR-0004), so **pace is set by the AI token budget available, not by calendar weeks** —
+long, multi-agent enterprise build (see "Why Phase 0" below). The build is done by Claude Code,
+Codex and Muse AI (ADR-0004, ADR-0021), so **pace is set by the AI token budget available, not by calendar weeks** —
 size is shown in estimate points and forecast as described under "Forecasting".
 
 ```mermaid
@@ -13,6 +13,7 @@ flowchart LR
   G1 --> P2["Phase 2 · Playground<br/>24 WPs · 90 pts"] --> G2{{"G2 · Templates pass their eval suites"}}
   G2 --> P3["Phase 3 · Teams and modes<br/>31 WPs · 120 pts"] --> G3{{"G3 · Security review signed off"}}
   G3 --> P4["Phase 4 · Enterprise scale<br/>19 WPs · 75 pts"] --> G4{{"G4 · GA"}}
+  G3 --> P5["Phase 5 · Platform and ecosystem<br/>42 WPs · 140 pts<br/>runs beside Phase 4"] --> G5{{"G5 · Platform release"}}
   G4 --> V2["v2 · Open interop"]
 ```
 
@@ -73,6 +74,27 @@ boundaries to keep merge conflicts low.
 `chat_service.rs` is a hotspot: several agent-loop WPs touch it. Sequence them (0121 first) or
 split the loop into modules in WP-0121 before the others start.
 
+## Phase 5 · Platform and ecosystem (ADR-0020)
+
+Added 2026-11-11. Ten areas that close the gap to agent platforms. Two design work packages
+(WP-0114, WP-0147) sit in Phase 1 so that Phase 3 leaves room for external agents and per-user
+credentials. Each lane starts when its entry dependencies are done and G3 has passed; none is on
+the path to G4. The detailed design is [`design/SOLUTION-DESIGN.md`](design/SOLUTION-DESIGN.md).
+
+| Lane | Work packages | Planned for | Main code area |
+|---|---|---|---|
+| Agent control plane | 0114 → 0501 → 0503, 0504 → 0505; 0502 | Muse (ADR), Codex | new `external_agent_*`, `a2a`, `trace_ingest` |
+| Delegated credentials and MCP gateway | 0147 → 0510 → 0511; 0512 → 0513 | Muse (ADR), Codex | `secret_service`, connector layer, `mcp_*` |
+| Channels | 0520 → 0521, 0522, 0523, 0524 → 0525 | Claude; Muse for 0523, 0524 | new `channels/`, `server/src/` |
+| Evaluation depth | 0530, 0531, 0532, 0533 | Codex 0530, 0533; Muse 0531, 0532 | `ai_eval_service`, `test_eval_service` |
+| Agent optimizer | 0540 → 0541 | Codex, then Muse | new `ai_optimizer_service` |
+| Ontology-grounded knowledge | 0550 → 0551, 0552; 0553 | Codex | `ai_knowledge_service`, `vector_search_service`, ontology |
+| Humans as seats | 0560 → 0561 | Codex, then Muse | teams, `ai_approvals`, Tasks |
+| Developer surface | 0570 → 0571; 0572 → 0573; 0574 | Muse; Codex for 0572, 0574 | `cli/`, new `sdk/` |
+| Enterprise operations | 0580, 0581, 0582, 0583, 0585; 0584 | Codex; Muse for 0584 | `server/src/`, `secret_service`, deployment |
+| AI compliance | 0590 → 0591 → 0592 | Muse | new `ai_compliance_*` |
+| Gate | 0599 | Claude | `gates/G5-platform-release.md` |
+
 ## Sequencing rationale
 
 1. **Precursors before features.** CI, a green `main`, reproducible installs, a model test double
@@ -108,5 +130,5 @@ measured throughput:
 4. Write the forecast in the gate file. If the budget is short, cut or defer scope explicitly
    (an ADR), never quality.
 
-Rough order of magnitude for planning only: about 437 points in total. The spec's own proposal
+Rough order of magnitude for planning only: about 640 points in total, 144 of them added by ADR-0020. The spec's own proposal
 was 28 weeks for Phases 1–4 with a human team; it is not a commitment here.
