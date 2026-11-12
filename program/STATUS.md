@@ -13,7 +13,7 @@
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
 | 5 · Platform and ecosystem | 42 | 0 | 0 | 0 | 0 | 42 | 0 / 140 | `░░░░░░░░░░` 0% |
 | 6 · Admin console and Experience Studio | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 96 | `░░░░░░░░░░` 0% |
-| 7 · Process Lanes | 19 | 0 | 2 | 0 | 0 | 17 | 0 / 58 | `░░░░░░░░░░` 0% |
+| 7 · Process Lanes | 19 | 2 | 0 | 0 | 0 | 17 | 6 / 58 | `█░░░░░░░░░` 10% |
 | v2 · Open interop | 1 | 0 | 0 | 0 | 0 | 1 | 0 / 4 | `░░░░░░░░░░` 0% |
 
 ## Edition coverage
@@ -22,18 +22,15 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 194 | 30 | 75 / 636 |
-| Team Workspace | 221 | 36 | 85 / 730 |
+| Desktop | 194 | 31 | 79 / 636 |
+| Team Workspace | 221 | 37 | 89 / 730 |
 | Online demo | 149 | 17 | 42 / 498 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
 ## Active now
 
-| WP | Title | Status | Owner | Branch | PR |
-|---|---|---|---|---|---|
-| [WP-0701](work/P7/WP-0701-adr-process-lanes-on-the-run-engine-and-the-lane-definition.md) | ADR: Process Lanes on the run engine, and the lane definition schema | in_review | muse | `wp/WP-0701-lane-model-and-schema` | https://github.com/vikram2409-eng/Lanesra-OS/pull/755 |
-| [WP-0703](work/P7/WP-0703-lane-definitions-in-the-core-store-lifecycle-and-compile-to.md) | Lane definitions in the core: store, lifecycle and compile to a graph | in_review | muse | `wp/WP-0703-lane-definitions-in-core` | https://github.com/vikram2409-eng/Lanesra-OS/pull/756 |
+Nothing in progress.
 
 ## Ready to start (all dependencies done)
 
@@ -51,13 +48,13 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 |---|---|---|---|
 | claude | 17 | 54 | WP-0520, WP-0521, WP-0522, WP-0525, WP-0599, WP-0601, WP-0602, WP-0605, WP-0610, WP-0611, WP-0613, WP-0643, WP-0699, WP-0702, WP-0704, WP-0707, WP-0799 |
 | codex | 53 | 182 | WP-0015, WP-0102, WP-0103, WP-0104, WP-0105, WP-0146, WP-0194, WP-0195, WP-0196, WP-0197, WP-0501, WP-0502, WP-0503, WP-0504, WP-0505, WP-0510, WP-0511, WP-0512, WP-0513, WP-0530, WP-0533, WP-0540, WP-0550, WP-0551, WP-0552, WP-0553, WP-0560, WP-0572, WP-0574, WP-0580, WP-0581, WP-0582, WP-0583, WP-0585, WP-0612, WP-0614, WP-0615, WP-0620, WP-0622, WP-0623, WP-0624, WP-0640, WP-0641, WP-0642, WP-0650, WP-0705, WP-0706, WP-0708, WP-0709, WP-0710, WP-0714, WP-0716, WP-0718 |
-| muse | 35 | 94 | WP-0114, WP-0147, WP-0422, WP-0523, WP-0524, WP-0531, WP-0532, WP-0541, WP-0561, WP-0570, WP-0571, WP-0573, WP-0584, WP-0590, WP-0591, WP-0592, WP-0603, WP-0604, WP-0606, WP-0607, WP-0608, WP-0621, WP-0625, WP-0630, WP-0631, WP-0632, WP-0651, WP-0652, WP-0701, WP-0703, WP-0711, WP-0712, WP-0713, WP-0715, WP-0717 |
+| muse | 33 | 88 | WP-0114, WP-0147, WP-0422, WP-0523, WP-0524, WP-0531, WP-0532, WP-0541, WP-0561, WP-0570, WP-0571, WP-0573, WP-0584, WP-0590, WP-0591, WP-0592, WP-0603, WP-0604, WP-0606, WP-0607, WP-0608, WP-0621, WP-0625, WP-0630, WP-0631, WP-0632, WP-0651, WP-0652, WP-0711, WP-0712, WP-0713, WP-0715, WP-0717 |
 
 ## Requirement coverage
 
 - Spec requirements tracked: **352**
 - Mapped to a work package: **352**
-- Delivered (every mapped work package done): **56**
+- Delivered (every mapped work package done): **58**
 
 ## Phase 0 · Precursors
 
@@ -331,9 +328,9 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 
 | WP | Title | Epic | Status | Est | Editions (✓ delivered) | Depends on |
 |---|---|---|---|---|---|---|
-| [WP-0701](work/P7/WP-0701-adr-process-lanes-on-the-run-engine-and-the-lane-definition.md) | ADR: Process Lanes on the run engine, and the lane definition schema | E7.1 Lane foundation | 👀 in review | M | — | - |
+| [WP-0701](work/P7/WP-0701-adr-process-lanes-on-the-run-engine-and-the-lane-definition.md) | ADR: Process Lanes on the run engine, and the lane definition schema | E7.1 Lane foundation | ✅ done | M | — | - |
 | [WP-0702](work/P7/WP-0702-online-demo-the-receive-shipment-lane-on-the-warehouse-demo.md) | Online demo: the Receive Shipment lane on the warehouse demo | E7.6 Shipped lanes | ⚪ proposed | L | ○Online demo | WP-0701 |
-| [WP-0703](work/P7/WP-0703-lane-definitions-in-the-core-store-lifecycle-and-compile-to.md) | Lane definitions in the core: store, lifecycle and compile to a graph | E7.1 Lane foundation | 👀 in review | L | ○Desktop ○Team Workspace | WP-0701 |
+| [WP-0703](work/P7/WP-0703-lane-definitions-in-the-core-store-lifecycle-and-compile-to.md) | Lane definitions in the core: store, lifecycle and compile to a graph | E7.1 Lane foundation | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0701 |
 | [WP-0704](work/P7/WP-0704-human-steps-and-run-data.md) | Human steps and run data | E7.1 Lane foundation | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0703 |
 | [WP-0705](work/P7/WP-0705-record-and-check-steps-real-atomic-repeat-safe-writes.md) | Record and check steps: real, atomic, repeat-safe writes | E7.2 Steps and rules | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0703, WP-0141 |
 | [WP-0706](work/P7/WP-0706-approvals-branches-with-exits-pause-handoff-and-cancel.md) | Approvals, branches with exits, pause, handoff and cancel | E7.2 Steps and rules | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0704 |
