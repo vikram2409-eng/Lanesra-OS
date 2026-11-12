@@ -3,9 +3,9 @@ id: WP-0702
 title: Online demo: the Receive Shipment lane on the warehouse demo
 phase: 7
 epic: E7.6 Shipped lanes
-status: proposed
-owner: unassigned
-planned_for: claude
+status: in_progress
+owner: muse
+planned_for: muse
 depends_on: [WP-0701]
 requirements: [REQ-LANE-025, REQ-LANE-014, REQ-NFR-008]
 estimate: L
@@ -13,7 +13,7 @@ editions: [demo]
 delivered: []
 editions_reason: owner decision (ADR-0023): the online demo previews Process Lanes first; desktop and Team Workspace follow in WP-0703 to WP-0707 from the same definition format
 docs: [process-lanes]
-branch: 
+branch: wp/WP-0702-receive-shipment-lane-demo
 pr: 
 updated: 2026-11-12
 ---
@@ -51,3 +51,5 @@ Prove the feature where a visitor can try it: one screen that receives PO-2026-0
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+- 2026-11-12 muse: Claimed — the owner reassigned this WP from claude to muse ("build WP-0702 and WP-0703, assign it yourself"). Status proposed → in_progress on branch wp/WP-0702-receive-shipment-lane-demo. ACs reviewed and stand as written. Next: read ADR-0023, ADR-0024, the spec Part B and SOLUTION-DESIGN.md §17, then build the demo lane. Note: this branch stacks on the WP-0701 branch (PR #755, program check green, CI/security running) — rebase onto main after #755 merges.
