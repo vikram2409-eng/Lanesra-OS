@@ -124,7 +124,7 @@ execution graph, so it is not a second engine. The online demo previews it first
 
 | Lane of work | Work packages | Planned for | Main code area |
 |---|---|---|---|
-| Decision, schema, demo | 0701 → 0702 | Claude | `decisions/`, `app.js` warehouse demo |
+| Decision, schema, demo | 0701 → 0702 | Muse (0701), Claude (0702) | `decisions/`, `app.js` warehouse demo |
 | Core foundation | 0703 → 0704 | Claude | `execution_graph`, `graph_runtime_service`, new `process_lane_*` |
 | Steps and rules | 0705, 0706, 0709, 0710, 0716 | Codex | `graph_runtime_service`, `action_type_service`, `approval_service`, workflows |
 | Runner and visibility | 0707; 0711, 0713 | Claude; Muse | new `desktop/src/features/lanes/`, Object 360 |

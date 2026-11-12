@@ -18,7 +18,7 @@ program/
 ├── RAID.md              Risks, assumptions, issues, dependencies, questions for the owner
 ├── FINISH-CHECKLIST.md  What every AI updates when a work package finishes
 ├── dashboard/           Source of the one-page program dashboard (data from `programctl export`)
-├── spec/                The design spec (immutable copy) and REQUIREMENTS.md (stable IDs)
+├── spec/                The design spec (immutable copy), REQUIREMENTS.md (stable IDs), process-lane-spec.md (owner's draft for Phase 7)
 ├── design/              SOLUTION-DESIGN.md (the whole solution, shown on the dashboard Design tab), TOKENS.md
 ├── work/P0..P7, Pv2/    One file per work package (YAML front matter + body + progress log)
 ├── gates/               G0..G7 checklists with evidence and sign-off

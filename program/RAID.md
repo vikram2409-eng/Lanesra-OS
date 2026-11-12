@@ -37,7 +37,7 @@ Questions (`Q-`) are for the program owner; agents keep working on what does not
 | Q-28 | Phase 5 scope (ADR-0020): confirm the ten areas and the six deferred ones (multimodal and voice, gateway routing and caching, computer use, public hub, policy as code, event-stream triggers) | Sets 144 points of new work | As recommended on 2026-11-11 | Open |
 | Q-29 | Admin console and Experience Studio (ADR-0022): merge the three screen builders? split AI across three menu areas? add to the program? | Sets 96 points of new work and changes every admin path | Merge; split with findability measures; add as Phase 6 | Answered 2026-11-11: merge them; split AI Studio, AI operations and Governance but make the grouping easy to understand; add to the program with the online demo, website help and both editions updated in every package |
 | Q-30 | Process Lanes (ADR-0023): add to the program with the review's changes? may the online demo preview it before the editions? | 58 points of new work; an exception to REQ-PRE-021 | Add as Phase 7; allow the demo preview for WP-0702 only | Answered 2026-11-12: add it with the recommendations; the owner's spec asks for the demo to prove it first |
-| Q-31 | Should the owner's Process Lane spec be committed to `program/spec/` (the repository is public)? | Agents other than Claude Code cannot read a file that is not in the repo; WP-0701 restates what it needs | Commit it | Open |
+| Q-31 | Should the owner's Process Lane spec be committed to `program/spec/` (the repository is public)? | Agents other than Claude Code cannot read a file that is not in the repo; WP-0701 restates what it needs | Commit it | Answered 2026-11-12: yes; committed as `program/spec/process-lane-spec.md`. WP-0701 is planned for Muse AI |
 
 ## Risks
 

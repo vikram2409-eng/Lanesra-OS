@@ -28,3 +28,8 @@ recommendations, rebase the planning branch, and say whether the feature can be 
 
 ## Decisions, risks or questions raised
 - ADR-0023; the demo-first exception to REQ-PRE-021 applies to WP-0702 only.
+
+## Follow-up, same day
+- Owner: commit the Process Lane spec and plan WP-0701 for Muse AI. Spec committed as
+  `program/spec/process-lane-spec.md` (kept as written; ADR-0023 wins where they differ).
+  WP-0701 refined (deliverables, out of scope), moved to `ready`, `planned_for: muse`. RAID Q-31 answered.

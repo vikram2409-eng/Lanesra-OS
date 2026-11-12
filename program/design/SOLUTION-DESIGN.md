@@ -399,7 +399,7 @@ is rewritten in the same release (WP-0608); the help names an "Admin →" path 1
 
 ## 17. Process Lanes [NEW]
 
-Decided in ADR-0023, from the owner's Process Lane spec. A Process Lane is a guided,
+Decided in ADR-0023, from the owner's Process Lane spec (`spec/process-lane-spec.md`). A Process Lane is a guided,
 single-screen, step-by-step execution of one business process for one record. The record travels
 along the lane: it has a current stage and a current step, and the screen shows where it is.
 
@@ -597,7 +597,7 @@ waits for is WP-0141 (idempotency keys).
 
 | Order | Lane of work | Work packages | Enters after | Planned for |
 |---|---|---|---|---|
-| Now | Decision and schema | WP-0701 | Nothing | Claude |
+| Now | Decision and schema | WP-0701 | Nothing | Muse |
 | 1 | Online demo preview | WP-0702 | The schema | Claude |
 | 1 | Core foundation | WP-0703 → WP-0704 | The schema | Claude |
 | 2 | Steps and rules | WP-0705, WP-0706 | Definitions, human steps, WP-0141 | Codex |
@@ -608,8 +608,8 @@ waits for is WP-0141 (idempotency keys).
 | Last | Gate G7 | WP-0799 | First-time-user test, parity walkthrough | Claude |
 
 Workload at the time of writing: Codex 53 packages and 182 points (including sign-in, provider
-coverage and toolchain upgrades from the existing plan); Muse AI 33 packages and 88 points; Claude
-Code keeps the critical path of Phases 1 to 4 plus 19 planned packages (60 points). Live numbers are in
+coverage and toolchain upgrades from the existing plan); Muse AI 34 packages and 90 points; Claude
+Code keeps the critical path of Phases 1 to 4 plus 18 planned packages (58 points). Live numbers are in
 `STATUS.md`. The reasoning for the split is in ADR-0021.
 
 ## 22. Deferred
@@ -627,7 +627,6 @@ Not planned; each needs its own ADR before it enters the plan.
 
 - RAID Q-27: how Codex works on this repo (shell, network, who merges).
 - RAID Q-28: confirm the ten areas and the six deferred ones.
-- Should the owner's Process Lane spec be committed to `program/spec/`? It is not in the repository today.
 - When may the Screen layouts and Dashboards aliases be removed: two releases after the unified builder ships, as with Pipelines? (decided in WP-0610)
 - Should the first external-agent protocol be A2A only, or A2A plus a plain HTTP adapter for agents that do not speak it? (decided in WP-0114)
 - Which key management services are required for the first release of WP-0581: all four, or the one the first customer uses?

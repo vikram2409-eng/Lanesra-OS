@@ -3,7 +3,7 @@
 - Status: Accepted (program owner, 2026-11-12: "add Process Lane to the build program with your recommendations")
 - Date: 2026-11-12
 - Requirements: REQ-LANE-001..025, REQ-NFR-008
-- Source: the owner's "Process Lane — Spec" (draft, 2026-11-12) and the review of it the same day
+- Source: the owner's "Process Lane — Spec" (draft, 2026-11-12), now at [`../spec/process-lane-spec.md`](../spec/process-lane-spec.md), and the review of it the same day
 - Design: [`../design/SOLUTION-DESIGN.md`](../design/SOLUTION-DESIGN.md) section 17
 - Detailed ADR to follow: WP-0701 (model on the run engine, definition schema)
 
@@ -87,12 +87,12 @@ The only package outside this track that the first usable version waits for is *
 ## Consequences
 
 - The plan grows by 19 work packages and 58 points (253 packages in total).
-- Planned split (ADR-0021): Claude Code 6 (ADR, demo, definitions, human steps, runner, gate),
+- Planned split (ADR-0021): Claude Code 5 (demo, definitions, human steps, runner, gate),
   Codex 8 (writes, branches, agent steps, workflow interplay, repeat and conditions, publish
-  checks, child lanes, builder), Muse AI 5 (anytime actions, blueprint view, board and metrics,
+  checks, child lanes, builder), Muse AI 6 (the model ADR and schema, WP-0701, by owner decision 2026-11-12; anytime actions, blueprint view, board and metrics,
   describe a process, more lanes).
 - The graph runtime gets a new node type and a new source kind; `validate_for_publish` learns both.
 - The spec refers to "WP-0114" as its pattern; in this program WP-0114 is the external agent ADR.
   The pattern meant is "demo first, then a port", which decision 6 records.
-- The owner's spec is not in the repository. WP-0701 restates what it needs; the owner may add the
-  spec to `program/spec/` if they want it public.
+- The owner's spec was committed to `program/spec/process-lane-spec.md` on 2026-11-12 (RAID Q-31).
+  It is kept as written; this ADR wins where they differ.
