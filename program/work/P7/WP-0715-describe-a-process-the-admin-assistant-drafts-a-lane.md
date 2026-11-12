@@ -3,8 +3,8 @@ id: WP-0715
 title: Describe a process: the Admin Assistant drafts a lane
 phase: 7
 epic: E7.5 Authoring
-status: proposed
-owner: unassigned
+status: in_progress
+owner: muse
 planned_for: muse
 depends_on: [WP-0703, WP-0712]
 requirements: [REQ-LANE-022]
@@ -12,7 +12,7 @@ estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
-branch: 
+branch: wp/WP-0715-describe-a-process-drafts-a-lane
 pr: 
 updated: 2026-11-12
 ---
@@ -49,3 +49,5 @@ A fast start: describe the job, review a drafted lane.
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+- 2026-11-12 muse: Claimed — the owner assigned the next two packages to muse ("assign next two work packages to yourself and start building it"). Status proposed → in_progress on branch wp/WP-0715-describe-a-process-drafts-a-lane. ACs reviewed and stand as written. Next: read ADR-0023, ADR-0024, SOLUTION-DESIGN.md §17 and the prompt catalog (WP-0130), then build the draft tool. Note: this branch stacks on the WP-0712 branch, which stacks on the WP-0703 branch (PR #756, CI red, fixes in progress) — the drafted lane opens in the blueprint view, so integrate with WP-0712's view as it lands; rebase onto main after #756 and the WP-0712 PR merge.
