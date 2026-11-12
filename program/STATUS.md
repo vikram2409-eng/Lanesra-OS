@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 19 | 0 | 0 | 0 | 1 | 34 / 36 | `█████████░` 94% |
-| 1 · Foundations | 62 | 35 | 0 | 0 | 0 | 27 | 82 / 162 | `█████░░░░░` 51% |
+| 1 · Foundations | 62 | 35 | 0 | 1 | 0 | 26 | 82 / 162 | `█████░░░░░` 51% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -33,7 +33,11 @@ Nothing in progress.
 
 ## Ready to start (all dependencies done)
 
-None.
+Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXXX-*` branch or a draft PR means claimed). Hand it over with `programctl brief WP-XXXX`.
+
+| WP | Title | Phase | Estimate |
+|---|---|---|---|
+| [WP-0160](work/P1/WP-0160-agent-editor-in-eight-settings-groups.md) | Agent editor in eight settings groups | 1 | L |
 
 ## Planned workload (ADR-0021)
 
@@ -120,7 +124,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0151](work/P1/WP-0151-four-review-responses.md) | Four review responses | E1.6 Approvals | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0150 |
 | [WP-0152](work/P1/WP-0152-approvals-bound-to-exact-arguments.md) | Approvals bound to exact arguments | E1.6 Approvals | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0150 |
 | [WP-0153](work/P1/WP-0153-standing-approvals.md) | Standing approvals | E1.6 Approvals | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0152 |
-| [WP-0160](work/P1/WP-0160-agent-editor-in-eight-settings-groups.md) | Agent editor in eight settings groups | E1.7 Agent setup experience | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0120, WP-0014 |
+| [WP-0160](work/P1/WP-0160-agent-editor-in-eight-settings-groups.md) | Agent editor in eight settings groups | E1.7 Agent setup experience | 🟢 ready | L | ○Desktop ○Team Workspace ○Online demo | WP-0120, WP-0014 |
 | [WP-0170](work/P1/WP-0170-run-the-published-agent-version.md) | Run the published agent version | E1.3 Agent loop | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0110 |
 | [WP-0180](work/P1/WP-0180-team-workspace-operations-backups-upgrades-health.md) | Team Workspace operations: backups, key recovery, upgrades and health | E1.9 Team Workspace platform | ⚪ proposed | L | ○Team Workspace ○Desktop | WP-0020, WP-0007 |
 | [WP-0181](work/P1/WP-0181-several-workspaces-on-one-team-workspace-server.md) | Several workspaces on one Team Workspace server | E1.9 Team Workspace platform | ⚪ proposed | XL | ○Team Workspace | WP-0107, WP-0108, WP-0109, WP-0020, WP-0007 |
