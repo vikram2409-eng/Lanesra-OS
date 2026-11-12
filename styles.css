@@ -1838,6 +1838,11 @@ html.app-mode{scroll-behavior:auto}
 .graph-stage{min-width:0;position:relative;display:flex;flex-direction:column;background-color:color-mix(in srgb,var(--muted) 28%,transparent);background-image:radial-gradient(color-mix(in srgb,var(--muted-foreground) 18%,transparent) 1px,transparent 1px);background-size:18px 18px}
 .graph-stage-head{min-height:64px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;background:color-mix(in srgb,var(--background) 86%,transparent);border-bottom:1px solid var(--border);backdrop-filter:blur(10px)}
 .graph-stage-head h3{margin:3px 0 0;font-size:18px;font-weight:700;letter-spacing:-.01em}
+/* Bug 3 (Day 2): the stage title ("Suppliers neighborhood" + chips) could
+   overflow its flex row and truncate — let the title column shrink and
+   wrap instead of pushing the heading off the edge. */
+.graph-stage-head>div:first-child{flex:1 1 auto;min-width:0}
+.graph-stage-head h3,.og-stage-title{overflow-wrap:break-word}
 .graph-canvas{min-height:620px;position:relative;overflow:hidden;flex:1}
 .graph-canvas .ontology-graph-viewport{position:absolute;inset:0;border:0;border-radius:0;max-height:none;background:none}
 .graph-legend{display:flex;flex-wrap:wrap;gap:7px;padding:12px 16px;border-top:1px solid var(--border);background:var(--background)}
