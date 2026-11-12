@@ -13124,16 +13124,9 @@ function depApplyCollapse(model,collapsed,typeLabel){
   .filter(e=>e.fromKey!==e.toKey&&liveKeys.has(e.fromKey)&&liveKeys.has(e.toKey))
   .filter(e=>{const k=e.fromKey+'>'+e.toKey+':'+e.edgeType;if(seen.has(k))return false;seen.add(k);return true});
 }
-// Pill size estimate for layout: labels render truncated to 18 chars at
-// 12px (13px root) with 12px side padding + dot + gap, so width is
-// ~38px + ~7px/char (root: 32px + ~7.5px/char, no dot). The same
-// estimate drives the harness's overlap checks, so layout and test agree.
-function depPillSize(label,isRoot){
- const chars=Math.min(String(label||'').length,18);
- const w=isRoot?Math.min(208,32+Math.ceil(chars*7.5)):Math.min(208,38+Math.ceil(chars*7));
- const h=isRoot?33:28;
- return {w,h,hw:w/2,hh:h/2};
-}
+// depPillSize lives once, below with the pan clamp (cap 28, matching the
+// label truncation in graphRender — the estimator must cover the widest
+// pill the renderer can draw).
 // De-overlap pass: push overlapping pills apart along the axis of least
 // penetration, a few deterministic passes. Force-directed layout alone
 // cannot do this — LINK_LEN (220) is barely wider than a pill, and
@@ -13337,7 +13330,7 @@ function graphRender(model,ui,W,H){
  const pathSet=hl.pathKeys?new Set(hl.pathKeys):null;
  const simSet=hl.simKeys?new Set(hl.simKeys):null;
  const hlActive=!!(pathSet||simSet);
- const haloSvg=[],haloLabels=[];
+ const haloSvg=[],haloLabels=[],haloDescs=[];
  const clusters=new Map();
  model.nodes.forEach(n=>{if(n.id==='__cluster__')return;const l=clusters.get(n.type)||[];l.push(n);clusters.set(n.type,l)});
  clusters.forEach((members,type)=>{
@@ -13358,15 +13351,52 @@ function graphRender(model,ui,W,H){
   const ery=Math.max(24,Math.min(Math.max(48,(maxY-minY)/2+padY),ecy,H-ecy));
   haloSvg.push('<ellipse data-cluster-type="'+type+'" cx="'+ecx.toFixed(1)+'" cy="'+ecy.toFixed(1)+'" rx="'+erx.toFixed(1)+'" ry="'+ery.toFixed(1)+'" fill="'+color+'" fill-opacity="0.04" stroke="'+color+'" stroke-opacity="0.6" stroke-width="1.5" stroke-dasharray="8 6"/>');
   const lx=Math.max(40,Math.min(W-40,(minX+maxX)/2));
-  const ly=Math.max(12,minY-14);
-  haloLabels.push('<button type="button" class="ontology-halo-label og-cluster-label" data-cluster-type="'+type+'" '+ui.collapseAttr+'="'+type+'" style="left:'+lx.toFixed(1)+'px;top:'+ly.toFixed(1)+'px;color:'+color+'" title="Collapse '+label+' into a single node">'+label+' ▾</button>');
+  // Group label sits ABOVE the cluster's top node (was minY-14, which put
+  // its lower half under the topmost pill — pills paint later in DOM order
+  // at the same z-index, so the label read as hidden behind the node).
+  const ly=Math.max(12,minY-30);
+  haloDescs.push({x:lx,y:ly,text:label+' ▾',color,cls:'ontology-halo-label og-cluster-label',attrs:'data-cluster-type="'+type+'" '+ui.collapseAttr+'="'+type+'"',title:'Collapse '+label+' into a single node'});
  });
  // Collapsed clusters: dashed halo + expand affordance.
  model.nodes.filter(n=>n.id==='__cluster__').forEach(n=>{
   const p=pos.get(n.key);if(!p)return;
   const color=ui.colors[n.type]||'#888';
   haloSvg.push('<circle data-cluster-type="'+n.type+'" cx="'+p.x.toFixed(1)+'" cy="'+p.y.toFixed(1)+'" r="36" fill="'+color+'" fill-opacity="0.06" stroke="'+color+'" stroke-opacity="0.6" stroke-width="1.5" stroke-dasharray="8 6"/>');
-  haloLabels.push('<button type="button" class="ontology-halo-label" '+ui.collapseAttr+'="'+n.type+'" style="left:'+p.x.toFixed(1)+'px;top:'+(p.y-48).toFixed(1)+'px" title="Expand '+n.label+'">'+n.label+' ▸</button>');
+  haloDescs.push({x:p.x,y:p.y-48,text:n.label+' ▸',color,cls:'ontology-halo-label',attrs:ui.collapseAttr+'="'+n.type+'"',title:'Expand '+n.label});
+ });
+ // Group labels must never cover each other either: several type clusters
+ // can share a top edge (their top nodes pin to the same layout clamp),
+ // so their labels land on the same spot. Push colliding labels apart —
+ // down when near the top of the canvas, up otherwise — until clear.
+ haloDescs.sort((a,b)=>a.y-b.y||a.x-b.x);
+ const placedLabels=[];
+ haloDescs.forEach(d=>{
+  const w=d.text.length*7+28,h=24;
+  // Keep the whole label inside the canvas horizontally: a cluster near
+  // an edge would otherwise have its label hang off the side.
+  const cx=Math.max(w/2+2,Math.min(W-w/2-2,d.x));
+  const lo=h/2+2,hi=H-h/2-2;
+  const clashAt=(y)=>placedLabels.some(q=>Math.min(cx+w/2,q.x1)-Math.max(cx-w/2,q.x0)>4&&Math.min(y+h/2,q.y1)-Math.max(y-h/2,q.y0)>4);
+  let y=Math.max(lo,Math.min(hi,d.y));
+  if(clashAt(y)){
+   // Walk outward from the home position, alternating directions (down
+   // first near the top of the canvas, up first elsewhere), until a clear
+   // slot. The old directional walk could oscillate and give up after 12
+   // steps in a dense label column; the candidate search cannot.
+   const dirs=d.y<100?[1,-1]:[-1,1];
+   let found=false;
+   for(let step=1;step<=8&&!found;step++){
+    for(const dir of dirs){
+     const cand=Math.max(lo,Math.min(hi,d.y+dir*step*26));
+     if(cand!==y&&!clashAt(cand)){y=cand;found=true;break;}
+    }
+   }
+   // No clear slot in 8 steps either way: keep the home position. The
+   // label still paints above the nodes (DOM order + z-index), so it stays
+   // readable even if it touches a sibling label.
+  }
+  placedLabels.push({x0:cx-w/2,x1:cx+w/2,y0:y-h/2,y1:y+h/2});
+  haloLabels.push('<button type="button" class="'+d.cls+'" '+d.attrs+' style="left:'+cx.toFixed(1)+'px;top:'+y.toFixed(1)+'px;color:'+d.color+'" title="'+d.title+'">'+d.text+'</button>');
  });
  const edgeSvg=[],edgeLabels=[];
  model.edges.forEach(e=>{
@@ -13394,7 +13424,7 @@ function graphRender(model,ui,W,H){
   const isDimmed=ui.hiddenTypes.has(n.type)||(hlActive&&!onPath&&!inSim);
   const isInspecting=!isRoot&&n.type===ui.inspectType&&n.id===ui.inspectId;
   const color=ui.colors[n.type]||'#888';
-  const short=n.label.length>18?n.label.slice(0,17)+'…':n.label;
+  const short=n.label.length>28?n.label.slice(0,27)+'…':n.label;
   if(n.id==='__cluster__'){
    nodeDivs.push('<div class="og-pill og-pill-cluster" '+ui.collapseAttr+'="'+n.type+'" data-node-key="'+n.key+'" style="left:'+p.x.toFixed(1)+'px;top:'+p.y.toFixed(1)+'px" title="'+n.label+' — click to expand" role="button" tabindex="0"><span class="og-pill-dot" style="background:'+color+'"></span><span class="og-pill-label">'+short+' · '+n.count+'</span></div>');
    return;
@@ -13408,7 +13438,10 @@ function graphRender(model,ui,W,H){
    :'<span class="og-pill-dot" style="background:'+color+'"></span><span class="og-pill-label">'+short+'</span>';
   nodeDivs.push('<div class="'+pillCls+'" '+ui.inspectAttr+'="'+n.type+':'+n.id+'" data-node-key="'+n.key+'" data-og-type="'+n.type+'" style="'+pillStyle+'" title="'+(ui.typeLabels[n.type]||n.type)+': '+n.label+'" role="button" tabindex="0">'+pillInner+'</div>');
  });
- return '<svg width="'+W+'" height="'+H+'" style="position:absolute;top:0;left:0;pointer-events:none">'+haloSvg.join('')+edgeSvg.join('')+'</svg>'+haloLabels.join('')+edgeLabels.join('')+nodeDivs.join('');
+ // Halo (group) labels render LAST so they paint above the node pills:
+ // both are z-index 2, so DOM order decides, and the topmost pill used to
+ // cover the label sitting above its cluster.
+ return '<svg width="'+W+'" height="'+H+'" style="position:absolute;top:0;left:0;pointer-events:none">'+haloSvg.join('')+edgeSvg.join('')+'</svg>'+edgeLabels.join('')+nodeDivs.join('')+haloLabels.join('');
 }
 
 /* MOBILE: touch pinch-zoom for graph canvas */
@@ -13682,38 +13715,53 @@ function depWireHashNav(){
   }catch(e){}
  });
 }
-// Zoom / pan -----------------------------------------------------------------
-// Zoom limits: manual zoom runs 0.5–2.0 (the old 0.25 floor turned a few
-// wheel ticks into a 25% thumbnail; 3.0 was never readable). Fit may
-// still go to 0.25 when a very large graph genuinely needs it — that is a
-// fit, not a thumbnail.
-const DEP_ZOOM_MIN=0.5,DEP_ZOOM_MAX=2,DEP_FIT_MIN=0.25,DEP_PAN_SLACK=40;
-// Node bounding box (pill-aware) + viewport size, or null off-tab.
+// Pan clamp: keep the graph from being shoved off-canvas. The bbox is
+// PILL-aware (not node centers) so no pill is ever clipped at the limit,
+// and the clamp keeps a DEP_PAN_SLACK margin on the near edge in BOTH
+// cases — content narrower than the viewport stays fully on screen with
+// the margin on both sides; wider content keeps its near edge at the
+// margin while the far edge is allowed off-canvas (it cannot fit).
+// DEP_PAN_SLACK itself is declared in the zoom-limits line below.
+function depPillSize(label,isRoot){
+ // Same cap as the label truncation in graphRender (28): the estimator
+ // must cover the widest pill the renderer can draw, with a little air.
+ const chars=Math.min(String(label||'').length,28);
+ const w=isRoot?Math.min(260,32+Math.ceil(chars*7.5)):Math.min(260,38+Math.ceil(chars*7));
+ const h=isRoot?33:28;
+ return {w,h,hw:w/2,hh:h/2};
+}
 function depContentBBox(){
  const vp=document.getElementById('depGraphViewport');
  if(!vp||!dependencyExplorerState.id)return null;
  const model=depGraphModel();
  const pos=depLayoutPositions(model,depLastCanvasW,depLastCanvasH);
  if(!model.nodes.length||!pos.size)return null;
- let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
  const rootKey=depNodeKey(dependencyExplorerState.type,dependencyExplorerState.id);
+ let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
  model.nodes.forEach(n=>{const p=pos.get(n.key);if(!p)return;const s=depPillSize(n.label,n.key===rootKey);minX=Math.min(minX,p.x-s.hw);maxX=Math.max(maxX,p.x+s.hw);minY=Math.min(minY,p.y-s.hh);maxY=Math.max(maxY,p.y+s.hh)});
+ // Halo (group) labels sit above each cluster's top node and can be wider
+ // than the pills below them — keep them inside the bbox too (label top is
+ // ~28px above the top pill's top edge; a label can overhang ~16px sideways).
+ minX-=16;maxX+=16;minY-=28;maxY+=4;
  return {minX,maxX,minY,maxY,vw:vp.clientWidth||0,vh:vp.clientHeight||0};
 }
-// Clamp a pan so the graph can never be dragged off-canvas: a graph
-// larger than the viewport must keep covering it (40px slack at most);
-// a smaller graph must stay fully on screen. Returns {panX,panY}.
 function depClampPan(panX,panY,zoom){
  const b=depContentBBox();
  if(!b||!b.vw||!b.vh)return {panX:Math.round(panX),panY:Math.round(panY)};
  const z=zoom||dependencyExplorerState.zoom||1;
  const clampAxis=(pan,min,max,v)=>{
-  const span=(max-min)*z;
-  if(span>=v-2*DEP_PAN_SLACK)return Math.max(v-DEP_PAN_SLACK-max*z,Math.min(DEP_PAN_SLACK-min*z,pan));
-  return Math.max(-min*z,Math.min(v-max*z,pan));
+  const lo=Math.min(DEP_PAN_SLACK-min*z,v-DEP_PAN_SLACK-max*z);
+  const hi=Math.max(DEP_PAN_SLACK-min*z,v-DEP_PAN_SLACK-max*z);
+  return Math.max(lo,Math.min(hi,pan));
  };
  return {panX:Math.round(clampAxis(panX,b.minX,b.maxX,b.vw)),panY:Math.round(clampAxis(panY,b.minY,b.maxY,b.vh))};
 }
+// Zoom / pan -----------------------------------------------------------------
+// Zoom limits: manual zoom runs 0.5–2.0 (the old 0.25 floor turned a few
+// wheel ticks into a 25% thumbnail; 3.0 was never readable). Fit may
+// still go to 0.25 when a very large graph genuinely needs it — that is a
+// fit, not a thumbnail.
+const DEP_ZOOM_MIN=0.5,DEP_ZOOM_MAX=2,DEP_FIT_MIN=0.25,DEP_PAN_SLACK=40;
 // True when every pill is fully inside the viewport at the current
 // zoom/pan — the test for "keep this view" vs "refit" on a view change.
 function depFitsViewport(){
@@ -13754,31 +13802,39 @@ function depResetZoomPan(){
   renderAdminTab();
  }
 }
-// Bug 3 (Day 2): fit the NODE bounding box — not the canvas dims — into
-// the viewport. The old version fit depLastCanvasW/H, so a wide canvas
-// (min 880px) on a ~600px stage still clipped the right-hand nodes, and
-// the layout clamp (fixed above) now keeps pills inside the canvas, so
-// the bbox plus half a pill of padding is the true content size.
+// Bug 3 (Day 2): fit the PILL bounding box — not the canvas dims, and not
+// bare node centers — into the viewport. The old version fit depLastCanvasW/H,
+// so a wide canvas (min 880px) on a ~600px stage still clipped the right-hand
+// nodes, and the layout clamp (fixed above) now keeps pills inside the canvas,
+// so the bbox plus half a pill of padding is the true content size.
+// Fit targets the VISIBLE slice of the viewport, not just the element: the
+// stage sits below the page header, so the element's bottom can sit below the
+// fold while its clientHeight claims the whole graph fits. Cap the fit height
+// by what is actually on screen (and center within that slice) so a tall
+// graph zooms out below 100% where needed instead of leaving lower nodes
+// below the fold.
 function depFitToContent(){
  const vp=document.getElementById('depGraphViewport');
  if(!vp||!dependencyExplorerState.id)return false;
- const model=depGraphModel();
- const pos=depLayoutPositions(model,depLastCanvasW,depLastCanvasH);
- if(!model.nodes.length||!pos.size)return false;
- let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
- pos.forEach(p=>{minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y)});
- // Pills are centered on their position, so grow the box by half a pill
- // on each side (~110px wide, ~28px tall) or the outer labels clip.
- const padX=110,padY=28;
- minX-=padX;maxX+=padX;minY-=padY;maxY+=padY;
- const vw=vp.clientWidth||1,vh=vp.clientHeight||1;
- const bw=Math.max(1,maxX-minX),bh=Math.max(1,maxY-minY);
+ const b=depContentBBox();
+ if(!b)return false;
+ const vw=b.vw||1;
+ let vh=b.vh||1,sliceTop=0;
+ try{
+  if(typeof window!=='undefined'&&window.innerHeight){
+   const r=vp.getBoundingClientRect();
+   const visTop=Math.max(0,r.top),visBottom=Math.min(window.innerHeight,r.bottom);
+   const visH=visBottom-visTop-16;
+   if(visH>200){vh=Math.min(vh,visH);sliceTop=visTop-r.top;}
+  }
+ }catch(e){}
+ const bw=Math.max(1,b.maxX-b.minX),bh=Math.max(1,b.maxY-b.minY);
  const margin=0.92;
  // Fit shrinks to fit, never magnifies: a small graph at 131% was the
  // old default view, magnified past readability with pills overlapping.
  const scale=Math.min(1,Math.max(DEP_FIT_MIN,Math.min(vw/bw,vh/bh)*margin));
- const panX=Math.round((vw-bw*scale)/2-minX*scale);
- const panY=Math.round((vh-bh*scale)/2-minY*scale);
+ const panX=Math.round((vw-bw*scale)/2-b.minX*scale);
+ const panY=Math.round(sliceTop+(vh-bh*scale)/2-b.minY*scale);
  dependencyExplorerState={...dependencyExplorerState,zoom:scale,panX,panY,labelMode:scale<0.8?'neighborhood':'all'};
  renderAdminTab();
  return true;
