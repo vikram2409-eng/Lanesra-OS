@@ -62,6 +62,7 @@ pub mod organization_repo;
 pub mod ownership_repo;
 pub mod page_layout_repo;
 pub mod page_template_repo;
+pub mod process_lane_repo;
 pub mod product_repo;
 pub mod publisher_repo;
 pub mod quote_repo;
