@@ -34,6 +34,10 @@ jobs:
         run: python3 program/tools/check_release_workflows.py
       - name: Validate work packages and requirement coverage
         run: python3 program/tools/programctl.py validate
+      - name: Install JSON Schema validator
+        run: pip install "jsonschema>=4.10,<5"
+      - name: Lane definitions validate against the Process Lane schema
+        run: python3 program/tools/check_lane_schema.py
       - name: Every help article is in the sitemap
         run: python3 program/tools/programctl.py docs --check
       - name: STATUS.md is up to date
