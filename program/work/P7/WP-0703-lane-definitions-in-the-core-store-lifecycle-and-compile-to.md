@@ -3,9 +3,9 @@ id: WP-0703
 title: Lane definitions in the core: store, lifecycle and compile to a graph
 phase: 7
 epic: E7.1 Lane foundation
-status: proposed
-owner: unassigned
-planned_for: claude
+status: in_progress
+owner: muse
+planned_for: muse
 depends_on: [WP-0701]
 requirements: [REQ-LANE-001, REQ-LANE-002]
 estimate: L
@@ -13,7 +13,7 @@ editions: [desktop, workspace]
 delivered: []
 editions_reason: core storage and API; the demo already has its definition from WP-0702
 docs: [process-lanes]
-branch: 
+branch: wp/WP-0703-lane-definitions-in-core
 pr: 
 updated: 2026-11-12
 ---
@@ -50,3 +50,5 @@ Give desktop and Team Workspace the lane definition, on the engine that already 
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+- 2026-11-12 muse: Claimed — the owner reassigned this WP from claude to muse ("build WP-0702 and WP-0703, assign it yourself"). Status proposed → in_progress on branch wp/WP-0703-lane-definitions-in-core. ACs reviewed and stand as written. Next: read ADR-0023, ADR-0024 (§3 compile mapping, §13 demo limits), SOLUTION-DESIGN.md §17–18, execution_graph.rs and migrate.rs, then build the core store + compile. Note: this branch stacks on the WP-0701 branch (PR #755, program check green, CI/security running) — rebase onto main after #755 merges. No local Rust toolchain here: keep changes small, CI is the compiler, expect fmt/clippy fix rounds.
