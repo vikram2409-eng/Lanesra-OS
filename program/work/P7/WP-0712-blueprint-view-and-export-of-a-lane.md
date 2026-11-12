@@ -3,8 +3,8 @@ id: WP-0712
 title: Blueprint view and export of a lane
 phase: 7
 epic: E7.5 Authoring
-status: proposed
-owner: unassigned
+status: in_progress
+owner: muse
 planned_for: muse
 depends_on: [WP-0703]
 requirements: [REQ-LANE-020]
@@ -12,7 +12,7 @@ estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
-branch: 
+branch: wp/WP-0712-blueprint-view-and-export
 pr: 
 updated: 2026-11-12
 ---
@@ -49,3 +49,5 @@ Give business owners a page they can read and sign off.
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+- 2026-11-12 muse: Claimed — the owner assigned the next two packages to muse ("assign next two work packages to yourself and start building it"). Status proposed → in_progress on branch wp/WP-0712-blueprint-view-and-export. ACs reviewed and stand as written. Next: read ADR-0023, ADR-0024, SOLUTION-DESIGN.md §17, then build the blueprint view + PDF export. Note: this branch stacks on the WP-0703 branch (PR #756, CI red on fmt + one compile error + two clippy errors, fixes in progress) — rebase onto main after #756 merges.
