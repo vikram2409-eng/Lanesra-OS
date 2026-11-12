@@ -8856,6 +8856,7 @@ function ensureWarehouseData(){
  ensureAdminData();
  ensureWarehouseRoles();
  ensureWarehouseDay2();
+ ensureWarehouseLaneData();
 }
 // ---- Warehouse demo (Day 2): agents, workflows, approvals, glossary ----
 // The Day 2 rows live in the warehouseSeed literal (agents, skills,
@@ -10025,7 +10026,7 @@ function appShell(){
  $('#sidebarCollapse').onclick=toggleSidebarCollapse;
  $('#themeToggle').onclick=toggleTheme;
  bindCmdPalette();
- const srd=document.getElementById('sideResetDemo');if(srd)srd.onclick=()=>{if(IS_WAREHOUSE){data=structuredClone(warehouseSeed);ensureWarehouseData();ensureVoiceData();syncCustomObjectRegistry();activeAppId=null;renderSidebarNav();current='dashboard';detailRecord=null;save();toast('Warehouse demo data restored')}else{data=structuredClone(seed);ensureAdminData();ensureVoiceData();syncCustomObjectRegistry();activeAppId=null;renderSidebarNav();current='dashboard';detailRecord=null;save();toast('Demo data restored')}refreshNotifBadge();applyWorkspaceTheme();renderView()};
+ const srd=document.getElementById('sideResetDemo');if(srd)srd.onclick=()=>{if(IS_WAREHOUSE){data=structuredClone(warehouseSeed);ensureWarehouseData();ensureWarehouseLaneData();ensureVoiceData();syncCustomObjectRegistry();activeAppId=null;renderSidebarNav();current='dashboard';detailRecord=null;save();toast('Warehouse demo data restored')}else{data=structuredClone(seed);ensureAdminData();ensureVoiceData();syncCustomObjectRegistry();activeAppId=null;renderSidebarNav();current='dashboard';detailRecord=null;save();toast('Demo data restored')}refreshNotifBadge();applyWorkspaceTheme();renderView()};
  const searchInput=$('#globalSearch'), searchBox=$('#searchResults');
  const searchable=[['companies','Company'],['contacts','Contact'],['opportunities','Opportunity'],['products','Product / Service'],['quotes','Quote'],['orders','Order'],['invoices','Invoice'],['contracts','Contract'],['tasks','Task']];
  // Admin Control Center Modernization (issue #197): the same Cmd/Ctrl+K
@@ -10170,6 +10171,7 @@ function renderView(){
  {const de=document.documentElement,resetScroll=()=>{de.style.scrollBehavior='auto';window.scrollTo(0,0);document.body.scrollTop=0;de.scrollTop=0;const ma=document.querySelector('.main-area');if(ma)ma.scrollTop=0;de.style.scrollBehavior=''};resetScroll();requestAnimationFrame(resetScroll)}
  document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active',b.dataset.nav===current));
  if(current==='dashboard') return IS_WAREHOUSE?warehouseDashboard():dashboard();
+ if(current==='laneRunner') return laneRunnerPage();
  if(current==='pipeline') return pipeline();
  if(current==='reports') return reportsPage();
  if(current==='assistant') return assistantPage();
@@ -10292,9 +10294,10 @@ function warehouseDashboard(){
  const card=(nav,label,value,meta)=>`<button type="button" class="card kpi-card" data-wh-nav="${nav}"><span class="kpi-label"><span>${label}</span></span><span class="kpi-number">${value}</span><span class="kpi-meta">${meta}</span></button>`;
  const stockRow=r=>{const p=prodById[r.product_id];return `<tr><td><a class="cell-link" data-open-record="stock:${r.id}">${p?.sku||''}</a></td><td>${p?.name||''}</td><td>${r.on_hand}</td><td>${r.reserved}</td><td>${r.on_hand-r.reserved}</td><td>${badgeMaybe(r.status)}</td></tr>`};
  const attention=[...k.outOfStock,...k.lowStock];
- $('#view').innerHTML=`<div class="page-heading"><div><h2>Toronto Distribution Centre</h2><p>Friday, November 13, 2026 · Warehouse Manager: Sarah Chen · ${k.onHand} units on hand, ${k.reserved} reserved, ${k.available} available.</p></div></div><div class="kpi-grid">${card('sales_order','Fill rate',(k.fillRate*100).toFixed(1)+'%',k.shippedUnits+' of '+k.ordered+' units shipped →')}${card('shipment','Orders shipped today',k.shippedToday,k.shippedTodayParcels+' parcels · '+k.shippedUnits+' units →')}${card('purchase_order','Receiving backlog',k.openPOs.length,k.dueToday.length+' due today →')}${card('stock','Stockouts',k.outOfStock.length,k.lowStock.length+' low-stock SKUs →')}${card('stock','Inventory value (cost)',moneyCAD(k.valueCost),'At sale '+moneyCAD(k.valueSale)+' →')}${card('reorder_rule','Reorder rules triggered',k.triggered.length,k.triggered.length+' SKUs at or below level →')}</div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Needs attention — low & out of stock</h3><p class="card-desc">${k.outOfStock.length} out of stock · ${k.lowStock.length} low stock</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Product</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th></tr></thead><tbody>${attention.map(stockRow).join('')}</tbody></table></div></div></section><section class="card"><div class="card-head panel-title"><div><h3>Orders by status</h3><p class="card-desc">${(data.sales_order||[]).length} open sales orders</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Orders</th></tr></thead><tbody>${['WAITING_STOCK','ALLOCATED','PICKING','PICKED','PACKED','SHIPPED'].map(s=>`<tr><td><a class="cell-link" data-wh-nav="sales_order">${s}</a></td><td>${k.soByStatus[s]||0}</td></tr>`).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Receiving — due today</h3><p class="card-desc">${k.dueToday.length} purchase order${k.dueToday.length===1?'':'s'} expected ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.dueToday.length?k.dueToday.map(p=>{const sup=byId('supplier',p.supplier_id);const lines=(p.lines||[]).map(l=>`${prodById[l.product_id]?.sku||''} × ${l.qty_ordered}`).join(', ');return `<div class="prb-row"><strong><a class="cell-link" data-open-record="purchase_order:${p.id}">${p.po_number}</a></strong><small class="muted"> · ${sup?.name||''} · ${lines}</small></div>`}).join(''):'<div class="empty">Nothing due today.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Cycle count in progress</h3><p class="card-desc">${k.counting?'<a class="cell-link" data-open-record="cycle_count:'+k.counting.id+'">'+k.counting.count_number+'</a> · '+k.counting.scope+' · '+k.variances.length+' variances':'No count in progress'}</p></div></div><div class="card-body">${k.counting?`<div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>${k.variances.map(l=>{const p=prodById[l.product_id];return `<tr><td><a class="cell-link" data-open-record="product:${l.product_id}">${p?.sku||''}</a></td><td>${l.expected_qty}</td><td>${l.counted_qty}</td><td>${l.variance>0?'+':''}${l.variance}</td></tr>`}).join('')}</tbody></table></div><p class="muted" style="font-size:12px">No adjustment posted yet — decide each variance in Approvals below; approving posts the adjustment, rejecting posts nothing.</p>`:'<div class="empty">No count in progress.</div>'}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Waves</h3><p class="card-desc">Batch picks in progress</p></div></div><div class="card-body">${Object.entries(k.waves).map(([w,v])=>`<div class="prb-row"><strong><a class="cell-link" data-wh-nav="pick_task">${w}</a></strong><small class="muted"> · ${v.orders.length} orders${v.held?` · ${v.held} task${v.held===1?'':'s'} held (waiting on stock)`:''} · ${v.tasks.map(t=>`<a class="cell-link" data-open-record="pick_task:${t.id}">${t.number||'Task'}</a>`).join(', ')}</small></div>`).join('')}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Reorder alerts</h3><p class="card-desc">${k.triggered.length} rules triggered ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.triggered.map(r=>{const p=prodById[r.product_id];const s=(data.stock||[]).find(x=>x.product_id===r.product_id);return `<div class="prb-row"><strong><a class="cell-link" data-open-record="product:${r.product_id}">${p?.sku||''}</a></strong><small class="muted"> · ${p?.name||''} · available ${s?s.on_hand-s.reserved:0} ≤ level ${r.reorder_level} · reorder ${r.reorder_qty} · <a class="cell-link" data-open-record="reorder_rule:${r.id}">rule ${r.number||''}</a></small></div>`}).join('')}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Approvals — needs your decision</h3><p class="card-desc">${pendingApprovals.length} pending</p></div></div><div class="card-body">${pendingApprovals.length?pendingApprovals.map(a=>`<div class="prb-row"><div><strong>${agentEsc(a.subjectType.replace('warehouse_','').replace(/_/g,' '))}</strong><small class="muted"> · ${demoDescribeApproval(a)}</small></div><div class="actions"><button class="btn btn-primary" data-wh-approve="${a.id}">Approve</button><button class="btn" data-wh-reject="${a.id}">Reject</button></div></div>`).join(''):'<p class="muted">Nothing pending — the Manager is all caught up.</p>'}<p class="muted" style="font-size:12px;margin-top:8px">Approving a count line posts a COUNT_ADJUSTMENT and updates Stock; rejecting posts nothing. Full inbox: AI Agents → Approvals.</p></div></section><section class="card"><div class="card-head panel-title"><div><h3>Open tasks</h3><p class="card-desc">${openTasks.length} open</p></div></div><div class="card-body">${openTasks.length?openTasks.map(t=>`<div class="prb-row"><a class="cell-link" data-open-record="tasks:${t.id}">${agentEsc(t.title||'Task')}</a><small class="muted"> · due ${t.due||'—'}</small></div>`).join(''):'<p class="muted">No open tasks.</p>'}</div></section></div>`;
+ $('#view').innerHTML=`<div class="page-heading"><div><h2>Toronto Distribution Centre</h2><p>Friday, November 13, 2026 · Warehouse Manager: Sarah Chen · ${k.onHand} units on hand, ${k.reserved} reserved, ${k.available} available.</p></div></div><div class="kpi-grid">${card('sales_order','Fill rate',(k.fillRate*100).toFixed(1)+'%',k.shippedUnits+' of '+k.ordered+' units shipped →')}${card('shipment','Orders shipped today',k.shippedToday,k.shippedTodayParcels+' parcels · '+k.shippedUnits+' units →')}${card('purchase_order','Receiving backlog',k.openPOs.length,k.dueToday.length+' due today →')}${card('stock','Stockouts',k.outOfStock.length,k.lowStock.length+' low-stock SKUs →')}${card('stock','Inventory value (cost)',moneyCAD(k.valueCost),'At sale '+moneyCAD(k.valueSale)+' →')}${card('reorder_rule','Reorder rules triggered',k.triggered.length,k.triggered.length+' SKUs at or below level →')}</div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Needs attention — low & out of stock</h3><p class="card-desc">${k.outOfStock.length} out of stock · ${k.lowStock.length} low stock</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Product</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th></tr></thead><tbody>${attention.map(stockRow).join('')}</tbody></table></div></div></section><section class="card"><div class="card-head panel-title"><div><h3>Orders by status</h3><p class="card-desc">${(data.sales_order||[]).length} open sales orders</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Orders</th></tr></thead><tbody>${['WAITING_STOCK','ALLOCATED','PICKING','PICKED','PACKED','SHIPPED'].map(s=>`<tr><td><a class="cell-link" data-wh-nav="sales_order">${s}</a></td><td>${k.soByStatus[s]||0}</td></tr>`).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Receiving — due today</h3><p class="card-desc">${k.dueToday.length} purchase order${k.dueToday.length===1?'':'s'} expected ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.dueToday.length?k.dueToday.map(p=>{const sup=byId('supplier',p.supplier_id);const lines=(p.lines||[]).map(l=>`${prodById[l.product_id]?.sku||''} × ${l.qty_ordered}`).join(', ');return `<div class="prb-row"><strong><a class="cell-link" data-open-record="purchase_order:${p.id}">${p.po_number}</a></strong><small class="muted"> · ${sup?.name||''} · ${lines}</small><button class="btn btn-primary" data-lane-start="lane-wh-receiving:${p.id}">Start receiving lane</button></div>`}).join(''):'<div class="empty">Nothing due today.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Cycle count in progress</h3><p class="card-desc">${k.counting?'<a class="cell-link" data-open-record="cycle_count:'+k.counting.id+'">'+k.counting.count_number+'</a> · '+k.counting.scope+' · '+k.variances.length+' variances':'No count in progress'}</p></div></div><div class="card-body">${k.counting?`<div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>${k.variances.map(l=>{const p=prodById[l.product_id];return `<tr><td><a class="cell-link" data-open-record="product:${l.product_id}">${p?.sku||''}</a></td><td>${l.expected_qty}</td><td>${l.counted_qty}</td><td>${l.variance>0?'+':''}${l.variance}</td></tr>`}).join('')}</tbody></table></div><p class="muted" style="font-size:12px">No adjustment posted yet — decide each variance in Approvals below; approving posts the adjustment, rejecting posts nothing.</p>`:'<div class="empty">No count in progress.</div>'}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Waves</h3><p class="card-desc">Batch picks in progress</p></div></div><div class="card-body">${Object.entries(k.waves).map(([w,v])=>`<div class="prb-row"><strong><a class="cell-link" data-wh-nav="pick_task">${w}</a></strong><small class="muted"> · ${v.orders.length} orders${v.held?` · ${v.held} task${v.held===1?'':'s'} held (waiting on stock)`:''} · ${v.tasks.map(t=>`<a class="cell-link" data-open-record="pick_task:${t.id}">${t.number||'Task'}</a>`).join(', ')}</small></div>`).join('')}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Reorder alerts</h3><p class="card-desc">${k.triggered.length} rules triggered ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.triggered.map(r=>{const p=prodById[r.product_id];const s=(data.stock||[]).find(x=>x.product_id===r.product_id);return `<div class="prb-row"><strong><a class="cell-link" data-open-record="product:${r.product_id}">${p?.sku||''}</a></strong><small class="muted"> · ${p?.name||''} · available ${s?s.on_hand-s.reserved:0} ≤ level ${r.reorder_level} · reorder ${r.reorder_qty} · <a class="cell-link" data-open-record="reorder_rule:${r.id}">rule ${r.number||''}</a></small></div>`}).join('')}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Approvals — needs your decision</h3><p class="card-desc">${pendingApprovals.length} pending</p></div></div><div class="card-body">${pendingApprovals.length?pendingApprovals.map(a=>`<div class="prb-row"><div><strong>${agentEsc(a.subjectType.replace('warehouse_','').replace(/_/g,' '))}</strong><small class="muted"> · ${demoDescribeApproval(a)}</small></div><div class="actions"><button class="btn btn-primary" data-wh-approve="${a.id}">Approve</button><button class="btn" data-wh-reject="${a.id}">Reject</button></div></div>`).join(''):'<p class="muted">Nothing pending — the Manager is all caught up.</p>'}<p class="muted" style="font-size:12px;margin-top:8px">Approving a count line posts a COUNT_ADJUSTMENT and updates Stock; rejecting posts nothing. Full inbox: AI Agents → Approvals.</p></div></section><section class="card"><div class="card-head panel-title"><div><h3>Open tasks</h3><p class="card-desc">${openTasks.length} open</p></div></div><div class="card-body">${openTasks.length?openTasks.map(t=>`<div class="prb-row"><a class="cell-link" data-open-record="tasks:${t.id}">${agentEsc(t.title||'Task')}</a><small class="muted"> · due ${t.due||'—'}</small></div>`).join(''):'<p class="muted">No open tasks.</p>'}</div></section></div>`;
  document.querySelectorAll('[data-wh-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.whNav;viewFilter=null;detailRecord=null;renderView()});
  wireCellLinks($('#view'));
+ laneWireStartButtons($('#view'));
  document.querySelectorAll('[data-wh-approve]').forEach(b=>b.onclick=()=>{demoDecideApproval(b.dataset.whApprove,true);toast(warehouseApprovalToast(b.dataset.whApprove,true));renderView()});
  document.querySelectorAll('[data-wh-reject]').forEach(b=>b.onclick=()=>{demoDecideApproval(b.dataset.whReject,false);toast(warehouseApprovalToast(b.dataset.whReject,false));renderView()});
 }
@@ -11363,12 +11366,13 @@ function renderObject360Body(){
     const pretty=caps.map(c=>c==='can read'?'Read':c==='can update'?'Act':c==='can delete'?'Delete':c).join(' + ');
     return `<span class="access-chip">${a.icon||''} ${a.name} · ${pretty}</span>`;
    }).join('');
+   const laneRunsHtml=laneRunsSectionHtml(s.root.entityType,s.root.entityId);
    sectionsHtml=`${groupEntries.length?`<div class="inspector-section"><div class="panel-title"><div><h3>Related records</h3><p class="card-desc">Linked to this record</p></div><span class="settings-count">${groupEntries.reduce((n,g)=>n+g[1].length,0)} linked</span></div>${groupEntries.map(([key,members])=>`<div class="ontology-inspector-group"><div class="ontology-inspector-group-label">${(members[0]&&members[0].groupLabel)||key}</div>${members.slice(0,MAXPER).map(m=>`<button type="button" class="ontology-inspector-bullet" data-o360g-inspect="${m.entityType}:${m.entityId}">${entityDotHtml(m.entityType)}${m.displayName}</button>`).join('')}${members.length>MAXPER?`<div class="muted" style="font-size:12px">+${members.length-MAXPER} more</div>`:''}</div>`).join('')}</div>`:`<div class="inspector-section"><p class="muted" style="font-size:12px">No related records yet.</p></div>`}
     ${orgUnit?`<div class="inspector-section"><div class="panel-title"><div><h3>Business Unit</h3></div></div><div style="font-size:13px">${orgUnit.name}</div></div>`:''}
     ${rules.length?`<div class="inspector-section"><div class="panel-title"><div><h3>Business Rules</h3><p class="card-desc">Evaluated for this record</p></div><span class="settings-count">${rules.length} rule${rules.length===1?'':'s'}</span></div>${ruleRows}</div>`:''}
     ${workflows.length?`<div class="inspector-section"><div class="panel-title"><div><h3>Workflows</h3><p class="card-desc">Connected automation</p></div></div><div class="o360-trigger-note">Trigger check evaluates each workflow's conditions against this record live — the demo keeps no run history, so there is no "last run" to show.</div>${wfRows}</div>`:''}
     ${agents.length?`<div class="inspector-section"><h3>Agent effective access</h3><p class="card-desc">Inherited and direct permissions</p><div class="access-chips">${agentChipsHtml}</div></div>`:''}
-    ${activities.length?`<div class="inspector-section"><div class="panel-title"><div><h3>Activity</h3><p class="card-desc">Recent work on this record</p></div></div>${activities.map(a=>`<div style="font-size:12px" class="muted">${a.subject||a.channel}<br>${new Date(a.occurredAt).toLocaleString()}</div>`).join('')}</div>`:''}`;
+    ${activities.length?`<div class="inspector-section"><div class="panel-title"><div><h3>Activity</h3><p class="card-desc">Recent work on this record</p></div></div>${activities.map(a=>`<div style="font-size:12px" class="muted">${a.subject||a.channel}<br>${new Date(a.occurredAt).toLocaleString()}</div>`).join('')}</div>`:''}${laneRunsHtml}`;
   }
   inspectorHtml=`<div class="ontology-inspector-card card" id="o360InspectorCard"${o360CardPosStyle}>
    <div class="ontology-inspector-head" id="o360InspectorHead">${entityDotHtml(s.inspect.entityType,14)}<div><strong>${s.inspect.label}</strong><div class="ontology-inspector-subtitle">${driver.typeLabel(s.inspect.entityType)}</div></div></div>
@@ -11418,6 +11422,7 @@ function renderObject360Body(){
  });
  body.querySelectorAll('[data-o360-admin]').forEach(b=>b.onclick=()=>{const t=b.dataset.o360Admin;closeModal();current='admin';adminTab=t;adminView='tool';renderView()});
  const openBtn=$('#o360OpenRecord'); if(openBtn)openBtn.onclick=()=>{const t=object360State.inspect;closeModal();openRecordDetail(t.entityType,t.entityId)};
+ body.querySelectorAll('[data-lane-open-run]').forEach(b=>b.onclick=()=>{closeModal();laneOpenRunner(b.dataset.laneOpenRun)});
  const recenterBtn=$('#o360Recenter'); if(recenterBtn)recenterBtn.onclick=()=>{const t=object360State.inspect;o360PivotTo(t.entityType,t.entityId,t.label);renderObject360Body()};
  const ontoBtn=$('#o360OpenOntology'); if(ontoBtn)ontoBtn.onclick=()=>openOntologyGraphFor(object360State.root.entityType);
  const pseudoBtn=$('#o360OpenPseudoAdmin'); if(pseudoBtn)pseudoBtn.onclick=()=>{const t={business_rule:'rules',workflow:'workflow',ai_agent:'aiAgents'}[object360State.inspect.entityType];closeModal();current='admin';adminTab=t;adminView='tool';renderView()};
@@ -11710,7 +11715,7 @@ function genericRecordDetail(key,id){
  ${recordTabsHtml()}
  <div id="rec-overview" class="tab-panel active"><div class="record-grid">
   <div>
-   ${linesHtml}${whLinesHtml}
+   ${linesHtml}${whLinesHtml}${laneRecordSectionHtml(key,id)}
    <section class="card"><div class="card-head"><h3>${singular} details</h3><p class="card-desc">Core information for this record</p></div><div class="card-body" style="padding:14px 0 0">${overviewPanelHtml(key,overviewFields,r,id)}</div></section>
   </div>
   <section class="card"><div class="card-head"><h3>Related records</h3><p class="card-desc">Connected across the workspace</p></div><div class="card-body" style="padding:14px 0 0">${relatedPreviewListHtml(relGroups)}</div></section>
@@ -11718,6 +11723,7 @@ function genericRecordDetail(key,id){
  <div id="rec-related" class="tab-panel"><section class="card"><div class="card-head"><h3>All related records</h3><p class="card-desc">Records connected to ${title}</p></div><div class="card-body" style="padding:14px 0 6px">${relatedFullGroupsHtml(relGroups)}</div></section></div>
  <div id=\"rec-activity\" class=\"tab-panel\">${activityTimelineHtml(key,id)}</div>`;
  wireDetail360Nav(()=>recordModal(key,fieldsFor(key,fieldsFn),r),()=>object360Modal(key,id,title));
+ laneWireStartButtons($('#view'));
  wireActivityTimelines($('#view'));
 }
 function recordModal(key,fields,record={}){
@@ -20612,10 +20618,12 @@ const DEMO_ADMIN_ACTIONS=['list_business_rules','create_business_rule','list_wor
 const DEMO_ALL_ACTIONS=[...DEMO_RECORD_ACTIONS,...DEMO_ADMIN_ACTIONS];
 function aiAgentsTab(body){
  const agents=data.aiAgents||[];
+ const laneByAgent={};
+ (data.laneDefinitions||[]).forEach(d=>{(d.lane.stages||[]).forEach(s=>{(s.steps||[]).forEach(st=>{if(st.assistance&&st.assistance.agent)laneByAgent[st.assistance.agent]=d;});});});
  body.innerHTML=`<div class="panel">
  <div class="panel-head"><h3>AI Agents</h3><button class="btn btn-primary" id="addAgent">+ New agent</button></div>
  <p class="muted" style="font-size:13px">Each agent is a persona layered over a set of actions it can take, with its own persistent memory and attached skills - real, structured data in this browser; chatting with one simulates the reply with a keyword match, since this static demo has no server to run a real tool-calling loop from. A supervisor agent with no actions of its own can delegate to named sub-agents instead (depth-guarded against runaway recursion, same as the real edition).</p>
- <div class="table-wrap"><table class="table"><thead><tr><th></th><th>Name</th><th>Actions</th><th>Skills</th><th>Delegates to</th><th>Ontology scope</th><th>Status</th><th>Actions</th></tr></thead><tbody>${agents.map(a=>`<tr><td>${a.icon}</td><td><b>${a.name}</b>${a.description?`<br><small class="muted">${a.description}</small>`:''}</td><td>${(a.actionNames||[]).length}</td><td>${(a.skillIds||[]).length}</td><td>${(a.delegateAgentIds||[]).length||'—'}</td><td>${(a.objectTypeScopes||[]).length===0?'<span class="muted">Unscoped</span>':`${a.objectTypeScopes.length} object type(s)`}</td><td>${badgeMaybe(a.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-chat-agent="${a.id}" ${a.isActive?'':'disabled'}>Chat</button><button class="icon-btn" data-edit-agent="${a.id}">Edit</button><button class="icon-btn" data-memory-agent="${a.id}">Memory</button><button class="icon-btn" data-guardrails-agent="${a.id}">Guardrails</button><button class="icon-btn" data-routing-agent="${a.id}">Routing${a.modelRouting?' <span class="badge badge-success">on</span>':''}</button><button class="icon-btn" data-toollimits-agent="${a.id}">Tool limits${Object.values(a.toolCaps||{}).some(c=>c.disabledAt)?' <span class="badge">disabled</span>':''}</button><button class="icon-btn" data-versions-agent="${a.id}">Versions</button><button class="icon-btn" data-toggle-agent="${a.id}">${a.isActive?'Deactivate':'Reactivate'}</button></div></td></tr>`).join('')}</tbody></table>${agents.length?'':'<div class="empty">No agents yet</div>'}</div>
+ <div class="table-wrap"><table class="table"><thead><tr><th></th><th>Name</th><th>Actions</th><th>Skills</th><th>Delegates to</th><th>Ontology scope</th><th>Status</th><th>Actions</th></tr></thead><tbody>${agents.map(a=>`<tr><td>${a.icon}</td><td><b>${a.name}</b>${a.description?`<br><small class="muted">${a.description}</small>`:''}</td><td>${(a.actionNames||[]).length}</td><td>${(a.skillIds||[]).length}</td><td>${(a.delegateAgentIds||[]).length||'—'}</td><td>${(a.objectTypeScopes||[]).length===0?'<span class="muted">Unscoped</span>':`${a.objectTypeScopes.length} object type(s)`}</td><td>${badgeMaybe(a.isActive?'Active':'Inactive')}</td><td><div class="actions"><button class="icon-btn" data-chat-agent="${a.id}" ${a.isActive?'':'disabled'}>Chat</button>${laneByAgent[a.id]?`<button class="icon-btn" data-lane-agent="${a.id}">${laneByAgent[a.id].lane.name} lane</button>`:''}<button class="icon-btn" data-edit-agent="${a.id}">Edit</button><button class="icon-btn" data-memory-agent="${a.id}">Memory</button><button class="icon-btn" data-guardrails-agent="${a.id}">Guardrails</button><button class="icon-btn" data-routing-agent="${a.id}">Routing${a.modelRouting?' <span class="badge badge-success">on</span>':''}</button><button class="icon-btn" data-toollimits-agent="${a.id}">Tool limits${Object.values(a.toolCaps||{}).some(c=>c.disabledAt)?' <span class="badge">disabled</span>':''}</button><button class="icon-btn" data-versions-agent="${a.id}">Versions</button><button class="icon-btn" data-toggle-agent="${a.id}">${a.isActive?'Deactivate':'Reactivate'}</button></div></td></tr>`).join('')}</tbody></table>${agents.length?'':'<div class="empty">No agents yet</div>'}</div>
  <div id="agentChatWrap"></div>
  <div id="agentMemoryWrap"></div>
  <div id="agentGuardrailsWrap"></div>
@@ -20636,6 +20644,7 @@ function aiAgentsTab(body){
  renderKnowledgeMemoryPanel(agents,$('#knowledgeMemoryWrap'));
  renderMcpServersPanel($('#mcpServersWrap'));
  $('#addAgent').onclick=()=>aiAgentModal();
+ laneWireStartButtons(body);
  body.querySelectorAll('[data-edit-agent]').forEach(b=>b.onclick=()=>aiAgentModal(agents.find(a=>a.id===b.dataset.editAgent)));
  body.querySelectorAll('[data-toggle-agent]').forEach(b=>b.onclick=()=>{const a=agents.find(x=>x.id===b.dataset.toggleAgent);a.isActive=!a.isActive;save();renderView()});
  body.querySelectorAll('[data-routing-agent]').forEach(b=>b.onclick=()=>aiAgentRoutingPanel(agents.find(x=>x.id===b.dataset.routingAgent),$('#agentRoutingWrap')));
@@ -22681,6 +22690,7 @@ function warehouseApprovalToast(id,approve){
  if(t==='warehouse_count_line')return approve?'Approved — COUNT_ADJUSTMENT posted, stock updated':'Rejected — no adjustment posted, record unchanged';
  if(t==='warehouse_recount')return approve?'Approved — recount queued':'Rejected — count stays rejected';
  if(t==='warehouse_pick_shortfall')return approve?'Approved — backorder confirmed, customer notified':'Rejected — no backorder created';
+ if(t==='warehouse_receipt_discrepancy'&&a.proposal&&a.proposal.laneRunId)return approve?'Approved — the lane run advanced to put-away':'Rejected — the lane run moved to the hold step, nothing posted';
  if(t==='warehouse_receipt_discrepancy')return approve?'Approved — put-away released for the good units':'Rejected — put-away stays on hold';
  if(t==='warehouse_draft_po')return approve?'Approved — draft purchase order created':'Rejected — no purchase order created';
  if(t==='pipeline_run'||t==='execution_graph_node')return approve?'Approved - the run resumed':'Rejected - the run ended';
@@ -22698,6 +22708,8 @@ function demoDecideApproval(id,approve){
   }
  }else if(a.subjectType==='execution_graph_node'){
   agentTeamResolveApproval(a.subjectId,approve,true);
+ }else if(a.subjectType==='warehouse_receipt_discrepancy'&&a.proposal&&a.proposal.laneRunId){
+  laneDecideApproval(a.proposal.laneRunId,approve);
  }else if(a.subjectType&&a.subjectType.startsWith('warehouse_')){
   warehouseApprovalEffect(a,approve);
  }
@@ -22723,6 +22735,9 @@ function demoDecideApproval(id,approve){
 //     stays WAITING_STOCK either way.
 //   receipt_discrepancy: approve -> put-away task (release hold); the
 //     rejected units are written off by the Receiving Agent off-demo.
+//   receipt_discrepancy in a lane: approve -> the lane run advances to
+//     put-away (no task; the lane's own steps post the moves). The
+//     standalone approval effect above is NOT run for a lane approval.
 //   draft_po:    approve -> a DRAFT PurchaseOrder (next PO-2026-nnn,
 //     one line, supplier from the reorder rule's product) + task.
 function nextWarehouseMoveNumber(){
@@ -23755,13 +23770,934 @@ function executeWorkflowAction(a,key,record){
  data.tasks.unshift({id:uid(),taskNumber:nextNumber('tasks'),title:a.taskTitle,relatedType:relatedTypeFor[key]||'General',relatedId:relatedTypeFor[key]?record.id:'',due:due.toISOString().slice(0,10),priority:'Medium',status:'Open',...defaultOwnershipFields(record)});
  return `created task "${a.taskTitle}"`;
 }
+// ---- Process Lanes (WP-0702) ----------------------------------------------
+// The online demo preview of Process Lanes (ADR-0023 decision 6, exception
+// to REQ-PRE-021; ADR-0024). One lane, Receive Shipment, on the warehouse
+// demo. The demo MAY: use the shared lane schema, run the runner screen
+// against the demo store, persist runs in localStorage shaped like ai_runs /
+// ai_run_nodes, do real writes through the same governed path a direct edit
+// uses, run the discrepancy branch with the seeded PO-2026-005 run, enforce
+// one active run per lane per record and the `replaces` rule. The demo MAY
+// NOT: invent a field, step kind, status, branch or outcome; simulate
+// writes; build a second engine; show ON_HOLD / IN_PROGRESS /
+// WAITING_APPROVAL / DONE / CANCELLED as run statuses (it uses the ADR-0007
+// statuses plus waiting_person); skip schema validation.
+// Roles: the demo has one simulated identity (the Manager, user-01, per the
+// warehouse stamping convention), so the runner shows each step's assigned
+// role but does not lock the visitor out — role gating is WP-0704's. The
+// Draft -> Published gate is WP-0703's: the seeded definition below is the
+// example file verbatim (status draft there) and the demo runs it as the
+// preview lane.
+
+// __LANE_WH_RECEIVING_START__
+// The Receive Shipment lane definition, verbatim from
+// program/spec/schemas/examples/lane-wh-receiving.json. Do not edit by hand:
+// program/tools/check_lane_schema.py verifies this copy matches the example
+// and validates it against the shared schema.
+const LANE_WH_RECEIVING = {"format_version":"1.0.0","lane":{"description":"Receive a shipment for one purchase order: verify the delivery, record what arrived, stage and put away the stock, and close the order. One run per purchase order. The discrepancy branch sends a short or damaged receipt to the Warehouse Manager for review. This is the Receive Shipment lane from Part B of the Process Lane spec, with the ADR-0023 changes applied: entered values are stored in run data (steps 1.1 and 1.2), record steps call governed Action Types, the hold branch has a declared exit (record the hold, end with outcome held), the workflow actions it replaces are declared (wf-wh-01 on step 4.2, wf-wh-07 on step 2B.1), and the per-line steps repeat over the order lines. The spec's hybrid 'form + record' steps are split (ADR-0024 section 3): 3.1 assigns the staging bin and 3.2 posts the receipt moves; 3.3 confirms the put-away bins and 3.4 posts the put-away moves. Action Type ids are provisional until WP-0705 adopts them (ADR-0024 section 14).","id":"lane-wh-receiving","name":"Receive Shipment","object_key":"purchase_order","run_data":{"fields":[{"description":"Carrier who delivered the shipment, entered at step 1.1.","key":"carrier","required":true,"type":"string"},{"description":"Delivery-note number from the carrier's paperwork, entered at step 1.1.","key":"delivery_note_number","required":true,"type":"string"},{"description":"Date the shipment arrived, entered at step 1.1. Must match the PO's expected date.","key":"received_date","required":true,"type":"date"},{"description":"Quantity on the delivery note, per order line, entered at step 1.2. Keyed by line id.","key":"delivery_note_qty","per_child":true,"required":true,"type":"integer"},{"description":"Rejection reason, per order line, entered at step 2.1 when units are rejected. Keyed by line id.","key":"rejection_reason","per_child":true,"type":"string"},{"description":"Receiving bin the goods are staged in (RCV-01 or RCV-02), entered at step 3.1.","key":"staging_bin","required":true,"type":"string"},{"description":"Put-away bin, per order line, confirmed at step 3.3. Suggested by the Receiving Agent from the product's preferred bin. Keyed by line id.","key":"putaway_bin","per_child":true,"required":true,"type":"string"},{"description":"Why the receipt is held, entered at step 2B.2 when the manager rejects the discrepancy.","key":"hold_reason","type":"string"}]},"stages":[{"id":"verify","name":"Verify","steps":[{"description":"Confirm the truck and delivery: carrier, delivery-note number, received date. The values are stored in run data (ADR-0023 change 1); the spec's step 1.1 wrote them nowhere.","fields":[{"binds_to":"run_data.carrier","key":"carrier","label":"Carrier","required":true,"type":"string"},{"binds_to":"run_data.delivery_note_number","key":"delivery_note_number","label":"Delivery-note number","required":true,"type":"string"},{"binds_to":"run_data.received_date","key":"received_date","label":"Received date","required":true,"type":"date"}],"id":"confirm-arrival","kind":"form","name":"Confirm shipment arrived","required":true,"role":"role_wh_receiver","validation":{"condition":{"compare_field":"$record.expected_date","field":"$run_data.received_date","operator":"equals"},"message":"Received date must match the PO's expected date."}},{"assistance":{"agent":"wh-agt-receiving","autonomy":"propose"},"description":"Match each order line to the delivery note: enter the quantity on the delivery note per line. The Receiving Agent proposes the match; the receiver confirms or overrides. Runs once per order line.","fields":[{"binds_to":"run_data.delivery_note_qty","key":"delivery_note_qty","label":"Delivery-note quantity","required":true,"type":"integer"}],"id":"match-delivery-note","kind":"form","name":"Match lines to the delivery note","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver"}]},{"id":"record-receipt","name":"Record receipt","steps":[{"description":"Per line: quantity received, quantity rejected and the rejection reason. The quantities are written to the PO lines; the reason is stored in run data. Runs once per order line.","fields":[{"binds_to":"record.lines[].qty_received","key":"qty_received","label":"Quantity received","required":true,"type":"integer"},{"binds_to":"record.lines[].qty_rejected","key":"qty_rejected","label":"Quantity rejected","required":true,"type":"integer"},{"binds_to":"run_data.rejection_reason","key":"rejection_reason","label":"Rejection reason","type":"string"}],"id":"enter-quantities","kind":"form","name":"Enter received quantities","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver","validation":{"expression":"$item.qty_received + $item.qty_rejected <= $item.qty_ordered","message":"Received + rejected must not exceed ordered for this line."}},{"branches":[{"on":"pass","target":{"stage":"stage-put-away","step":"assign-staging-bin"}},{"on":"fail","target":{"stage":"hold-review","step":"review-discrepancy"}}],"check":{"aggregate":"all","condition":{"conditions":[{"compare_field":"$item.qty_ordered","field":"$item.qty_received","operator":"equals"},{"field":"$item.qty_rejected","operator":"equals","value":0}],"match":"all"},"message":"A line is short or has rejected units.","scope":"per_item"},"description":"Automatic check: every line fully received. If any line is short or rejected, the run branches to manager review instead of continuing to put-away.","id":"discrepancy-check","kind":"check","name":"Discrepancy check"}]},{"id":"hold-review","name":"Hold & review","steps":[{"branches":[{"on":"approved","target":{"stage":"stage-put-away","step":"assign-staging-bin"}},{"on":"rejected","target":{"stage":"hold-review","step":"record-hold"}}],"description":"The Warehouse Manager sees per-line ordered vs received vs rejected, with the receiver's note. Approve: continue to Stage 3 with the adjusted quantities; the PO becomes PARTIALLY_RECEIVED. Reject: the run goes to the hold step; no receipt is posted for the disputed lines.","id":"review-discrepancy","kind":"approval","name":"Review discrepancy","replaces":[{"action_index":0,"workflow_id":"wf-wh-07"}],"required":true,"role":"role_wh_warehouse_manager","writes":[{"action_type":"purchase_order.set_status","inputs":{"status":"PARTIALLY_RECEIVED"}}]},{"description":"Record why the receipt is held. Completing this step ends the run with the named outcome held (ADR-0023 change 6: the spec's hold branch ended in ON_HOLD with no exit). Put-away never happens for the disputed lines. Resuming the receipt is a new run on the same PO.","ends_run":{"outcome":"held"},"fields":[{"binds_to":"run_data.hold_reason","key":"hold_reason","label":"Hold reason","required":true,"type":"string"}],"id":"record-hold","kind":"form","name":"Record hold","required":true,"role":"role_wh_warehouse_manager"}]},{"id":"stage-put-away","name":"Stage & put away","steps":[{"assistance":{"agent":"wh-agt-receiving","autonomy":"propose"},"description":"Assign a receiving bin for the staged goods: RCV-01 or RCV-02. The Receiving Agent proposes the bin; the receiver confirms or overrides.","fields":[{"binds_to":"run_data.staging_bin","key":"staging_bin","label":"Staging bin","required":true,"type":"string"}],"id":"assign-staging-bin","kind":"form","name":"Stage the goods","required":true,"role":"role_wh_receiver"},{"description":"Post a RECEIPT StockMove per order line (MV-2026-016, MV-2026-017 for PO-2026-001). Runs once per order line. The move number is assigned by the Action Type; the ledger is append-only.","id":"post-receipt-moves","kind":"record","name":"Post receipt moves","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver","writes":[{"action_type":"warehouse.post_stock_move","inputs":{"from_location":null,"move_type":"RECEIPT","product_id":"$item.product_id","quantity":"$item.qty_received","reference_id":"$record.id","to_location":"$run_data.staging_bin"}}]},{"assistance":{"agent":"wh-agt-receiving","autonomy":"propose"},"description":"Confirm the put-away bin per line, suggested by the Receiving Agent from the product's preferred bin (HG-1001 and HG-1002 both go to A-01-03). Runs once per order line.","fields":[{"binds_to":"run_data.putaway_bin","key":"putaway_bin","label":"Put-away bin","required":true,"type":"string"}],"id":"confirm-putaway-bins","kind":"form","name":"Confirm put-away","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver"},{"description":"Post a PUTAWAY StockMove per order line (MV-2026-018, MV-2026-019 for PO-2026-001) and update stock on hand (48 to 88 for HG-1001, 22 to 52 for HG-1002). Runs once per order line. Available is recomputed, never written.","id":"post-putaway-moves","kind":"record","name":"Post put-away moves","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver","writes":[{"action_type":"warehouse.post_stock_move","inputs":{"from_location":"$run_data.staging_bin","move_type":"PUTAWAY","product_id":"$item.product_id","quantity":"$item.qty_received","reference_id":"$record.id","to_location":"$run_data.putaway_bin"}}]}]},{"id":"confirm","name":"Confirm","steps":[{"description":"Read-only summary of the run: what was received, staged and put away, and the new on-hand quantities (88 / 52 for PO-2026-001). No fields to fill; completing the step moves on.","id":"review-summary","kind":"form","name":"Review summary","required":true,"role":"role_wh_receiver"},{"description":"Close the receipt. The Action Type closes the PO as RECEIVED when every line is fully received, or PARTIALLY_RECEIVED when the run took the discrepancy branch. The Warehouse Manager is notified automatically. This step replaces the wf-wh-01 put-away task: put-away already happened in Stage 3, so no duplicate task is created. The workflow stays the fallback for a PO that becomes RECEIVED outside a lane.","id":"close-po","kind":"record","name":"Close the PO","notify":[{"message":"PO-2026-001 received: 40 x HG-1001, 30 x HG-1002. Stock on hand 88 / 52.","to_role":"role_wh_warehouse_manager"}],"replaces":[{"action_index":0,"workflow_id":"wf-wh-01"}],"required":true,"role":"role_wh_receiver","writes":[{"action_type":"purchase_order.close_receipt","inputs":{"purchase_order_id":"$record.id"}}]}]}],"start_condition":{"field":"$record.status","operator":"equals","value":"OPEN"},"status":"draft","version":1}};
+// __LANE_WH_RECEIVING_END__
+
+let laneRunId = null; // id of the run open in the runner, if any
+let laneViewStep = null; // {stageId, stepId} while Back previews an earlier step, else null
+
+// ---- Store ---------------------------------------------------------------
+function laneDefinitions(){ if(!data.laneDefinitions)data.laneDefinitions=[]; return data.laneDefinitions; }
+function laneDef(id){ return (data.laneDefinitions||[]).find(d=>d.lane&&d.lane.id===id)||null; }
+function laneRuns(){ if(!data.laneRuns)data.laneRuns=[]; return data.laneRuns; }
+function laneRunSteps(){ if(!data.laneRunSteps)data.laneRunSteps=[]; return data.laneRunSteps; }
+function laneRunById(id){ return (data.laneRuns||[]).find(r=>r.id===id)||null; }
+function laneActiveRun(laneId, recordId){
+ return (data.laneRuns||[]).find(r=>r.laneId===laneId&&r.anchorRecordId===recordId&&!['completed','completed_partial','cancelled'].includes(r.status))||null;
+}
+function laneRunsForRecord(objectKey, recordId){
+ return (data.laneRuns||[]).filter(r=>r.anchorObjectKey===objectKey&&r.anchorRecordId===recordId);
+}
+function laneStepsForRun(runId){ return (data.laneRunSteps||[]).filter(s=>s.runId===runId); }
+function laneStepRow(runId, stageId, stepId){
+ const rows=(data.laneRunSteps||[]).filter(s=>s.runId===runId&&s.stageId===stageId&&s.stepId===stepId);
+ return rows.length?rows[rows.length-1]:null;
+}
+
+// The seeded run for PO-2026-005, waiting at manager review (spec B5). Its
+// state mirrors the seed exactly: 18 received / 2 rejected, mv-015
+// CONFIRMED, put-away pending. Steps 1.1-2.2 were done by Aisha Khan
+// (user-03, who performed mv-015); the run data holds only what the seed
+// records — the per-line quantities and the rejection reason.
+function laneSeedRunPo005(){
+ const run={
+  id:'run-wh-po005', laneId:'lane-wh-receiving', laneVersion:1,
+  anchorObjectKey:'purchase_order', anchorRecordId:'po-2026-005',
+  status:'waiting_approval', currentStageId:'hold-review', currentStepId:'review-discrepancy',
+  runData:{delivery_note_qty:{'pol-005-1':18}, rejection_reason:{'pol-005-1':'Damaged'}},
+  startedBy:'user-03', startedAt:'2026-11-13T08:00:00.000Z', finishedAt:null, outcome:null,
+  approvalId:'apr-wh-po005'
+ };
+ const steps=[
+  {id:'lstep-po005-1', runId:'run-wh-po005', stageId:'verify', stepId:'confirm-arrival', status:'completed', attempt:1, enteredAt:'2026-11-13T08:00:00.000Z', completedAt:'2026-11-13T08:02:00.000Z', completedBy:'user-03', note:'Shipment confirmed.', writes:[]},
+  {id:'lstep-po005-2', runId:'run-wh-po005', stageId:'verify', stepId:'match-delivery-note', status:'completed', attempt:1, enteredAt:'2026-11-13T08:02:00.000Z', completedAt:'2026-11-13T08:05:00.000Z', completedBy:'user-03', note:'Delivery note matched: 18 × HG-1008.', writes:[]},
+  {id:'lstep-po005-3', runId:'run-wh-po005', stageId:'record-receipt', stepId:'enter-quantities', status:'completed', attempt:1, enteredAt:'2026-11-13T08:05:00.000Z', completedAt:'2026-11-13T08:10:00.000Z', completedBy:'user-03', note:'Received 18, rejected 2 (Damaged).', writes:['PO line pol-005-1: qty_received 18, qty_rejected 2']},
+  {id:'lstep-po005-4', runId:'run-wh-po005', stageId:'record-receipt', stepId:'discrepancy-check', status:'completed', attempt:1, enteredAt:'2026-11-13T08:10:00.000Z', completedAt:'2026-11-13T08:12:00.000Z', completedBy:'user-03', note:'Failed — a line is short or has rejected units.', outcome:'fail', writes:[]},
+  {id:'lstep-po005-5', runId:'run-wh-po005', stageId:'hold-review', stepId:'review-discrepancy', status:'waiting_approval', attempt:1, enteredAt:'2026-11-13T08:15:00.000Z', completedAt:null, completedBy:null, note:null, writes:[]}
+ ];
+ return {run, steps};
+}
+
+// Heal stored workspaces the way ensureWarehouseDay2 does: id-guarded,
+// one-time-flagged so a finished run is never resurrected, and re-seeded
+// from scratch after Reset (which rebuilds data from the literal, so the
+// flag is gone). Reset clears runs and keeps definitions (spec B5): the
+// definition is re-seeded identically, the run is re-seeded fresh.
+function ensureWarehouseLaneData(){
+ if(!data.laneDefinitions)data.laneDefinitions=[];
+ if(!laneDef('lane-wh-receiving'))data.laneDefinitions.push(JSON.parse(JSON.stringify(LANE_WH_RECEIVING)));
+ if(!data.laneRuns)data.laneRuns=[];
+ if(!data.laneRunSteps)data.laneRunSteps=[];
+ if(!data.workspace.warehouseLaneSeeded){
+  const seeded=laneSeedRunPo005();
+  if(!laneRunById(seeded.run.id)&&!laneRunsForRecord('purchase_order','po-2026-005').length){
+   data.laneRuns.push(seeded.run);
+   seeded.steps.forEach(s=>data.laneRunSteps.push(s));
+   // The existing discrepancy entry becomes this run's waiting approval
+   // (spec B6), not a separate standalone item.
+   const apr=(data.aiApprovals||[]).find(a=>a.id==='apr-wh-po005');
+   if(apr){ apr.proposal=apr.proposal||{}; apr.proposal.laneRunId='run-wh-po005'; apr.proposal.laneStepId='review-discrepancy'; }
+  }
+  data.workspace.warehouseLaneSeeded=true;
+ }
+}
+
+// ---- References, conditions, expressions ---------------------------------
+// A $ reference resolves against {record, runData, item}. A $run_data field
+// declared per_child resolves to the current child's value inside a
+// repeating step (ADR-0024 section 3).
+function laneResolveRef(ref, ctx){
+ if(typeof ref!=='string'||ref[0]!=='$')return ref;
+ const parts=ref.slice(1).split('.');
+ const scope=parts[0];
+ if(scope==='record')return laneGetPath(ctx.record, parts.slice(1));
+ if(scope==='run_data'){
+  const val=laneGetPath(ctx.runData, parts.slice(1));
+  if(ctx.item&&ctx.itemId&&ctx.perChild&&ctx.perChild[parts[1]]&&val&&typeof val==='object'&&!Array.isArray(val))return val[ctx.itemId];
+  return val;
+ }
+ if(scope==='item')return laneGetPath(ctx.item, parts.slice(1));
+ return undefined;
+}
+function laneGetPath(obj, parts){
+ let cur=obj;
+ for(const p of parts){
+  if(cur==null)return undefined;
+  if(p==='[]'){ cur=Array.isArray(cur)?cur[0]:cur; continue; }
+  cur=cur[p];
+ }
+ return cur;
+}
+function laneCompare(op, left, right){
+ switch(op){
+  case 'equals': return left===right;
+  case 'not_equals': return left!==right;
+  case 'contains': return typeof left==='string'&&typeof right==='string'&&left.includes(right);
+  case 'not_contains': return typeof left==='string'&&typeof right==='string'&&!left.includes(right);
+  case 'starts_with': return typeof left==='string'&&typeof right==='string'&&left.startsWith(right);
+  case 'ends_with': return typeof left==='string'&&typeof right==='string'&&left.endsWith(right);
+  case 'in_list': return typeof right==='string'&&right.split('|').includes(String(left));
+  case 'not_in_list': return typeof right==='string'&&!right.split('|').includes(String(left));
+  case 'is_empty': return left===undefined||left===null||left==='';
+  case 'is_not_empty': return !(left===undefined||left===null||left==='');
+  case 'greater_than': return Number(left)>Number(right);
+  case 'less_than': return Number(left)<Number(right);
+  case 'on_or_after': return String(left)>=String(right);
+  case 'on_or_before': return String(left)<=String(right);
+  default: return false;
+ }
+}
+function laneEvalCondition(cond, ctx){
+ if(!cond)return true;
+ if(cond.conditions) return laneEvalConditionGroup(cond, ctx);
+ const left=laneResolveRef(cond.field, ctx);
+ const right=cond.compare_field!==undefined?laneResolveRef(cond.compare_field, ctx):cond.value;
+ return laneCompare(cond.operator, left, right);
+}
+function laneEvalConditionGroup(group, ctx){
+ const results=(group.conditions||[]).map(c=>laneEvalCondition(c, ctx));
+ return group.match==='any'?results.some(Boolean):results.every(Boolean);
+}
+// The narrow sum grammar (ADR-0024 section 5): a sum of field references
+// and numbers compared to a field reference or a number. Nothing else.
+function laneEvalExpression(expr, ctx){
+ const m=/^(.+?)\s*(<=|<|>=|>|==|!=)\s*(.+)$/.exec(String(expr||'').trim());
+ if(!m)return false;
+ const evalSum=s=>String(s).split('+').reduce((total,part)=>{
+  const t=part.trim();
+  const v=t[0]==='$'?laneResolveRef(t, ctx):Number(t);
+  return total+Number(v||0);
+ },0);
+ const left=evalSum(m[1]);
+ const rhs=m[3].trim();
+ const right=rhs[0]==='$'?Number(laneResolveRef(rhs, ctx)||0):Number(rhs);
+ switch(m[2]){
+  case '<=': return left<=right;
+  case '<': return left<right;
+  case '>=': return left>=right;
+  case '>': return left>right;
+  case '==': return left===right;
+  case '!=': return left!==right;
+  default: return false;
+ }
+}
+function laneEvalValidation(validation, ctx){
+ if(!validation)return {ok:true};
+ const ok=validation.expression!==undefined?laneEvalExpression(validation.expression, ctx):laneEvalCondition(validation.condition, ctx);
+ return {ok, message: ok?null:(validation.message||'Validation failed.')};
+}
+
+// A repeating step runs once per child record named by repeat_over.field
+// (an object: {field, item_id_field}); a non-repeating step runs once.
+function laneRepeatItems(step, po){
+ if(!step.repeat_over)return [null];
+ const items=laneGetPath(po, step.repeat_over.field.split('.'));
+ return Array.isArray(items)?items:[];
+}
+// ---- Definition navigation ------------------------------------------------
+function laneOrderedSteps(def){
+ const out=[];
+ (def.lane.stages||[]).forEach((stage,si)=>{
+  (stage.steps||[]).forEach((step,ii)=>out.push({stage, step, stageIndex:si, stepIndex:ii}));
+ });
+ return out;
+}
+function laneFindStep(def, stageId, stepId){
+ for(const stage of (def.lane.stages||[])){
+  if(stage.id!==stageId)continue;
+  const step=(stage.steps||[]).find(s=>s.id===stepId);
+  if(step)return {stage, step};
+ }
+ return null;
+}
+function lanePerChildMap(def){
+ const map={};
+ ((def.lane.run_data||{}).fields||[]).forEach(f=>{ if(f.per_child)map[f.key]=true; });
+ return map;
+}
+function laneCurrentStep(run){
+ const def=laneDef(run.laneId);
+ if(!def)return null;
+ return laneFindStep(def, run.currentStageId, run.currentStepId);
+}
+function laneRunLabel(run){
+ const def=laneDef(run.laneId);
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const label=po?(po.po_number||po.number||po.name||run.anchorRecordId):run.anchorRecordId;
+ const laneName=def?def.lane.name:run.laneId;
+ if(['completed','completed_partial','cancelled'].includes(run.status)){
+  return `${label} · ${laneName} · ${run.outcome||run.status}`;
+ }
+ const stages=(def?def.lane.stages:[])||[];
+ const idx=stages.findIndex(s=>s.id===run.currentStageId);
+ return `${label} · ${laneName} · stage ${idx+1} of ${stages.length}`;
+}
+function laneRunIsActive(run){ return !['completed','completed_partial','cancelled'].includes(run.status); }
+
+// ---- Run life-cycle -------------------------------------------------------
+// Start a run, or open the active one. One active run per lane per record
+// (REQ-LANE-010); the start condition is evaluated first and a refusal
+// names its reason.
+function laneStartOrOpen(laneId, recordId){
+ const existing=laneActiveRun(laneId, recordId);
+ if(existing){ laneOpenRunner(existing.id); return existing; }
+ const run=laneStartRun(laneId, recordId);
+ if(run)laneOpenRunner(run.id);
+ return run;
+}
+function laneStartRun(laneId, recordId){
+ const def=laneDef(laneId);
+ if(!def){ toast('Unknown lane: '+laneId); return null; }
+ const po=byId(def.lane.object_key, recordId);
+ if(!po){ toast('Record not found: '+recordId); return null; }
+ // One active run per lane per record (REQ-LANE-010): starting again
+ // reopens the run that is already there.
+ const existing=laneActiveRun(laneId, recordId);
+ if(existing)return existing;
+ const perChild=lanePerChildMap(def);
+ const ctx={record:po, runData:{}, item:null, perChild};
+ if(def.lane.start_condition&&!laneEvalConditionGroup(def.lane.start_condition, ctx)){
+  toast(`The ${def.lane.name} lane starts only when the order is OPEN — ${po.po_number||recordId} is ${po.status}.`);
+  return null;
+ }
+ const first=laneOrderedSteps(def)[0];
+ const run={
+  id:'run-'+uid(), laneId, laneVersion:def.lane.version,
+  anchorObjectKey:def.lane.object_key, anchorRecordId:recordId,
+  status:'waiting_person', currentStageId:first.stage.id, currentStepId:first.step.id,
+  runData:{}, startedBy:'user-01', startedAt:new Date().toISOString(), finishedAt:null, outcome:null,
+  approvalId:null
+ };
+ laneRuns().push(run);
+ laneEnterStep(run, first.stage, first.step);
+ save();
+ return run;
+}
+// Park the run on a step: a fresh attempt row, entered now. A check step is
+// evaluated at once (it never waits); an approval step creates its inbox
+// entry and the run waits on it.
+function laneEnterStep(run, stage, step){
+ const rows=laneStepsForRun(run.id).filter(s=>s.stageId===stage.id&&s.stepId===step.id);
+ const attempt=rows.length+1;
+ const row={id:'lstep-'+uid(), runId:run.id, stageId:stage.id, stepId:step.id,
+  status:step.kind==='approval'?'waiting_approval':'waiting_person', attempt,
+  enteredAt:new Date().toISOString(), completedAt:null, completedBy:null, note:null, outcome:null, writes:[]};
+ laneRunSteps().push(row);
+ run.currentStageId=stage.id; run.currentStepId=step.id;
+ run.status=step.kind==='approval'?'waiting_approval':'waiting_person';
+ if(step.kind==='approval')laneCreateApproval(run, step);
+ if(step.kind==='check')laneEvaluateCheckStep(run, step, row);
+ return row;
+}
+function laneCreateApproval(run, step){
+ const def=laneDef(run.laneId);
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const badLines=(po.lines||[]).filter(l=>Number(l.qty_received||0)<Number(l.qty_ordered||0)||Number(l.qty_rejected||0)>0);
+ const firstBad=badLines[0];
+ const prod=firstBad?(data.product||[]).find(p=>p.id===firstBad.product_id)||{}:{};
+ ensureDemoApprovals();
+ const approval={
+  id:'apr-'+uid(), subjectType:'warehouse_receipt_discrepancy', subjectId:po.id,
+  proposal:{
+   poId:po.id, poNumber:po.po_number, productId:firstBad?firstBad.product_id:null, sku:prod.sku||'',
+   qtyOrdered:firstBad?firstBad.qty_ordered:0, qtyReceived:firstBad?firstBad.qty_received:0, qtyRejected:firstBad?firstBad.qty_rejected:0,
+   lines:badLines.map(l=>{ const p=(data.product||[]).find(x=>x.id===l.product_id)||{}; return {lineId:l.id, productId:l.product_id, sku:p.sku||'', qtyOrdered:l.qty_ordered, qtyReceived:l.qty_received, qtyRejected:l.qty_rejected, reason:(run.runData.rejection_reason||{})[l.id]||''}; }),
+   laneRunId:run.id, laneStepId:step.id
+  },
+  status:'pending', requestedBy:'Receive Shipment lane', createdAt:new Date().toISOString(), resolvedAt:null
+ };
+ data.aiApprovals.unshift(approval);
+ run.approvalId=approval.id;
+ return approval;
+}
+// Evaluate a check step at once and follow its branch. Returns the branch
+// target the run moved to (or null when the run finished).
+function laneEvaluateCheckStep(run, step, row){
+ const def=laneDef(run.laneId);
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const rule=step.check;
+ let pass;
+ if(rule.scope==='per_item'){
+  const perChild=lanePerChildMap(def);
+  const results=(po.lines||[]).map(line=>{
+   const ctx={record:po, runData:run.runData, item:line, itemId:line.id, perChild};
+   return rule.expression!==undefined?laneEvalExpression(rule.expression, ctx):laneEvalCondition(rule.condition, ctx);
+  });
+  pass=rule.aggregate==='any'?results.some(Boolean):results.every(Boolean);
+ }else{
+  const ctx={record:po, runData:run.runData, item:null, perChild:lanePerChildMap(def)};
+  pass=rule.expression!==undefined?laneEvalExpression(rule.expression, ctx):laneEvalCondition(rule.condition, ctx);
+ }
+ row.status='completed'; row.completedAt=new Date().toISOString(); row.completedBy='user-01';
+ row.outcome=pass?'pass':'fail';
+ row.note=pass?'Passed — every line fully received.':('Failed — '+(rule.message||'a line is short or has rejected units.'));
+ const branch=(step.branches||[]).find(b=>b.on===row.outcome);
+ if(!branch){ toast('The lane has no branch for this check outcome.'); return null; }
+ return laneFollowBranch(run, branch);
+}
+function laneFollowBranch(run, branch){
+ if(branch.end){ laneFinishRun(run, branch.end.outcome); return null; }
+ const def=laneDef(run.laneId);
+ const target=laneFindStep(def, branch.target.stage, branch.target.step);
+ if(!target){ toast('The lane branch points at a step that does not exist.'); return null; }
+ laneEnterStep(run, target.stage, target.step);
+ save();
+ return target;
+}
+// Advance after a step completes: the next step in order, or the end of
+// the run. A check step reached this way evaluates at once.
+function laneAdvanceRun(run){
+ const def=laneDef(run.laneId);
+ const ordered=laneOrderedSteps(def);
+ const idx=ordered.findIndex(o=>o.stage.id===run.currentStageId&&o.step.id===run.currentStepId);
+ const next=ordered[idx+1];
+ if(!next){ laneFinishRun(run, 'done'); return; }
+ laneEnterStep(run, next.stage, next.step);
+ save();
+}
+function laneFinishRun(run, outcome){
+ run.status='completed'; run.outcome=outcome; run.finishedAt=new Date().toISOString();
+ save();
+}
+function lanePauseRun(run){
+ if(!laneRunIsActive(run))return;
+ run.status='paused'; save();
+}
+function laneResumeRun(run){
+ if(run.status!=='paused')return;
+ const cur=laneCurrentStep(run);
+ run.status=cur&&cur.step.kind==='approval'?'waiting_approval':'waiting_person'; save();
+}
+// The decision for an approval step, from the runner or the Approvals
+// inbox (demoDecideApproval routes lane approvals here). Approving posts
+// the guarded writes; rejecting posts nothing.
+function laneDecideApproval(runId, approve){
+ const run=laneRunById(runId);
+ if(!run)return;
+ const cur=laneCurrentStep(run);
+ if(!cur||cur.step.kind!=='approval')return;
+ const row=laneStepRow(run.id, cur.stage.id, cur.step.id);
+ if(!row||row.status!=='waiting_approval')return;
+ row.status='completed'; row.completedAt=new Date().toISOString(); row.completedBy='user-01';
+ row.outcome=approve?'approved':'rejected';
+ if(approve){
+  const writes=laneExecuteWrites(run, cur.step, null);
+  row.writes=writes;
+  row.note='Approved — the guarded write posted.';
+ }else{
+  row.note='Rejected — nothing posted for the disputed lines.';
+ }
+ const branch=(cur.step.branches||[]).find(b=>b.on===row.outcome);
+ if(!branch){ laneFinishRun(run, 'done'); return; }
+ laneFollowBranch(run, branch);
+}
+
+// ---- Step completion ------------------------------------------------------
+// values: non-repeat {fieldKey: value}; repeat {lineId: {fieldKey: value}}.
+// Validation runs before anything is written: a failure blocks the step
+// with its reason and writes nothing (AC-2).
+function laneSubmitFormStep(run, step, values){
+ const def=laneDef(run.laneId);
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const perChild=lanePerChildMap(def);
+ const lines=laneRepeatItems(step, po);
+ for(const line of lines){
+  const lineId=line?line.id:null;
+  const vals=line?((values||{})[lineId]||{}):(values||{});
+  for(const field of (step.fields||[])){
+   const v=vals[field.key];
+   if(field.required&&(v===undefined||v===null||v==='')){
+    return {ok:false, message:`${field.label} is required${line?` for ${laneLineLabel(po,line)}`:''}.`};
+   }
+   if(field.type==='integer'&&v!==undefined&&v!==null&&v!==''&&(!Number.isInteger(Number(v))||Number(v)<0)){
+    return {ok:false, message:`${field.label} must be a whole number of 0 or more${line?` for ${laneLineLabel(po,line)}`:''}.`};
+   }
+  }
+  // Candidate state: the submitted values applied, for validation.
+  const candRunData=JSON.parse(JSON.stringify(run.runData||{}));
+  const candPo={...po, lines:(po.lines||[]).map(l=>({...l}))};
+  const candLine=line?candPo.lines.find(l=>l.id===lineId):null;
+  for(const field of (step.fields||[])){
+   const v=vals[field.key];
+   if(v===undefined)continue;
+   laneApplyBinding(candRunData, candLine, candPo, field.binds_to, v, perChild);
+  }
+  if(step.validation){
+   const ctx={record:candPo, runData:candRunData, item:candLine, itemId:lineId, perChild};
+   const check=laneEvalValidation(step.validation, ctx);
+   if(!check.ok)return {ok:false, message:check.message};
+  }
+ }
+ // Valid: apply the bindings for real.
+ const notes=[];
+ for(const line of lines){
+  const lineId=line?line.id:null;
+  const vals=line?((values||{})[lineId]||{}):(values||{});
+  const liveLine=line?(po.lines||[]).find(l=>l.id===lineId):null;
+  for(const field of (step.fields||[])){
+   const v=vals[field.key];
+   if(v===undefined)continue;
+   laneApplyBinding(run.runData, liveLine, po, field.binds_to, v, perChild);
+  }
+  if(line){
+   const l=(po.lines||[]).find(x=>x.id===line.id)||line;
+   notes.push(`${laneLineLabel(po,l)}: received ${l.qty_received}, rejected ${l.qty_rejected}`);
+  }
+ }
+ const row=laneStepRow(run.id, run.currentStageId, step.id);
+ if(row){
+  row.status='completed'; row.completedAt=new Date().toISOString(); row.completedBy='user-01';
+  row.note=notes.length?notes.join('; '):(step.fields||[]).length?'Values recorded in run data.':'Reviewed.';
+ }
+ if(step.ends_run){ row.outcome=step.ends_run.outcome; laneFinishRun(run, step.ends_run.outcome); }
+ else laneAdvanceRun(run);
+ return {ok:true};
+}
+// One field binding. binds_to is run_data.<key> (a per_child map entry when
+// the definition declares the field per_child) or record.<field> or
+// record.<collection>[].<field>. `line` and `po` are the objects to write
+// into — candidate copies during validation, live records when applying.
+function laneApplyBinding(runData, line, po, bindsTo, value, perChildMap){
+ const parts=bindsTo.split('.');
+ if(parts[0]==='run_data'){
+  const key=parts[1];
+  if(perChildMap&&perChildMap[key]){
+   if(!runData[key]||typeof runData[key]!=='object')runData[key]={};
+   runData[key][line?line.id:''] = value;
+  }else{
+   runData[key]=value;
+  }
+  return;
+ }
+ if(parts[0]==='record'){
+  if(parts.length===3&&parts[1].endsWith('[]')){
+   if(line)line[parts[2]]=value;
+   return;
+  }
+  if(parts.length===2){ po[parts[1]]=value; return; }
+ }
+}
+function laneLineLabel(po, line){
+ const prod=(data.product||[]).find(p=>p.id===line.product_id)||{};
+ return `${prod.sku||line.product_id} (ordered ${line.qty_ordered})`;
+}
+// A record step: execute its writes, all-or-nothing per line, then advance.
+// A write that already posted (same move, same quantity) is not posted
+// again — the demo's repeat-safety for a retry or a double click.
+function laneCompleteRecordStep(run, step){
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const lines=laneRepeatItems(step, po);
+ const summaries=[];
+ for(const line of lines){
+  summaries.push(...laneExecuteWrites(run, step, line?{item:line, itemId:line.id}:null));
+ }
+ const row=laneStepRow(run.id, run.currentStageId, step.id);
+ if(row){
+  row.status='completed'; row.completedAt=new Date().toISOString(); row.completedBy='user-01';
+  row.writes=summaries;
+  row.note=summaries.length?summaries.join('; '):'Nothing to post.';
+ }
+ if(step.ends_run){ row.outcome=step.ends_run.outcome; laneFinishRun(run, step.ends_run.outcome); }
+ else laneAdvanceRun(run);
+ return {ok:true};
+}
+function laneExecuteWrites(run, step, itemCtx){
+ const summaries=[];
+ for(const w of (step.writes||[])){
+  const fn=laneActionTypes[w.action_type];
+  if(!fn){ toast('Unknown Action Type: '+w.action_type); continue; }
+  const inputs=laneResolveInputs(w.inputs, run, itemCtx);
+  const summary=fn(inputs, run, step);
+  if(summary)summaries.push(summary);
+ }
+ return summaries;
+}
+function laneResolveInputs(inputs, run, itemCtx){
+ const out={};
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const perChild=lanePerChildMap(laneDef(run.laneId));
+ const ctx={record:po, runData:run.runData, item:itemCtx?itemCtx.item:null, itemId:itemCtx?itemCtx.itemId:null, perChild};
+ for(const [k,v] of Object.entries(inputs||{})){
+  out[k]=(typeof v==='string'&&v[0]==='$')?laneResolveRef(v, ctx):v;
+ }
+ return out;
+}
+
+// ---- Governed Action Types (provisional ids, ADR-0024 section 14) ---------
+// The demo's implementation of the three Action Types the lane names. The
+// catalog is WP-0705's; it must adopt these ids or update the example in
+// the same pull request.
+const laneActionTypes={
+ 'warehouse.post_stock_move': (inputs, run, step)=>lanePostStockMove(inputs),
+ 'purchase_order.set_status': (inputs, run, step)=>laneSetPoStatus(inputs, run, step),
+ 'purchase_order.close_receipt': (inputs, run, step)=>laneCloseReceipt(inputs, run, step)
+};
+function laneLocationCode(id){
+ const loc=(data.location||[]).find(l=>l.id===id);
+ return loc?loc.code:id;
+}
+function lanePostStockMove(inputs){
+ const qty=Number(inputs.quantity||0);
+ const prod=(data.product||[]).find(p=>p.id===inputs.product_id)||{};
+ const sku=prod.sku||inputs.product_id;
+ if(!(qty>0))return `No ${inputs.move_type} move for ${sku} — received 0.`;
+ // Repeat-safe: the same move for the same reference never posts twice.
+ // The key is the business fact (type + product + reference + quantity):
+ // the bin is where the goods sit, not whether they moved.
+ const existing=(data.stock_move||[]).find(m=>m.move_type===inputs.move_type&&m.product_id===inputs.product_id&&m.reference_id===inputs.reference_id&&Number(m.qty)===qty);
+ if(existing)return `${existing.move_number} ${inputs.move_type} ${sku} × ${qty} → ${laneLocationCode(inputs.to_location)} (already posted)`;
+ const n=nextWarehouseMoveNumber();
+ const stockForLot=(data.stock||[]).find(s=>s.product_id===inputs.product_id);
+ data.stock_move.unshift({
+  id:'mv-'+uid(), number:n, name:n+' · '+inputs.move_type, status:'DONE', owner:'Sarah Chen', notes:'',
+  move_number:n, move_type:inputs.move_type, product_id:inputs.product_id,
+  lot_id:stockForLot?stockForLot.lot_id||null:null, qty,
+  from_location_id:inputs.from_location||null, to_location_id:inputs.to_location||null,
+  reference_id:inputs.reference_id, performed_by:'user-01', move_date:WAREHOUSE_TODAY
+ });
+ // Stock on hand moves only on PUTAWAY (goods arriving in the bin). A
+ // RECEIPT move parks the goods in the receiving bin; no stock row lives
+ // there, so on hand does not change.
+ if(inputs.move_type==='PUTAWAY'){
+  let stock=(data.stock||[]).find(s=>s.product_id===inputs.product_id&&s.location_id===inputs.to_location);
+  if(!stock){
+   stock={id:'stock-wh-'+inputs.product_id+'-'+inputs.to_location, number:'STK-'+sku, name:(prod.name||sku)+' @ '+laneLocationCode(inputs.to_location), status:'IN_STOCK', owner:'Sarah Chen', notes:'', product_id:inputs.product_id, location_id:inputs.to_location, lot_id:stockForLot?stockForLot.lot_id||null:null, on_hand:0, reserved:0};
+   data.stock.push(stock);
+  }
+  stock.on_hand=Number(stock.on_hand||0)+qty;
+  if(Number(stock.on_hand||0)===0)stock.status='OUT_OF_STOCK';
+  else if(Number(stock.on_hand||0)-Number(stock.reserved||0)<=Number(prod.reorder_level||0))stock.status='LOW_STOCK';
+  else stock.status='IN_STOCK';
+ }
+ return `${n} ${inputs.move_type} ${sku} × ${qty} → ${laneLocationCode(inputs.to_location)}`;
+}
+function laneFirePoWorkflows(po, before, replaces){
+ const skip=new Set((replaces||[]).map(r=>r.workflow_id+':'+r.action_index));
+ evaluateWorkflowRulesFor('purchase_order', po, before, po, skip.size?skip:null);
+}
+function laneSetPoStatus(inputs, run, step){
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const before={...po};
+ po.status=inputs.status;
+ laneFirePoWorkflows(po, before, step.replaces);
+ return `PO status → ${inputs.status}`;
+}
+function laneCloseReceipt(inputs, run, step){
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const before={...po};
+ const fully=(po.lines||[]).every(l=>Number(l.qty_received||0)===Number(l.qty_ordered||0)&&Number(l.qty_rejected||0)===0);
+ po.status=fully?'RECEIVED':'PARTIALLY_RECEIVED';
+ laneFirePoWorkflows(po, before, step.replaces);
+ // Automatic notification to the Warehouse Manager, composed from the
+ // run's actual values (the definition's literal message is the worked
+ // example's text for PO-2026-001).
+ const parts=(po.lines||[]).map(l=>{
+  const prod=(data.product||[]).find(p=>p.id===l.product_id)||{};
+  return `${l.qty_received} × ${prod.sku||l.product_id}${Number(l.qty_rejected||0)?` (${l.qty_rejected} rejected)`:''}`;
+ });
+ const onHand=(po.lines||[]).map(l=>{
+  const stock=(data.stock||[]).find(s=>s.product_id===l.product_id);
+  return stock?Number(stock.on_hand||0):0;
+ });
+ data.notifications.unshift({id:uid(), message:`${po.po_number} ${fully?'received':'partially received'}: ${parts.join(', ')}. Stock on hand ${onHand.join(' / ')}.`, createdAt:new Date().toISOString(), read:false});
+ return `PO status → ${po.status}`;
+}
+
+// ---- Runner screen --------------------------------------------------------
+// One screen (REQ-LANE-014): stage bar, step list, current step's work,
+// anchor-record summary, and the run's audit trail. A run is identified by
+// lane + anchor record; Back previews an earlier step without changing the
+// run (laneViewStep), and the same screen is used for a finished run, which
+// shows its outcome and the writes that posted.
+function laneOpenRunner(runId){
+ laneRunId=runId; laneViewStep=null;
+ current='laneRunner'; detailRecord=null;
+ window.scrollTo(0,0);
+ renderView();
+}
+function laneActorName(id){
+ const du=(data.demo_user||[]).find(u=>u.id===id);
+ if(du)return du.name;
+ return demoUserName(id);
+}
+function laneRoleLabel(roleId){
+ const role=(data.roles||[]).find(r=>r.id===roleId);
+ return role?role.name:roleId;
+}
+function laneAgentName(agentId){
+ const agent=(data.aiAgents||[]).find(a=>a.id===agentId);
+ return agent?agent.name:agentId;
+}
+function laneRunWrittenSummary(run){
+ const rows=laneStepsForRun(run.id);
+ const writes=rows.flatMap(r=>r.writes||[]);
+ return writes;
+}
+function renderLaneRunner(){
+ const run=laneRunById(laneRunId);
+ if(!run)return '<div class="view"><div class="card"><h3>Process Lane</h3><p>No run is open.</p></div></div>';
+ const def=laneDef(run.laneId);
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ if(!def||!po)return '<div class="view"><div class="card"><h3>Process Lane</h3><p>This run&rsquo;s lane or order is missing.</p></div></div>';
+ const cur=laneCurrentStep(run);
+ const stages=def.lane.stages||[];
+ const curStageIdx=stages.findIndex(s=>s.id===run.currentStageId);
+ const steps=laneStepsForRun(run.id);
+ const finished=['completed','completed_partial','cancelled'].includes(run.status);
+ const supplier=(data.supplier||[]).find(s=>s.id===po.supplier_id)||{};
+ const viewStep=laneViewStep&&laneFindStep(def, laneViewStep.stageId, laneViewStep.stepId);
+ const showStep=viewStep||cur;
+ const showRow=showStep?laneStepRow(run.id, showStep.stage.id, showStep.step.id):null;
+ const isViewingBack=!!viewStep;
+ // Stage bar: every stage, current highlighted, done checked.
+ const stageBar=stages.map((s,i)=>{
+  const cls=i<curStageIdx||finished?'done':i===curStageIdx?'current':'';
+  return `<div class="lane-stage ${cls}"><span class="lane-stage-num">${i<curStageIdx||finished?'✓':i+1}</span><span class="lane-stage-name">${agentEsc(s.name)}</span></div>`;
+ }).join('<div class="lane-stage-sep">›</div>');
+ // Step list for the current stage.
+ const stageSteps=cur?cur.stage.steps||[]:[];
+ const stepList=stageSteps.map(step=>{
+  const row=laneStepRow(run.id, cur.stage.id, step.id);
+  const done=row&&row.status==='completed';
+  const currentStep=step.id===run.currentStepId&&cur.stage.id===run.currentStageId;
+  const cls=done?'done':currentStep?'current':'locked';
+  const mark=done?'✓':currentStep?'▶':'·';
+  return `<button class="lane-step ${cls}" data-lane-view-step="${cur.stage.id}:${step.id}" ${done||currentStep?'':'disabled'}><span class="lane-step-mark">${mark}</span><span class="lane-step-name">${agentEsc(step.name)}</span><span class="lane-step-kind">${agentEsc(step.kind)}</span></button>`;
+ }).join('');
+ // Anchor-record summary.
+ const poLines=(po.lines||[]).map(l=>{
+  const prod=(data.product||[]).find(p=>p.id===l.product_id)||{};
+  const stock=(data.stock||[]).find(s=>s.product_id===l.product_id);
+  return `<tr><td>${agentEsc(prod.sku||l.product_id)}</td><td>${agentEsc(prod.name||'')}</td><td class="num">${l.qty_ordered}</td><td class="num">${l.qty_received}</td><td class="num">${l.qty_rejected}</td><td class="num">${stock?stock.on_hand:'—'}</td></tr>`;
+ }).join('');
+ // Audit trail: every step attempt + the run's own events.
+ const audit=steps.slice().sort((a,b)=>String(a.enteredAt).localeCompare(String(b.enteredAt))).map(r=>{
+  const stepName=(laneFindStep(def, r.stageId, r.stepId)||{step:{name:r.stepId}}).step.name;
+  const when=r.completedAt?`${r.enteredAt.slice(0,10)} ${r.enteredAt.slice(11,16)} → ${r.completedAt.slice(11,16)}`:`${r.enteredAt.slice(0,10)} ${r.enteredAt.slice(11,16)}`;
+  return `<div class="lane-audit-row"><span class="lane-audit-time">${agentEsc(when)}</span><span class="lane-audit-text"><b>${agentEsc(stepName)}</b> — ${agentEsc(r.status)}${r.note?` — ${agentEsc(r.note)}`:''}${r.completedBy?` <span class="muted">by ${agentEsc(laneActorName(r.completedBy))}</span>`:''}</span></div>`;
+ }).join('');
+ const writes=laneRunWrittenSummary(run);
+ const writesHtml=writes.length?`<div class="card"><h4>What this run has written</h4><ul class="lane-writes">${writes.map(w=>`<li>${agentEsc(w)}</li>`).join('')}</ul></div>`:'';
+ const outcomeBanner=finished?`<div class="card lane-outcome"><h4>Run ${agentEsc(run.status)}${run.outcome?` — ${agentEsc(run.outcome)}`:''}</h4><p>${run.outcome==='held'?'This run ended on the hold branch. Nothing further posts to the order; the way out is to start a new run when the supplier or the manager resolves the discrepancy.':run.outcome==='done'?'Every step completed and the order is closed.':''}</p></div>`:'';
+ return `<div class="view">
+  <div class="view-head">
+   <div>
+    <div class="crumbs">Warehouse · Process Lane</div>
+    <h2>${agentEsc(laneRunLabel(run))}</h2>
+    <div class="muted">Lane ${agentEsc(def.lane.name)} · version ${def.lane.version} · ${agentEsc(po.po_number)} · status <b>${agentEsc(run.status)}</b></div>
+   </div>
+   <div class="head-actions">
+    <button class="btn btn-secondary" data-lane-back-record="${po.id}">Back to ${agentEsc(po.po_number)}</button>
+    ${!finished&&run.status!=='paused'?'<button class="btn btn-secondary" id="lanePauseBtn">Pause run</button>':''}
+    ${run.status==='paused'?'<button class="btn btn-primary" id="laneResumeBtn">Resume run</button>':''}
+   </div>
+  </div>
+  ${outcomeBanner}
+  <div class="lane-stages">${stageBar}</div>
+  <div class="lane-layout">
+   <div class="lane-steps card">
+    <h4>Steps — ${agentEsc(cur?cur.stage.name:'')}</h4>
+    ${stepList}
+    <p class="muted lane-note">Back reviews a finished step without changing the run. A step that is not done yet is locked until the lane reaches it.</p>
+   </div>
+   <div class="lane-main">
+    ${showStep?laneRunnerStepHtml(run, showStep.stage, showStep.step, showRow, isViewingBack):'<div class="card"><p>This run has no current step.</p></div>'}
+   </div>
+   <div class="lane-side">
+    <div class="card">
+     <h4>${agentEsc(po.po_number)} — ${agentEsc(supplier.name||'')}</h4>
+     <div class="kv"><span>Status</span><b>${agentEsc(po.status)}</b></div>
+     <div class="kv"><span>Ordered</span><b>${agentEsc(po.order_date||'')}</b></div>
+     <div class="kv"><span>Expected</span><b>${agentEsc(po.expected_date||'')}</b></div>
+     <div class="kv"><span>Total</span><b>${moneyCAD(po.total||0)}</b></div>
+     <table class="tbl lane-po-lines"><thead><tr><th>SKU</th><th>Item</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Rejected</th><th class="num">On hand</th></tr></thead><tbody>${poLines}</tbody></table>
+    </div>
+    ${writesHtml}
+    <div class="card"><h4>Audit trail</h4><div class="lane-audit">${audit||'<p class="muted">Nothing yet.</p>'}</div></div>
+   </div>
+  </div>
+ </div>`;
+}
+// One step's work area. The runner collects the values, the lane module
+// validates and writes; the screen never writes directly.
+function laneRunnerStepHtml(run, stage, step, row, isViewingBack){
+ const def=laneDef(run.laneId);
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const perChild=lanePerChildMap(def);
+ const done=row&&row.status==='completed';
+ const lines=laneRepeatItems(step, po);
+ let body='';
+ if(step.kind==='form'){
+  const fieldsHtml=lines.map(line=>{
+   const lineId=line?line.id:null;
+   const legend=line?`<div class="lane-line-head">${agentEsc(laneLineLabel(po,line))}</div>`:'';
+   const fields=(step.fields||[]).map(field=>{
+    return laneFieldInputHtml(run, field, lineId, step);
+   }).join('');
+   return `<div class="lane-line-group">${legend}${fields}</div>`;
+  }).join('');
+  const assistance=step.assistance?`<p class="lane-assist">Suggested by ${agentEsc(laneAgentName(step.assistance.agent))} — confirm or change the values. The suggestion is recorded, not applied by the agent.</p>`:'';
+  body=`<p>${agentEsc(step.description||'')}</p>${assistance}<div class="lane-form">${fieldsHtml}</div><div class="lane-error" id="laneStepError"></div>
+   <div class="lane-actions"><button class="btn btn-primary" id="laneCompleteBtn" ${isViewingBack?'disabled':''}>Complete step</button></div>`;
+ }else if(step.kind==='record'){
+  const desc=step.writes.map(w=>{
+   const label=w.action_type==='warehouse.post_stock_move'?`Post ${w.inputs.move_type||''} moves`:w.action_type;
+   return `<li><b>${agentEsc(label)}</b> — ${agentEsc(JSON.stringify(w.inputs))}</li>`;
+  }).join('');
+  body=`<p>${agentEsc(step.description||'')}</p><ul class="lane-writes">${desc}</ul>
+   <p class="muted">Posting is all-or-nothing for the step and never repeats: a move that already posted is not posted again.</p>
+   <div class="lane-actions"><button class="btn btn-primary" id="laneCompleteBtn" ${isViewingBack?'disabled':''}>Post and complete step</button></div>`;
+ }else if(step.kind==='approval'){
+  const apr=(data.aiApprovals||[]).find(a=>a.id===run.approvalId)||null;
+  const proposalLines=(apr&&apr.proposal&&apr.proposal.lines)||[];
+  const rows=proposalLines.map(l=>`<tr><td>${agentEsc(l.sku)}</td><td class="num">${l.qtyOrdered}</td><td class="num">${l.qtyReceived}</td><td class="num">${l.qtyRejected}</td><td>${agentEsc(l.reason||'')}</td></tr>`).join('');
+  body=`<p>${agentEsc(step.description||'')}</p>
+   <table class="tbl"><thead><tr><th>SKU</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Rejected</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table>
+   <p class="muted">Approving posts the guarded write (PO status → PARTIALLY_RECEIVED) and continues to put-away. Rejecting posts nothing and goes to the hold step.</p>
+   <div class="lane-actions"><button class="btn btn-primary" id="laneApproveBtn" ${isViewingBack?'disabled':''}>Approve — put away ${apr?agentEsc(String(apr.proposal.qtyReceived||'')):''} × ${apr?agentEsc(apr.proposal.sku||''):''}</button><button class="btn btn-danger" id="laneRejectBtn" ${isViewingBack?'disabled':''}>Reject — hold the order</button></div>`;
+ }else if(step.kind==='check'){
+  body=`<p>${agentEsc(step.description||'')}</p><p class="muted">This step runs on its own when the lane reaches it — ${done?'it '+(row.outcome==='pass'?'passed':'failed')+'.':''}</p>${done&&row.note?`<p>${agentEsc(row.note)}</p>`:''}`;
+ }else{
+  body=`<p>${agentEsc(step.description||'')}</p>`;
+ }
+ const roleHtml=step.role?`<div class="muted">Assigned role: <b>${agentEsc(laneRoleLabel(step.role))}</b></div>`:'';
+ const noteHtml=row&&row.note?`<p class="lane-step-note">${agentEsc(row.note)}</p>`:'';
+ return `<div class="card lane-step-card">
+  <div class="crumbs">Stage ${agentEsc(stage.name)} · ${agentEsc(step.kind)}</div>
+  <h3>${agentEsc(step.name)}</h3>
+  ${roleHtml}
+  ${isViewingBack?'<p class="lane-viewing">Reviewing a finished step — the run has already moved on.</p>':''}
+  ${noteHtml}
+  ${body}
+ </div>`;
+}
+// One form field, prefilled with the agent's suggestion when the step
+// carries assistance (propose). The suggestion is a starting value, never
+// a decision.
+function laneFieldInputHtml(run, field, lineId, step){
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const line=lineId?(po.lines||[]).find(l=>l.id===lineId):null;
+ const key=lineId?`${lineId}:${field.key}`:field.key;
+ let value='';
+ if(step.assistance&&step.assistance.level==='propose')value=laneSuggestedValue(run, field, line);
+ if(value===undefined||value===null)value='';
+ const input=field.type==='integer'?`<input type="number" min="0" step="1" class="input" data-lane-field="${agentEsc(key)}" value="${agentEsc(String(value))}">`
+  :field.type==='date'?`<input type="date" class="input" data-lane-field="${agentEsc(key)}" value="${agentEsc(String(value))}">`
+  :`<input type="text" class="input" data-lane-field="${agentEsc(key)}" value="${agentEsc(String(value))}">`;
+ return `<label class="field"><span class="field-label">${agentEsc(field.label)}${field.required?' *':''}</span>${input}</label>`;
+}
+function laneSuggestedValue(run, field, line){
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ if(field.key==='delivery_note_qty'&&line)return line.qty_ordered;
+ if(field.key==='staging_bin'){
+  const alreadyReceived=(data.stock_move||[]).find(m=>m.move_type==='RECEIPT'&&m.reference_id===run.anchorRecordId);
+  if(alreadyReceived)return alreadyReceived.to_location_id;
+  return 'loc-rec-01';
+ }
+ if(field.key==='putaway_bin'&&line){
+  const prod=(data.product||[]).find(p=>p.id===line.product_id)||{};
+  return prod.preferred_bin_id||'loc-a-01-03';
+ }
+ return '';
+}
+// Collect the runner's values for a form step into the {field} /
+// {lineId: {field}} shape laneSubmitFormStep expects.
+function laneCollectStepValues(step){
+ const values={};
+ document.querySelectorAll('[data-lane-field]').forEach(el=>{
+  const raw=el.dataset.laneField;
+  const v=el.value;
+  if(raw.includes(':')){
+   const [lineId, fieldKey]=raw.split(':');
+   if(!values[lineId])values[lineId]={};
+   values[lineId][fieldKey]=laneFieldValue(step, fieldKey, v);
+  }else{
+   values[raw]=laneFieldValue(step, raw, v);
+  }
+ });
+ return values;
+}
+function laneFieldValue(step, fieldKey, v){
+ const field=(step.fields||[]).find(f=>f.key===fieldKey);
+ if(field&&field.type==='integer')return v===''?null:Number(v);
+ return v;
+}
+function laneWireRunner(run){
+ const completeBtn=byIdDom('laneCompleteBtn');
+ if(completeBtn)completeBtn.onclick=()=>{
+  const cur=laneCurrentStep(run);
+  if(!cur)return;
+  if(cur.step.kind==='form'){
+   const values=laneCollectStepValues(cur.step);
+   const res=laneSubmitFormStep(run, cur.step, values);
+   if(!res.ok){ const err=byIdDom('laneStepError'); if(err)err.textContent=res.message; return; }
+   toast('Step complete — '+cur.step.name);
+  }else if(cur.step.kind==='record'){
+   laneCompleteRecordStep(run, cur.step);
+   toast('Step complete — '+cur.step.name);
+  }
+  laneViewStep=null;
+  renderView();
+ };
+ const approveBtn=byIdDom('laneApproveBtn');
+ if(approveBtn)approveBtn.onclick=()=>{
+  if(run.approvalId)demoDecideApproval(run.approvalId, true);
+  laneViewStep=null;
+  renderView();
+ };
+ const rejectBtn=byIdDom('laneRejectBtn');
+ if(rejectBtn)rejectBtn.onclick=()=>{
+  if(run.approvalId)demoDecideApproval(run.approvalId, false);
+  laneViewStep=null;
+  renderView();
+ };
+ const pauseBtn=byIdDom('lanePauseBtn');
+ if(pauseBtn)pauseBtn.onclick=()=>{ lanePauseRun(run); renderView(); };
+ const resumeBtn=byIdDom('laneResumeBtn');
+ if(resumeBtn)resumeBtn.onclick=()=>{ laneResumeRun(run); renderView(); };
+ document.querySelectorAll('[data-lane-view-step]').forEach(btn=>{
+  btn.onclick=()=>{
+   const [stageId, stepId]=btn.dataset.laneViewStep.split(':');
+   laneViewStep={stageId, stepId};
+   renderView();
+  };
+ });
+ document.querySelectorAll('[data-lane-back-record]').forEach(btn=>{
+  btn.onclick=()=>{ openRecordDetail('purchase_order', btn.dataset.laneBackRecord); };
+ });
+}
+function byIdDom(id){ return document.getElementById(id); }
+// The runner page: render, then wire (the same render-then-wire split
+// warehouseDashboard uses).
+function laneRunnerPage(){
+ $('#view').innerHTML=renderLaneRunner();
+ const r=laneRunById(laneRunId);
+ if(r)laneWireRunner(r);
+}
+// One wiring helper for every lane entry point (dashboard card, PO record,
+// agent row): start/open a run, or open an existing run.
+function laneWireStartButtons(scope){
+ (scope||document).querySelectorAll('[data-lane-start]').forEach(b=>b.onclick=()=>{const parts=b.dataset.laneStart.split(':');laneStartOrOpen(parts[0],parts[1])});
+ (scope||document).querySelectorAll('[data-lane-open-run]').forEach(b=>b.onclick=()=>laneOpenRunner(b.dataset.laneOpenRun));
+ (scope||document).querySelectorAll('[data-lane-agent]').forEach(b=>b.onclick=()=>laneOpenForAgent(b.dataset.laneAgent));
+}
+// The lane card on a purchase order's record page: open the active run, or
+// start one when the order is OPEN. Other records get no card.
+function laneRecordSectionHtml(key,id){
+ if(key!=='purchase_order')return '';
+ const r=byId(key,id);
+ if(!r)return '';
+ const def=laneDef('lane-wh-receiving');
+ if(!def)return '';
+ const run=laneActiveRun('lane-wh-receiving', id);
+ if(run){
+  return `<section class="card" style="margin-bottom:18px"><div class="card-head"><h3>Process Lane — ${agentEsc(def.lane.name)}</h3><p class="card-desc">${agentEsc(laneRunLabel(run))}</p></div><div class="card-body"><button class="btn btn-primary" data-lane-open-run="${run.id}">Open lane run</button></div></section>`;
+ }
+ if(r.status==='OPEN'){
+  return `<section class="card" style="margin-bottom:18px"><div class="card-head"><h3>Process Lane — ${agentEsc(def.lane.name)}</h3><p class="card-desc">No run yet for this order.</p></div><div class="card-body"><button class="btn btn-primary" data-lane-start="lane-wh-receiving:${id}">Start receiving lane</button></div></section>`;
+ }
+ return '';
+}
+// The Process Lanes section of a record's Object 360 inspector (REQ-LANE-015):
+// every run on this record, its label, status and audit trail.
+function laneRunsSectionHtml(objectKey, recordId){
+ const runs=laneRunsForRecord(objectKey, recordId);
+ if(!runs.length)return '';
+ const rows=runs.map(run=>{
+  const def=laneDef(run.laneId);
+  const steps=laneStepsForRun(run.id);
+  const audit=steps.slice().sort((a,b)=>String(a.enteredAt).localeCompare(String(b.enteredAt))).map(r=>{
+   const stepName=(laneFindStep(def, r.stageId, r.stepId)||{step:{name:r.stepId}}).step.name;
+   return `<div class="lane-audit-row"><span class="lane-audit-time">${agentEsc(String(r.enteredAt||'').slice(0,16).replace('T',' '))}</span><span class="lane-audit-text"><b>${agentEsc(stepName)}</b> — ${agentEsc(r.status)}${r.note?` — ${agentEsc(r.note)}`:''}</span></div>`;
+  }).join('');
+  return `<div class="lane-o360-run"><div class="lane-o360-run-head"><strong>${agentEsc(laneRunLabel(run))}</strong><span class="muted"> · ${agentEsc(run.status)}${run.outcome?` — ${agentEsc(run.outcome)}`:''}</span></div><div class="lane-audit">${audit}</div><button type="button" class="btn btn-secondary" data-lane-open-run="${run.id}">Open lane run</button></div>`;
+ }).join('');
+ return `<div class="inspector-section"><div class="panel-title"><div><h3>Process Lanes</h3><p class="card-desc">Runs on this record</p></div></div>${rows}</div>`;
+}
+// From an agent's row: the lane that agent assists, for the order due
+// today (or the first open order); an active run on it opens instead.
+function laneOpenForAgent(agentId){
+ const def=(data.laneDefinitions||[]).find(d=>(d.lane.stages||[]).some(s=>(s.steps||[]).some(st=>st.assistance&&st.assistance.agent===agentId)));
+ if(!def){toast('No lane uses this agent.');return;}
+ const due=(data.purchase_order||[]).filter(p=>p.status==='OPEN'&&p.expected_date===WAREHOUSE_TODAY)[0]||(data.purchase_order||[]).find(p=>p.status==='OPEN');
+ if(due){laneStartOrOpen(def.lane.id, due.id);return;}
+ const active=(data.laneRuns||[]).find(r=>r.laneId===def.lane.id&&laneRunIsActive(r));
+ if(active){laneOpenRunner(active.id);return;}
+ toast('No open purchase order to receive.');
+}
+
+
 // The workflow engine's save-time evaluation, extracted verbatim from the
 // record-modal save path so the warehouse runner can evaluate rules for
 // records IT mutates (e.g. a reorder_rule whose `triggered` flag flips
 // during a stock save) through the same code path. Fires only when a field
 // a rule's conditions watch actually changed on this save AND the full
 // condition set matches the just-saved record.
-function evaluateWorkflowRulesFor(key,obj,before,record){
+function evaluateWorkflowRulesFor(key,obj,before,record,skipActions){
  (data.workflowRules||[]).filter(r=>r.entity===key&&r.active).forEach(r=>{
   const conditions=r.conditions||[];
   if(!conditions.length)return;
@@ -23770,7 +24706,7 @@ function evaluateWorkflowRulesFor(key,obj,before,record){
   const anyChanged=[...watchedFields].some(f=>obj[f]!==undefined&&obj[f]!==before[f]);
   if(!anyChanged)return;
   if(!conditionsMatch(r.matchType||'all',conditions,obj))return;
-  const descriptions=(r.actions||[]).map(a=>executeWorkflowAction(a,key,record)).filter(Boolean);
+  const descriptions=(r.actions||[]).map((a,i)=>skipActions&&skipActions.has(r.id+':'+i)?null:executeWorkflowAction(a,key,record)).filter(Boolean);
   if(!descriptions.length)return; // e.g. update_related_record with nothing linked yet - a silent no-op, same as desktop
   if(r.notify){
    const label=obj.name||obj.title||obj.number||entityLabel(key);
@@ -24188,7 +25124,7 @@ function roadmapPage(){
    ]],
   ['⌕','Admin, Search & Demo Parity','Finding records fast, keeping admins oriented across a growing Admin section, and making sure the browser demo never falls behind the desktop edition.',[
    ['⌕','Admin UX, search & list views',[['Customer 360 / Contact 360','A dedicated detail page for every company and contact — full field overview plus every linked record (contacts, opportunities, quotes, orders, invoices, contracts, tasks) one click away, replacing edit-modal-only access.'],['Admin landing page redesign & Admin UX polish','Admin no longer opens straight into a flat tab row — a categorized landing page (Workspace, Access, Customization, Automation, Integrations) routes straight into each builder on click, with a breadcrumb (Dashboard → Admin → tool) back to the landing page; the sidebar Admin icon always resets to it. Business Rules and Workflow Automation both gained Duplicate (clones a rule/workflow as an inactive draft, opened for review), a bounded version history (last 10 saves with a one-click Restore per version — restoring itself snapshots the state it replaces, so it\'s never a dead end), and a dependency warning before deactivating a custom field an active rule or workflow still reads or writes, listing exactly which ones. Shipped on both the online demo and the desktop app (Rust core + React). The last scoped item in the Admin Automation & Customization addendum.'],['Desktop: Global search & list-view filtering','A topbar search box (Companies, Contacts, Opportunities, Products, Quotes, Orders, Invoices, Contracts, Tasks, active custom objects, plus any custom field flagged Searchable) resolves matches to a real display name via the entity-registry dispatcher and jumps straight to the record, reusing the exact same one-shot openId navigation every ID hyperlink already uses. Every list screen also gained filter controls for whichever custom fields an admin flagged Filterable — a select/boolean field filters by exact match, text by case-insensitive contains — client-side against one bulk values fetch per screen. Gives the is_searchable/is_filterable capability flags their first real use since Phase E introduced them. Desktop only; the online demo\'s own simple ⌘K search stays unaffected, as planned.'],['Saved Views & Bulk Actions','Any list screen that already had per-field filtering — Companies, Contacts, Tasks, Opportunities, and every Custom Object\'s records — can now save its current filter/sort/column/grouping combination as a named view, Private or Shared, with an admin-settable object default; a saved view also feeds a dashboard record-list widget directly, narrowing it to that view\'s filters instead of showing every record. Bulk operations pair with the multi-select a saved view narrows to: update a status/stage (validated through the same Status Transition rules a single edit already goes through), reassign owner, add/remove tags, and archive — each offered only where the entity actually carries that field (Contacts have no owner field, for instance, so bulk reassign isn\'t offered there). Shipped on the desktop edition (Rust core: migration 0034, <code>saved_view_service</code>, <code>bulk_action_service</code>) and mirrored in the online demo — the same view/sort/group-by and bulk update-status/reassign-owner/export/delete operations against this demo\'s simpler status-and-owner field set, without a Private/Shared distinction or a per-custom-field filter, since the demo has neither a signed-in-user concept nor desktop\'s per-field list filtering to begin with.'],['Audit trail exposure: per-record created_by/updated_by + Activity view','The audit history every create/update/archive already wrote was captured but unreachable — no API exposed it, and no screen rendered it. Now closed end to end: a generic audit-history API (Tauri command + server dispatch), a reusable AuditTrail component wired into all 9 built-in entity detail/edit views and Custom Object records, and created_by/updated_by extended to the 7 admin metadata tables that previously lacked it. Shipped on the desktop edition and mirrored in the online demo where practical.']]],
-   ['📖','Documentation',[['Product Documentation: 8 categories, 52 articles, two surfaces','A full documentation system, not a wishlist item anymore - AI Agent Foundry, Voice-First Mode, Low-Code Application Platform, App Catalog &amp; Industry Data Models, Deployment Management, Integration Hub, Architecture &amp; Extensibility, and Organization &amp; Access Control, each with real step-by-step articles (real menu paths, field names and constraints verified against the working codebase, not written from memory). Ships in two independently-maintained places, matching this codebase\'s established demo/desktop convention: a public <a href="/help">Documentation</a> section on the website (crawlable, no login needed - pre-purchase evaluation and reference) and a searchable Help tab inside the desktop admin panel, context-linked with a "📖 Help" button from the builder each category documents (Custom Objects, AI Agents, App Catalog, Deployment Management, Integration Hub, Users).'],
+   ['📖','Documentation',[['Product Documentation: 9 categories, 53 articles, two surfaces','A full documentation system, not a wishlist item anymore - AI Agent Foundry, Voice-First Mode, Low-Code Application Platform, App Catalog &amp; Industry Data Models, Deployment Management, Integration Hub, Architecture &amp; Extensibility, Organization &amp; Access Control, and Process Lanes, each with real step-by-step articles (real menu paths, field names and constraints verified against the working codebase, not written from memory). Ships in two independently-maintained places, matching this codebase\'s established demo/desktop convention: a public <a href="/help">Documentation</a> section on the website (crawlable, no login needed - pre-purchase evaluation and reference) and a searchable Help tab inside the desktop admin panel, context-linked with a "📖 Help" button from the builder each category documents (Custom Objects, AI Agents, App Catalog, Deployment Management, Integration Hub, Users).'],
    ['Website Refresh: information architecture overhaul','Scoped against a supplied Website Refresh Strategy document and checked against the real product rather than copied verbatim: the site had grown five nav dropdowns deep with real duplication between the homepage and <code>/platform</code>. Replaced with one flat primary nav - Product, App Catalog, Developers, Docs, Open Source, Try Live - and the six core capabilities (AI Agent Foundry, Low-Code Platform, App Catalog, Integration Hub, Voice AI, Open &amp; Sovereign) each got their own destination page instead of one long scroll repeating the same points. Shipped in the same 5 phases the strategy document itself recommended: navigation, homepage and a shortened Product Overview page; the Agent Foundry, Low-Code and App Catalog destination pages; Integration Hub, Voice AI and a new Developers hub; per-app-catalog detail pages and a docs terminology pass (CRM became an app inside the catalog, not the platform identity); and a final video-embed-standards and visual-polish pass. Every feature name, screenshot and supported-provider claim was checked against the current build before publishing, not lifted from the strategy doc as-is.'],['Documentation redesign: the "Holy Trinity" reader layout','The public Documentation section rebuilt around the 3-column layout real technical docs use - a persistent left sidebar (every category and article, current one highlighted, plus a version indicator), a width-restricted center article with breadcrumbs, and a sticky right "On this page" table of contents with scroll-spy highlighting the section currently in view. A <b>⌘K / Ctrl+K</b> search palette indexes every article\'s title, summary and section headings for instant type-ahead, separate from the hub\'s own inline filter box. Collapses to a single column with native <code>&lt;details&gt;</code> disclosures for the sidebar and TOC below 1000px - no extra JS for the mobile behavior.'],['Documentation redesign: callouts, copyable code & feedback','Info/warning/danger admonition callouts now flag the genuinely risky steps inline (restoring a backup replaces the whole workspace, the last-Administrator lockout guard, an API client secret shown exactly once) instead of reading identically to routine text. Every code sample gets a one-click Copy button, and multi-language examples (calling the MCP server or the REST API) render as switchable tabs reusing the site\'s existing code-tabs component. A "Was this page helpful?" widget closes the loop for a maintainer - a Yes/No vote, with a follow-up note field on No - captured today as a static site honestly can: client-side, ready to wire to a real endpoint later. Prev/Next cards at the bottom of every article follow one flat reading order across all 5 categories, not just same-category siblings.'],['Homepage redesign: modern platform, consulting &amp; developer experience','A supplied website UX spec found the homepage reading as a features/release-notes list rather than a coherent platform story. Rebuilt around an executive-first narrative backed by developer proof: a new hero, a Seven Platform Capabilities grid, a Unified Platform Architecture section with a layered diagram, and dedicated sections for Agent Foundry &amp; Orchestration, the Low-Code Platform, all 11 shipped Industry Packages, Integration Hub, Voice-First Mode, Solution Packages &amp; Deployment, and a consolidated Own Your Data/Offline section - plus a grouped Platform/AI &amp; Agents/Industries/Integrations/Developers navigation replacing the old flat link row. Every claim maps to a real shipped capability already documented elsewhere on this site.']]],
    ['◧','Online demo parity',[['Online demo: full interactive parity','The browser demo at /demo mirrors everything above as real interactive features, not just changelog copy — its own Status Transitions tab, expanded workflow actions, Test rule/Test workflow panels, the redesigned rule-builder layout with a visual canvas, custom field extensibility, and Customer 360/Contact 360 detail pages.'],['Online demo: workflow-action & custom-field parity','Workflow "Create a new record" now offers all 9 built-in entities, not just 3, and "Update a related record" walks the relationship graph in both directions so every trigger entity gets its actual related-record options. Custom fields in the demo gained the same Required/Max length/Pattern/Min/Max/Searchable/Filterable/Reportable settings the desktop edition already had.'],['Online demo: Custom Objects','An Administrator can define a whole new business object at runtime from Admin → Custom Objects - its own icon, sidebar entry and ID format, no code change - and it works through the demo\'s existing Custom Fields, Business Rules, Status Transitions and Workflow Automation tabs exactly like a built-in entity. Delete is blocked while records exist; deactivate is always safe and reversible.'],['Online demo: Custom Relationships','An Administrator can connect any two object types - built-in or custom - from Admin → Relationships, with a cardinality (many-to-one/one-to-one/many-to-many), forward/reverse labels, and a delete behavior (Restrict or Archive). Every record\'s edit form gets a "Related records" panel showing every link from either direction, with inline Link/Unlink.'],['Online demo: Reports','A new Reports section in the browser demo with the desktop edition\'s full fixed report gallery (Revenue by month, Win rate by owner, Lost reasons, AR aging, Sales by owner) plus a Custom Reports builder that can group any built-in or custom object by its status/stage or a reportable custom field, count or sum, with CSV export on every report - closing the online demo\'s last desktop-parity gap.'],['Online demo: Screen layouts (no-code UI designer)','A new capability that doesn\'t exist on desktop either: from Admin → Screen layouts, an admin drag-orders any built-in or custom object\'s create/edit fields into named sections. Editing only ever touches a draft - the live form keeps its default order until Publish, and Preview shows the draft rendered before that. A scoped, demo-first version of the "No-code Screen/UI Designer" item still proposed below for the full desktop admin extensibility spec (which also covers detail-page and tab/column layouts).'],['Online demo: Integrations (UI-only simulation)','A new Admin → Integrations section, also new to the product rather than a desktop port: scheduled data Export/Import/Sync jobs against any object with a Run now simulation and per-job history, defined-and-exposed API endpoints with a Test call that returns real demo data as JSON, and configured external API connections with a Test request and call history. Everything is a local simulation against this browser\'s data - the static demo has no server, so it\'s built and labeled that way rather than faking a real backend.'],['Online demo: workflow self-updates + custom-object workflow fix','Workflow automation gained the desktop edition\'s update_field action - set another field on the same record a workflow just triggered on (e.g. Company status becomes Customer, so Industry gets set to Active), with the new value either fixed or copied live from another field. Also fixed a bug where workflow rules on admin-defined Custom Objects were creatable but silently never fired.'],['Online demo: mobile layout fix + stale favicon fix','The new record detail pages above overflowed horizontally on a phone - a nested overflow:auto table wrapper without min-width:0 on its containing grid, the same class of bug across Order/Invoice/Quote/Product/Contract detail; fixed to match Company/Contact 360\'s existing correct mobile behavior. Also fixed the browser tab favicon, which still drew a "B" glyph left over from the product\'s original BusinessOS name.']]],
    ]],
@@ -24196,7 +25132,7 @@ function roadmapPage(){
    ['🔑','Bring-your-own LLM key, MCP Server & CLI',[['Bring-your-own LLM key','A workspace supplies its own Anthropic or OpenAI-compatible API key (openai_compatible also covers a self-hosted, fully offline model server) - Lanesra never resells or proxies inference, the same "own your data" posture the rest of the product already takes. The key is stored exactly like any other secret (AES-256-GCM, never returned by any read command), with a one-click Test key connectivity check, and nothing else in the product calls an LLM until this is configured.'],['MCP Server & CLI','A stateless <code>POST /mcp</code> Model Context Protocol server (Team Workspace mode) exposes 7 tools - list/get objects and records, create/update/archive a record - to any MCP-speaking external agent (Claude Desktop, an IDE agent, a custom script), authenticated with the same scoped API-client bearer keys and rate-limited/logged the same way the generic REST API already is. A companion <code>lanesra</code> CLI gives humans and shell scripts the same access without an agent in the loop.']]],
    ['🕒','Unified Activity Timeline & Agent Actions',[['Unified Activity Timeline','A generic activities log - one entry per email, call or message, tied to a Company, Contact or Opportunity - the foundation later agent features read from. Distinct from the audit trail (which records what a user changed, not what happened around a record from outside it); ships with manual logging first, with an email/call/Slack auto-capture connector named as a deliberate follow-on, not silently skipped.'],['Agent Actions: natural-language reporting','Ask a plain-English question ("revenue by month this quarter") and the workspace\'s configured LLM translates it into the exact shape the existing Custom Report builder already understands - one object, one group-by field, count or sum - validated through the identical path a human\'s manual report creation goes through, then rendered live with a one-click Save as report. The first of four proposed Agent Actions; meeting-prep briefings, commitment capture and record-hygiene suggestions stay proposed until a live Activity channel exists for them to draw on.']]],
    ['💬','LLM Chat Assistant',[['Conversational assistant — records & admin, full tool coverage','A chat assistant for every user (a "records" mode with the same 7 read/write tools MCP exposes) and, for Administrators, an "admin" mode with ~17 tool pairs spanning Business Rules, Workflow Automation, Custom Objects/Fields/Relationships, Integration Hub, Dashboards, Apps, Reports, Saved Views, Users and more - each a thin wrapper over that subsystem\'s own already-validated function, so the assistant genuinely builds a workflow or a business rule for you, not just describes how. One non-negotiable boundary: a Connection\'s or API client\'s secret is never read from a tool call and is redacted a second time before it ever reaches chat history.']]],
-   ['🏭','AI Agent Foundry & Orchestration',[['AI Agent Foundry — Agents, Memory, Skills, Actions, Delegation','A dedicated admin section for named, reusable AI Agents: a persona layered over a per-tool Actions checklist (granting any admin-catalog tool makes an agent Administrator-only, computed at runtime), a persistent Memory document the agent reads every run and can revise itself, a shared Skills library (name + description shown up front, full instructions loaded only when the agent decides to use one), and delegation to other agents - a supervisor agent calling named sub-agents and getting their answer back, depth-guarded against runaway recursion. Chat with any agent you\'re allowed to use from the main Assistant page.'],['Orchestration — Pipelines, Triggers & workflow-fired agent runs','Chain agents into a deterministic, admin-authored Pipeline - each step\'s input can reference the previous step\'s real output or the run\'s own trigger input - complementary to an agent\'s own dynamic delegation above, not redundant with it. Trigger a Pipeline or a lone Agent manually, on a schedule, from an inbound authenticated webhook, or as a new "Run AI agent" Workflow Automation action - the same enqueue-now/drain-later pattern already proven for Connector Actions, so a workflow firing inside a record save never blocks on a live LLM call. Every run - manual, scheduled, webhook or workflow-triggered - writes to one unified run history, step by step.'],['Guardrails & declarative export/import','An agent\'s own <code>guardrails_md</code> is injected into its system prompt as an explicit operational-boundary statement the model is instructed to respect - advisory, the same real/advisory split Business Rules and an agent\'s own persona text already draw - alongside one genuinely code-enforced guard: the tool-calling loop aborts with a clear error the moment the same tool call with the same arguments repeats 3 times in a row. An agent or Skill (persona, Memory seed, guardrails, Actions, Skills and delegates) can be added to a Solution, exported, and imported into another workspace exactly like a Custom Object or Business Rule already can be - its Gateway routing policy and live token-usage history don\'t travel with it, since those are workspace-specific runtime state, not portable definition.'],['Consensus & Peer-Review orchestration, with a real Evaluation Harness','Two more Pipeline topologies alongside the original "sequential": "consensus" runs every step but the last independently against the same trigger input, then a synthesizer step combines every candidate\'s real answer; "peer_review" loops a drafter and a reviewer (draft, critique, revise) until the reviewer approves, or 3 rounds pass without approval, failing clearly rather than looping forever. A new Evaluation Harness runs a named Suite of golden test Cases - an input plus a plain-English success criteria - against one Agent or Pipeline, each graded by an LLM-as-judge call rather than a brittle exact-match comparison.'],['Human-in-the-loop approval gates & OTLP tracing','Any Pipeline topology can pause for an Administrator\'s review at the one step it has a well-defined resume point for - any step of a sequential chain, a consensus pipeline\'s synthesizer, or a peer-review pipeline\'s reviewer (every round) - who then approves (optionally editing the paused step\'s own output before it feeds the rest of the run) or rejects it outright. Real per-step timing renders a finished run as a standard OTLP <code>resourceSpans</code> trace, exportable as JSON or pushed on demand to a configured collector endpoint.'],['Integration Hub Tool Bridge — Connector Actions as agent tools','An agent\'s Actions checklist could already list/manage Connectors but never call one - closed with a real, typed bridge from an imported OpenAPI operation straight to an LLM tool-call definition. Fails closed on an ambiguous schema by construction: a Connector Action with a request body only becomes a tool once its body schema is confidently typed (a real <code>properties</code> map, no unresolved <code>$ref</code>/<code>oneOf</code>/<code>anyOf</code>/<code>allOf</code>) - a vague or unresolvable body schema is never turned into a guessable tool. Phased exactly as scoped: read-only actions (GET/HEAD/OPTIONS) need only a per-connector opt-in plus one Connection Reference the tool executes against; write-capable actions need a second, separate opt-in and make the whole agent Administrator-only the moment one is granted - the identical "one admin-catalog action gates the agent" rule the fixed record/admin tool catalogs already enforced, now covering connector-derived tools too.'],['AI Agent Platform v2, Phase 1 — versioning, Structured Output &amp; a durable Approval Service','An Agent was a single mutable row with no history - editing it in place was the only way to change its persona, instructions or tools, and a Pipeline/Workflow referencing it had no stable target to point at. Every agent now carries a real Draft → Test → Published → Deprecated → Disabled version lifecycle (<code>ai_agent_versions</code>): a Published version is an immutable snapshot of exactly what ran, publishing a new one automatically deprecates whichever version was Published before it, and every existing agent was backfilled with a Published v1 so nothing broke. A version can declare a JSON Schema its final answer must conform to (Structured Output), checked automatically with one repair attempt before falling back to the model\'s own text. A new durable Approval Service (<code>ai_approvals</code>) generalizes "something is pending a human decision" out of Orchestration\'s own step-level approval flag into a reusable, workspace-wide inbox - the foundation Phase 2\'s Tool-Call Firewall and later phases route sensitive actions through. Every tool call an agent makes during a run is now additionally attributed to that agent\'s own identity in the audit trail, alongside the initiating user. Admin → AI Agents gets a Versions tab (view history, draft/edit, move through the lifecycle) and a Pending Approvals panel; mirrored in the online demo.'],['AI Agent Platform v2, Phase 2 — Toolboxes, a unified Policy Engine &amp; Tool-Call Firewall','Formalizes what was already the only tool-dispatch path (<code>chat_service::execute_tool</code>/<code>execute_agent_tool</code>) into an explicit, named pipeline: schema → permission (Access Control) → policy → approval → execute → audit - the same function as before, just with a real decision point in front of it instead of an implicit one. A new Tool Registry (<code>ai_tool_registry</code>) classifies every tool this codebase can produce into one of six risk tiers (Read/Low Write/Write/External Action/Destructive/Privileged) via a name-prefix convention plus a short list of hardcoded exceptions for the genuinely sensitive names, with a per-workspace admin override for any tool that needs reclassifying. A new Policy Engine (<code>ai_agent_policies</code>) resolves a workspace-wide default or a stricter per-agent policy - a blocklist denies a tool name outright, a risk threshold instead queues it as a durable Pending Approval (reusing Phase 1\'s Approval Service) rather than dispatching it. A workspace that never configures a policy sees zero behavior change - every call still Allowed, exactly as before this shipped. Admin → AI Agents gets a Policy Engine panel (per-agent or workspace-default editor, plus tool risk overrides); mirrored in the online demo as real, saved policy configuration - honestly not enforced against anything there, since the static demo has no server-side tool-dispatch loop for a firewall to sit in front of. Toolboxes (versioned, reusable tool+policy bundles as a Solution component type) remain the scoped, named follow-up.'],['AI Agent Platform v2, Phase 3 — the Shared Execution Graph Runtime','Workflow Automation and Orchestration Pipelines were two separate engines - Workflow a fixed trigger→conditions→flat-action-list, Pipelines a fixed sequential/consensus/peer_review topology - neither able to branch, run in parallel or bound a loop the way the other could. This closes GitHub issue #168 with a real, durable, node-based Execution Graph (<code>ai_execution_graphs</code>/<code>ai_graph_nodes</code>/<code>ai_graph_edges</code>): Trigger, Condition, Router, Action, Agent, Approval, Delay, Transform, Loop, Parallel Split, Join and End nodes, checkpointed to <code>ai_runs</code>/<code>ai_run_nodes</code> after every single node transition so a run surviving a process restart just resumes from exactly where it paused - the same durability property Phase 1\'s resumable Pipeline runs already had, generalized to an arbitrary graph position. An Action node calls the identical <code>workflow_service::apply_action</code> dispatch a Workflow\'s own action list already uses, and an Approval node is the first thing genuinely built on Phase 1\'s durable Approval Service to actually pause and resume a run on it - consolidating three previously separate, unmerged "pause for human" mechanisms (a fire-and-forget workflow agent call, a Pipeline\'s own self-contained approval flag, and the Tool-Call Firewall\'s policy-triggered approval row) onto one durable primitive for the first time. Today\'s saved Workflows and Pipelines keep running completely unchanged in production - a compatibility-shape mapping (<code>graph_from_workflow</code>/<code>graph_from_pipeline</code>) expresses an existing Workflow or Pipeline as an equivalent graph shape (a sequential Pipeline becomes a linear Agent-node chain, consensus becomes a Parallel Split → Join(All) → synthesizer, peer_review becomes a bounded Loop) purely for parity testing, never a data migration or a production cutover. A publish-time validator rejects an unreachable node, a graph with no reachable End, a Loop missing a positive <code>max_iterations</code>, or any cycle that doesn\'t legitimately re-enter a Loop node\'s own body. Shipped on the desktop edition (migration <code>0062_execution_graph_runtime.sql</code>, <code>execution_graph_service</code>, <code>graph_runtime_service</code>, 11 new Rust tests in <code>execution_graph_runtime.rs</code> covering every node type, publish-time validation, checkpoint/resume durability and a parity check proving the compatibility-shape mapping produces the exact same output as the pre-existing orchestration engine for an equivalent Pipeline); the visual Team Builder canvas authoring a graph directly stays the deliberate, separate next step now that the engine itself is proven correct.'],['AI Agent Platform v2, Phase 4 — Memory Architecture &amp; Document RAG','Closes GitHub issue #169. Today\'s single <code>memory_md</code> document (unchanged, now called Agent Memory) is joined by three genuinely itemized memory types on a new <code>ai_memory_items</code> table (migration <code>0063_memory_architecture.sql</code>) - Session Memory (scoped to one agent+user\'s ongoing conversation, a short default TTL, injected ambiently into the system prompt the same way <code>memory_md</code> already is), Working Memory (scoped to one real <code>ai_runs</code>/<code>ai_agent_runs</code> run, rejected outright outside an actual run context rather than inventing a key) and Entity Memory (tied to a specific record via <code>entity_type</code>/<code>entity_id</code>, no expiry by default). Two new always-available tools, <code>remember</code> and <code>get_memory</code>, let an agent write and retrieve these explicitly - deliberately never dumping a whole table into a prompt - and a new Memory Inspector panel lets an Administrator list, filter and forget any item. A <code>restricted</code>-classification memory write is checked against Phase 2\'s Policy Engine (<code>policy_engine_service::evaluate_memory_write</code>, gated by a new per-policy <code>exclude_restricted_memory</code> flag, on by default) before it\'s ever persisted. <b>Document RAG</b> adds Knowledge Collections and Knowledge Sources (<code>ai_knowledge_service</code>): an admin supplies a source\'s full text directly (no file upload/binary parsing yet, stated plainly rather than half-built), which is chunked (a simple word-boundary sliding window) and embedded through the exact same provider call Vector Search already established (<code>ai_service::embed_texts</code>) - re-saving a source re-chunks and re-embeds it in place. A new <code>search_knowledge</code> tool ranks chunks by cosine similarity, scoped to a workspace or one collection, and every hit carries a <code>source_id</code>/<code>source_name</code> citation - never an unattributed answer. Shipped on the desktop edition (16 new Rust tests across <code>ai_memory_architecture.rs</code> and <code>ai_document_rag.rs</code>, covering the tool round trip, ambient injection timing, the policy gate, TTL sweep, chunk re-indexing and collection-scoped search) and mirrored in the online demo\'s AI Agents admin panel. An MCP client role and the visual Agent Team Builder (issue #170) shipped next as Phase 5a/5b below; Evaluation Harness expansion (issue #171) shipped next as Phase 6a below - usage/cost dashboards and Solution packaging (issue #172) remain the deliberate, separate next steps.'],['AI Agent Platform v2, Phase 5a — the MCP client role','Closes the backend half of GitHub issue #170. Lanesra\'s existing MCP server (above) exposes its own tools outward; this is the mirror image - calling OUT to an external MCP server. An external server is configured as an ordinary Connection (<code>connection_type="mcp"</code>, reusing the exact same AES-256-GCM secret handling, auth modes and <code>apply_auth</code> logic every other Connection type already has) wrapped by a new <code>ai_mcp_servers</code>/<code>ai_mcp_tools</code> pair (migration <code>0064_mcp_client.sql</code>). Discovery performs a real <code>initialize</code> + <code>tools/list</code> JSON-RPC 2.0 handshake and reconciles the result against any admin-set <code>is_write</code>/<code>enabled</code> flags from a prior discovery, so re-discovering never resets an admin\'s own classification - a genuinely new tool defaults to disabled and read-only. Since an MCP tool carries no HTTP-verb signal to auto-classify read vs. write the way a Connector Action can, a two-level write gate applies instead: a tool only becomes an agent-callable write tool when both its own <code>is_write</code> flag and the server\'s own <code>agent_write_tools_enabled</code> flag are on. Wired into the identical Tool-Call Firewall the Integration Hub Tool Bridge already uses (<code>tool_source</code>, <code>agent_requires_admin</code>, <code>validate_action_names</code>, risk classification), and every real outbound <code>tools/call</code> is logged through the same <code>integration_executions</code> log every other Integration Hub call already uses - never a second, MCP-only log. Shipped on the desktop edition (8 new Rust tests in <code>mcp_client.rs</code> against a real local JSON-RPC stub server, covering discovery, the two-level write gate, dispatch including the tool-level <code>isError:true</code> failure path, and the Tool-Call Firewall admin gate) and mirrored in the online demo.'],['AI Agent Platform v2, Phase 5b — the visual Agent Team Builder canvas','Closes the UI half of GitHub issue #170, completing the whole AI Agent Platform v2 epic (issue #165). Admin → AI Agent Foundry → Agent Teams is a genuine free-form drag-and-drop canvas authoring Phase 3\'s Execution Graphs directly - nodes are placed and dragged freely, connected by clicking a node\'s own connect handle then a target node (prompting for a branch label - true/false, approved/rejected - exactly where a node type requires one), with an SVG overlay drawing the edges. A right-hand property panel edits each node\'s real <code>config_json</code> field-for-field exactly as <code>graph_runtime_service</code>\'s own node executors read it - a Condition node\'s field/operator/value list reuses the platform\'s existing condition-operator vocabulary, an Agent node lists real configured agents, an Action node gets a real per-action-type params example. Save only works on a Draft (a Published graph is immutable, matching the backend); Publish surfaces <code>validate_for_publish</code>\'s own rejection message inline on failure rather than a generic error; and a Runs tab drives start/resume/approve/reject/cancel against the real graph runtime - reusing every Phase 3 API endpoint as-is, no new backend surface needed. Deliberately scoped to the canvas plus a Runs viewer, not a full Agents/Routing/Policies/Tests/Versions tab set - those already have their own dedicated, shipped admin screens, so duplicating them here would be a second, divergent copy of the same configuration. Shipped on the desktop edition and mirrored in the online demo as a real interactive canvas over six of the twelve node types (Trigger/Condition/Action/Agent/Approval/End), with real drag positioning and a real per-node run trace.'],['AI Agent Platform v2, Phase 6a — Evaluation Harness expansion, part 1','Closes the first slice of GitHub issue #171. The Evaluation Harness\'s one LLM-as-judge grader becomes a real, per-Suite <code>evaluator_type</code> choice (migration <code>0065_eval_harness_expansion.sql</code>): <code>task_completion</code> is the original judge-call behavior, now named explicitly, alongside two new evaluator types that run with no judge call at all. <code>structured_output</code> reuses the exact <code>validate_output_schema</code> function Phase 1\'s own repair-retry logic already calls, checking a target Agent\'s actual response against whatever JSON Schema its currently Published version declares - a Suite refuses to attach to anything but an Agent with a declared schema, rather than silently passing. <code>policy_compliance</code> counts a run\'s own Tool-Call Firewall outcomes (a new <code>AppError::PolicyBlocked</code> variant and a <code>policy_violations_count</code> column on every run step, mirroring the existing <code>tool_calls_count</code> column) and passes iff zero tool calls were blocked or queued for approval during the run. A new publish gate (AI-AC-12) makes a failing Suite consequential rather than advisory: <code>agent_version_service::transition_status</code> now blocks a Draft/Test → Published transition outright if any <code>policy_compliance</code> Suite targeting that agent has a most-recent run with a failure - the same opt-in "no policy configured, no gating" posture Phase 2\'s own Policy Engine already established, so a workspace that never configures such a Suite sees zero behavior change. Shipped on the desktop edition (new Rust tests in <code>ai_eval_harness.rs</code> plus a dedicated publish-gate test in <code>agent_version_lifecycle.rs</code>) and mirrored in the online demo, including the same publish-blocking check on a version transition. Groundedness, tool-selection, hallucination, latency and cost evaluators, a model-comparison view and usage/cost dashboards remain the deliberate next step (Phase 6b); Solution packaging for every new component type (issue #172) runs last, once everything else is stable enough to package.'],['Agent Access Governance — closing the Tool-Call Firewall\'s real gaps &amp; a traced Agent Access Inspector','Auditing the claim "the Policy Engine firewalls every tool call; the Access Inspector shows exactly what each agent can touch" against the real code (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/245">#245</a>) surfaced two genuine gaps rather than naming/documentation drift. First: <code>chat_service::execute_agent_tool</code> dispatched six Foundry-internal tool names (<code>update_memory</code>, <code>remember</code>, <code>get_memory</code>, <code>search_knowledge</code>, <code>use_skill</code>, <code>delegate_to_agent</code>) before the Tool-Call Firewall ever saw them - <code>tool_source</code> now classifies all six, and the firewall check moved to cover every tool name unconditionally, closing the one path that let a workspace policy\'s blocklist/approval threshold be silently skipped. Second, deeper gap: <code>access_service::require_capability</code>\'s own "<code>actor_user_id: None</code> means unattributed/system, always Allow" convention meant every AI-driven record write - whether from a named Agent or the plain records/admin chat assistant - ran completely unscoped by Access Control v1, regardless of who was chatting or which role they held. A new opt-in <code>enforce_record_access</code> flag on a Policy Engine policy (workspace-default or per-agent, resolved the identical way <code>exclude_restricted_memory</code> already is) gives this real teeth: when on, <code>create_record</code>/<code>update_record</code>/<code>archive_record</code> check for real against either the agent\'s own new, optional <code>acts_as_user_id</code> bound identity or whoever is actually chatting - default <code>false</code>, so no existing workspace\'s behavior changes until an admin opts in. The actually-missing feature: a real <b>Agent Access Inspector</b> (Admin → AI Agents) - pick an agent and a tool, optionally simulate a user and a record, and trace (a) whether the tool is even in that agent\'s own list, (b) the exact Policy Engine decision and which policy produced it, and (c) for a record-write tool once enforcement is on, the identical <code>access_service::explain_access</code> trace the real user-facing Access Inspector already renders - reusing that evaluator, not a second one, and honestly reporting "not enforced yet" rather than a fabricated allow when it\'s off. Record <em>reads</em> stay unscoped for AI-driven calls in this pass - <code>list_records</code>/<code>get_record</code> have no actor parameter anywhere in this codebase today, not even on the manual REST/MCP API role, so claiming otherwise would be new, unreviewed scope creep rather than closing a real gap. Shipped on the desktop edition (10 new Rust tests in <code>agent_access_governance.rs</code>, including a full stub-driven agent chat run proving a policy-blocklisted Foundry tool is denied before it ever dispatches, and that <code>enforce_record_access</code> on with a zero-grant \"Acts as\" identity really blocks a write the exact same way a manual edit by that user would) and mirrored in the online demo\'s AI Agent Foundry panel - an "Acts as" field, an "Enforce Access Control" checkbox and the same dry-run Inspector, reusing its own already-real <code>explainAccess</code>/<code>resolveAgentPolicy</code>/<code>effectiveRisk</code> functions rather than inventing parallel ones; still honestly real-data-only, same as the Policy Engine panel\'s own long-standing disclaimer, since this static demo has never had a live tool-dispatch loop for a firewall to sit in front of.']]],
+   ['🏭','AI Agent Foundry & Orchestration',[['AI Agent Foundry — Agents, Memory, Skills, Actions, Delegation','A dedicated admin section for named, reusable AI Agents: a persona layered over a per-tool Actions checklist (granting any admin-catalog tool makes an agent Administrator-only, computed at runtime), a persistent Memory document the agent reads every run and can revise itself, a shared Skills library (name + description shown up front, full instructions loaded only when the agent decides to use one), and delegation to other agents - a supervisor agent calling named sub-agents and getting their answer back, depth-guarded against runaway recursion. Chat with any agent you\'re allowed to use from the main Assistant page.'],['Orchestration — Pipelines, Triggers & workflow-fired agent runs','Chain agents into a deterministic, admin-authored Pipeline - each step\'s input can reference the previous step\'s real output or the run\'s own trigger input - complementary to an agent\'s own dynamic delegation above, not redundant with it. Trigger a Pipeline or a lone Agent manually, on a schedule, from an inbound authenticated webhook, or as a new "Run AI agent" Workflow Automation action - the same enqueue-now/drain-later pattern already proven for Connector Actions, so a workflow firing inside a record save never blocks on a live LLM call. Every run - manual, scheduled, webhook or workflow-triggered - writes to one unified run history, step by step.'],['Guardrails & declarative export/import','An agent\'s own <code>guardrails_md</code> is injected into its system prompt as an explicit operational-boundary statement the model is instructed to respect - advisory, the same real/advisory split Business Rules and an agent\'s own persona text already draw - alongside one genuinely code-enforced guard: the tool-calling loop aborts with a clear error the moment the same tool call with the same arguments repeats 3 times in a row. An agent or Skill (persona, Memory seed, guardrails, Actions, Skills and delegates) can be added to a Solution, exported, and imported into another workspace exactly like a Custom Object or Business Rule already can be - its Gateway routing policy and live token-usage history don\'t travel with it, since those are workspace-specific runtime state, not portable definition.'],['Consensus & Peer-Review orchestration, with a real Evaluation Harness','Two more Pipeline topologies alongside the original "sequential": "consensus" runs every step but the last independently against the same trigger input, then a synthesizer step combines every candidate\'s real answer; "peer_review" loops a drafter and a reviewer (draft, critique, revise) until the reviewer approves, or 3 rounds pass without approval, failing clearly rather than looping forever. A new Evaluation Harness runs a named Suite of golden test Cases - an input plus a plain-English success criteria - against one Agent or Pipeline, each graded by an LLM-as-judge call rather than a brittle exact-match comparison.'],['Human-in-the-loop approval gates & OTLP tracing','Any Pipeline topology can pause for an Administrator\'s review at the one step it has a well-defined resume point for - any step of a sequential chain, a consensus pipeline\'s synthesizer, or a peer-review pipeline\'s reviewer (every round) - who then approves (optionally editing the paused step\'s own output before it feeds the rest of the run) or rejects it outright. Real per-step timing renders a finished run as a standard OTLP <code>resourceSpans</code> trace, exportable as JSON or pushed on demand to a configured collector endpoint.'],['Integration Hub Tool Bridge — Connector Actions as agent tools','An agent\'s Actions checklist could already list/manage Connectors but never call one - closed with a real, typed bridge from an imported OpenAPI operation straight to an LLM tool-call definition. Fails closed on an ambiguous schema by construction: a Connector Action with a request body only becomes a tool once its body schema is confidently typed (a real <code>properties</code> map, no unresolved <code>$ref</code>/<code>oneOf</code>/<code>anyOf</code>/<code>allOf</code>) - a vague or unresolvable body schema is never turned into a guessable tool. Phased exactly as scoped: read-only actions (GET/HEAD/OPTIONS) need only a per-connector opt-in plus one Connection Reference the tool executes against; write-capable actions need a second, separate opt-in and make the whole agent Administrator-only the moment one is granted - the identical "one admin-catalog action gates the agent" rule the fixed record/admin tool catalogs already enforced, now covering connector-derived tools too.'],['AI Agent Platform v2, Phase 1 — versioning, Structured Output &amp; a durable Approval Service','An Agent was a single mutable row with no history - editing it in place was the only way to change its persona, instructions or tools, and a Pipeline/Workflow referencing it had no stable target to point at. Every agent now carries a real Draft → Test → Published → Deprecated → Disabled version lifecycle (<code>ai_agent_versions</code>): a Published version is an immutable snapshot of exactly what ran, publishing a new one automatically deprecates whichever version was Published before it, and every existing agent was backfilled with a Published v1 so nothing broke. A version can declare a JSON Schema its final answer must conform to (Structured Output), checked automatically with one repair attempt before falling back to the model\'s own text. A new durable Approval Service (<code>ai_approvals</code>) generalizes "something is pending a human decision" out of Orchestration\'s own step-level approval flag into a reusable, workspace-wide inbox - the foundation Phase 2\'s Tool-Call Firewall and later phases route sensitive actions through. Every tool call an agent makes during a run is now additionally attributed to that agent\'s own identity in the audit trail, alongside the initiating user. Admin → AI Agents gets a Versions tab (view history, draft/edit, move through the lifecycle) and a Pending Approvals panel; mirrored in the online demo.'],['AI Agent Platform v2, Phase 2 — Toolboxes, a unified Policy Engine &amp; Tool-Call Firewall','Formalizes what was already the only tool-dispatch path (<code>chat_service::execute_tool</code>/<code>execute_agent_tool</code>) into an explicit, named pipeline: schema → permission (Access Control) → policy → approval → execute → audit - the same function as before, just with a real decision point in front of it instead of an implicit one. A new Tool Registry (<code>ai_tool_registry</code>) classifies every tool this codebase can produce into one of six risk tiers (Read/Low Write/Write/External Action/Destructive/Privileged) via a name-prefix convention plus a short list of hardcoded exceptions for the genuinely sensitive names, with a per-workspace admin override for any tool that needs reclassifying. A new Policy Engine (<code>ai_agent_policies</code>) resolves a workspace-wide default or a stricter per-agent policy - a blocklist denies a tool name outright, a risk threshold instead queues it as a durable Pending Approval (reusing Phase 1\'s Approval Service) rather than dispatching it. A workspace that never configures a policy sees zero behavior change - every call still Allowed, exactly as before this shipped. Admin → AI Agents gets a Policy Engine panel (per-agent or workspace-default editor, plus tool risk overrides); mirrored in the online demo as real, saved policy configuration - honestly not enforced against anything there, since the static demo has no server-side tool-dispatch loop for a firewall to sit in front of. Toolboxes (versioned, reusable tool+policy bundles as a Solution component type) remain the scoped, named follow-up.'],['AI Agent Platform v2, Phase 3 — the Shared Execution Graph Runtime','Workflow Automation and Orchestration Pipelines were two separate engines - Workflow a fixed trigger→conditions→flat-action-list, Pipelines a fixed sequential/consensus/peer_review topology - neither able to branch, run in parallel or bound a loop the way the other could. This closes GitHub issue #168 with a real, durable, node-based Execution Graph (<code>ai_execution_graphs</code>/<code>ai_graph_nodes</code>/<code>ai_graph_edges</code>): Trigger, Condition, Router, Action, Agent, Approval, Delay, Transform, Loop, Parallel Split, Join and End nodes, checkpointed to <code>ai_runs</code>/<code>ai_run_nodes</code> after every single node transition so a run surviving a process restart just resumes from exactly where it paused - the same durability property Phase 1\'s resumable Pipeline runs already had, generalized to an arbitrary graph position. An Action node calls the identical <code>workflow_service::apply_action</code> dispatch a Workflow\'s own action list already uses, and an Approval node is the first thing genuinely built on Phase 1\'s durable Approval Service to actually pause and resume a run on it - consolidating three previously separate, unmerged "pause for human" mechanisms (a fire-and-forget workflow agent call, a Pipeline\'s own self-contained approval flag, and the Tool-Call Firewall\'s policy-triggered approval row) onto one durable primitive for the first time. Today\'s saved Workflows and Pipelines keep running completely unchanged in production - a compatibility-shape mapping (<code>graph_from_workflow</code>/<code>graph_from_pipeline</code>) expresses an existing Workflow or Pipeline as an equivalent graph shape (a sequential Pipeline becomes a linear Agent-node chain, consensus becomes a Parallel Split → Join(All) → synthesizer, peer_review becomes a bounded Loop) purely for parity testing, never a data migration or a production cutover. A publish-time validator rejects an unreachable node, a graph with no reachable End, a Loop missing a positive <code>max_iterations</code>, or any cycle that doesn\'t legitimately re-enter a Loop node\'s own body. Shipped on the desktop edition (migration <code>0062_execution_graph_runtime.sql</code>, <code>execution_graph_service</code>, <code>graph_runtime_service</code>, 11 new Rust tests in <code>execution_graph_runtime.rs</code> covering every node type, publish-time validation, checkpoint/resume durability and a parity check proving the compatibility-shape mapping produces the exact same output as the pre-existing orchestration engine for an equivalent Pipeline); the visual Team Builder canvas authoring a graph directly stays the deliberate, separate next step now that the engine itself is proven correct.'],['AI Agent Platform v2, Phase 4 — Memory Architecture &amp; Document RAG','Closes GitHub issue #169. Today\'s single <code>memory_md</code> document (unchanged, now called Agent Memory) is joined by three genuinely itemized memory types on a new <code>ai_memory_items</code> table (migration <code>0063_memory_architecture.sql</code>) - Session Memory (scoped to one agent+user\'s ongoing conversation, a short default TTL, injected ambiently into the system prompt the same way <code>memory_md</code> already is), Working Memory (scoped to one real <code>ai_runs</code>/<code>ai_agent_runs</code> run, rejected outright outside an actual run context rather than inventing a key) and Entity Memory (tied to a specific record via <code>entity_type</code>/<code>entity_id</code>, no expiry by default). Two new always-available tools, <code>remember</code> and <code>get_memory</code>, let an agent write and retrieve these explicitly - deliberately never dumping a whole table into a prompt - and a new Memory Inspector panel lets an Administrator list, filter and forget any item. A <code>restricted</code>-classification memory write is checked against Phase 2\'s Policy Engine (<code>policy_engine_service::evaluate_memory_write</code>, gated by a new per-policy <code>exclude_restricted_memory</code> flag, on by default) before it\'s ever persisted. <b>Document RAG</b> adds Knowledge Collections and Knowledge Sources (<code>ai_knowledge_service</code>): an admin supplies a source\'s full text directly (no file upload/binary parsing yet, stated plainly rather than half-built), which is chunked (a simple word-boundary sliding window) and embedded through the exact same provider call Vector Search already established (<code>ai_service::embed_texts</code>) - re-saving a source re-chunks and re-embeds it in place. A new <code>search_knowledge</code> tool ranks chunks by cosine similarity, scoped to a workspace or one collection, and every hit carries a <code>source_id</code>/<code>source_name</code> citation - never an unattributed answer. Shipped on the desktop edition (16 new Rust tests across <code>ai_memory_architecture.rs</code> and <code>ai_document_rag.rs</code>, covering the tool round trip, ambient injection timing, the policy gate, TTL sweep, chunk re-indexing and collection-scoped search) and mirrored in the online demo\'s AI Agents admin panel. An MCP client role and the visual Agent Team Builder (issue #170) shipped next as Phase 5a/5b below; Evaluation Harness expansion (issue #171) shipped next as Phase 6a below - usage/cost dashboards and Solution packaging (issue #172) remain the deliberate, separate next steps.'],['AI Agent Platform v2, Phase 5a — the MCP client role','Closes the backend half of GitHub issue #170. Lanesra\'s existing MCP server (above) exposes its own tools outward; this is the mirror image - calling OUT to an external MCP server. An external server is configured as an ordinary Connection (<code>connection_type="mcp"</code>, reusing the exact same AES-256-GCM secret handling, auth modes and <code>apply_auth</code> logic every other Connection type already has) wrapped by a new <code>ai_mcp_servers</code>/<code>ai_mcp_tools</code> pair (migration <code>0064_mcp_client.sql</code>). Discovery performs a real <code>initialize</code> + <code>tools/list</code> JSON-RPC 2.0 handshake and reconciles the result against any admin-set <code>is_write</code>/<code>enabled</code> flags from a prior discovery, so re-discovering never resets an admin\'s own classification - a genuinely new tool defaults to disabled and read-only. Since an MCP tool carries no HTTP-verb signal to auto-classify read vs. write the way a Connector Action can, a two-level write gate applies instead: a tool only becomes an agent-callable write tool when both its own <code>is_write</code> flag and the server\'s own <code>agent_write_tools_enabled</code> flag are on. Wired into the identical Tool-Call Firewall the Integration Hub Tool Bridge already uses (<code>tool_source</code>, <code>agent_requires_admin</code>, <code>validate_action_names</code>, risk classification), and every real outbound <code>tools/call</code> is logged through the same <code>integration_executions</code> log every other Integration Hub call already uses - never a second, MCP-only log. Shipped on the desktop edition (8 new Rust tests in <code>mcp_client.rs</code> against a real local JSON-RPC stub server, covering discovery, the two-level write gate, dispatch including the tool-level <code>isError:true</code> failure path, and the Tool-Call Firewall admin gate) and mirrored in the online demo.'],['AI Agent Platform v2, Phase 5b — the visual Agent Team Builder canvas','Closes the UI half of GitHub issue #170, completing the whole AI Agent Platform v2 epic (issue #165). Admin → AI Agent Foundry → Agent Teams is a genuine free-form drag-and-drop canvas authoring Phase 3\'s Execution Graphs directly - nodes are placed and dragged freely, connected by clicking a node\'s own connect handle then a target node (prompting for a branch label - true/false, approved/rejected - exactly where a node type requires one), with an SVG overlay drawing the edges. A right-hand property panel edits each node\'s real <code>config_json</code> field-for-field exactly as <code>graph_runtime_service</code>\'s own node executors read it - a Condition node\'s field/operator/value list reuses the platform\'s existing condition-operator vocabulary, an Agent node lists real configured agents, an Action node gets a real per-action-type params example. Save only works on a Draft (a Published graph is immutable, matching the backend); Publish surfaces <code>validate_for_publish</code>\'s own rejection message inline on failure rather than a generic error; and a Runs tab drives start/resume/approve/reject/cancel against the real graph runtime - reusing every Phase 3 API endpoint as-is, no new backend surface needed. Deliberately scoped to the canvas plus a Runs viewer, not a full Agents/Routing/Policies/Tests/Versions tab set - those already have their own dedicated, shipped admin screens, so duplicating them here would be a second, divergent copy of the same configuration. Shipped on the desktop edition and mirrored in the online demo as a real interactive canvas over six of the twelve node types (Trigger/Condition/Action/Agent/Approval/End), with real drag positioning and a real per-node run trace.'],['AI Agent Platform v2, Phase 6a — Evaluation Harness expansion, part 1','Closes the first slice of GitHub issue #171. The Evaluation Harness\'s one LLM-as-judge grader becomes a real, per-Suite <code>evaluator_type</code> choice (migration <code>0065_eval_harness_expansion.sql</code>): <code>task_completion</code> is the original judge-call behavior, now named explicitly, alongside two new evaluator types that run with no judge call at all. <code>structured_output</code> reuses the exact <code>validate_output_schema</code> function Phase 1\'s own repair-retry logic already calls, checking a target Agent\'s actual response against whatever JSON Schema its currently Published version declares - a Suite refuses to attach to anything but an Agent with a declared schema, rather than silently passing. <code>policy_compliance</code> counts a run\'s own Tool-Call Firewall outcomes (a new <code>AppError::PolicyBlocked</code> variant and a <code>policy_violations_count</code> column on every run step, mirroring the existing <code>tool_calls_count</code> column) and passes iff zero tool calls were blocked or queued for approval during the run. A new publish gate (AI-AC-12) makes a failing Suite consequential rather than advisory: <code>agent_version_service::transition_status</code> now blocks a Draft/Test → Published transition outright if any <code>policy_compliance</code> Suite targeting that agent has a most-recent run with a failure - the same opt-in "no policy configured, no gating" posture Phase 2\'s own Policy Engine already established, so a workspace that never configures such a Suite sees zero behavior change. Shipped on the desktop edition (new Rust tests in <code>ai_eval_harness.rs</code> plus a dedicated publish-gate test in <code>agent_version_lifecycle.rs</code>) and mirrored in the online demo, including the same publish-blocking check on a version transition. Groundedness, tool-selection, hallucination, latency and cost evaluators, a model-comparison view and usage/cost dashboards remain the deliberate next step (Phase 6b); Solution packaging for every new component type (issue #172) runs last, once everything else is stable enough to package.'],['Agent Access Governance — closing the Tool-Call Firewall\'s real gaps &amp; a traced Agent Access Inspector','Auditing the claim "the Policy Engine firewalls every tool call; the Access Inspector shows exactly what each agent can touch" against the real code (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/245">#245</a>) surfaced two genuine gaps rather than naming/documentation drift. First: <code>chat_service::execute_agent_tool</code> dispatched six Foundry-internal tool names (<code>update_memory</code>, <code>remember</code>, <code>get_memory</code>, <code>search_knowledge</code>, <code>use_skill</code>, <code>delegate_to_agent</code>) before the Tool-Call Firewall ever saw them - <code>tool_source</code> now classifies all six, and the firewall check moved to cover every tool name unconditionally, closing the one path that let a workspace policy\'s blocklist/approval threshold be silently skipped. Second, deeper gap: <code>access_service::require_capability</code>\'s own "<code>actor_user_id: None</code> means unattributed/system, always Allow" convention meant every AI-driven record write - whether from a named Agent or the plain records/admin chat assistant - ran completely unscoped by Access Control v1, regardless of who was chatting or which role they held. A new opt-in <code>enforce_record_access</code> flag on a Policy Engine policy (workspace-default or per-agent, resolved the identical way <code>exclude_restricted_memory</code> already is) gives this real teeth: when on, <code>create_record</code>/<code>update_record</code>/<code>archive_record</code> check for real against either the agent\'s own new, optional <code>acts_as_user_id</code> bound identity or whoever is actually chatting - default <code>false</code>, so no existing workspace\'s behavior changes until an admin opts in. The actually-missing feature: a real <b>Agent Access Inspector</b> (Admin → AI Agents) - pick an agent and a tool, optionally simulate a user and a record, and trace (a) whether the tool is even in that agent\'s own list, (b) the exact Policy Engine decision and which policy produced it, and (c) for a record-write tool once enforcement is on, the identical <code>access_service::explain_access</code> trace the real user-facing Access Inspector already renders - reusing that evaluator, not a second one, and honestly reporting "not enforced yet" rather than a fabricated allow when it\'s off. Record <em>reads</em> stay unscoped for AI-driven calls in this pass - <code>list_records</code>/<code>get_record</code> have no actor parameter anywhere in this codebase today, not even on the manual REST/MCP API role, so claiming otherwise would be new, unreviewed scope creep rather than closing a real gap. Shipped on the desktop edition (10 new Rust tests in <code>agent_access_governance.rs</code>, including a full stub-driven agent chat run proving a policy-blocklisted Foundry tool is denied before it ever dispatches, and that <code>enforce_record_access</code> on with a zero-grant \"Acts as\" identity really blocks a write the exact same way a manual edit by that user would) and mirrored in the online demo\'s AI Agent Foundry panel - an "Acts as" field, an "Enforce Access Control" checkbox and the same dry-run Inspector, reusing its own already-real <code>explainAccess</code>/<code>resolveAgentPolicy</code>/<code>effectiveRisk</code> functions rather than inventing parallel ones; still honestly real-data-only, same as the Policy Engine panel\'s own long-standing disclaimer, since this static demo has never had a live tool-dispatch loop for a firewall to sit in front of.'],['Process Lanes — preview: the Receive Shipment lane (online demo)','A guided, step-by-step process for one record, run on the existing execution-graph run engine: a lane definition (stages + steps) compiles to a graph, a run is a Run, and a human step is the one new node type. The online demo previews it with the Receive Shipment lane on the warehouse demo — real writes to purchase-order lines, stock moves and stock on hand, a discrepancy branch with a seeded run waiting for manager review, and a runner screen with a stage bar, step list, anchor-record summary and audit trail. The shared lane definition schema (program/spec/schemas/process-lane.schema.json) and its CI check shipped with it; the desktop and Team Workspace editions, role gating and a lane builder follow.']]],
    ['🌐','Unified AI Gateway',[['Multi-provider routing, failover & budgets','Named, admin-managed AI Providers beyond a single workspace default - Anthropic, an OpenAI-compatible endpoint, or Google Gemini - with per-agent primary/fallback/local-fallback routing: a request automatically fails over on an error or rate limit, all the way down to a fully local, air-gapped model if configured. Real per-(workspace, agent, user, day) token-usage accounting is enforced against a daily budget at both the System and Agent tier, with a Gateway health view showing today\'s usage and every failover event and its reason.'],['DLP-driven forced air-gapping','An agent can name sensitive data classes - SSN, credit card number, bank account, phone, email - that route its request straight to the local-fallback tier the moment a scan detects one, regardless of the normal routing order. An agent with no routing policy configured keeps its exact pre-Gateway behavior - purely additive, not a breaking change to the Agent Foundry or Orchestration above.']]],
    ['🔎','Context Layer',[['Real memory-change history','The prior value of an agent\'s persistent Memory is snapshotted before every overwrite - whether from the agent\'s own <code>update_memory</code> tool or an admin\'s direct edit - so what an agent has revised about itself over time is auditable and reviewable from a "Show memory history" panel, most-recent-first. No snapshot for a genuine no-op (empty or unchanged).'],['Ranked full-text search over Custom Object records','A new <code>search_records</code> tool gives agents ranked full-text search over Custom Object records via a SQLite FTS5 index kept in sync by triggers - <code>bm25()</code> lexical relevance, a fast, always-on complement to Vector Search\'s newer, meaning-based ranking below. Scoped to Custom Objects for this pass; built-in entities and MCP exposure are named next steps, not silently skipped.'],['Agent context primer — relationships & a platform overview','<code>get_object_metadata</code> includes every Custom Relationship an object participates in, from either direction, with the correct label and related object already resolved; <code>get_related_records</code> follows one for a specific record, the same lookup the desktop UI\'s own "Related records" panel uses. A new <code>get_platform_overview</code> tool explains how Lanesra OS\'s own primitives compose (Custom Object → Fields → Relationships → Business Rules → Workflow Automation → App → Dashboard) plus a live count of this workspace\'s own objects, relationships and apps - orientation an agent can call before proposing or building anything unfamiliar.'],['Vector Search — semantic search over records','Real embeddings from the workspace\'s own already-configured provider (OpenAI-compatible or Google Gemini - Anthropic has no embeddings API) power <code>semantic_search_records</code>, a meaning-based ranking over Custom Object records that finds a relevant record even when it shares none of a query\'s exact words. No vector database or native extension: vectors are plain BLOBs in SQLite, ranked by cosine similarity in Rust; a record\'s own create/update/archive enqueues a reindex rather than blocking on a live provider call. Desktop only, opt-in (Admin → LLM & MCP → Vector Search).']]],
    ['🎙️','Voice-First Mode',[['Voice PIN, sessions & Voice Governance — a second, narrower permission gate','A 4-digit Voice PIN, separate from the primary login password, unlocks a time-boxed Voice session (5/15/30 minutes, capped per Access Role by an Administrator) with lockout after repeated failed attempts. A new Voice access section on each role\'s editor (Admin → Access → Users & roles) adds 8 per-Access-Role capability toggles (Use Voice, Search, Create, Update, Act, Bulk Act, External Act, Use AI Agents), a Max Voice Action Level (Ask Only → Capture → Act with Confirmation → Act) and a Processing Boundary label (Cloud / Approved Private / Local Only - Local Only is a label today, with no real local speech adapter behind it yet). This is deliberately a second, narrower gate on top of Access Control v1\'s own capability-scoped Access Roles and Record Scopes: Voice can only narrow what a role\'s ordinary object permissions already allow, never widen them. Shipped on the desktop edition (<code>voice_session_service</code>, <code>voice_policy_service</code>, migration <code>0057_voice_mode_v1</code>, a dedicated 17-test Rust suite in <code>voice_mode_v1.rs</code>) and mirrored in the online demo.'],['Metadata-driven command planner & real entity resolution','A command planner (<code>voice_planner_service</code>) reads live object and status metadata instead of matching against a fixed phrase table, recognizing NAVIGATE ("open X"), QUERY ("what\'s the status of X" - read-only), CREATE_TASK ("create a task to follow up tomorrow"), CAPTURE ("add an interaction to X that Y happened" - logs a Company/Contact/Opportunity activity) and UPDATE_STATUS ("mark X as Won") across Company, Contact, Opportunity, Contract, Task, Quote, Order and any admin-defined Custom Object - a brand-new Custom Object or a newly added status value is voice-addressable the moment it\'s created, with zero new code. <code>voice_entity_resolver</code> resolves a spoken or typed reference the same honest way every time: an exact name/number match resolves with high confidence, more than one plausible match always asks a clarifying question naming the specific candidates rather than guessing, and no match says so plainly. Saying "this" or nothing at all while looking at a record uses that record as the target; navigate away and it still resolves via this session\'s own multi-turn conversation history - see PR 2, part 2 below.'],['Risk-gated confirmation, real Undo, a full audit trail & real speech I/O','<code>voice_risk_service</code> classifies every command into one of five tiers (none/low/medium/high/critical) and gates it against the role\'s own Max Voice Action Level: a status change or field update always shows an explicit Confirm/Reject step with the literal Before → After values, never a generic "are you sure?"; reads and navigation execute immediately with no confirmation; the critical (delete-class) tier is hard-blocked for Voice entirely in this release. Every voice-triggered write runs through <code>voice_execution_service</code> calling the exact same entity service the ordinary UI/API already uses, so Access Control v1\'s per-record capability checks, status-transition validation, Business Rules and Workflow Automation all fire identically to a manual edit - Voice is a new caller into existing logic, never a second enforcement path. A status change or a created task gets real Undo (a genuine compensating write through the same real services); logging an interaction has no undo path, honestly not offered since no archive mechanism exists for that record type either. <code>voice_audit_service</code> logs every command\'s transcript, resolved intent/record, risk and outcome, queryable from "My Voice Activity" (any user, their own history) and a new admin-only "Voice Activity" search screen, workspace-wide. Real browser speech I/O - the Web Speech API (SpeechRecognition + speechSynthesis) with live interim transcripts, plus an always-visible "type instead" field as a first-class fallback - means the feature works fully without a working microphone; raw audio is never persisted anywhere, in any form.'],['RUN_AGENT — voice-triggered AI Agents & Pipelines (PR 2, part 1)','A new RUN_AGENT intent ("ask the Research Analyst agent to summarize a company", "run pipeline Lead Triage with this new lead") resolves a spoken Agent or Pipeline name against this workspace\'s real <code>ai_agent_service</code>/<code>ai_orchestration_service</code> catalogs and calls the exact same entry points the AI Agent Foundry\'s own chat panel and Orchestration\'s "Run now" button call - <code>chat_service::send_agent_message</code> and <code>ai_orchestration_service::run_manual</code> - never a second, Voice-only agent runtime. Classified Medium risk, so it always shows an explicit Confirm/Reject step, gated by the <code>Use AI Agents</code> Voice capability on top of whatever admin-only/action-name restriction the target Agent already carries. The agent\'s real reply (or the pipeline\'s real final step output) is spoken back and shown inline once confirmed; running a Pipeline manually is Administrator-gated exactly like the "Run now" button already is - Voice is a new caller into that restriction, not a way around it. Shipped on the desktop edition (async Tauri/Team-Workspace-server wiring, 5 new Rust tests in <code>voice_mode_v2.rs</code>) and mirrored in the online demo.'],['Multi-turn conversational context (PR 2, part 2)','A reference like "it" or "that" now survives across a whole back-and-forth, not just the record currently open on screen. Each Voice session keeps its own bounded history (5 turns) of the last few records a command actually resolved to - only a command that resolved to one specific record is recorded, so an aggregate query ("how many open opportunities") has nothing for "it" to mean next - written by <code>voice_session_service</code> to the <code>voice_sessions.conversation_json</code> column PR 1\'s schema already reserved for this. <code>voice_entity_resolver</code> checks it as a second, lower-confidence fallback strictly behind the record actually open on screen, never a replacement for it - open one record, navigate away, and "mark it Won" still resolves correctly. The existing "Reset voice context" action clears it without ending the session. Shipped on the desktop edition (3 new Rust tests in <code>voice_mode_v3.rs</code>) and mirrored in the online demo, including a small "it currently means…" status line with a one-click reset.'],['Custom Object voice parity, fuzzy matching &amp; a fixed mic-permission bug','Custom Object records (including ones from an installed Industry App) are voice-addressable the moment they exist, the same as any built-in record, closing a real gap the online demo\'s own hardcoded object list had (VOICE-AC-06). A bounded Levenshtein edit-distance fuzzy-match tier - the product spec\'s own §8.1-named-but-never-built one - now resolves a typo\'d name ("Atlas Construcion") after an exact/substring search comes back completely empty, on both the desktop edition (<code>search_service::fuzzy_search</code>, 4 new tests in <code>voice_mode_v4.rs</code>) and the online demo; more than one plausible typo still asks rather than guessing, never a silent pick. Separately, the online demo\'s microphone was found to be blocked site-wide by an overly strict <code>Permissions-Policy</code> header, not a per-user permission issue - fixed, along with an honest, specific reason shown for every other recognition failure instead of silently reverting to idle.'],['Honest speech failures &amp; a full conversational voice UX','Spoken responses are now provably either heard or honestly flagged as not working on that device/browser, never silently swallowed: <code>voiceSpeak()</code> wires the browser\'s own utterance start/end/error events plus a ~4-second safety-timeout, and every response - not just a completed action - is spoken, including clarifying questions and confirmation prompts. The online demo\'s Voice-First Mode is rebuilt into a full-screen conversational overlay (ChatGPT/Siri/Gemini-style): a state-driven animated orb, a live transcript, and a hands-free loop that automatically resumes listening after each spoken reply to a completed command - clarify/confirm prompts are the deliberate exception, spoken aloud but always requiring an explicit tap rather than guessing at a free-form spoken answer.'],['Fixed the real root cause of silent speech on iOS/WebKit','The honest safety-timeout above correctly caught the failure on a real device, but a real user report showed it was still firing every time on iOS - the timeout was masking, not fixing, the actual bug. Root cause: <code>voiceSpeak()</code> built its <code>SpeechSynthesisUtterance</code> as a plain local variable with no reference held anywhere else, and iOS/WebKit (every iOS browser - Safari, Chrome, Gemini - runs on WebKit) has a long-documented bug where exactly that pattern lets the JS engine garbage-collect the utterance mid-speech, silently killing it with zero events fired - indistinguishable from a dead speech backend. Fixed by holding a persistent, module-scope reference to the in-flight utterance until it genuinely settles, the standard documented workaround; the safety-timeout notice stays as a backstop for a genuinely unsupported browser, it just shouldn\'t be the common case on iOS anymore.'],['Silent speech, round three - a caching fix and a second real WebKit bug','A device report showed the exact same notice still firing after the fix above - two separate causes, both real. This site\'s static assets had no explicit cache-control policy, so several mobile/in-app WebKit browsers can keep serving a stale disk-cached copy across an ordinary reload regardless of the <code>?v=X.Y.Z</code> query-string bump; <code>netlify.toml</code> now sets <code>Cache-Control: no-cache</code> on <code>index.html</code>/<code>app.js</code>/<code>styles.css</code>, forcing a revalidation request every load - a systemic fix for every future release, not just this one. Separately: <code>speechSynthesis</code> only ever produces real audio in a page session where its first <code>speak()</code> call happened synchronously inside a trusted user tap, not an async callback like a <code>SpeechRecognition</code> result - so a session where the user\'s first-ever interaction was by voice could stay silently mute regardless of the GC fix. Fixed with a one-time, near-silent "unlock" utterance spoken directly from the mic button\'s own click handler before anything async runs.'],['Guided step-by-step record creation (PR 2, part 3)','A new CREATE intent ("create a company Acme Corp", or just "create a company") asks for whatever\'s still missing one field at a time instead of requiring everything crammed into a single utterance - the name first if it wasn\'t given, then any required custom field, in the same order the record form itself would present them. Each turn\'s partial answer is held in the Voice session (a new <code>pending_create_json</code> column, PR 1\'s own migration convention), so "create a company" → "What should the company name be?" → "Acme Corp" → (any required field) → the real create runs, exactly like <code>company_service::create</code> plus <code>custom_field_service::set_entity_values</code> already do for a manual save - never a second, voice-only validation path. A plain cancel word ("never mind") abandons the flow honestly, leaving nothing half-created. Scoped to Company and any Custom Object (VOICE-AC-06: zero new code for an admin-defined object) - Contact, Opportunity, Quote, Order, Contract and Task all need a related Company chosen first, which this single linear loop doesn\'t resolve yet, so asking for one of those says so honestly rather than failing partway through. Shipped on the desktop edition (migration <code>0058_voice_pending_create</code>, 6 new Rust tests in <code>voice_mode_v5.rs</code>) and mirrored in the online demo.'],['Industry voice vocabulary packs, Quiet Mode fixed &amp; real response-detail levels (PR 3, the final phase)','GitHub issue #161, closing out the product spec\'s full v0.1-v1.0 voice rollout. <b>Industry vocabulary</b>: <code>voice_planner_service</code>\'s catalog now reads every installed Industry App\'s own select-type status fields (Property Management\'s Unit "Occupancy Status" - Vacant/Reserved/Occupied/Maintenance/Inactive - and the equivalent on every other reference package), so "mark unit Riverside 5A as Occupied" resolves and writes through that specific field via <code>custom_field_service::set_entity_values</code>, not just the generic Active/Inactive/Archived column every Custom Object shares; a value present on both (like "Inactive") still resolves to the generic column first, and a genuine pre-existing substring-matching bug ("Active" silently matching inside "Inactive") was found and fixed along the way, verified by 2 new Rust tests in <code>voice_mode_v6.rs</code>. <b>Quiet Mode</b>: turning it on on the desktop edition never actually silenced anything before this pass - a real bug fix, not just polish - plus a visible 🔇 indicator (mic button, panel header, admin settings) so "responses are silenced" is now something you can see, not just a setting that silently did nothing. <b>Response-detail levels</b>: the stored <code>spoken_detail</code> preference ("short"/"normal"/"detailed") is real phrasing logic for the first time - each plan step now carries a normal <code>description</code> plus a genuinely shorter <code>brief_description</code> and a genuinely fuller <code>detail_note</code> (never fabricated, only ever facts the planner already had), consumed at the exact point <code>VoiceModeButton.tsx</code>\'s <code>speak()</code> (and the online demo\'s equivalent) assembles what to say - verified by 3 new Rust tests in <code>voice_mode_v7.rs</code>. All three shipped on the desktop edition and mirrored in the online demo.'],['An optional LLM-backed conversational layer','The command planner above is deliberately metadata-driven, not phrase-driven - a real safety/determinism choice, but it also meant a genuinely conversational phrasing ("hey, could you please go ahead and mark the Northern Star deal as won, thanks") that never lines up with one of the fixed trigger verbs came back an honest "I didn\'t recognize a command" instead of being understood. A new workspace-wide, admin-opt-in setting (Admin → Access → Voice Governance, off by default) changes that: only when the deterministic planner returns "unsupported" - never for a command it already understood - the transcript is sent to the workspace\'s own chosen <code>ai_providers</code> row (any of Claude, an OpenAI-compatible model such as ChatGPT or Qwen, or Gemini) with exactly one narrow job, rewrite it into one of the supported canonical command phrasings, or ask a clarifying question - never to resolve a record, decide a risk level, or execute anything itself. <code>voice_llm_planner_service</code>\'s rewritten text is fed straight back into the exact same <code>voice_planner_service::plan()</code>/<code>voice_entity_resolver</code>/<code>voice_risk_service</code>/<code>voice_execution_service</code> pipeline a manually-phrased command already goes through, so every existing safety guarantee still applies completely unchanged - gated by the same <code>Use AI Agents</code> Voice capability RUN_AGENT already uses, the same trust tier as letting Voice run an AI Agent. 8 new Rust tests in <code>voice_llm_conversational.rs</code> (a stubbed provider, never a real network call) cover the settings round trip, the capability gate, a successful rewrite still landing on <code>awaiting_confirmation</code>, a CLARIFY response, and a rewrite that still doesn\'t match anything falling back to the original honest message rather than a confusing second one. Shipped on the desktop edition and mirrored in the online demo as a lenient filler-stripping retry (never a real LLM call in the static demo, the same "real shape, no real wire" convention its own Assistant chat already follows).']]],
@@ -24454,7 +25390,8 @@ function bindRoadmapSearch(){
 }
 function releasesPage(){document.title='Releases — Lanesra OS';
  setPageMeta('The full Lanesra OS changelog - every shipped release across the desktop app, the online demo and this website, compiled directly from the working codebase. See also the desktop-only installer tags on GitHub, cut less often than this list.');
- const releases=[['v0.99.0','November 2026','Per-step model routing and data boundaries',['An agent run can now be held to a <b>data boundary</b> (work package WP-0123). When a step\'s outbound request matches one of the sensitive data classes an agent forces to its local/air-gapped fallback, the Gateway routes it only to a provider an Administrator has marked <b>Local</b> on <b>Admin → LLM &amp; MCP → LLM</b> - and if no local provider is available it <b>fails closed</b> (<code>config.not_local</code>) rather than quietly falling back to a cloud model, so sensitive bound data is never sent off-box. The built-in Assistant chat now runs through the same Gateway, so the workspace\'s System daily token budget applies to it too. See <a href="/help/unified-ai-gateway">Unified AI Gateway</a>.']],
+ const releases=[['v0.99.1','November 2026','Process Lanes preview: the Receive Shipment lane',['A guided, step-by-step process for one record, previewed on the warehouse demo (work package WP-0702, ADR-0024). The <b>Receive Shipment</b> lane walks a purchase order through five stages — verify, record receipt, hold review, stage &amp; put away, confirm — posting real writes at each step: order lines, stock moves and stock on hand, with the order closing as RECEIVED and the manager notified. A discrepancy branch handles short or rejected lines: the demo seeds a run on PO-2026-005 waiting for manager review, and approving it continues to put-away while rejecting it holds the order with nothing posted. The lane starts from the dashboard, the purchase order, or the Receiving Agent, and its definition is validated against the shared lane schema in CI. See <a href="/help/process-lanes">Process Lanes</a>.']],
+  ['v0.99.0','November 2026','Per-step model routing and data boundaries',['An agent run can now be held to a <b>data boundary</b> (work package WP-0123). When a step\'s outbound request matches one of the sensitive data classes an agent forces to its local/air-gapped fallback, the Gateway routes it only to a provider an Administrator has marked <b>Local</b> on <b>Admin → LLM &amp; MCP → LLM</b> - and if no local provider is available it <b>fails closed</b> (<code>config.not_local</code>) rather than quietly falling back to a cloud model, so sensitive bound data is never sent off-box. The built-in Assistant chat now runs through the same Gateway, so the workspace\'s System daily token budget applies to it too. See <a href="/help/unified-ai-gateway">Unified AI Gateway</a>.']],
   ['v0.98.0','November 2026','Desktop and Team Workspace now release separately',['Until now one release carried both: the desktop installer and the Team Workspace server image shared a version number and a release page, which is why every release page was titled "desktop". They now have separate releases, links and version numbers (ADR-0019). Desktop stays <code>desktop-vX.Y.Z</code>; Team Workspace is <code>team-workspace-server-vX.Y.Z</code> with its own GitHub Release, and its Docker image <code>ghcr.io/vikram2409-eng/lanesra-os-server:X.Y.Z</code> uses the same number.','A desktop release no longer builds or publishes the server image, and a server release no longer builds the installer. The image\'s <code>:latest</code> tag moves only when a Team Workspace release is published. Up to 0.16.3 the two shared a number; the first separate Team Workspace release is 0.17.0, so its numbers never go backwards.','Release tooling and documentation only: no change to either product (work package WP-0200). A new self-test fails CI if a desktop tag could ever start a server release again.']],
 ['v0.97.0','October 2026','Outbound webhooks now deliver real record events',['Agents can now carry a persona and a reasoning mode (work package WP-0120). Open an agent\'s <b>Persona</b> panel to give it a role, goal and background, which are compiled - with its instructions, memory, guardrails and scoped object types - into one system prompt you can read with <b>View compiled prompt</b>. A <b>reasoning mode</b> changes how it works: <b>Direct</b> (default) answers straight away, <b>Plan-first</b> writes a plan shown in the run trace before any tool use, and <b>Reflect</b> makes one self-critique pass before the final answer. An agent left on Direct with no persona is unchanged. See <a href="/help/build-your-first-agent">Build your first AI Agent</a>.','Tool results from outside the workspace are now contained against prompt injection (work package WP-0145). A result from a connector, an external MCP tool, or web or email reached through them is fenced in the model\'s context as data, not instructions, and once a step has read any such untrusted content its write-tier and external-action tool calls are held for administrator approval by default - reads are not, so an agent can keep gathering information but cannot quietly act on injected instructions. An unknown tool source is treated as untrusted. The run trace marks the untrusted span and the held approval says the step read untrusted content; an Administrator can list specific tools as taint-exempt on a Policy. A step that reads no untrusted content behaves exactly as before. See <a href="/help/prompt-injection-defence">Prompt-injection defence</a>.','A webhook an admin created in the Integration Hub never actually fired when a record changed: the event was queued but nothing sent it, and only the <b>Test</b> button delivered (tracked as RAID I-29, work package WP-0182). Queued <code>record.created</code>, <code>record.updated</code> and <code>record.archived</code> events are now signed, sent and cleared by the Team Workspace server\'s scheduler within about a minute, and by the desktop app\'s background poll.','One event that cannot be processed no longer stops the events behind it: it stays queued and is retried on the next pass, and the server logs it. A paused, deleted or other-object-scoped webhook still receives nothing, and the queue clears either way.','Shipped on Team Workspace and the desktop app (new Rust tests: the real scheduler thread delivering signed create, update and archive events, the negative cases, and failure isolation). Not in the online demo, which has no real network egress.','Webhook signing secrets can now be used: the Integration Hub shows a webhook\'s secret once when it is created, and a new <b>Rotate secret</b> action replaces it (admin only, audited without the value, work package WP-0183). Until now the secret was generated but never visible, so a receiver had no way to verify a signature. The online demo shows the same dialogs with a throwaway value.','API clients can now be limited to a network. The <b>Allowed networks</b> list on an API client (previously stored but ignored, so a leaked key worked from anywhere) is enforced on REST, MCP and the event stream: a call from outside it gets 403 and is logged with the address it came from (work package WP-0184). Behind a reverse proxy, set the new <code>LANESRA_TRUSTED_PROXIES</code> setting so the real caller address is used; forwarded headers from anyone else are ignored.','Unattended agent runs now act as an <b>Agent Identity</b>, never as a person (work packages WP-0107 to WP-0109). On upgrade each schedule and webhook trigger gets its own identity with no Administrator role and no Access Roles, so it keeps exactly the rights it had; every assignment is audited. A webhook call now runs only an agent or pipeline with an active webhook trigger (403 otherwise), and every tool call an agent makes records who it acted as. See <a href="/help/agent-identities">Agent Identities</a>.','API clients can now search: <code>GET /api/v1/search?q=…</code> finds records by text across every readable object, with an optional object filter and paging, for clients holding the <code>search.read</code> scope, which until now could be granted but did nothing (work package WP-0186). The command-line tool gains <code>lanesra search</code>.','Bulk export and bulk write for API clients (work package WP-0187): <code>GET /api/v1/objects/{key}/export</code> streams an object as NDJSON or CSV (scope <code>bulk.read</code>), and <code>POST /api/v1/objects/{key}/bulk</code> applies up to 1000 create, update and archive operations with a result per item (scope <code>bulk.write</code>); both scopes could be granted before but did nothing. <b>Behaviour change:</b> Business Rules that block a save now also apply to writes through the REST API, MCP and CSV import, which until now bypassed them. The command-line tool gains <code>lanesra records export</code> and <code>lanesra records bulk</code>.','Webhooks can be managed over the API (work package WP-0188) by a client holding <code>webhooks.manage</code>, which until now did nothing: create, update, pause, reactivate, test, rotate the secret, delete and read delivery history under <code>/api/v1/webhooks</code>, audited under the client\'s id. Creating or updating a webhook, in the admin screen too, now checks that its connection\'s URL is one the server may reach (previously such a webhook was saved and then every delivery failed). The command-line tool gains <code>lanesra webhooks</code>.','Every API scope now does what it says (work package WP-0189, closing RAID I-31). <code>admin.integration.read</code> lists connections, connectors, jobs and API clients without any secret, and <code>admin.integration.manage</code> pauses, reactivates and runs them; a paused connection makes no outbound call until reactivated. A test now fails the build if a scope can be granted without a route enforcing it.','Webhooks now send every event type they can subscribe to (work package WP-0185). <code>field.changed</code> is sent once per field whose value changes on save, built-in or custom, with the previous and current value (cut to 2 KB). <code>workflow.completed</code> and <code>workflow.failed</code> are sent when a workflow run finishes, with the workflow, the record that triggered it and, on failure, an error of at most 500 characters. Workflows built in the graph editor do not send them yet. Events are only queued when a webhook subscribes, and a failure to queue one never blocks a save or a workflow.','The online demo now follows the Agent Identity rules (work packages WP-0107 to WP-0109): a workflow-started agent run acts as its Agent Identity and never borrows anyone\'s Administrator rights, runs you start act as you, every simulated tool call is recorded in a new <b>Agent audit trail</b> under AI Agents, and agent tokens never reach chat history, run inputs or the audit trail. The Agent Identities screen with show-once credentials is built and switches on with desktop and Team Workspace.','The online demo shows how a run handles a provider error (work package WP-0124): <b>Admin → LLM &amp; MCP → Gateway → Retries and failure handling</b> simulates a failure and shows each attempt, the backoff or Retry-After wait, and whether the run retries, fails over or stops. A new help article, <a href="/help/agent-limits-and-partial-results">Agent limits and failures</a>, explains the error classes and retry rules for every edition.','The <b>Agent Identities</b> screen is switched on in every edition (work package WP-0190): Administrators create identities, give them the Administrator role or Access Roles, issue, rotate and revoke their credentials (each token shown once), and choose a <b>Runs as</b> identity on each schedule and webhook trigger. This is what lets an agent that uses admin tools run on a schedule or webhook, which since WP-0107 needs an identity holding Administrator. An Administrator can switch the screen off per workspace under Admin → Workspace → Feature flags. The online demo shows the same screen.','An agent that sends a malformed tool call (arguments that are not valid JSON, or that miss a required parameter) is now told what was wrong and can try again, instead of the whole chat or run failing; the tool never runs on bad arguments, and a run stops after three malformed calls (work package WP-0122). Every instruction Lanesra OS gives a model now lives in one versioned prompt catalog with a test suite for each prompt, so a wording change is always a new, reviewable version (work package WP-0130).','Agent runs now end gracefully at their limits (work package WP-0121). A run that uses all its tool-calling rounds (8 unless the agent sets 1 to 25) or its new optional token limit is asked once for a final answer with tools switched off, and keeps that answer as a partial result, where it used to fail and lose the work; an execution graph step and run that end this way show <code>completed_partial</code>. A model call that takes longer than its time limit (5 minutes unless set) is cancelled and tried once on the agent\'s fallback provider. The <b>Temperature</b> and <b>Max tokens</b> in an agent\'s routing were saved but never sent; they now reach every call. Set the limits in an agent\'s <b>Routing</b> panel; the online demo simulates them under Admin → LLM &amp; MCP → Gateway. See <a href="/help/agent-limits-and-partial-results">Agent limits and failures</a>.','Every pipeline and execution-graph run now records a trace (work package WP-0111): a tree of its steps, model calls (provider, model, tokens, latency and which routing tier answered), tool calls and Tool-Call Firewall verdicts, with a delegation to another agent nested as a child step. A run that waits for an approval or a delay carries on in the same trace. Prompts and outputs are not kept unless an Administrator sets <b>Prompts and outputs in run traces</b> (Admin → LLM &amp; MCP → Gateway → Observability) to redacted or full; each change is audited and agent credentials are always removed. Writing a trace costs under a millisecond per round. See <a href="/help/run-traces">Run traces</a>.','Agents\' tools can now be capped and rate-limited (work package WP-0140). Under <b>Tool limits</b> on an agent, each tool can be limited to a number of calls per run, disabled after a number of failures in a row (until an Administrator re-enables it), and kept to a result size, beyond which the result is stored and the agent gets its start and a reference. <b>Rate limits</b> in the Policy Engine allow at most a number of calls per window for one tool, one connector or the whole workspace; the Tool-Call Firewall refuses a call over a limit before it runs, for agents and the Assistant alike. Every refusal shows in the run trace, and the online demo applies the same rules. See <a href="/help/policy-engine-tool-call-firewall">Policy Engine &amp; the Tool-Call Firewall</a>.','Each round of an agent run now tells the agent how much of its budget is left: the tool-calling rounds left of its limit and, when the agent has a run token limit, the tokens left, so it can plan to finish instead of being cut off (work package WP-0126). The wording is the new catalog prompt <code>loop/budget-line</code>. See <a href="/help/agent-limits-and-partial-results">Agent limits and failures</a>.','A step in an Agent Team can now keep its output out of storage (work package WP-0127). Tick <b>Don\'t store this step\'s output</b> on an Agent or Transform node for a token, a one-time code or a personal detail: later steps use it, but it is never written to checkpoints, step records, run traces or audit, where <code>[not persisted]</code> appears instead. A run that pauses after the step runs it again on resume to fetch the value back. See <a href="/help/execution-graph-agent-teams">Shared Execution Graph &amp; Agent Teams</a>.','<b>Release 0.16.3</b> is published for both editions: the <a href="https://github.com/vikram2409-eng/Lanesra-OS/releases/tag/desktop-v0.16.3" target="_blank" rel="noopener">Windows desktop installer</a> and the <a href="https://github.com/users/vikram2409-eng/packages/container/package/lanesra-os-server" target="_blank" rel="noopener">Team Workspace server image</a> (<code>docker pull ghcr.io/vikram2409-eng/lanesra-os-server:0.16.3</code>), with live run events and the SFTP security update below. From this release the server image\'s <code>:latest</code> tag moves only when a release is published, never when a build merely finishes.','Every pause for a person now goes through one inbox, <b>Pending Approvals</b> (work package WP-0150). Pipeline steps that need approval, in every topology, and voice commands that need approval now appear there alongside Agent Team approval gates, and deciding one resumes what was waiting. Before, approving an Agent Team gate from the inbox left its run stuck, and a voice command needing approval could not be decided at all. A tool call the Policy Engine holds for approval now pauses the run instead of being dropped; approving lets exactly that call run once. Pauses already waiting when you upgrade move into the inbox. Starting, resuming, approving and cancelling Agent Team runs from a browser on Team Workspace works again (it failed with "Unknown command"). See <a href="/help/agent-versioning-and-approvals">Agent Versioning &amp; the Approval Service</a>.','Agent runs can now be watched live (work package WP-0112). As a pipeline or execution-graph run executes it sends <b>run events</b>: steps starting and finishing, each model round, each tool call, each refusal by the Tool-Call Firewall and each wait for an approval, numbered in order and stored with the run\'s trace. An Agent Team\'s test run updates as each step happens. On Team Workspace, Administrators and API clients with the <code>events.read</code> scope can follow them over Server-Sent Events at <code>/api/v1/runs/{id}/events</code>, resuming after a dropped connection without missing any. See <a href="/help/run-traces">Run traces</a> and <a href="/help/api-access-and-webhooks">API Access &amp; Webhooks</a>.','The Windows desktop installers <a href="https://github.com/vikram2409-eng/Lanesra-OS/releases/tag/desktop-v0.16.1" target="_blank" rel="noopener">desktop-v0.16.1</a> and <a href="https://github.com/vikram2409-eng/Lanesra-OS/releases/tag/desktop-v0.16.2" target="_blank" rel="noopener">desktop-v0.16.2</a> are published on GitHub Releases as Early Access prereleases, each with its own release notes, alongside the Team Workspace server images 0.16.1 and 0.16.2. The SSH library behind SFTP connections was upgraded for security advisory RUSTSEC-2026-0387; a pinned SFTP host key still names exactly one key.','<b>Operator action for Team Workspace upgrades:</b> the server now refuses to call addresses on its own network (loopback such as <code>localhost</code>, private ranges and <code>100.64.0.0/10</code>) from any URL an admin configures: model providers such as a local Ollama, connectors, webhooks, MCP servers and trace exporters. List the internal services it may reach in <code>LANESRA_OUTBOUND_ALLOW</code> as IP addresses or CIDR blocks, for example <code>LANESRA_OUTBOUND_ALLOW=172.18.0.0/16</code> for the other containers on a Docker network, then restart. An admin who saves a refused URL is told at once which address it is and what to add (work package WP-0191). Cloud metadata and link-local addresses stay refused in every edition, and the desktop app is unaffected. See <a href="/help/set-up-team-workspace">Set up Team Workspace</a>.']],
 ['v0.96.0','October 2026','Ontology Layer (Palantir-style), part 2 — the Ontology Graph visual redesign &amp; Object 360',['The Ontology Graph\'s visual language is redesigned (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/339">#339</a>) around a radial dot-graph instead of the old fixed dependents/dependencies columns: a persistent type-color legend that doubles as a click-to-dim toggle-filter, a floating inspector card with cross-link actions and relationships grouped by edge type, and a zoomed-out "cloud" view for a component\'s full upstream/downstream impact. This is still schema/config-level only - it answers "what depends on the Company object type," not "show me everything connected to one specific company."','Object 360 (issue <a href="https://github.com/vikram2409-eng/Lanesra-OS/issues/352">#352</a>) is that second, genuinely different capability: given one real record - a specific Company, not just its object type - shows every other real record directly linked to it, unioning the generic admin-defined relationship system with the built-in CRM\'s own hardcoded FK relationships (<code>company_id</code>, <code>Task.related_type</code>/<code>related_id</code>, and similar) which predate and completely bypass it, so a fresh workspace\'s own records don\'t show up empty here. Also shows the record\'s Business Unit, the Business Rules/Workflows that apply to records of its type, the AI Agents scoped to that type, and its own real audit history - opened from a "View in Object 360" button on any record\'s own detail page, to any user who can already view that record, not just Administrators.','Shipped on the desktop edition (new Rust tests covering native FK aggregation and agent object-type scoping) and mirrored in the online demo, with one named gap: Opportunities and generic Custom Object record forms don\'t yet have a working cross-object navigation callback wired from <code>App.tsx</code>, so their Object 360 entry point still works for browsing/re-centering, just without the "Open record" shortcut on those two surfaces specifically.']],
@@ -25384,6 +26321,21 @@ docker exec lanesra cat /data/setup-token</code></pre><p>Paste that token into t
       {heading:'What Phase 2 deliberately still leaves open',bodyHtml:`<p>List views, global search, dashboard record-list widgets and custom report counts/sums are now narrowed to each viewer's Read scope too (see <a href="/help/access-roles-and-record-scopes">Access Roles &amp; Record Scopes</a>); related-record lists and aggregate KPI dashboard tiles remain unfiltered by design, the one deliberately bounded remainder. Field-level read/write policies, reusable capability bundles, cross-cutting Access Groups and one-off time-bounded Record Grants are all real gaps the next phase closes, not this one.</p>`},
       {heading:'Phases 3 through 6',bodyHtml:`<ul><li><b>v1.1</b> - Field Access Policies, reusable Capability Packs/Bundles, Access Groups, and Record Grants for one-off, time-bounded exceptions.</li><li><b>v1.2</b> - declarative Record Access Policies, and a stronger dedicated audit view over bulk reassignment specifically.</li><li><b>AI Access v1, partially shipped</b> - <a href="/help/policy-engine-tool-call-firewall">Agent Access Governance</a> already delivers a real Agent Identity (an agent's optional <b>Acts as</b> binding to a human user) and a real, opt-in <code>enforce_record_access</code> enforcement flag, plus the Agent Access Inspector to trace it. Still open: <i>graded</i> AI Action Levels - today's enforcement is a binary on/off per policy, not a read-only / propose-for-approval / autonomous-write spectrum evaluated per tool call.</li><li><b>Enterprise Identity v2</b> - OIDC/SAML single sign-on, SCIM-provisioned user lifecycle, and a first-class External User concept.</li></ul>`},
       {heading:'Track it',bodyHtml:`<p>Each phase has its own GitHub issue, and the <a href="/roadmap">Roadmap</a> page tracks them under Planned/Proposed alongside everything else being considered next.</p>`},
+     ]},
+   ]},
+  {key:'process-lanes',label:'Process Lanes',icon:'🛤️',
+   blurb:'A guided, step-by-step process for one record — stages, steps and a runner screen that walks a person through the work, posting real writes at each step. Previewed on the warehouse demo with the Receive Shipment lane.',
+   topics:[
+    {slug:'process-lanes',title:'Process Lanes: a guided run for one record',
+     summary:'What a lane is, how to walk the Receive Shipment lane on the warehouse demo, where a lane starts, and what it writes — plus what is still coming.',
+     wps:'WP-0702',
+     sections:[
+      {heading:'What a Process Lane is',bodyHtml:`<p>A <b>Process Lane</b> is a definition for one kind of work on one record: a set of <b>stages</b>, each holding <b>steps</b> in order. A <b>run</b> is one live execution of that definition for one record — the <b>anchor record</b> — and the <b>runner</b> is the one screen that walks a person through it: a stage bar across the top, the current stage's steps on the left, the current step's work in the middle, the anchor record and everything the run has written on the right, and an audit trail underneath. One lane has at most one active run per record; starting again on the same record reopens the run where it left off.</p><p>There are five kinds of step. A <b>form</b> step asks a person to enter values (a date, a quantity, a bin). A <b>record</b> step posts a governed write — a stock move, a status change — through the same Action Types a direct edit uses. A <b>check</b> step runs a rule on its own and follows the branch its result names. An <b>approval</b> step waits for a person to approve or reject. An <b>agent</b> step lets a named AI agent propose values or act, within that agent's own scope. A step that is not done yet is locked until the lane reaches it; a finished step can be reviewed with Back without changing the run.</p>`},
+      {heading:'Try it: the Receive Shipment lane',bodyHtml:`<p>The warehouse demo ships one lane, <b>Receive Shipment</b>, for purchase orders. To walk it: open the <a href="/demo/warehouse">warehouse demo</a>, and on the dashboard card <b>Receiving — due today</b> click <b>Start receiving lane</b> on <b>PO-2026-001</b> (Kiln &amp; Clay Co., 40 × HG-1001 and 30 × HG-1002).</p><ol><li><b>Stage 1, Verify:</b> confirm the arrival (the received date must match the order's expected date — the lane blocks the step and says why if it does not), then match the delivery note line by line. The Receiving Agent suggests each line's quantity; confirm or change it.</li><li><b>Stage 2, Record receipt:</b> enter the received and rejected quantity for each line. Entering more received plus rejected than ordered blocks the step with the reason shown and writes nothing. The lane then checks the lines itself: fully received with nothing rejected passes; anything short or rejected fails and sends the run to the manager.</li><li><b>Stage 3, Stage &amp; put away:</b> pick a staging bin, post the receipt moves, confirm each line's put-away bin (the product's preferred bin is suggested), then post the put-away moves.</li><li><b>Stage 4, Confirm:</b> review the summary, then close the order. The lane sets the order to RECEIVED and notifies the Warehouse Manager.</li></ol><p>End state for PO-2026-001: status RECEIVED, stock on hand 88 for HG-1001 and 52 for HG-1002, and four new stock moves (two RECEIPT, two PUTAWAY). Every step's write is listed on the runner under <b>What this run has written</b>.</p>`},
+      {heading:'The discrepancy branch — PO-2026-005',bodyHtml:`<p>The demo seeds a second run, already waiting for the manager: <b>PO-2026-005</b> arrived with 18 of 30 units received and 2 rejected as damaged, so the check step failed and the run is parked at the <b>review-discrepancy</b> step. Open it from the purchase order's own record page (<b>Open lane run</b>) or decide it from the dashboard's Approvals card.</p><p><b>Approving</b> posts the guarded write — the order stays PARTIALLY_RECEIVED — and the run continues to put-away. Only the put-away move posts for this order: the receipt move for the 18 good units (MV-2026-015) already posted before the run reached the manager. <b>Rejecting</b> posts nothing and moves the run to the hold step, which ends the run with the outcome <b>held</b>. A held run writes nothing further; the way out is a new run once the supplier or the manager resolves the discrepancy.</p>`},
+      {heading:'Where to find a lane',bodyHtml:`<p>A lane is reachable from four places: the dashboard's <b>Receiving — due today</b> card, the purchase order's record page (<b>Start receiving lane</b> or <b>Open lane run</b>), the Receiving Agent's row under <b>Admin → AI Agent Foundry → AI Agents</b> (<b>Receive Shipment lane</b>), and the record's <b>Object 360</b> view, which lists the run's stage, step, status and audit trail. A run can be <b>paused</b> and resumed at the same step; pausing changes nothing that is already written.</p>`},
+      {heading:'What a lane writes — and what it never does',bodyHtml:`<p>Every write a lane makes is real: a stock move is a stock move, a status change is a status change, and the order, stock and move records show it. Each step's writes post all-or-nothing, and never repeat — a move that already posted is not posted again, so retrying a step or double-clicking cannot duplicate it. Workflows still fire on a lane's writes, except for the exact actions a step declares it replaces: closing PO-2026-001 does not create the duplicate put-away task the ordinary RECEIVED workflow would, because the lane's own put-away steps already do that work. Every advance and every write is audited with who did it and when, and <b>Reset demo</b> restores the seed — runs are cleared and the lane definition stays.</p>`},
+      {heading:'What is still coming',bodyHtml:`<p>This is the online-demo preview of Process Lanes (the lane definition format is shared — see <a href="https://github.com/vikram2409-eng/Lanesra-OS/blob/main/program/spec/schemas/process-lane.schema.json">process-lane.schema.json</a> — and the demo shows no behaviour the core will not have). The desktop and Team Workspace editions, role gating on individual steps, and a lane builder in the admin UI follow in later work packages; today a lane definition is data in the demo, not yet something an administrator authors through a screen. The Receiving Agent's suggestions are prefilled values a person confirms or changes — the agent never completes a step on its own.</p>`},
      ]},
    ]},
 ];
