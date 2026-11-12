@@ -3,7 +3,7 @@ id: WP-0712
 title: Blueprint view and export of a lane
 phase: 7
 epic: E7.5 Authoring
-status: in_progress
+status: in_review
 owner: muse
 planned_for: muse
 depends_on: [WP-0703]
@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
 branch: wp/WP-0712-blueprint-view-and-export-r2
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/761
 updated: 2026-11-12
 ---
 
