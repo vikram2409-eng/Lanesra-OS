@@ -103,7 +103,8 @@ use lanesra_core::services::{
     industry_package_service, integration_job_service, integration_log_service, invoice_service,
     mapping_service, mcp_client_service, metric_service, numbering_service, ontology_service,
     opportunity_service, order_service, org_unit_service, organization_service, ownership_service,
-    page_layout_service, page_template_service, policy_engine_service, product_service,
+    page_layout_service, page_template_service, policy_engine_service, process_lane_service,
+    product_service,
     publisher_service, quote_service, relationship_service, report_service, saved_view_service,
     screen_layout_service, search_service, security_settings_service, semantic_mapping_service,
     solution_component_service, solution_service, status_transition_service, system_graph_service,
@@ -3187,6 +3188,53 @@ pub fn dispatch(
                 &graph_id,
                 &require_workspace_id(conn)?,
                 &node_key,
+                actor,
+            )?)
+        }
+        // WP-0703 (Process Lanes): the same lane operations as the desktop
+        // Tauri commands, over the same service - one code path, two
+        // editions. Starting a run is async, so it lives in
+        // `admin_actions.rs` (`POST /api/admin/process-lanes/:lane_key/runs`).
+        "import_process_lane" => {
+            let definition_json: String = arg(args, "definitionJson")?;
+            to_value(process_lane_service::import_lane_definition(
+                conn,
+                &require_workspace_id(conn)?,
+                &definition_json,
+                actor,
+            )?)
+        }
+        "list_process_lanes" => to_value(process_lane_service::list_lanes(
+            conn,
+            &require_workspace_id(conn)?,
+            actor,
+        )?),
+        "get_process_lane" => {
+            let lane_key: String = arg(args, "laneKey")?;
+            to_value(process_lane_service::get_lane(
+                conn,
+                &require_workspace_id(conn)?,
+                &lane_key,
+                actor,
+            )?)
+        }
+        "create_process_lane_version" => {
+            let lane_key: String = arg(args, "laneKey")?;
+            let definition_json: String = arg(args, "definitionJson")?;
+            to_value(process_lane_service::create_version(
+                conn,
+                &require_workspace_id(conn)?,
+                &lane_key,
+                &definition_json,
+                actor,
+            )?)
+        }
+        "publish_process_lane" => {
+            let lane_key: String = arg(args, "laneKey")?;
+            to_value(process_lane_service::publish_lane(
+                conn,
+                &require_workspace_id(conn)?,
+                &lane_key,
                 actor,
             )?)
         }

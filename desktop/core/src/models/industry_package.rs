@@ -265,6 +265,19 @@ pub struct IndustryPackageManifest {
     pub ai_skills: Vec<ManifestAiSkill>,
     #[serde(default)]
     pub ai_agents: Vec<ManifestAiAgent>,
+    /// WP-0703 (Process Lanes): a lane's latest *published* definition,
+    /// verbatim. A lane with no published version exports nothing - a
+    /// draft is not portable. Import installs it as a new draft version
+    /// (a follow-up package); export is one-way in WP-0703.
+    #[serde(default)]
+    pub process_lanes: Vec<ManifestProcessLane>,
+}
+
+/// WP-0703: a Process Lane in a Solution manifest - the lane's published
+/// definition file, parsed, so the manifest stays human-readable.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestProcessLane {
+    pub definition: serde_json::Value,
 }
 
 // --- Registry read models -------------------------------------------------

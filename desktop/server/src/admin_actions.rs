@@ -40,7 +40,8 @@ use lanesra_core::services::{
     agent_service, ai_eval_service, ai_knowledge_service, ai_orchestration_service,
     ai_provider_service, ai_service, chat_service, connection_service, connector_execution_service,
     external_object_service, graph_runtime_service, integration_job_service, mcp_client_service,
-    test_eval_service, vector_search_service, voice_execution_service, webhook_service,
+    process_lane_service, test_eval_service, vector_search_service, voice_execution_service,
+    webhook_service,
 };
 
 use crate::dispatch::{require_workspace_id, resolve_master_key, to_value};
@@ -86,6 +87,10 @@ pub fn router() -> Router<SharedState> {
         .route(
             "/api/admin/execution-graphs/:id/run",
             post(start_graph_run_admin),
+        )
+        .route(
+            "/api/admin/process-lanes/:lane_key/runs",
+            post(start_process_lane_run_admin),
         )
         .route(
             "/api/admin/execution-graph-runs/:id/resume",
@@ -408,6 +413,38 @@ async fn start_graph_run_admin(
             None,
             None,
             None,
+        )
+        .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+struct StartProcessLaneRunBody {
+    anchor_record_id: String,
+}
+
+/// WP-0703: starts a lane run on an anchor record (the async half of the
+/// lane commands; import/publish are sync and live in `dispatch.rs`).
+async fn start_process_lane_run_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(lane_key): Path<String>,
+    Json(body): Json<StartProcessLaneRunBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::start_lane_run(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &lane_key,
+            &body.anchor_record_id,
+            Some(&actor),
         )
         .await
     })
