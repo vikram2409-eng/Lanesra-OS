@@ -3,7 +3,7 @@ id: WP-0701
 title: ADR: Process Lanes on the run engine, and the lane definition schema
 phase: 7
 epic: E7.1 Lane foundation
-status: in_progress
+status: in_review
 owner: muse
 planned_for: muse
 depends_on: []
@@ -12,7 +12,7 @@ estimate: M
 editions: []
 delivered: []
 branch: wp/WP-0701-lane-model-and-schema
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/755
 updated: 2026-11-12
 ---
 
