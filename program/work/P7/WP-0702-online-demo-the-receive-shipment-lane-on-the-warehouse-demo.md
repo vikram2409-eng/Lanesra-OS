@@ -3,7 +3,7 @@ id: WP-0702
 title: Online demo: the Receive Shipment lane on the warehouse demo
 phase: 7
 epic: E7.6 Shipped lanes
-status: in_progress
+status: in_review
 owner: muse
 planned_for: muse
 depends_on: [WP-0701]
@@ -14,7 +14,7 @@ delivered: []
 editions_reason: owner decision (ADR-0023): the online demo previews Process Lanes first; desktop and Team Workspace follow in WP-0703 to WP-0707 from the same definition format
 docs: [process-lanes]
 branch: wp/WP-0702-receive-shipment-lane-demo-r2
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/758
 updated: 2026-11-12
 ---
 
