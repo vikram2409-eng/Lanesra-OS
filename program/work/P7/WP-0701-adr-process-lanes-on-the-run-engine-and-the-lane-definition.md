@@ -3,16 +3,16 @@ id: WP-0701
 title: ADR: Process Lanes on the run engine, and the lane definition schema
 phase: 7
 epic: E7.1 Lane foundation
-status: ready
-owner: unassigned
+status: in_review
+owner: muse
 planned_for: muse
 depends_on: []
 requirements: [REQ-LANE-001, REQ-LANE-003]
 estimate: M
 editions: []
 delivered: []
-branch: 
-pr: 
+branch: wp/WP-0701-lane-model-and-schema
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/755
 updated: 2026-11-12
 ---
 
@@ -41,9 +41,9 @@ Fix the model before the demo and the product are built, so both use one definit
 
 ## Acceptance criteria
 
-- [ ] AC-1: The ADR is Accepted and maps every part of the owner's Process Lane spec (A3.1 to A3.9) to the model, noting each change from the spec
-- [ ] AC-2: The JSON Schema validates the Receive Shipment definition from the spec's Part B
-- [ ] AC-3: The ADR lists what the demo may do before the editions and what it may not (no behaviour the core will not have)
+- [x] AC-1: The ADR is Accepted and maps every part of the owner's Process Lane spec (A3.1 to A3.9) to the model, noting each change from the spec
+- [x] AC-2: The JSON Schema validates the Receive Shipment definition from the spec's Part B
+- [x] AC-3: The ADR lists what the demo may do before the editions and what it may not (no behaviour the core will not have)
 
 ## Test plan
 
@@ -60,3 +60,5 @@ Fix the model before the demo and the product are built, so both use one definit
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+- 2026-11-12 muse: **Done** — ADR-0024 (Proposed) in `program/decisions/`; `program/spec/schemas/process-lane.schema.json` (draft 2020-12, follows the team-format precedent); `program/spec/schemas/examples/lane-wh-receiving.json` (Receive Shipment, 5 stages, 12 steps, 8 run-data fields); `program/tools/check_lane_schema.py` + 5 self-tests + a new `program` CI job step (`pip install "jsonschema>=4.10,<5"` then the check). **State** — AC-2 proven locally (`jsonschema.validate` passes on the example; 9 negative tests prove the schema rejects a check step with a role, a form step with writes, a branch with no exit, a bad expression/operator, an approval without branches, a bad lane id, and a record/approval step without writes); the gate was proven to fail on a corrupted example (exit 1 with the exact location) and pass again after restore. AC-3 is ADR §13. **2026-11-12 owner accepted ADR-0024** (instruction to merge once CI is green) — ADR status flipped to Accepted, AC-1 ticked. `programctl validate` 0 errors; program-tools self-tests 77 passing (was 70 after WP-0200; +5 mine, +2 from other merged work); REGRESSION.md bullet added. **Next** — owner accepts or amends ADR-0024; then set `status: in_review` → `done` on merge, and WP-0702/WP-0703 start from this schema. **Gotchas** — (1) Local clone was stale (October); fetched origin/main into a fresh worktree `~/workspace/lanesra-build/wp0701` because local main carries unpushed tracker commits (WP-0122/WP-0130) and cannot fast-forward. (2) `jsonschema` is NOT a CI dependency anywhere in the repo, so the program.yml step installs it explicitly; the check scripts are otherwise stdlib-only by convention. (3) The spec's hybrid "form + record" steps (3.1, 3.2) split into form + record steps so each step compiles to exactly one graph node — recorded in ADR §3 and the A3.2 row. (4) Action Type ids in the example are provisional until WP-0705 adopts them. (5) `program/STATUS.md` was regenerated with `programctl status` (the program-bot will re-commit it on the PR branch if it drifts).
