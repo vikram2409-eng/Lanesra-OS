@@ -121,12 +121,16 @@ const seed = {
 // truth: ~/workspace/lanesra-warehouse-demo/SEED_SPEC.md — 15 home-goods
 // SKUs, 16 objects, 187 rows, canonical "today" 2026-11-13, all IDs and
 // numbers fixed literals (no uid()/Date.now()/random in the seed). Day 1
-// is data only: no agents, workflows, pipelines, graphs or approvals
-// inbox rows exist here — Day 2 builds those on these frozen object/field
-// names (SEED_SPEC §20). Stock stores on_hand + reserved only; available
-// is always computed (on_hand - reserved), never stored. quantity_on_hand
-// / quantity_reserved are the Day 2 agent-facing aliases (§20/§19.7) of
-// on_hand / reserved (§5), kept identical by construction.
+// was data only; Day 2 (2026-11-11) seeded the agents, skills, pipelines,
+// execution graphs, workflow rules, glossary, approvals and policies below
+// on these frozen object/field names (SEED_SPEC §20). Stock stores on_hand
+// + reserved only; available is always computed (on_hand - reserved),
+// never stored. Day 1 also seeded quantity_on_hand/quantity_reserved
+// aliases of on_hand/reserved; Day 2 dropped the alias pair — canonical
+// is on_hand/reserved per SEED_SPEC §5, the stock form fields were renamed
+// to match (wcf_stock_on_hand / wcf_stock_reserved), and §20 now names
+// on_hand/reserved too. ensureWarehouseData() strips the alias keys from
+// any stored workspace that still has them.
 const IS_WAREHOUSE=(typeof location!=='undefined'&&location.pathname.replace(/\/$/,'')==='/demo/warehouse');
 const WAREHOUSE_TODAY='2026-11-13';
 const warehouseStoreKey='lanesra-os-warehouse-demo-v1';
@@ -751,9 +755,7 @@ const warehouseSeed = {
    "location_id": "loc-a-01-03",
    "lot_id": "lot-007",
    "on_hand": 48,
-   "reserved": 6,
-   "quantity_on_hand": 48,
-   "quantity_reserved": 6
+   "reserved": 6
   },
   {
    "number": "STK-HG-1002",
@@ -766,9 +768,7 @@ const warehouseSeed = {
    "location_id": "loc-a-01-03",
    "lot_id": null,
    "on_hand": 22,
-   "reserved": 4,
-   "quantity_on_hand": 22,
-   "quantity_reserved": 4
+   "reserved": 4
   },
   {
    "number": "STK-HG-1003",
@@ -781,9 +781,7 @@ const warehouseSeed = {
    "location_id": "loc-a-02-02",
    "lot_id": null,
    "on_hand": 14,
-   "reserved": 2,
-   "quantity_on_hand": 14,
-   "quantity_reserved": 2
+   "reserved": 2
   },
   {
    "number": "STK-HG-1004",
@@ -796,9 +794,7 @@ const warehouseSeed = {
    "location_id": "loc-a-02-02",
    "lot_id": "lot-004",
    "on_hand": 9,
-   "reserved": 3,
-   "quantity_on_hand": 9,
-   "quantity_reserved": 3
+   "reserved": 3
   },
   {
    "number": "STK-HG-1005",
@@ -811,9 +807,7 @@ const warehouseSeed = {
    "location_id": "loc-a-03-01",
    "lot_id": null,
    "on_hand": 26,
-   "reserved": 0,
-   "quantity_on_hand": 26,
-   "quantity_reserved": 0
+   "reserved": 0
   },
   {
    "number": "STK-HG-1006",
@@ -826,9 +820,7 @@ const warehouseSeed = {
    "location_id": "loc-b-01-02",
    "lot_id": "lot-005",
    "on_hand": 31,
-   "reserved": 5,
-   "quantity_on_hand": 31,
-   "quantity_reserved": 5
+   "reserved": 5
   },
   {
    "number": "STK-HG-1007",
@@ -841,9 +833,7 @@ const warehouseSeed = {
    "location_id": "loc-b-01-02",
    "lot_id": "lot-010",
    "on_hand": 5,
-   "reserved": 2,
-   "quantity_on_hand": 5,
-   "quantity_reserved": 2
+   "reserved": 2
   },
   {
    "number": "STK-HG-1008",
@@ -856,9 +846,7 @@ const warehouseSeed = {
    "location_id": "loc-b-01-02",
    "lot_id": null,
    "on_hand": 0,
-   "reserved": 0,
-   "quantity_on_hand": 0,
-   "quantity_reserved": 0
+   "reserved": 0
   },
   {
    "number": "STK-HG-1009",
@@ -871,9 +859,7 @@ const warehouseSeed = {
    "location_id": "loc-c-01-01",
    "lot_id": null,
    "on_hand": 18,
-   "reserved": 1,
-   "quantity_on_hand": 18,
-   "quantity_reserved": 1
+   "reserved": 1
   },
   {
    "number": "STK-HG-1010",
@@ -886,9 +872,7 @@ const warehouseSeed = {
    "location_id": "loc-c-01-01",
    "lot_id": "lot-006",
    "on_hand": 11,
-   "reserved": 2,
-   "quantity_on_hand": 11,
-   "quantity_reserved": 2
+   "reserved": 2
   },
   {
    "number": "STK-HG-1011",
@@ -901,9 +885,7 @@ const warehouseSeed = {
    "location_id": "loc-c-02-01",
    "lot_id": "lot-008",
    "on_hand": 40,
-   "reserved": 8,
-   "quantity_on_hand": 40,
-   "quantity_reserved": 8
+   "reserved": 8
   },
   {
    "number": "STK-HG-1012",
@@ -916,9 +898,7 @@ const warehouseSeed = {
    "location_id": "loc-c-02-01",
    "lot_id": null,
    "on_hand": 7,
-   "reserved": 4,
-   "quantity_on_hand": 7,
-   "quantity_reserved": 4
+   "reserved": 4
   },
   {
    "number": "STK-HG-1013",
@@ -931,9 +911,7 @@ const warehouseSeed = {
    "location_id": "loc-a-03-01",
    "lot_id": "lot-001",
    "on_hand": 60,
-   "reserved": 10,
-   "quantity_on_hand": 60,
-   "quantity_reserved": 10
+   "reserved": 10
   },
   {
    "number": "STK-HG-1014",
@@ -946,9 +924,7 @@ const warehouseSeed = {
    "location_id": "loc-a-03-01",
    "lot_id": "lot-009",
    "on_hand": 0,
-   "reserved": 0,
-   "quantity_on_hand": 0,
-   "quantity_reserved": 0
+   "reserved": 0
   },
   {
    "number": "STK-HG-1015",
@@ -961,9 +937,7 @@ const warehouseSeed = {
    "location_id": "loc-a-01-01",
    "lot_id": null,
    "on_hand": 55,
-   "reserved": 5,
-   "quantity_on_hand": 55,
-   "quantity_reserved": 5
+   "reserved": 5
   }
  ],
  "lot": [
@@ -4584,9 +4558,9 @@ const warehouseSeed = {
    "lookupTargetEntity": "lot"
   },
   {
-   "id": "wcf_stock_quantity_on_hand",
+   "id": "wcf_stock_on_hand",
    "entity": "stock",
-   "key": "quantity_on_hand",
+   "key": "on_hand",
    "label": "On hand",
    "type": "number",
    "options": "",
@@ -4606,9 +4580,9 @@ const warehouseSeed = {
    "hiddenByDefault": false
   },
   {
-   "id": "wcf_stock_quantity_reserved",
+   "id": "wcf_stock_reserved",
    "entity": "stock",
-   "key": "quantity_reserved",
+   "key": "reserved",
    "label": "Reserved",
    "type": "number",
    "options": "",
@@ -6456,10 +6430,296 @@ const warehouseSeed = {
    "active": true,
    "protected": false
   }
+,
+  {
+   "id": "wrel_picking_sales_order",
+   "key": "picking_sales_order",
+   "sourceEntity": "picking",
+   "targetEntity": "sales_order",
+   "relType": "many_to_one",
+   "forwardLabel": "Sales Order",
+   "reverseLabel": "Pickings",
+   "deleteBehavior": "restrict",
+   "showRelatedList": true,
+   "required": false,
+   "active": true,
+   "protected": false
+  },
+  {
+   "id": "wrel_picking_purchase_order",
+   "key": "picking_purchase_order",
+   "sourceEntity": "picking",
+   "targetEntity": "purchase_order",
+   "relType": "many_to_one",
+   "forwardLabel": "Purchase Order",
+   "reverseLabel": "Receipt Pickings",
+   "deleteBehavior": "restrict",
+   "showRelatedList": true,
+   "required": false,
+   "active": true,
+   "protected": false
+  },
+  {
+   "id": "wrel_pick_task_picking",
+   "key": "pick_task_picking",
+   "sourceEntity": "pick_task",
+   "targetEntity": "picking",
+   "relType": "many_to_many",
+   "forwardLabel": "Pickings",
+   "reverseLabel": "Pick Tasks",
+   "deleteBehavior": "restrict",
+   "showRelatedList": true,
+   "required": false,
+   "active": true,
+   "protected": false
+  },
+  {
+   "id": "wrel_pick_task_sales_order",
+   "key": "pick_task_sales_order",
+   "sourceEntity": "pick_task",
+   "targetEntity": "sales_order",
+   "relType": "many_to_many",
+   "forwardLabel": "Sales Orders",
+   "reverseLabel": "Pick Tasks",
+   "deleteBehavior": "restrict",
+   "showRelatedList": true,
+   "required": false,
+   "active": true,
+   "protected": false
+  },
+  {
+   "id": "wrel_stock_move_from_location",
+   "key": "stock_move_from_location",
+   "sourceEntity": "stock_move",
+   "targetEntity": "location",
+   "relType": "many_to_one",
+   "forwardLabel": "From Location",
+   "reverseLabel": "Moves From Here",
+   "deleteBehavior": "restrict",
+   "showRelatedList": true,
+   "required": false,
+   "active": true,
+   "protected": false
+  },
+  {
+   "id": "wrel_stock_move_to_location",
+   "key": "stock_move_to_location",
+   "sourceEntity": "stock_move",
+   "targetEntity": "location",
+   "relType": "many_to_one",
+   "forwardLabel": "To Location",
+   "reverseLabel": "Moves To Here",
+   "deleteBehavior": "restrict",
+   "showRelatedList": true,
+   "required": false,
+   "active": true,
+   "protected": false
+  }
  ],
  "relationshipInstances": [],
  "fieldRules": [],
- "workflowRules": [],
+ "workflowRules": [
+  {
+   "id": "wf-wh-01",
+   "name": "PO received — put away to suggested bin",
+   "entity": "purchase_order",
+   "matchType": "all",
+   "active": true,
+   "conditions": [
+    {
+     "fieldKey": "status",
+     "operator": "equals",
+     "value": "RECEIVED",
+     "compareField": null,
+     "groupId": null
+    }
+   ],
+   "actions": [
+    {
+     "type": "create_task",
+     "taskTitle": "Put away received stock to its suggested bin (product preferred bin)",
+     "daysOffset": 0
+    }
+   ],
+   "notify": false,
+   "conditionsMerged": true
+  },
+  {
+   "id": "wf-wh-02",
+   "name": "Reorder triggered — replenishment task + draft PO",
+   "entity": "reorder_rule",
+   "matchType": "all",
+   "active": true,
+   "conditions": [
+    {
+     "fieldKey": "triggered",
+     "operator": "equals",
+     "value": "true",
+     "compareField": null,
+     "groupId": null
+    }
+   ],
+   "actions": [
+    {
+     "type": "create_task",
+     "taskTitle": "Review draft PO for triggered reorder rule — Manager approval required",
+     "daysOffset": 0
+    }
+   ],
+   "notify": true,
+   "conditionsMerged": true
+  },
+  {
+   "id": "wf-wh-03",
+   "name": "SO allocated — create pick task and wave",
+   "entity": "sales_order",
+   "matchType": "all",
+   "active": true,
+   "conditions": [
+    {
+     "fieldKey": "status",
+     "operator": "equals",
+     "value": "ALLOCATED",
+     "compareField": null,
+     "groupId": null
+    }
+   ],
+   "actions": [
+    {
+     "type": "create_task",
+     "taskTitle": "Create pick task and assign to wave",
+     "daysOffset": 0
+    }
+   ],
+   "notify": false,
+   "conditionsMerged": true
+  },
+  {
+   "id": "wf-wh-04",
+   "name": "Pick done — create pack task",
+   "entity": "picking",
+   "matchType": "all",
+   "active": true,
+   "conditions": [
+    {
+     "fieldKey": "status",
+     "operator": "equals",
+     "value": "DONE",
+     "compareField": null,
+     "groupId": null
+    }
+   ],
+   "actions": [
+    {
+     "type": "create_task",
+     "taskTitle": "Pack the picked order",
+     "daysOffset": 0
+    }
+   ],
+   "notify": false,
+   "conditionsMerged": true
+  },
+  {
+   "id": "wf-wh-05",
+   "name": "Pack verified — create shipment and tracking",
+   "entity": "sales_order",
+   "matchType": "all",
+   "active": true,
+   "conditions": [
+    {
+     "fieldKey": "status",
+     "operator": "equals",
+     "value": "PACKED",
+     "compareField": null,
+     "groupId": null
+    }
+   ],
+   "actions": [
+    {
+     "type": "create_task",
+     "taskTitle": "Create shipment, set tracking and mark order shipped",
+     "daysOffset": 0
+    }
+   ],
+   "notify": false,
+   "conditionsMerged": true
+  },
+  {
+   "id": "wf-wh-06",
+   "name": "Count variance over 5% — Manager approval, no auto-adjust",
+   "entity": "cycle_count",
+   "matchType": "all",
+   "active": true,
+   "conditions": [
+    {
+     "fieldKey": "status",
+     "operator": "equals",
+     "value": "PENDING_APPROVAL",
+     "compareField": null,
+     "groupId": null
+    }
+   ],
+   "actions": [
+    {
+     "type": "create_task",
+     "taskTitle": "Manager approval: review cycle-count variances — no auto-adjust",
+     "daysOffset": 0
+    }
+   ],
+   "notify": true,
+   "conditionsMerged": true
+  },
+  {
+   "id": "wf-wh-07",
+   "name": "Receipt discrepancy — Manager task, hold put-away",
+   "entity": "purchase_order",
+   "matchType": "all",
+   "active": true,
+   "conditions": [
+    {
+     "fieldKey": "status",
+     "operator": "equals",
+     "value": "PARTIALLY_RECEIVED",
+     "compareField": null,
+     "groupId": null
+    }
+   ],
+   "actions": [
+    {
+     "type": "create_task",
+     "taskTitle": "Receipt discrepancy — review short/rejected quantities; hold put-away",
+     "daysOffset": 0
+    }
+   ],
+   "notify": true,
+   "conditionsMerged": true
+  },
+  {
+   "id": "wf-wh-08",
+   "name": "Out of stock on allocation — backorder",
+   "entity": "sales_order",
+   "matchType": "all",
+   "active": true,
+   "conditions": [
+    {
+     "fieldKey": "status",
+     "operator": "equals",
+     "value": "WAITING_STOCK",
+     "compareField": null,
+     "groupId": null
+    }
+   ],
+   "actions": [
+    {
+     "type": "create_task",
+     "taskTitle": "Backorder: no stock to allocate — notify customer and hold pick",
+     "daysOffset": 0
+    }
+   ],
+   "notify": true,
+   "conditionsMerged": true
+  }
+ ],
  "statusTransitionRules": [],
  "numberingOverrides": {},
  "kpiPrefs": [],
@@ -6473,14 +6733,1382 @@ const warehouseSeed = {
  "installedApps": [],
  "components": [],
  "solutions": [],
- "businessGlossaryTerms": [],
+ "businessGlossaryTerms": [
+  {
+   "id": "gt-wh-sku",
+   "name": "SKU",
+   "definition": "Stock Keeping Unit — the unique code for one sellable product (here HG-1001…HG-1015). One SKU can sit in several bins and lots.",
+   "ownerUserId": null,
+   "synonyms": [
+    "stock keeping unit"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  },
+  {
+   "id": "gt-wh-bin",
+   "name": "Bin",
+   "definition": "One addressable storage slot in the warehouse (for example A-01-03), inside a zone such as Pick Face, Bulk or Receiving. Every stock row lives in exactly one bin.",
+   "ownerUserId": null,
+   "synonyms": [
+    "location"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  },
+  {
+   "id": "gt-wh-fefo",
+   "name": "FEFO",
+   "definition": "First Expired, First Out — pick the lot with the earliest expiry date first. Used for the two expiry-tracked decor SKUs (HG-1013, HG-1014).",
+   "ownerUserId": null,
+   "synonyms": [
+    "first expired first out"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  },
+  {
+   "id": "gt-wh-fifo",
+   "name": "FIFO",
+   "definition": "First In, First Out — pick the oldest received stock first. The default removal strategy for every SKU that is not expiry-tracked.",
+   "ownerUserId": null,
+   "synonyms": [
+    "first in first out"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  },
+  {
+   "id": "gt-wh-wave",
+   "name": "Wave",
+   "definition": "A batch of allocated sales orders picked together in one serpentine walk (up to 8 orders per wave).",
+   "ownerUserId": null,
+   "synonyms": [
+    "batch pick"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  },
+  {
+   "id": "gt-wh-pick-face",
+   "name": "Pick face",
+   "definition": "The bins pickers walk to fill orders — small, fast-moving quantities at waist height — as opposed to bulk storage.",
+   "ownerUserId": null,
+   "synonyms": [
+    "pickface"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  },
+  {
+   "id": "gt-wh-cycle-count",
+   "name": "Cycle count",
+   "definition": "A small, scheduled count of one zone or a few bins, instead of a full wall-to-wall stocktake. Variances over 5% need Manager approval.",
+   "ownerUserId": null,
+   "synonyms": [
+    "stocktake",
+    "count"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  },
+  {
+   "id": "gt-wh-fill-rate",
+   "name": "Fill rate",
+   "definition": "Shipped units divided by ordered units across open sales orders. In this demo 19 of 84 units shipped = 22.6%.",
+   "ownerUserId": null,
+   "synonyms": [
+    "fulfilment rate"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  },
+  {
+   "id": "gt-wh-putaway",
+   "name": "Put-away",
+   "definition": "Moving received goods from a Receiving bin to their storage bin (usually the product's preferred bin).",
+   "ownerUserId": null,
+   "synonyms": [
+    "putaway"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  },
+  {
+   "id": "gt-wh-backorder",
+   "name": "Backorder",
+   "definition": "An order line that cannot be filled because the SKU is out of stock. The order waits (WAITING_STOCK) until stock arrives.",
+   "ownerUserId": null,
+   "synonyms": [
+    "shortfall"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  },
+  {
+   "id": "gt-wh-reorder-level",
+   "name": "Reorder level",
+   "definition": "The available quantity at or below which a SKU must be replenished. Each reorder rule pairs a level with a reorder quantity.",
+   "ownerUserId": null,
+   "synonyms": [
+    "reorder point"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  },
+  {
+   "id": "gt-wh-lot",
+   "name": "Lot / Batch",
+   "definition": "One production batch of a SKU, tracked by lot code (and expiry date where the product is expiry-tracked).",
+   "ownerUserId": null,
+   "synonyms": [
+    "batch"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  },
+  {
+   "id": "gt-wh-stock-move",
+   "name": "Stock move",
+   "definition": "One line of the append-only stock ledger: a quantity of one product moving from one bin to another (or in from a supplier / out to a customer). Balances are derived from moves.",
+   "ownerUserId": null,
+   "synonyms": [
+    "ledger entry",
+    "stock ledger"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  },
+  {
+   "id": "gt-wh-available",
+   "name": "Available",
+   "definition": "On-hand minus reserved. Always computed, never stored — writing it directly would let it drift from the ledger.",
+   "ownerUserId": null,
+   "synonyms": [
+    "available stock"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  },
+  {
+   "id": "gt-wh-reservation",
+   "name": "Reservation",
+   "definition": "Stock set aside for a specific sales order line. Reserved stock is still on hand, but not available to promise to anyone else.",
+   "ownerUserId": null,
+   "synonyms": [
+    "allocation"
+   ],
+   "dataClassification": "standard",
+   "active": true
+  }
+ ],
+ "semanticMappings": [
+  {
+   "id": "sm-wh-sku",
+   "glossaryTermId": "gt-wh-sku",
+   "entityType": "product",
+   "fieldKey": "sku"
+  },
+  {
+   "id": "sm-wh-bin",
+   "glossaryTermId": "gt-wh-bin",
+   "entityType": "location",
+   "fieldKey": "code"
+  },
+  {
+   "id": "sm-wh-wave",
+   "glossaryTermId": "gt-wh-wave",
+   "entityType": "pick_task",
+   "fieldKey": "wave_number"
+  },
+  {
+   "id": "sm-wh-cycle-count",
+   "glossaryTermId": "gt-wh-cycle-count",
+   "entityType": "cycle_count",
+   "fieldKey": null
+  },
+  {
+   "id": "sm-wh-fill-rate",
+   "glossaryTermId": "gt-wh-fill-rate",
+   "entityType": "sales_order",
+   "fieldKey": null
+  },
+  {
+   "id": "sm-wh-putaway",
+   "glossaryTermId": "gt-wh-putaway",
+   "entityType": "stock_move",
+   "fieldKey": "move_type"
+  },
+  {
+   "id": "sm-wh-backorder",
+   "glossaryTermId": "gt-wh-backorder",
+   "entityType": "sales_order",
+   "fieldKey": "status"
+  },
+  {
+   "id": "sm-wh-reorder-level",
+   "glossaryTermId": "gt-wh-reorder-level",
+   "entityType": "reorder_rule",
+   "fieldKey": "reorder_level"
+  },
+  {
+   "id": "sm-wh-lot",
+   "glossaryTermId": "gt-wh-lot",
+   "entityType": "lot",
+   "fieldKey": "lot_code"
+  },
+  {
+   "id": "sm-wh-stock-move",
+   "glossaryTermId": "gt-wh-stock-move",
+   "entityType": "stock_move",
+   "fieldKey": null
+  },
+  {
+   "id": "sm-wh-available",
+   "glossaryTermId": "gt-wh-available",
+   "entityType": "stock",
+   "fieldKey": null
+  },
+  {
+   "id": "sm-wh-reservation",
+   "glossaryTermId": "gt-wh-reservation",
+   "entityType": "stock",
+   "fieldKey": "reserved"
+  },
+  {
+   "id": "sm-wh-fefo",
+   "glossaryTermId": "gt-wh-fefo",
+   "entityType": "product",
+   "fieldKey": "removal_strategy"
+  },
+  {
+   "id": "sm-wh-fifo",
+   "glossaryTermId": "gt-wh-fifo",
+   "entityType": "product",
+   "fieldKey": "removal_strategy"
+  }
+ ],
  "metricDefinitions": [],
  "testCaseDefinitions": [],
  "actionTypeDefinitions": [],
- "aiExecutionGraphs": [],
- "aiAgents": [],
- "aiSkills": [],
- "aiAgentPipelines": [],
+ "aiExecutionGraphs": [
+  {
+   "id": "wh-grp-receiving",
+   "name": "Receiving flow",
+   "description": "PO intake: verify the receipt, stage it, put it away.",
+   "status": "published",
+   "version": 1,
+   "nodes": [
+    {
+     "key": "trigger_1",
+     "type": "trigger",
+     "config": {},
+     "x": 40,
+     "y": 40
+    },
+    {
+     "key": "agent_1",
+     "type": "agent",
+     "config": {
+      "agentId": "wh-agt-receiving",
+      "inputTemplate": "{{trigger_input}}"
+     },
+     "x": 40,
+     "y": 120
+    },
+    {
+     "key": "agent_2",
+     "type": "agent",
+     "config": {
+      "agentId": "wh-agt-receiving",
+      "inputTemplate": "{{previous_output}}"
+     },
+     "x": 40,
+     "y": 200
+    },
+    {
+     "key": "agent_3",
+     "type": "agent",
+     "config": {
+      "agentId": "wh-agt-receiving",
+      "inputTemplate": "{{previous_output}}"
+     },
+     "x": 40,
+     "y": 280
+    },
+    {
+     "key": "end_1",
+     "type": "end",
+     "config": {},
+     "x": 40,
+     "y": 360
+    }
+   ],
+   "edges": [
+    {
+     "from": "trigger_1",
+     "to": "agent_1"
+    },
+    {
+     "from": "agent_1",
+     "to": "agent_2"
+    },
+    {
+     "from": "agent_2",
+     "to": "agent_3"
+    },
+    {
+     "from": "agent_3",
+     "to": "end_1"
+    }
+   ]
+  },
+  {
+   "id": "wh-grp-inventory",
+   "name": "Inventory flow",
+   "description": "Levels, reservations and reorder check, in order.",
+   "status": "published",
+   "version": 1,
+   "nodes": [
+    {
+     "key": "trigger_1",
+     "type": "trigger",
+     "config": {},
+     "x": 40,
+     "y": 40
+    },
+    {
+     "key": "agent_1",
+     "type": "agent",
+     "config": {
+      "agentId": "wh-agt-inventory",
+      "inputTemplate": "{{trigger_input}}"
+     },
+     "x": 40,
+     "y": 120
+    },
+    {
+     "key": "agent_2",
+     "type": "agent",
+     "config": {
+      "agentId": "wh-agt-inventory",
+      "inputTemplate": "{{previous_output}}"
+     },
+     "x": 40,
+     "y": 200
+    },
+    {
+     "key": "end_1",
+     "type": "end",
+     "config": {},
+     "x": 40,
+     "y": 280
+    }
+   ],
+   "edges": [
+    {
+     "from": "trigger_1",
+     "to": "agent_1"
+    },
+    {
+     "from": "agent_1",
+     "to": "agent_2"
+    },
+    {
+     "from": "agent_2",
+     "to": "end_1"
+    }
+   ]
+  },
+  {
+   "id": "wh-grp-picking",
+   "name": "Picking flow",
+   "description": "Allocate, wave, pick along the serpentine route.",
+   "status": "published",
+   "version": 1,
+   "nodes": [
+    {
+     "key": "trigger_1",
+     "type": "trigger",
+     "config": {},
+     "x": 40,
+     "y": 40
+    },
+    {
+     "key": "agent_1",
+     "type": "agent",
+     "config": {
+      "agentId": "wh-agt-picking",
+      "inputTemplate": "{{trigger_input}}"
+     },
+     "x": 40,
+     "y": 120
+    },
+    {
+     "key": "agent_2",
+     "type": "agent",
+     "config": {
+      "agentId": "wh-agt-picking",
+      "inputTemplate": "{{previous_output}}"
+     },
+     "x": 40,
+     "y": 200
+    },
+    {
+     "key": "agent_3",
+     "type": "agent",
+     "config": {
+      "agentId": "wh-agt-picking",
+      "inputTemplate": "{{previous_output}}"
+     },
+     "x": 40,
+     "y": 280
+    },
+    {
+     "key": "end_1",
+     "type": "end",
+     "config": {},
+     "x": 40,
+     "y": 360
+    }
+   ],
+   "edges": [
+    {
+     "from": "trigger_1",
+     "to": "agent_1"
+    },
+    {
+     "from": "agent_1",
+     "to": "agent_2"
+    },
+    {
+     "from": "agent_2",
+     "to": "agent_3"
+    },
+    {
+     "from": "agent_3",
+     "to": "end_1"
+    }
+   ]
+  },
+  {
+   "id": "wh-grp-packing",
+   "name": "Packing & shipping flow",
+   "description": "Pack, verify against the pick, book the carrier and ship.",
+   "status": "published",
+   "version": 1,
+   "nodes": [
+    {
+     "key": "trigger_1",
+     "type": "trigger",
+     "config": {},
+     "x": 40,
+     "y": 40
+    },
+    {
+     "key": "agent_1",
+     "type": "agent",
+     "config": {
+      "agentId": "wh-agt-packing",
+      "inputTemplate": "{{trigger_input}}"
+     },
+     "x": 40,
+     "y": 120
+    },
+    {
+     "key": "agent_2",
+     "type": "agent",
+     "config": {
+      "agentId": "wh-agt-packing",
+      "inputTemplate": "{{previous_output}}"
+     },
+     "x": 40,
+     "y": 200
+    },
+    {
+     "key": "agent_3",
+     "type": "agent",
+     "config": {
+      "agentId": "wh-agt-packing",
+      "inputTemplate": "{{previous_output}}"
+     },
+     "x": 40,
+     "y": 280
+    },
+    {
+     "key": "end_1",
+     "type": "end",
+     "config": {},
+     "x": 40,
+     "y": 360
+    }
+   ],
+   "edges": [
+    {
+     "from": "trigger_1",
+     "to": "agent_1"
+    },
+    {
+     "from": "agent_1",
+     "to": "agent_2"
+    },
+    {
+     "from": "agent_2",
+     "to": "agent_3"
+    },
+    {
+     "from": "agent_3",
+     "to": "end_1"
+    }
+   ]
+  },
+  {
+   "id": "wh-grp-counting",
+   "name": "Counting flow",
+   "description": "Count, review variances, then pause for the Manager's approval. Approving records the decision; the stock adjustment itself posts through the approvals inbox, not this run.",
+   "status": "published",
+   "version": 1,
+   "nodes": [
+    {
+     "key": "trigger_1",
+     "type": "trigger",
+     "config": {},
+     "x": 40,
+     "y": 40
+    },
+    {
+     "key": "agent_1",
+     "type": "agent",
+     "config": {
+      "agentId": "wh-agt-counting",
+      "inputTemplate": "{{trigger_input}}"
+     },
+     "x": 40,
+     "y": 120
+    },
+    {
+     "key": "agent_2",
+     "type": "agent",
+     "config": {
+      "agentId": "wh-agt-inventory",
+      "inputTemplate": "{{previous_output}}"
+     },
+     "x": 40,
+     "y": 200
+    },
+    {
+     "key": "approval_1",
+     "type": "approval",
+     "config": {
+      "subjectType": "execution_graph_node"
+     },
+     "x": 40,
+     "y": 280
+    },
+    {
+     "key": "action_1",
+     "type": "action",
+     "config": {
+      "note": "Recorded note only — stock adjustments post through the Manager approvals inbox (warehouse_count_line), never from this run."
+     },
+     "x": 40,
+     "y": 360
+    },
+    {
+     "key": "end_1",
+     "type": "end",
+     "config": {},
+     "x": 40,
+     "y": 440
+    }
+   ],
+   "edges": [
+    {
+     "from": "trigger_1",
+     "to": "agent_1"
+    },
+    {
+     "from": "agent_1",
+     "to": "agent_2"
+    },
+    {
+     "from": "agent_2",
+     "to": "approval_1"
+    },
+    {
+     "from": "approval_1",
+     "to": "action_1",
+     "label": "approved"
+    },
+    {
+     "from": "approval_1",
+     "to": "end_1",
+     "label": "rejected"
+    },
+    {
+     "from": "action_1",
+     "to": "end_1"
+    }
+   ]
+  }
+ ],
+ "aiAgents": [
+  {
+   "id": "wh-agt-receiving",
+   "name": "Receiving Agent",
+   "icon": "📥",
+   "description": "Takes a purchase order from the dock door to the shelf: verifies the receipt against the PO, stages it in Receiving, and suggests the put-away bin.",
+   "systemPrompt": "You are the Receiving Agent for the Toronto Distribution Centre (WH-TOR-01). When a purchase order arrives, verify every line against the order — quantity ordered vs received vs rejected — stage verified goods in a Receiving bin (RCV-01/RCV-02), and suggest a put-away bin from the product's preferred bin. Never put away rejected or damaged units; any discrepancy goes to the Warehouse Manager instead of being adjusted silently. You work only on purchase orders, receipts, put-away moves and receipt pickings. In this hosted demo your runs are simulations: you walk the steps and record a trace, but you do not move physical stock and you do not call a live carrier or supplier system.",
+   "actionNames": [
+    "list_records",
+    "get_record",
+    "search_records",
+    "create_record",
+    "update_record"
+   ],
+   "skillIds": [
+    "wh-skl-receipt-verify",
+    "wh-skl-putaway-suggest"
+   ],
+   "delegateAgentIds": [],
+   "isActive": true,
+   "memoryMd": "",
+   "objectTypeScopes": [
+    {
+     "objectType": "purchase_order",
+     "capabilities": [
+      "read",
+      "update"
+     ]
+    },
+    {
+     "objectType": "stock_move",
+     "capabilities": [
+      "read",
+      "update"
+     ]
+    },
+    {
+     "objectType": "stock",
+     "capabilities": [
+      "read"
+     ]
+    },
+    {
+     "objectType": "picking",
+     "capabilities": [
+      "read",
+      "update"
+     ]
+    },
+    {
+     "objectType": "product",
+     "capabilities": [
+      "read"
+     ]
+    },
+    {
+     "objectType": "lot",
+     "capabilities": [
+      "read"
+     ]
+    }
+   ],
+   "lifecycle": "Published"
+  },
+  {
+   "id": "wh-agt-inventory",
+   "name": "Inventory Agent",
+   "icon": "📊",
+   "description": "Watches stock levels, reservations and FEFO/FIFO rotation, and raises reorder alerts with a replenishment suggestion for the Manager.",
+   "systemPrompt": "You are the Inventory Agent for the Toronto Distribution Centre. You watch on-hand and reserved quantities, compute available as on-hand minus reserved (never store it), enforce FEFO for expiry-tracked lots and FIFO otherwise, and flag any SKU whose available quantity is at or below its reorder level. A reorder suggestion is a draft for the Warehouse Manager to approve — you never create a purchase order on your own. You work only on stock, stock moves, reorder rules, products and lots.",
+   "actionNames": [
+    "list_records",
+    "get_record",
+    "search_records",
+    "create_record",
+    "update_record"
+   ],
+   "skillIds": [
+    "wh-skl-fefo-fifo",
+    "wh-skl-reorder-check"
+   ],
+   "delegateAgentIds": [],
+   "isActive": true,
+   "memoryMd": "",
+   "objectTypeScopes": [
+    {
+     "objectType": "stock",
+     "capabilities": [
+      "read",
+      "update"
+     ]
+    },
+    {
+     "objectType": "stock_move",
+     "capabilities": [
+      "read",
+      "update"
+     ]
+    },
+    {
+     "objectType": "reorder_rule",
+     "capabilities": [
+      "read",
+      "update"
+     ]
+    },
+    {
+     "objectType": "product",
+     "capabilities": [
+      "read"
+     ]
+    },
+    {
+     "objectType": "lot",
+     "capabilities": [
+      "read"
+     ]
+    }
+   ],
+   "lifecycle": "Published"
+  },
+  {
+   "id": "wh-agt-picking",
+   "name": "Picking Agent",
+   "icon": "🧺",
+   "description": "Turns allocated sales orders into waves and batch picks, walking the bins in serpentine order and flagging shortfalls instead of guessing.",
+   "systemPrompt": "You are the Picking Agent for the Toronto Distribution Centre. You take allocated sales orders, group them into waves, plan a serpentine route through the pick-face bins (aisle A, then B, then C, no backtracking), and pick reserved quantities line by line. If a line cannot be fully picked, you stop, mark the order WAITING_STOCK and raise a shortfall for the Warehouse Manager — you never pick from another order's reservation and never promise stock that is not there.",
+   "actionNames": [
+    "list_records",
+    "get_record",
+    "search_records",
+    "update_record"
+   ],
+   "skillIds": [
+    "wh-skl-wave-plan",
+    "wh-skl-shortfall"
+   ],
+   "delegateAgentIds": [],
+   "isActive": true,
+   "memoryMd": "",
+   "objectTypeScopes": [
+    {
+     "objectType": "sales_order",
+     "capabilities": [
+      "read",
+      "update"
+     ]
+    },
+    {
+     "objectType": "picking",
+     "capabilities": [
+      "read",
+      "update"
+     ]
+    },
+    {
+     "objectType": "pick_task",
+     "capabilities": [
+      "read",
+      "update"
+     ]
+    },
+    {
+     "objectType": "stock",
+     "capabilities": [
+      "read"
+     ]
+    }
+   ],
+   "lifecycle": "Published"
+  },
+  {
+   "id": "wh-agt-packing",
+   "name": "Packing & Shipping Agent",
+   "icon": "📦",
+   "description": "Scan-verifies every pack item-by-item, then books the carrier, sets tracking and marks the order shipped.",
+   "systemPrompt": "You are the Packing & Shipping Agent for the Toronto Distribution Centre. You pack picked orders item by item against the sales order, verify the pack matches the pick exactly, then create the shipment with carrier, service and tracking number and mark the order shipped. Booking a carrier is an ExternalAction: in the real edition it needs a Manager approval first, and in this demo it is approval-gated by policy. You never ship an order whose pack does not match its pick.",
+   "actionNames": [
+    "list_records",
+    "get_record",
+    "search_records",
+    "create_record",
+    "update_record"
+   ],
+   "skillIds": [
+    "wh-skl-pack-verify"
+   ],
+   "delegateAgentIds": [],
+   "isActive": true,
+   "memoryMd": "",
+   "objectTypeScopes": [
+    {
+     "objectType": "shipment",
+     "capabilities": [
+      "read",
+      "update"
+     ]
+    },
+    {
+     "objectType": "sales_order",
+     "capabilities": [
+      "read",
+      "update"
+     ]
+    },
+    {
+     "objectType": "stock_move",
+     "capabilities": [
+      "read"
+     ]
+    }
+   ],
+   "lifecycle": "Published"
+  },
+  {
+   "id": "wh-agt-counting",
+   "name": "Counting & Audit Agent",
+   "icon": "🔍",
+   "description": "Runs blind and non-blind cycle counts, detects variances and packs them for the Manager — adjustments post only after approval.",
+   "systemPrompt": "You are the Counting & Audit Agent for the Toronto Distribution Centre. You run blind and non-blind cycle counts by location, compare counted against expected quantities, and flag every variance over 5% for the Warehouse Manager. You never adjust stock yourself: a COUNT_ADJUSTMENT move posts only after the Manager approves that variance line, and a rejected line posts nothing and goes back for recount. You work only on cycle counts, stock and stock moves.",
+   "actionNames": [
+    "list_records",
+    "get_record",
+    "search_records",
+    "update_record"
+   ],
+   "skillIds": [
+    "wh-skl-blind-count",
+    "wh-skl-variance-pack"
+   ],
+   "delegateAgentIds": [],
+   "isActive": true,
+   "memoryMd": "",
+   "objectTypeScopes": [
+    {
+     "objectType": "cycle_count",
+     "capabilities": [
+      "read",
+      "update"
+     ]
+    },
+    {
+     "objectType": "stock",
+     "capabilities": [
+      "read"
+     ]
+    },
+    {
+     "objectType": "stock_move",
+     "capabilities": [
+      "read",
+      "update"
+     ]
+    }
+   ],
+   "lifecycle": "Published"
+  }
+ ],
+ "aiSkills": [
+  {
+   "id": "wh-skl-receipt-verify",
+   "name": "Receipt verification",
+   "description": "Check a delivery against its purchase order line by line: quantities ordered, received and rejected, and lot codes where tracked.",
+   "instructionsMd": "Given a PO number, list its lines with qty_ordered, qty_received and qty_rejected. Any line where received + rejected does not equal ordered is a discrepancy: report it, do not adjust it. Rejected units never reach a put-away bin.",
+   "isActive": true
+  },
+  {
+   "id": "wh-skl-putaway-suggest",
+   "name": "Put-away suggestion",
+   "description": "Suggest the best bin for received stock: the product's preferred pick-face bin first, then bulk, then receiving overflow.",
+   "instructionsMd": "Look up the product's preferred_bin_id and its capacity. Suggest that bin when it has room; otherwise suggest the bulk bin in the same aisle. Never suggest a bin in the returns zone for fresh stock.",
+   "isActive": true
+  },
+  {
+   "id": "wh-skl-fefo-fifo",
+   "name": "FEFO / FIFO selection",
+   "description": "Pick the right lot: earliest-expiring first for FEFO products, oldest receipt first for FIFO.",
+   "instructionsMd": "For expiry-tracked products (removal_strategy FEFO), order lots by expiry_date ascending and pick the earliest. For FIFO, order by receipt date. Never pick a lot that is EXHAUSTED, EXPIRED or QUARANTINED.",
+   "isActive": true
+  },
+  {
+   "id": "wh-skl-reorder-check",
+   "name": "Reorder check",
+   "description": "Compare available stock against each reorder rule and draft the replenishment quantities.",
+   "instructionsMd": "available = on_hand - reserved. A rule is triggered when available <= reorder_level. Draft a purchase suggestion for reorder_qty of each triggered SKU with its supplier and unit cost; the Manager approves the draft before anything is ordered.",
+   "isActive": true
+  },
+  {
+   "id": "wh-skl-wave-plan",
+   "name": "Wave planning",
+   "description": "Group allocated orders into waves and plan a serpentine pick route.",
+   "instructionsMd": "Group up to 8 allocated orders per wave. Order the route by aisle (A, then B, then C) and bin within each aisle, never backtracking. Held orders (WAITING_STOCK) stay out of the wave.",
+   "isActive": true
+  },
+  {
+   "id": "wh-skl-shortfall",
+   "name": "Shortfall handling",
+   "description": "Handle a pick that cannot be fully filled: hold the order and raise a backorder.",
+   "instructionsMd": "When reserved stock cannot cover an order line, mark the order WAITING_STOCK, note the shortfall quantity per line, and raise it to the Manager. Never borrow another order's reservation.",
+   "isActive": true
+  },
+  {
+   "id": "wh-skl-pack-verify",
+   "name": "Pack verification",
+   "description": "Verify a pack item-by-item against the pick before it ships.",
+   "instructionsMd": "Compare qty_packed against qty_picked for every line. If any line differs, stop and report the mismatch. Only a fully matching pack may be sealed and handed to a carrier.",
+   "isActive": true
+  },
+  {
+   "id": "wh-skl-blind-count",
+   "name": "Blind cycle count",
+   "description": "Count a location without seeing the expected quantities, then compare.",
+   "instructionsMd": "Count every SKU in the location and record counted_qty. Do not look at expected_qty until the count is submitted. Variances are computed afterwards as counted - expected.",
+   "isActive": true
+  },
+  {
+   "id": "wh-skl-variance-pack",
+   "name": "Variance approval pack",
+   "description": "Pack count variances over 5% for Manager approval, with the evidence attached.",
+   "instructionsMd": "For each variance line, report expected, counted, variance and variance percent (|variance| / expected). Lines over 5% need Manager approval before any adjustment. A rejected line posts no adjustment.",
+   "isActive": true
+  }
+ ],
+ "aiAgentPipelines": [
+  {
+   "id": "wh-pln-receiving",
+   "name": "Receiving — verify, stage, put away",
+   "description": "A receipt walks three stages in order: verify against the PO, stage in Receiving, put away to the suggested bin.",
+   "topology": "sequential",
+   "steps": [
+    {
+     "agentId": "wh-agt-receiving",
+     "inputTemplate": "{{trigger_input}}",
+     "requiresApproval": false
+    },
+    {
+     "agentId": "wh-agt-receiving",
+     "inputTemplate": "{{previous_output}}",
+     "requiresApproval": false
+    },
+    {
+     "agentId": "wh-agt-receiving",
+     "inputTemplate": "{{previous_output}}",
+     "requiresApproval": false
+    }
+   ],
+   "isActive": true,
+   "runs": []
+  },
+  {
+   "id": "wh-pln-inventory-seq",
+   "name": "Inventory — levels to reorder check",
+   "description": "Sequential check of stock levels, then of every reorder rule against those levels.",
+   "topology": "sequential",
+   "steps": [
+    {
+     "agentId": "wh-agt-inventory",
+     "inputTemplate": "{{trigger_input}}",
+     "requiresApproval": false
+    },
+    {
+     "agentId": "wh-agt-inventory",
+     "inputTemplate": "{{previous_output}}",
+     "requiresApproval": false
+    }
+   ],
+   "isActive": true,
+   "runs": []
+  },
+  {
+   "id": "wh-pln-inventory-consensus",
+   "name": "Inventory — reorder quantity check",
+   "description": "Two independent takes on what to reorder — the rule-based quantities and the open demand — reconciled by the Inventory Agent into one reorder list.",
+   "topology": "consensus",
+   "steps": [
+    {
+     "agentId": "wh-agt-inventory",
+     "inputTemplate": "{{trigger_input}}",
+     "requiresApproval": false
+    },
+    {
+     "agentId": "wh-agt-picking",
+     "inputTemplate": "{{trigger_input}}",
+     "requiresApproval": false
+    },
+    {
+     "agentId": "wh-agt-inventory",
+     "inputTemplate": "{{candidate_outputs}}",
+     "requiresApproval": false
+    }
+   ],
+   "isActive": true,
+   "runs": []
+  },
+  {
+   "id": "wh-pln-picking",
+   "name": "Picking — allocate, wave, pick",
+   "description": "An allocated order walks three stages in order: allocate reserved stock, assign to a wave, pick along the serpentine route.",
+   "topology": "sequential",
+   "steps": [
+    {
+     "agentId": "wh-agt-picking",
+     "inputTemplate": "{{trigger_input}}",
+     "requiresApproval": false
+    },
+    {
+     "agentId": "wh-agt-picking",
+     "inputTemplate": "{{previous_output}}",
+     "requiresApproval": false
+    },
+    {
+     "agentId": "wh-agt-picking",
+     "inputTemplate": "{{previous_output}}",
+     "requiresApproval": false
+    }
+   ],
+   "isActive": true,
+   "runs": []
+  },
+  {
+   "id": "wh-pln-packing",
+   "name": "Packing — pack, verify, ship",
+   "description": "A picked order walks three stages in order: pack item by item, verify the pack against the pick, book the carrier and ship.",
+   "topology": "sequential",
+   "steps": [
+    {
+     "agentId": "wh-agt-packing",
+     "inputTemplate": "{{trigger_input}}",
+     "requiresApproval": false
+    },
+    {
+     "agentId": "wh-agt-packing",
+     "inputTemplate": "{{previous_output}}",
+     "requiresApproval": false
+    },
+    {
+     "agentId": "wh-agt-packing",
+     "inputTemplate": "{{previous_output}}",
+     "requiresApproval": false
+    }
+   ],
+   "isActive": true,
+   "runs": []
+  },
+  {
+   "id": "wh-pln-counting",
+   "name": "Counting — count, review, approve",
+   "description": "The Counting Agent counts, the Inventory Agent reviews the variances, and the run pauses for the Manager's approval before anything is adjusted.",
+   "topology": "peer_review",
+   "steps": [
+    {
+     "agentId": "wh-agt-counting",
+     "inputTemplate": "{{trigger_input}}",
+     "requiresApproval": false
+    },
+    {
+     "agentId": "wh-agt-inventory",
+     "inputTemplate": "{{previous_output}}",
+     "requiresApproval": true
+    }
+   ],
+   "isActive": true,
+   "runs": []
+  }
+ ],
+ "aiApprovals": [
+  {
+   "id": "apr-wh-cc001-1001",
+   "subjectType": "warehouse_count_line",
+   "subjectId": "cc-2026-001",
+   "proposal": {
+    "countId": "cc-2026-001",
+    "countNumber": "CC-2026-001",
+    "productId": "prod-hg-1001",
+    "sku": "HG-1001",
+    "locationId": "loc-a-01-03",
+    "locationCode": "A-01-03",
+    "expectedQty": 48,
+    "countedQty": 46,
+    "variance": -2,
+    "variancePct": -4.2,
+    "severity": "minor",
+    "stockId": "stock-hg-1001"
+   },
+   "status": "pending",
+   "requestedBy": "Counting & Audit Agent",
+   "createdAt": "2026-11-13T08:00:00.000Z",
+   "resolvedAt": null
+  },
+  {
+   "id": "apr-wh-cc001-1003",
+   "subjectType": "warehouse_count_line",
+   "subjectId": "cc-2026-001",
+   "proposal": {
+    "countId": "cc-2026-001",
+    "countNumber": "CC-2026-001",
+    "productId": "prod-hg-1003",
+    "sku": "HG-1003",
+    "locationId": "loc-a-02-02",
+    "locationCode": "A-02-02",
+    "expectedQty": 14,
+    "countedQty": 15,
+    "variance": 1,
+    "variancePct": 7.1,
+    "severity": "major",
+    "stockId": "stock-hg-1003"
+   },
+   "status": "pending",
+   "requestedBy": "Counting & Audit Agent",
+   "createdAt": "2026-11-13T08:01:00.000Z",
+   "resolvedAt": null
+  },
+  {
+   "id": "apr-wh-cc001-1005",
+   "subjectType": "warehouse_count_line",
+   "subjectId": "cc-2026-001",
+   "proposal": {
+    "countId": "cc-2026-001",
+    "countNumber": "CC-2026-001",
+    "productId": "prod-hg-1005",
+    "sku": "HG-1005",
+    "locationId": "loc-a-03-01",
+    "locationCode": "A-03-01",
+    "expectedQty": 26,
+    "countedQty": 24,
+    "variance": -2,
+    "variancePct": -7.7,
+    "severity": "major",
+    "stockId": "stock-hg-1005"
+   },
+   "status": "pending",
+   "requestedBy": "Counting & Audit Agent",
+   "createdAt": "2026-11-13T08:02:00.000Z",
+   "resolvedAt": null
+  },
+  {
+   "id": "apr-wh-cc010-recount",
+   "subjectType": "warehouse_recount",
+   "subjectId": "cc-2026-010",
+   "proposal": {
+    "countId": "cc-2026-010",
+    "countNumber": "CC-2026-010",
+    "productId": "prod-hg-1015",
+    "sku": "HG-1015",
+    "locationId": "loc-b-01-01",
+    "locationCode": "B-01-01",
+    "expectedQty": 12,
+    "countedQty": 9,
+    "variance": -3
+   },
+   "status": "pending",
+   "requestedBy": "Counting & Audit Agent",
+   "createdAt": "2026-11-13T08:05:00.000Z",
+   "resolvedAt": null
+  },
+  {
+   "id": "apr-wh-so014-1008",
+   "subjectType": "warehouse_pick_shortfall",
+   "subjectId": "so-2026-014",
+   "proposal": {
+    "soId": "so-2026-014",
+    "soNumber": "SO-2026-014",
+    "productId": "prod-hg-1008",
+    "sku": "HG-1008",
+    "qtyOrdered": 4,
+    "qtyAvailable": 0
+   },
+   "status": "pending",
+   "requestedBy": "Picking Agent",
+   "createdAt": "2026-11-13T08:10:00.000Z",
+   "resolvedAt": null
+  },
+  {
+   "id": "apr-wh-so014-1014",
+   "subjectType": "warehouse_pick_shortfall",
+   "subjectId": "so-2026-014",
+   "proposal": {
+    "soId": "so-2026-014",
+    "soNumber": "SO-2026-014",
+    "productId": "prod-hg-1014",
+    "sku": "HG-1014",
+    "qtyOrdered": 3,
+    "qtyAvailable": 0
+   },
+   "status": "pending",
+   "requestedBy": "Picking Agent",
+   "createdAt": "2026-11-13T08:11:00.000Z",
+   "resolvedAt": null
+  },
+  {
+   "id": "apr-wh-so015-1008",
+   "subjectType": "warehouse_pick_shortfall",
+   "subjectId": "so-2026-015",
+   "proposal": {
+    "soId": "so-2026-015",
+    "soNumber": "SO-2026-015",
+    "productId": "prod-hg-1008",
+    "sku": "HG-1008",
+    "qtyOrdered": 2,
+    "qtyAvailable": 0
+   },
+   "status": "pending",
+   "requestedBy": "Picking Agent",
+   "createdAt": "2026-11-13T08:12:00.000Z",
+   "resolvedAt": null
+  },
+  {
+   "id": "apr-wh-so015-1014",
+   "subjectType": "warehouse_pick_shortfall",
+   "subjectId": "so-2026-015",
+   "proposal": {
+    "soId": "so-2026-015",
+    "soNumber": "SO-2026-015",
+    "productId": "prod-hg-1014",
+    "sku": "HG-1014",
+    "qtyOrdered": 4,
+    "qtyAvailable": 0
+   },
+   "status": "pending",
+   "requestedBy": "Picking Agent",
+   "createdAt": "2026-11-13T08:13:00.000Z",
+   "resolvedAt": null
+  },
+  {
+   "id": "apr-wh-po005",
+   "subjectType": "warehouse_receipt_discrepancy",
+   "subjectId": "po-2026-005",
+   "proposal": {
+    "poId": "po-2026-005",
+    "poNumber": "PO-2026-005",
+    "productId": "prod-hg-1008",
+    "sku": "HG-1008",
+    "qtyOrdered": 30,
+    "qtyReceived": 18,
+    "qtyRejected": 2
+   },
+   "status": "pending",
+   "requestedBy": "Receiving Agent",
+   "createdAt": "2026-11-13T08:15:00.000Z",
+   "resolvedAt": null
+  },
+  {
+   "id": "apr-wh-dpo-1004",
+   "subjectType": "warehouse_draft_po",
+   "subjectId": "rr-04",
+   "proposal": {
+    "ruleId": "rr-04",
+    "productId": "prod-hg-1004",
+    "sku": "HG-1004",
+    "productName": "Cotton Percale Sheet Set, King",
+    "reorderLevel": 12,
+    "reorderQty": 24,
+    "supplierId": "sup-02",
+    "supplierName": "Northern Linen Mills",
+    "unitCost": 44.0,
+    "estCost": 1056.0
+   },
+   "status": "pending",
+   "requestedBy": "Inventory Agent",
+   "createdAt": "2026-11-13T08:20:00.000Z",
+   "resolvedAt": null
+  },
+  {
+   "id": "apr-wh-dpo-1007",
+   "subjectType": "warehouse_draft_po",
+   "subjectId": "rr-06",
+   "proposal": {
+    "ruleId": "rr-06",
+    "productId": "prod-hg-1007",
+    "sku": "HG-1007",
+    "productName": "Stainless Steel Saucepan Set, 3-pc",
+    "reorderLevel": 8,
+    "reorderQty": 16,
+    "supplierId": "sup-03",
+    "supplierName": "ForgeLine Cookware",
+    "unitCost": 68.0,
+    "estCost": 1088.0
+   },
+   "status": "pending",
+   "requestedBy": "Inventory Agent",
+   "createdAt": "2026-11-13T08:21:00.000Z",
+   "resolvedAt": null
+  },
+  {
+   "id": "apr-wh-dpo-1008",
+   "subjectType": "warehouse_draft_po",
+   "subjectId": "rr-07",
+   "proposal": {
+    "ruleId": "rr-07",
+    "productId": "prod-hg-1008",
+    "sku": "HG-1008",
+    "productName": "Non-stick Frying Pan, 28 cm",
+    "reorderLevel": 15,
+    "reorderQty": 30,
+    "supplierId": "sup-04",
+    "supplierName": "HomeChef Supply",
+    "unitCost": 19.0,
+    "estCost": 570.0
+   },
+   "status": "pending",
+   "requestedBy": "Inventory Agent",
+   "createdAt": "2026-11-13T08:22:00.000Z",
+   "resolvedAt": null
+  },
+  {
+   "id": "apr-wh-dpo-1012",
+   "subjectType": "warehouse_draft_po",
+   "subjectId": "rr-09",
+   "proposal": {
+    "ruleId": "rr-09",
+    "productId": "prod-hg-1012",
+    "sku": "HG-1012",
+    "productName": "Bamboo Bath Mat",
+    "reorderLevel": 20,
+    "reorderQty": 40,
+    "supplierId": "sup-06",
+    "supplierName": "SoftWeave Textiles",
+    "unitCost": 10.5,
+    "estCost": 420.0
+   },
+   "status": "pending",
+   "requestedBy": "Inventory Agent",
+   "createdAt": "2026-11-13T08:23:00.000Z",
+   "resolvedAt": null
+  },
+  {
+   "id": "apr-wh-dpo-1014",
+   "subjectType": "warehouse_draft_po",
+   "subjectId": "rr-11",
+   "proposal": {
+    "ruleId": "rr-11",
+    "productId": "prod-hg-1014",
+    "sku": "HG-1014",
+    "productName": "Reed Diffuser, Eucalyptus",
+    "reorderLevel": 20,
+    "reorderQty": 40,
+    "supplierId": "sup-07",
+    "supplierName": "Golden Wick Candle Co.",
+    "unitCost": 14.0,
+    "estCost": 560.0
+   },
+   "status": "pending",
+   "requestedBy": "Inventory Agent",
+   "createdAt": "2026-11-13T08:24:00.000Z",
+   "resolvedAt": null
+  }
+ ],
+ "aiAgentPolicies": [
+  {
+   "id": "wh-pol-packing",
+   "agentId": "wh-agt-packing",
+   "requireApprovalAtOrAbove": "external_action",
+   "blockedToolNames": [
+    "archive_record"
+   ]
+  }
+ ],
  "aiEvalSuites": [],
  "activities": [],
  "themeAudit": [],
@@ -6573,7 +8201,8 @@ const warehouseSeed = {
   "logo": "",
   "aiFoundrySeeded": true,
   "ontologyGraphSeeded": true,
-  "object360Seeded": true
+  "object360Seeded": true,
+  "warehouseDay2Seeded": true
  },
  "voice": {
   "pinSet": false,
@@ -6590,6 +8219,36 @@ const warehouseSeed = {
   },
   "activity": []
  }
+};
+// Day 2 data tables — declared HERE, directly after the seed literal, NOT
+// with the Day 2 functions below: ensureWarehouseData() runs at load time
+// (a few lines down) and its Day 2 healing reads both during the very
+// first evaluation, before the later function block is reached. consts
+// are not hoisted — declaring them down there threw a TDZ
+// ReferenceError on every fresh warehouse load (caught by jsdom probe).
+const WAREHOUSE_DAY2_ARRAYS=['aiAgents','aiSkills','aiAgentPipelines','aiExecutionGraphs','workflowRules','businessGlossaryTerms','semanticMappings','aiApprovals','aiAgentPolicies'];
+const WAREHOUSE_REL_FK={
+ wrel_location_warehouse:['location','warehouse_id'],
+ wrel_product_supplier:['product','supplier_id'],
+ wrel_product_location:['product','preferred_bin_id'],
+ wrel_stock_product:['stock','product_id'],
+ wrel_stock_location:['stock','location_id'],
+ wrel_stock_lot:['stock','lot_id'],
+ wrel_lot_product:['lot','product_id'],
+ wrel_lot_supplier:['lot','supplier_id'],
+ wrel_purchase_order_supplier:['purchase_order','supplier_id'],
+ wrel_purchase_order_warehouse:['purchase_order','warehouse_id'],
+ wrel_sales_order_customer:['sales_order','customer_id'],
+ wrel_sales_order_warehouse:['sales_order','warehouse_id'],
+ wrel_shipment_sales_order:['shipment','sales_order_id'],
+ wrel_cycle_count_warehouse:['cycle_count','warehouse_id'],
+ wrel_stock_move_product:['stock_move','product_id'],
+ wrel_stock_move_lot:['stock_move','lot_id'],
+ wrel_stock_move_from_location:['stock_move','from_location_id'],
+ wrel_stock_move_to_location:['stock_move','to_location_id'],
+ wrel_reorder_rule_product:['reorder_rule','product_id'],
+ wrel_reorder_rule_warehouse:['reorder_rule','warehouse_id'],
+ wrel_demo_user_warehouse:['demo_user','warehouse_id'],
 };
 const storeKey=IS_WAREHOUSE?warehouseStoreKey:'lanesra-os-demo-v10';
 // Workspace feature flags (WP-0010, ADR-0012). The online demo shows a
@@ -6626,13 +8285,13 @@ function userName(id){return (data.users||[]).find(u=>u.id===id)?.name||'System'
 // Stamps a freshly created record with created_at/created_by AND
 // updated_at/updated_by set equal, exactly like every desktop repository's
 // INSERT statement (see e.g. custom_record_repo::create).
-function stampCreate(obj){const now=new Date().toISOString();obj.createdAt=now;obj.createdBy=CURRENT_USER_ID;obj.updatedAt=now;obj.updatedBy=CURRENT_USER_ID;return obj}
+function stampCreate(obj){const now=new Date().toISOString();obj.createdAt=now;obj.createdBy=IS_WAREHOUSE?'user-01':CURRENT_USER_ID;obj.updatedAt=now;obj.updatedBy=IS_WAREHOUSE?'user-01':CURRENT_USER_ID;return obj}
 // Refreshes only updated_at/updated_by on a save - created_at/created_by
 // are never touched again after a record's first save (mirrors every
 // desktop UPDATE statement, including numbering_override_repo::upsert's ON
 // CONFLICT branch, which is the one place this demo also upserts rather
 // than always inserting).
-function stampUpdate(obj){obj.updatedAt=new Date().toISOString();obj.updatedBy=CURRENT_USER_ID;return obj}
+function stampUpdate(obj){obj.updatedAt=new Date().toISOString();obj.updatedBy=IS_WAREHOUSE?'user-01':CURRENT_USER_ID;return obj}
 // "Created by X on ... · Last updated by Y on ..." - same convention as
 // the desktop app's AuditByline component. Renders nothing for anything
 // that predates this feature (or was never stamped, like a User) rather
@@ -6667,7 +8326,9 @@ function orgUnitName(id){return (data.orgUnits||[]).find(u=>u.id===id)?.name||''
 // as a blank owner picker on a manual create form would.
 function defaultOwnershipFields(inheritFrom){
  const ownerType=inheritFrom?.ownerType||'USER';
- const ownerId=inheritFrom?.ownerId||CURRENT_USER_ID;
+ // Day 2 (6c): in warehouse mode the Manager (Sarah Chen, user-01) owns
+ // new records, not the main-demo identity u1/Maya Chen.
+ const ownerId=inheritFrom?.ownerId||(IS_WAREHOUSE?'user-01':CURRENT_USER_ID);
  return {ownerType,ownerId,owningOrgUnitId:inheritFrom?.owningOrgUnitId||data.workspace.rootOrgUnitId,assignedAt:new Date().toISOString(),ownershipVersion:1,owner:ownerName({ownerType,ownerId})};
 }
 // "Owner: X · Y Region" - the Owner/Owning Organization Unit sibling to
@@ -7148,7 +8809,8 @@ function ensureAdminData(){
 // inside ensureAdminData() below (its 4 sample agents + pipelines, the
 // ontology enrichment incl. Partner Tiers, and the Object 360 demo data),
 // so the warehouse workspace stays free of agents, workflows, pipelines
-// and graphs until Day 2 seeds the warehouse agents explicitly. The
+// and graphs until Day 2 seeds the warehouse agents explicitly (see
+// ensureWarehouseDay2() below, run at the end of this function). The
 // scaffolding in ensureAdminData() (roles, dashboards, org root, audit /
 // ownership backfills, empty arrays) still runs.
 function ensureWarehouseData(){
@@ -7162,7 +8824,70 @@ function ensureWarehouseData(){
  if(!data.workspace)data.workspace={name:'Toronto Distribution Centre',address:'125 Industrial Parkway, Toronto, ON M8Z 4R7',city:'Toronto, ON',phone:'416-555-0142',logo:''};
  data.workspace.aiFoundrySeeded=true;data.workspace.ontologyGraphSeeded=true;data.workspace.object360Seeded=true;
  ensureAdminData();
+ ensureWarehouseDay2();
 }
+// ---- Warehouse demo (Day 2): agents, workflows, approvals, glossary ----
+// The Day 2 rows live in the warehouseSeed literal (agents, skills,
+// pipelines, execution graphs, workflow rules, glossary terms + mappings,
+// approvals, policies). This heals workspaces stored before Day 2 — the
+// same one-time-flag convention as ensureAdminData()'s Agent Foundry seed
+// above: id-guarded pushes, then the flag is set so a later delete is
+// never silently resurrected. Reset restores the literal (store key
+// cleared -> ensureWarehouseData re-runs from scratch).
+function ensureWarehouseDay2(){
+ if(!data.workspace.warehouseDay2Seeded){
+  WAREHOUSE_DAY2_ARRAYS.forEach(k=>{
+   if(!data[k])data[k]=[];
+   (warehouseSeed[k]||[]).forEach(row=>{if(!data[k].some(x=>x.id===row.id))data[k].push(JSON.parse(JSON.stringify(row)))});
+  });
+  data.workspace.warehouseDay2Seeded=true;
+ }
+ // Day 1 -> Day 2 stock alias migration: drop quantity_on_hand /
+ // quantity_reserved from stored stock rows and remove the old field defs
+ // (the literal now carries wcf_stock_on_hand / wcf_stock_reserved).
+ // Runs every load; a no-op once migrated.
+ if(data.customFields)data.customFields=data.customFields.filter(f=>f.id!=='wcf_stock_quantity_on_hand'&&f.id!=='wcf_stock_quantity_reserved');
+ (data.stock||[]).forEach(r=>{delete r.quantity_on_hand;delete r.quantity_reserved});
+ ensureWarehouseRelationshipInstances();
+ ensureExecutionGraphs(); // initialises data.aiGraphRuns for graph runs
+}
+// Object 360's record graph reads relationshipInstances (nativeRelatedRecordsFor
+// covers built-ins only), and the Day 1 seed shipped none — so warehouse
+// records showed no linked records at all. This derives the instances from
+// the seed's own foreign keys, one per (definition, source, target) triple,
+// with deterministic ids so re-running never duplicates. The 6 Day 2 defs
+// (picking -> order, pick_task -> picking/order, stock_move -> from/to
+// location) are included; PO/SO lines are embedded arrays, not records,
+// so they link through their header's instances instead.
+function ensureWarehouseRelationshipInstances(){
+ if(!data.relationshipInstances)data.relationshipInstances=[];
+ const defs=data.relationshipDefinitions||[];
+ const have=new Set(data.relationshipInstances.map(i=>i.id));
+ const push=(defId,srcEnt,srcId,tgtEnt,tgtId)=>{
+  if(!srcId||!tgtId)return;
+  // Inline lookup, not byId(): this runs at load time (inside
+  // ensureWarehouseData), before byId's own declaration is evaluated.
+  if(!(data[tgtEnt]||[]).some(r=>r.id===tgtId))return;
+  const id='wri_'+defId+'_'+srcId+'_'+tgtId;
+  if(have.has(id))return;
+  have.add(id);
+  data.relationshipInstances.push({id,definitionId:defId,sourceEntity:srcEnt,sourceId:srcId,targetEntity:tgtEnt,targetId:tgtId,createdAt:'2026-11-13T00:00:00.000Z',createdBy:'user-01'});
+ };
+ Object.entries(WAREHOUSE_REL_FK).forEach(([defId,[srcEnt,fk]])=>{
+  const def=defs.find(d=>d.id===defId);if(!def||!def.active)return;
+  (data[srcEnt]||[]).forEach(r=>push(defId,srcEnt,r.id,def.targetEntity,r[fk]));
+ });
+ // Polymorphic / array-valued foreign keys (no single field to map above).
+ (data.picking||[]).forEach(p=>{
+  if(p.picking_type==='DELIVERY')push('wrel_picking_sales_order','picking',p.id,'sales_order',p.source_order_id);
+  if(p.picking_type==='RECEIPT')push('wrel_picking_purchase_order','picking',p.id,'purchase_order',p.source_order_id);
+ });
+ (data.pick_task||[]).forEach(t=>{
+  (t.picking_ids||[]).forEach(pid=>push('wrel_pick_task_picking','pick_task',t.id,'picking',pid));
+  (t.order_ids||[]).forEach(oid=>push('wrel_pick_task_sales_order','pick_task',t.id,'sales_order',oid));
+ });
+}
+
 const icons={dashboard:'▦',companies:'◫',contacts:'◎',pipeline:'⌁',products:'◇',quotes:'▤',orders:'▣',invoices:'$',contracts:'▧',tasks:'✓',reports:'▥',assistant:'💬'};
 const labels={dashboard:'Dashboard',companies:'Companies',contacts:'Contacts',pipeline:'Sales Pipeline',products:'Products',quotes:'Quotes',orders:'Orders',invoices:'Invoices',contracts:'Contracts',tasks:'Tasks',reports:'Reports',assistant:'Assistant'};
 // Admin extensibility: an admin-defined Custom Object (data.customObjects)
@@ -7358,6 +9083,9 @@ const ADMIN_CATEGORIES=[
 let dependencyExplorerState={type:'custom_object',id:null,depth:'1',inspectType:null,inspectId:null,showImpact:true,showLineage:true,expanded:{},collapsed:{},zoom:1,panX:0,panY:0,labelMode:'all',pathMode:false,pathFrom:null,pathTo:null,pathKeys:null,pathEdges:null,pathUnreachable:false,simKeys:null,simChange:null,simRoot:null};
 // PR3-A power tools: last canvas size (for centering) + one-time document-level pan listeners.
 let depLastCanvasW=0,depLastCanvasH=0,depPanWired=false,depDragPanEl=null,depDragState=null;
+// Bug 3 (Day 2): viewport-measured canvas caps (two-pass, see
+// dependencyExplorerTab) + the last auto-fit view signature.
+let depCanvasCapW=null,depCanvasCapH=null,depLastFitSig=null;
 function depMaxDepth(){const d=dependencyExplorerState.depth;return d==='all'?25:(parseInt(d,10)||1)}
 // Legend toggle-filter (issue #339's own design text: "identify/toggle
 // what's showing") - kept as its own module-level Set rather than inside
@@ -8253,7 +9981,7 @@ function appShell(){
  try{history.scrollRestoration='manual'}catch(e){}
  document.documentElement.classList.add('app-mode');
  if(/[?&]debug=scroll\b/.test(location.search)&&!document.getElementById('scrollDebug')){const d=document.createElement('pre');d.id='scrollDebug';d.style.cssText='position:fixed;left:4px;bottom:92px;z-index:9999;margin:0;padding:6px 8px;background:rgba(0,0,0,.78);color:#0f0;font:11px/1.35 monospace;border-radius:6px;pointer-events:none;white-space:pre';document.body.appendChild(d);const upd=()=>{const r=s=>{const e=document.querySelector(s);return e?Math.round(e.getBoundingClientRect().top)+'..'+Math.round(e.getBoundingClientRect().bottom):'-'},vv=window.visualViewport||{};d.textContent='scrollY '+Math.round(scrollY)+' mainScroll '+Math.round((document.querySelector('.main-area')||{}).scrollTop||0)+' docH '+document.documentElement.scrollHeight+'\ninnerH '+innerHeight+' vv '+Math.round(vv.offsetTop||0)+'/'+Math.round(vv.height||0)+'\ntopbar '+r('.topbar')+'\nheading '+r('#view .page-heading, #view .page-head')+'\nmain '+r('.main-area')};['scroll','resize','touchend'].forEach(t=>addEventListener(t,upd,{passive:true}));window.visualViewport&&visualViewport.addEventListener('resize',upd);setInterval(upd,500);upd()}
- $('#app').innerHTML=`<div class="app-shell"><div class="side-backdrop" id="sidebarBackdrop" data-close-side hidden></div><aside class="sidebar" id="appSidebar"><div class="side-top side-brand"><img class="theme-brand-logo" alt="Workspace logo" hidden><a href="https://lanesraos.com" class="product-mark" style="text-decoration:none;color:inherit"><img class="brand-mark-img" src="/media/lanesraos-logo-icon.png" alt="LanesraOS" style="width:32px;height:32px;border-radius:8px;display:inline-block;vertical-align:middle;"/><!--__headerLogoV6--><span class="product-name">LanesraOS</span><span class="demo-pill">DEMO</span></a></div><div id="sideNav"></div><div class="side-demo-links"><button type="button" id="sideResetDemo">↻ Reset demo</button><a href="/">🌐 Product website</a></div><button type="button" class="btn btn-ghost collapse-side" id="sidebarCollapse" aria-label="Collapse sidebar" data-tooltip="Collapse sidebar">«<span class="collapse-label">Collapse sidebar</span></button></aside><div class="main-area"><header class="topbar"><button type="button" class="btn btn-ghost btn-icon mobile-menu" id="mobileNavToggle" aria-label="Open navigation" aria-expanded="false">☰</button><img class="theme-brand-logo topbar-brand-logo" alt="" hidden><div class="search search-wrap"><span class="search-icon" aria-hidden="true">⌕</span><input class="input" id="globalSearch" autocomplete="off" placeholder="Search companies, contacts, deals…  ⌘K" aria-label="Search" data-tooltip="Search (Ctrl+K)"><div id="searchResults" class="search-results" hidden></div></div><div class="bar-actions"><div class="notif-wrap"><button class="icon-btn" id="voiceButton" aria-label="Voice-First Mode">🎙️</button><div id="voicePanel" class="notif-panel voice-panel" hidden></div></div><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><button class="btn btn-ghost btn-icon" id="themeToggle" aria-label="Toggle theme" data-tooltip="Toggle light/dark theme">🌙</button><div class="avatar">MC</div></div></header><div class="content page" id="view"></div><nav class="bottom-nav" id="bottomNav" aria-label="Primary"><button type="button" data-nav="assistant" aria-label="Assistant" title="Assistant"><span class="bn-ic" aria-hidden="true">💬</span></button><button type="button" data-nav="companies" aria-label="Companies" title="Companies"><span class="bn-ic" aria-hidden="true">▤</span></button><button type="button" data-nav="reports" aria-label="Reports" title="Reports"><span class="bn-ic" aria-hidden="true">💡</span></button><button type="button" data-nav="tasks" aria-label="Tasks" title="Tasks"><span class="bn-ic" aria-hidden="true">✓</span></button><button type="button" data-nav="dashboard" aria-label="Dashboard" title="Dashboard"><span class="bn-ic" aria-hidden="true">▦</span></button></nav></div></div><div id="voiceConversation" class="voice-convo" hidden></div><div id="cmdPalette" hidden><div class="cmd-palette" role="dialog" aria-modal="true" aria-label="Command palette"><input class="cmd-input" id="cmdInput" autocomplete="off" placeholder="Type a command or search…" aria-label="Command palette search"><div class="cmd-list" id="cmdList" role="listbox"></div></div></div>`;
+ $('#app').innerHTML=`<div class="app-shell"><div class="side-backdrop" id="sidebarBackdrop" data-close-side hidden></div><aside class="sidebar" id="appSidebar"><div class="side-top side-brand"><img class="theme-brand-logo" alt="Workspace logo" hidden><a href="https://lanesraos.com" class="product-mark" style="text-decoration:none;color:inherit"><img class="brand-mark-img" src="/media/lanesraos-logo-icon.png" alt="LanesraOS" style="width:32px;height:32px;border-radius:8px;display:inline-block;vertical-align:middle;"/><!--__headerLogoV6--><span class="product-name">LanesraOS</span><span class="demo-pill">DEMO</span></a></div><div id="sideNav"></div><div class="side-demo-links"><button type="button" id="sideResetDemo">↻ Reset demo</button><a href="/">🌐 Product website</a></div><button type="button" class="btn btn-ghost collapse-side" id="sidebarCollapse" aria-label="Collapse sidebar" data-tooltip="Collapse sidebar">«<span class="collapse-label">Collapse sidebar</span></button></aside><div class="main-area"><header class="topbar"><button type="button" class="btn btn-ghost btn-icon mobile-menu" id="mobileNavToggle" aria-label="Open navigation" aria-expanded="false">☰</button><img class="theme-brand-logo topbar-brand-logo" alt="" hidden><div class="search search-wrap"><span class="search-icon" aria-hidden="true">⌕</span><input class="input" id="globalSearch" autocomplete="off" placeholder="${IS_WAREHOUSE?'Search SKUs, orders, bins…  ⌘K':'Search companies, contacts, deals…  ⌘K'}" aria-label="Search" data-tooltip="Search (Ctrl+K)"><div id="searchResults" class="search-results" hidden></div></div><div class="bar-actions"><div class="notif-wrap"><button class="icon-btn" id="voiceButton" aria-label="Voice-First Mode">🎙️</button><div id="voicePanel" class="notif-panel voice-panel" hidden></div></div><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><button class="btn btn-ghost btn-icon" id="themeToggle" aria-label="Toggle theme" data-tooltip="Toggle light/dark theme">🌙</button>${IS_WAREHOUSE?'<div class="avatar">SC</div>':'<div class="avatar">MC</div>'}</div></header><div class="content page" id="view"></div><nav class="bottom-nav" id="bottomNav" aria-label="Primary"><button type="button" data-nav="assistant" aria-label="Assistant" title="Assistant"><span class="bn-ic" aria-hidden="true">💬</span></button><button type="button" data-nav="companies" aria-label="Companies" title="Companies"><span class="bn-ic" aria-hidden="true">▤</span></button><button type="button" data-nav="reports" aria-label="Reports" title="Reports"><span class="bn-ic" aria-hidden="true">💡</span></button><button type="button" data-nav="tasks" aria-label="Tasks" title="Tasks"><span class="bn-ic" aria-hidden="true">✓</span></button><button type="button" data-nav="dashboard" aria-label="Dashboard" title="Dashboard"><span class="bn-ic" aria-hidden="true">▦</span></button></nav></div></div><div id="voiceConversation" class="voice-convo" hidden></div><div id="cmdPalette" hidden><div class="cmd-palette" role="dialog" aria-modal="true" aria-label="Command palette"><input class="cmd-input" id="cmdInput" autocomplete="off" placeholder="Type a command or search…" aria-label="Command palette search"><div class="cmd-list" id="cmdList" role="listbox"></div></div></div>`;
  // Modern UI PR-A: restore persisted shell state (theme + sidebar) before
  // the first render, so a returning visitor never flashes the wrong theme.
  // Best-effort: a fresh visitor with an empty store gets Light + expanded.
@@ -8420,7 +10148,7 @@ function renderView(){
  // recordModal flow every built-in entity uses - only the columns/fields
  // are built from the object's definition instead of being hardcoded.
  const co=customObjectByKey(current);
- if(co)return tablePage(current,{cols:[['number','ID'],['name','Name'],['status','Status'],['owner','Owner']],fields:()=>fieldsFor(current,customObjectFields)});
+ if(co)return tablePage(current,{cols:[['number','ID','idLink'],['name','Name'],['status','Status'],['owner','Owner']],fields:()=>fieldsFor(current,customObjectFields)});
  // Every ID column below is 'idLink' - v0.25 round, so every list can
  // click straight into that record's own detail page, not just
  // Companies/Contacts' Name column as before (see cellValue/openRecordDetail).
@@ -8511,6 +10239,8 @@ function warehouseKpis(){
  const dueToday=openPOs.filter(p=>p.expected_date===WAREHOUSE_TODAY);
  const soLines=(data.sales_order||[]).flatMap(o=>(o.lines||[]));
  const ordered=soLines.reduce((s,l)=>s+Number(l.qty_ordered||0),0);
+ // Fill rate is shipped units ÷ ordered units (19/84 = 22.6% on the Day 1
+ // seed) — NOT orders shipped ÷ orders total. SEED_SPEC §18.3.
  const shippedUnits=soLines.reduce((s,l)=>s+Number(l.qty_shipped||0),0);
  const shippedToday=(data.shipment||[]).filter(s=>s.status==='SHIPPED'&&s.shipped_at===WAREHOUSE_TODAY);
  const shippedTodaySOs=new Set(shippedToday.map(s=>s.sales_order_id));
@@ -8518,18 +10248,24 @@ function warehouseKpis(){
  const variances=counting?(counting.lines||[]).filter(l=>Number(l.variance||0)!==0):[];
  const triggered=(data.reorder_rule||[]).filter(r=>r.triggered);
  const soByStatus={};(data.sales_order||[]).forEach(o=>{soByStatus[o.status]=(soByStatus[o.status]||0)+1});
- const waves={};(data.pick_task||[]).forEach(t=>{(waves[t.wave_number]=waves[t.wave_number]||{orders:[],held:0});waves[t.wave_number].orders.push(...t.order_ids);if(t.status==='DRAFT'&&!t.assigned_to)waves[t.wave_number].held++});
+ const waves={};(data.pick_task||[]).forEach(t=>{(waves[t.wave_number]=waves[t.wave_number]||{orders:[],held:0,tasks:[]});waves[t.wave_number].orders.push(...t.order_ids);waves[t.wave_number].tasks.push(t);if(t.status==='DRAFT'&&!t.assigned_to)waves[t.wave_number].held++});
  return {onHand,reserved,available:onHand-reserved,valueCost,valueSale,lowStock,outOfStock,openPOs,dueToday,ordered,shippedUnits,fillRate:ordered?shippedUnits/ordered:0,shippedToday:shippedTodaySOs.size,shippedTodayParcels:shippedToday.length,counting,variances,triggered,soByStatus,waves};
 }
 function warehouseDashboard(){
  const k=warehouseKpis();
+ // Day 2: the Manager's pending approvals + open tasks (Approvals card
+ // below; full inbox is AI Agents -> Approvals).
+ const pendingApprovals=(data.aiApprovals||[]).filter(a=>a.status==='pending'&&a.subjectType&&a.subjectType.startsWith('warehouse_'));
+ const openTasks=(data.tasks||[]).filter(t=>t.status==='Open').slice(0,8);
  const prodById=Object.fromEntries((data.product||[]).map(p=>[p.id,p]));
  const card=(nav,label,value,meta)=>`<button type="button" class="card kpi-card" data-wh-nav="${nav}"><span class="kpi-label"><span>${label}</span></span><span class="kpi-number">${value}</span><span class="kpi-meta">${meta}</span></button>`;
- const stockRow=r=>{const p=prodById[r.product_id];return `<tr><td>${p?.sku||''}</td><td>${p?.name||''}</td><td>${r.on_hand}</td><td>${r.reserved}</td><td>${r.on_hand-r.reserved}</td><td>${badgeMaybe(r.status)}</td></tr>`};
+ const stockRow=r=>{const p=prodById[r.product_id];return `<tr><td><a class="cell-link" data-open-record="stock:${r.id}">${p?.sku||''}</a></td><td>${p?.name||''}</td><td>${r.on_hand}</td><td>${r.reserved}</td><td>${r.on_hand-r.reserved}</td><td>${badgeMaybe(r.status)}</td></tr>`};
  const attention=[...k.outOfStock,...k.lowStock];
- $('#view').innerHTML=`<div class="page-heading"><div><h2>Toronto Distribution Centre</h2><p>Friday, November 13, 2026 · Warehouse Manager: Sarah Chen · ${k.onHand} units on hand, ${k.reserved} reserved, ${k.available} available.</p></div></div><div class="kpi-grid">${card('sales_order','Fill rate',(k.fillRate*100).toFixed(1)+'%',k.shippedUnits+' of '+k.ordered+' units shipped →')}${card('shipment','Orders shipped today',k.shippedToday,k.shippedTodayParcels+' parcels · '+k.shippedUnits+' units →')}${card('purchase_order','Receiving backlog',k.openPOs.length,k.dueToday.length+' due today →')}${card('stock','Stockouts',k.outOfStock.length,k.lowStock.length+' low-stock SKUs →')}${card('stock','Inventory value (cost)',moneyCAD(k.valueCost),'At sale '+moneyCAD(k.valueSale)+' →')}${card('reorder_rule','Reorder rules triggered',k.triggered.length,k.triggered.length+' SKUs at or below level →')}</div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Needs attention — low & out of stock</h3><p class="card-desc">${k.outOfStock.length} out of stock · ${k.lowStock.length} low stock</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Product</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th></tr></thead><tbody>${attention.map(stockRow).join('')}</tbody></table></div></div></section><section class="card"><div class="card-head panel-title"><div><h3>Orders by status</h3><p class="card-desc">${(data.sales_order||[]).length} open sales orders</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Orders</th></tr></thead><tbody>${['WAITING_STOCK','ALLOCATED','PICKING','PICKED','PACKED','SHIPPED'].map(s=>`<tr><td>${s}</td><td>${k.soByStatus[s]||0}</td></tr>`).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Receiving — due today</h3><p class="card-desc">${k.dueToday.length} purchase order${k.dueToday.length===1?'':'s'} expected ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.dueToday.length?k.dueToday.map(p=>{const sup=byId('supplier',p.supplier_id);const lines=(p.lines||[]).map(l=>`${prodById[l.product_id]?.sku||''} × ${l.qty_ordered}`).join(', ');return `<div class="prb-row"><strong>${p.po_number}</strong><small class="muted"> · ${sup?.name||''} · ${lines}</small></div>`}).join(''):'<div class="empty">Nothing due today.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Cycle count in progress</h3><p class="card-desc">${k.counting?k.counting.count_number+' · '+k.counting.scope+' · '+k.variances.length+' variances':'No count in progress'}</p></div></div><div class="card-body">${k.counting?`<div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>${k.variances.map(l=>{const p=prodById[l.product_id];return `<tr><td>${p?.sku||''}</td><td>${l.expected_qty}</td><td>${l.counted_qty}</td><td>${l.variance>0?'+':''}${l.variance}</td></tr>`}).join('')}</tbody></table></div><p class="muted" style="font-size:12px">No adjustment posted yet — that is the Manager's approval decision (Day 2).</p>`:'<div class="empty">No count in progress.</div>'}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Waves</h3><p class="card-desc">Batch picks in progress</p></div></div><div class="card-body">${Object.entries(k.waves).map(([w,v])=>`<div class="prb-row"><strong>${w}</strong><small class="muted"> · ${v.orders.length} orders${v.held?` · ${v.held} task${v.held===1?'':'s'} held (waiting on stock)`:''}</small></div>`).join('')}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Reorder alerts</h3><p class="card-desc">${k.triggered.length} rules triggered ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.triggered.map(r=>{const p=prodById[r.product_id];const s=(data.stock||[]).find(x=>x.product_id===r.product_id);return `<div class="prb-row"><strong>${p?.sku||''}</strong><small class="muted"> · ${p?.name||''} · available ${s?s.on_hand-s.reserved:0} ≤ level ${r.reorder_level} · reorder ${r.reorder_qty}</small></div>`}).join('')}</div></section></div>`;
+ $('#view').innerHTML=`<div class="page-heading"><div><h2>Toronto Distribution Centre</h2><p>Friday, November 13, 2026 · Warehouse Manager: Sarah Chen · ${k.onHand} units on hand, ${k.reserved} reserved, ${k.available} available.</p></div></div><div class="kpi-grid">${card('sales_order','Fill rate',(k.fillRate*100).toFixed(1)+'%',k.shippedUnits+' of '+k.ordered+' units shipped →')}${card('shipment','Orders shipped today',k.shippedToday,k.shippedTodayParcels+' parcels · '+k.shippedUnits+' units →')}${card('purchase_order','Receiving backlog',k.openPOs.length,k.dueToday.length+' due today →')}${card('stock','Stockouts',k.outOfStock.length,k.lowStock.length+' low-stock SKUs →')}${card('stock','Inventory value (cost)',moneyCAD(k.valueCost),'At sale '+moneyCAD(k.valueSale)+' →')}${card('reorder_rule','Reorder rules triggered',k.triggered.length,k.triggered.length+' SKUs at or below level →')}</div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Needs attention — low & out of stock</h3><p class="card-desc">${k.outOfStock.length} out of stock · ${k.lowStock.length} low stock</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Product</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th></tr></thead><tbody>${attention.map(stockRow).join('')}</tbody></table></div></div></section><section class="card"><div class="card-head panel-title"><div><h3>Orders by status</h3><p class="card-desc">${(data.sales_order||[]).length} open sales orders</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Orders</th></tr></thead><tbody>${['WAITING_STOCK','ALLOCATED','PICKING','PICKED','PACKED','SHIPPED'].map(s=>`<tr><td><a class="cell-link" data-wh-nav="sales_order">${s}</a></td><td>${k.soByStatus[s]||0}</td></tr>`).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Receiving — due today</h3><p class="card-desc">${k.dueToday.length} purchase order${k.dueToday.length===1?'':'s'} expected ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.dueToday.length?k.dueToday.map(p=>{const sup=byId('supplier',p.supplier_id);const lines=(p.lines||[]).map(l=>`${prodById[l.product_id]?.sku||''} × ${l.qty_ordered}`).join(', ');return `<div class="prb-row"><strong><a class="cell-link" data-open-record="purchase_order:${p.id}">${p.po_number}</a></strong><small class="muted"> · ${sup?.name||''} · ${lines}</small></div>`}).join(''):'<div class="empty">Nothing due today.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Cycle count in progress</h3><p class="card-desc">${k.counting?'<a class="cell-link" data-open-record="cycle_count:'+k.counting.id+'">'+k.counting.count_number+'</a> · '+k.counting.scope+' · '+k.variances.length+' variances':'No count in progress'}</p></div></div><div class="card-body">${k.counting?`<div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>${k.variances.map(l=>{const p=prodById[l.product_id];return `<tr><td><a class="cell-link" data-open-record="product:${l.product_id}">${p?.sku||''}</a></td><td>${l.expected_qty}</td><td>${l.counted_qty}</td><td>${l.variance>0?'+':''}${l.variance}</td></tr>`}).join('')}</tbody></table></div><p class="muted" style="font-size:12px">No adjustment posted yet — decide each variance in Approvals below; approving posts the adjustment, rejecting posts nothing.</p>`:'<div class="empty">No count in progress.</div>'}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Waves</h3><p class="card-desc">Batch picks in progress</p></div></div><div class="card-body">${Object.entries(k.waves).map(([w,v])=>`<div class="prb-row"><strong><a class="cell-link" data-wh-nav="pick_task">${w}</a></strong><small class="muted"> · ${v.orders.length} orders${v.held?` · ${v.held} task${v.held===1?'':'s'} held (waiting on stock)`:''} · ${v.tasks.map(t=>`<a class="cell-link" data-open-record="pick_task:${t.id}">${t.number||'Task'}</a>`).join(', ')}</small></div>`).join('')}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Reorder alerts</h3><p class="card-desc">${k.triggered.length} rules triggered ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.triggered.map(r=>{const p=prodById[r.product_id];const s=(data.stock||[]).find(x=>x.product_id===r.product_id);return `<div class="prb-row"><strong><a class="cell-link" data-open-record="product:${r.product_id}">${p?.sku||''}</a></strong><small class="muted"> · ${p?.name||''} · available ${s?s.on_hand-s.reserved:0} ≤ level ${r.reorder_level} · reorder ${r.reorder_qty} · <a class="cell-link" data-open-record="reorder_rule:${r.id}">rule ${r.number||''}</a></small></div>`}).join('')}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Approvals — needs your decision</h3><p class="card-desc">${pendingApprovals.length} pending</p></div></div><div class="card-body">${pendingApprovals.length?pendingApprovals.map(a=>`<div class="prb-row"><div><strong>${agentEsc(a.subjectType.replace('warehouse_','').replace(/_/g,' '))}</strong><small class="muted"> · ${demoDescribeApproval(a)}</small></div><div class="actions"><button class="btn btn-primary" data-wh-approve="${a.id}">Approve</button><button class="btn" data-wh-reject="${a.id}">Reject</button></div></div>`).join(''):'<p class="muted">Nothing pending — the Manager is all caught up.</p>'}<p class="muted" style="font-size:12px;margin-top:8px">Approving a count line posts a COUNT_ADJUSTMENT and updates Stock; rejecting posts nothing. Full inbox: AI Agents → Approvals.</p></div></section><section class="card"><div class="card-head panel-title"><div><h3>Open tasks</h3><p class="card-desc">${openTasks.length} open</p></div></div><div class="card-body">${openTasks.length?openTasks.map(t=>`<div class="prb-row"><a class="cell-link" data-open-record="tasks:${t.id}">${agentEsc(t.title||'Task')}</a><small class="muted"> · due ${t.due||'—'}</small></div>`).join(''):'<p class="muted">No open tasks.</p>'}</div></section></div>`;
  document.querySelectorAll('[data-wh-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.whNav;viewFilter=null;detailRecord=null;renderView()});
  wireCellLinks($('#view'));
+ document.querySelectorAll('[data-wh-approve]').forEach(b=>b.onclick=()=>{demoDecideApproval(b.dataset.whApprove,true);toast(warehouseApprovalToast(b.dataset.whApprove,true));renderView()});
+ document.querySelectorAll('[data-wh-reject]').forEach(b=>b.onclick=()=>{demoDecideApproval(b.dataset.whReject,false);toast(warehouseApprovalToast(b.dataset.whReject,false));renderView()});
 }
 // Warehouse shell chrome: "Reset warehouse demo" label + a warehouse
 // bottom nav (mobile). Runs inside appShell() before renderSidebarNav()
@@ -9049,13 +10785,15 @@ function tablePage(key,cfg){
  const groups=svCapable?groupRows(arr,ensureViewState(key).groupByField):[{label:null,rows:arr}];
  const sel=svCapable?selectionFor(key):new Set();
  const extraCols=svCapable?1:0;
- const rowHtml=r=>`<tr>${svCapable?`<td data-label=""><input type="checkbox" class="bulk-check" data-bulk-id="${r.id}" ${sel.has(r.id)?'checked':''}></td>`:''}${cfg.cols.map(c=>`<td data-label="${c[1]}">${cellValue(r,c,key)}</td>`).join('')}<td data-label=""><div class="actions"><button class="btn btn-ghost btn-sm" data-edit="${r.id}">Edit</button><button class="btn btn-ghost btn-sm" data-del="${r.id}">Delete</button></div></td></tr>`;
+ const rowHtml=r=>`<tr>${svCapable?`<td data-label=""><input type="checkbox" class="bulk-check" data-bulk-id="${r.id}" ${sel.has(r.id)?'checked':''}></td>`:''}${cfg.cols.map(c=>`<td data-label="${c[1]}">${cellValue(r,c,key)}</td>`).join('')}<td data-label=""><div class="actions"><button class="btn btn-ghost btn-sm" data-edit="${r.id}">View</button><button class="btn btn-ghost btn-sm" data-del="${r.id}">Delete</button></div></td></tr>`;
  const bodyHtml=groups.map(g=>`${g.label!==null?`<tr class="prb-group-row"><td colspan="${cfg.cols.length+1+extraCols}">${g.label}</td></tr>`:''}${g.rows.map(rowHtml).join('')}`).join('');
  $('#view').innerHTML=`<div class="page-heading"><div>${viewFilter?`<nav class="breadcrumbs"><button data-clear-filter>Dashboard</button><span>›</span><span>${viewFilter.charAt(0).toUpperCase()+viewFilter.slice(1)}</span></nav>`:''}<h2>${viewFilter==='open'&&key==='tasks'?'Open Tasks':viewFilter==='outstanding'?'Outstanding Invoices':labels[key]}</h2><p>${arr.length} connected records in the sample workspace</p></div><button class="btn btn-primary btn-shimmer" id="addRecord">+ New ${labels[key].replace(/s$/,'')}</button></div>${svCapable?savedViewBarHtml(key,cfg,statusField):''}<div class="list-toolbar"><div class="list-search"><span class="search-icon" aria-hidden="true">⌕</span><input class="input" id="listSearch" autocomplete="off" placeholder="Search ${labels[key].toLowerCase()}…" aria-label="Search ${labels[key]}"></div></div><section class="card list-card"><div class="table-wrap"><table class="company-table"><thead><tr>${svCapable?'<th></th>':''}${cfg.cols.map(c=>`<th>${c[1]}</th>`).join('')}<th aria-label="Actions"></th></tr></thead><tbody id="listRows">${bodyHtml}</tbody></table>${arr.length?'':'<div class="empty">No records yet</div>'}</div><div class="pagination"><span id="pageInfo"></span><div class="pagination-actions" id="pageBtns"></div></div></section>${svCapable?bulkActionBarHtml(key,statusField):''}`;
  document.querySelector('[data-clear-filter]')?.addEventListener('click',()=>{current='dashboard';viewFilter=null;detailRecord=null;renderView()});
  wireCellLinks($('#view'));
  $('#addRecord').onclick=()=>recordModal(key,cfg.fields());
- document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>recordModal(key,cfg.fields(),byId(key,b.dataset.edit)));
+ // Bug 2 (Day 2): a list row opens the record's read-only View page;
+ // Edit lives on that page's Edit button (wireDetail360Nav), never here.
+ document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>openRecordDetail(key,b.dataset.edit));
  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>remove(key,b.dataset.del));
  if(svCapable)wireSavedViewsAndBulkActions(key,cfg,statusField);
  // Modern UI PR-D/1 (issue #395): the artifact's list-toolbar search and
@@ -9121,8 +10859,17 @@ function openContactDetail(id){current='contacts';detailRecord={type:'contacts',
 // no detail page (kanban pipeline only), so that one still lands on its
 // list instead.
 const DETAIL_PAGE_ENTITIES=new Set(['companies','contacts','products','quotes','orders','invoices','contracts','tasks']);
+// Bug 2 (Day 2): every entity except opportunities has a read-only View
+// page — the 8 built-ins plus every custom object (its View is
+// genericRecordDetail). Opportunities has no detail page (kanban only).
+function hasDetailPage(key){return key!=='opportunities'&&(DETAIL_PAGE_ENTITIES.has(key)||!!customObjectByKey(key))}
+// Bug 2 (Day 2): every record opens its read-only View page — companies /
+// contacts keep their 360 pages, every other entity (built-in or custom)
+// goes through genericRecordDetail. Only opportunities has no detail page
+// (kanban pipeline only) and still lands on its list. Edit is reached
+// from the View page's Edit button, never directly from a list or link.
 function openRecordDetail(key,id){
- if(!DETAIL_PAGE_ENTITIES.has(key)){current=key==='opportunities'?'pipeline':key;viewFilter=null;detailRecord=null;renderView();return}
+ if(!hasDetailPage(key)){current='pipeline';viewFilter=null;detailRecord=null;renderView();return}
  if(key==='companies')return openCompanyDetail(id);
  if(key==='contacts')return openContactDetail(id);
  current=key;detailRecord={type:key,id};renderView();
@@ -9904,32 +11651,43 @@ function pageLiveNodeHtml(node,entityKey,record,entityId){
 // linked record, same as every other card on this page) - link/unlink
 // stays a create/edit-modal action, consistent with how this page's
 // other related cards work.
+// Bug 2 (Day 2): the View page for every entity — built-ins keep their
+// DETAIL_* maps; custom objects fall back to their own field function
+// (fieldsFnFor), the record's name/title/id as title, the object label
+// as breadcrumb/eyebrow, and a status badge as meta.
 function genericRecordDetail(key,id){
  const r=byId(key,id);
  if(!r){current=key;detailRecord=null;return renderView()}
- const fieldsFn=DETAIL_FIELDS_FN[key];
+ const fieldsFn=DETAIL_FIELDS_FN[key]||fieldsFnFor(key)||(()=>[]);
+ const titleField=DETAIL_TITLE_FIELD[key]||(r.name?'name':r.title?'title':null);
  const relationTypes=['auto','relation','filteredContact','filteredOpportunity','filteredQuote','filteredOrder','dynamicRelation','ownerPicker','orgUnitPicker'];
- const overviewFields=fieldsFor(key,fieldsFn).filter(f=>!relationTypes.includes(f[2])&&f[0]!==DETAIL_TITLE_FIELD[key]);
+ const overviewFields=fieldsFor(key,fieldsFn).filter(f=>!relationTypes.includes(f[2])&&f[0]!==titleField);
  const isDoc=['quotes','orders','invoices'].includes(key);
  const singular=(ENTITY_SINGULAR[key]||key).replace(/^./,c=>c.toUpperCase());
  // Modern UI PR-D/2: line items keep every data binding; the card takes the
  // artifact's card-head anatomy.
  const linesHtml=isDoc?`<section class="card prb2-lines" style="margin-bottom:18px"><div class="card-head"><h3>Products & services</h3><p class="card-desc">Line items on this ${singular.toLowerCase()}</p></div><div class="card-body" style="padding-top:14px"><div class="table-wrap"><table class="table"><thead><tr><th>Product / service</th><th>Quantity</th><th>Unit price</th><th>Line total</th></tr></thead><tbody>${(r.items||[]).map(i=>`<tr><td>${productName(i.productId)}</td><td>${i.quantity}</td><td>${money(i.unitPrice)}</td><td>${money(lineTotal(i))}</td></tr>`).join('')}</tbody></table></div><div class="prb2-line-total">Total <strong>${money(docTotal(r))}</strong>${key==='invoices'?` <span class="prb2-line-balance">· Balance ${money(docBalance(r))}</span>`:''}</div></div></section>`:'';
  // Modern UI PR-D/2: related groups as tuples - see companyDetail.
+ // PO/SO-style embedded lines (custom objects): read-only, like the doc
+ // line items above but over `lines` (qty_ordered / qty_received /
+ // qty_shipped / unit_cost), not `items`. Warehouse product names come
+ // from data.product; productName() covers the main demo's products.
+ const whLinesHtml=(Array.isArray(r.lines)&&r.lines.length)?`<section class=\"card prb2-lines\" style=\"margin-bottom:18px\"><div class=\"card-head\"><h3>Lines</h3><p class=\"card-desc\">Order lines on this ${singular.toLowerCase()}</p></div><div class=\"card-body\" style=\"padding-top:14px\"><div class=\"table-wrap\"><table class=\"table\"><thead><tr><th>Product</th><th>Ordered</th><th>Received</th><th>Shipped</th><th>Unit cost</th></tr></thead><tbody>${r.lines.map(l=>`<tr><td>${((data.product||[]).find(p=>p.id===l.product_id)||{}).name||productName(l.product_id)}</td><td>${l.qty_ordered??'—'}</td><td>${l.qty_received??'—'}</td><td>${l.qty_shipped??'—'}</td><td>${l.unit_cost!==undefined?money(l.unit_cost):(l.unit_price!==undefined?money(l.unit_price):'—')}</td></tr>`).join('')}</tbody></table></div></div></section>`:'';
  const relGroups=[...recordRelatedDefs(key,r),...customRelatedGroups(key,id)];
- const title=r[DETAIL_TITLE_FIELD[key]]||'—';
- $('#view').innerHTML=`${detail360Header(DETAIL_BREADCRUMB[key],title,DETAIL_EYEBROW(key,r),recordEyebrowMeta(key,r),auditByline(r)+ownershipByline(r))}
+ const title=recordTitleOf(key,r)||'—';
+ $('#view').innerHTML=`${detail360Header(DETAIL_BREADCRUMB[key]||entityLabel(key),title,DETAIL_EYEBROW(key,r)||(customObjectByKey(key)?customObjectByKey(key).label:entityLabel(key)),recordEyebrowMeta(key,r)||(r.status?badgeMaybe(r.status):''),auditByline(r)+ownershipByline(r))}
  ${recordTabsHtml()}
  <div id="rec-overview" class="tab-panel active"><div class="record-grid">
   <div>
-   ${linesHtml}
+   ${linesHtml}${whLinesHtml}
    <section class="card"><div class="card-head"><h3>${singular} details</h3><p class="card-desc">Core information for this record</p></div><div class="card-body" style="padding:14px 0 0">${overviewPanelHtml(key,overviewFields,r,id)}</div></section>
   </div>
   <section class="card"><div class="card-head"><h3>Related records</h3><p class="card-desc">Connected across the workspace</p></div><div class="card-body" style="padding:14px 0 0">${relatedPreviewListHtml(relGroups)}</div></section>
  </div></div>
  <div id="rec-related" class="tab-panel"><section class="card"><div class="card-head"><h3>All related records</h3><p class="card-desc">Records connected to ${title}</p></div><div class="card-body" style="padding:14px 0 6px">${relatedFullGroupsHtml(relGroups)}</div></section></div>
- <div id="rec-activity" class="tab-panel"><section class="card"><div class="card-head"><h3>Activity timeline</h3><p class="card-desc">Calls, emails and messages logged against this record</p></div><ul class="timeline"><li><div class="sub">No interactions logged yet.</div></li></ul></section></div>`;
+ <div id=\"rec-activity\" class=\"tab-panel\">${activityTimelineHtml(key,id)}</div>`;
  wireDetail360Nav(()=>recordModal(key,fieldsFor(key,fieldsFn),r),()=>object360Modal(key,id,title));
+ wireActivityTimelines($('#view'));
 }
 function recordModal(key,fields,record={}){
  const isDoc=['quotes','orders','invoices'].includes(key);
@@ -9948,11 +11706,11 @@ function recordModal(key,fields,record={}){
  // once record.id exists - a create form has nothing to link yet).
  const panelsHtml=tabsOut.map((t,i)=>`<div data-form-panel="${i}" style="${i===0?'':'display:none'}">${groupsHtml(t.groups,record)}<div data-related-slot="${i}"></div></div>`).join('');
  // Audit trail: entities with their own detail page (companies, contacts,
- // and the six DETAIL_PAGE_ENTITIES generic-360 types) show the byline
- // there instead - only show it here, in the shared edit form, for
- // entities that have no separate detail view (opportunities, custom
- // object records).
- const auditHtml=(record.id&&!DETAIL_PAGE_ENTITIES.has(key))?auditByline(record)+ownershipByline(record):'';
+// the six DETAIL_PAGE_ENTITIES generic-360 types, and — since Day 2 —
+// every custom object) show the byline there instead - only show it
+// here, in the shared edit form, for entities that have no separate
+// detail view (opportunities is the only one left).
+ const auditHtml=(record.id&&!hasDetailPage(key))?auditByline(record)+ownershipByline(record):'';
  // AI & Agentic Layer, Phase 3: Opportunity has no dedicated detail page
  // (unlike Company/Contact's companyDetail/contactDetail above), so its
  // Interactions card lives here instead - a sibling of the form, not
@@ -10053,21 +11811,11 @@ function recordModal(key,fields,record={}){
   // Salesforce/Dynamics "entry criteria" pattern: one list of conditions,
   // re-evaluated on save, instead of a separate mandatory trigger plus
   // optional extra filters.
-  (data.workflowRules||[]).filter(r=>r.entity===key&&r.active).forEach(r=>{
-   const conditions=r.conditions||[];
-   if(!conditions.length)return;
-   const watchedFields=new Set();
-   conditions.forEach(c=>{watchedFields.add(c.fieldKey);if(c.compareField)watchedFields.add(c.compareField)});
-   const anyChanged=[...watchedFields].some(f=>obj[f]!==undefined&&obj[f]!==before[f]);
-   if(!anyChanged)return;
-   if(!conditionsMatch(r.matchType||'all',conditions,obj))return;
-   const descriptions=(r.actions||[]).map(a=>executeWorkflowAction(a,key,record)).filter(Boolean);
-   if(!descriptions.length)return; // e.g. update_related_record with nothing linked yet - a silent no-op, same as desktop
-   if(r.notify){
-    const label=obj.name||obj.title||obj.number||entityLabel(key);
-    data.notifications.unshift({id:uid(),message:`${entityLabel(key).replace(/s$/,'')} "${label}" — ${describeConditions(key,conditions,r.matchType||'all')} — ${descriptions.join('; ')}`,createdAt:new Date().toISOString(),read:false});
-   }
-  });
+  evaluateWorkflowRulesFor(key,obj,before,record);
+  // Warehouse demo (Day 2): quantitative triggers the flat engine cannot
+  // express (line-level variance %, reorder re-evaluation, rejected units,
+  // zero-stock shortfalls) — see runWarehouseWorkflows.
+  if(IS_WAREHOUSE)runWarehouseWorkflows(key,record,before);
  }
  save();closeModal();toast('Record saved');refreshNotifBadge();renderView();
  // show_error/show_warning notices (non-blocking - the save already
@@ -11410,11 +13158,16 @@ function graphLayoutPositions(model,layout){
    const pp=pos.get(n.key),dd=disp.get(n.key);
    dd.x+=(c.x-pp.x)*0.06;dd.y+=(c.y-pp.y)*0.06;
   });
+  // Bug 3 (Day 2): pills are CENTERED on their position (CSS
+  // translate(-50%,-50%)), so the old [34,W-34] clamp let a ~90px
+  // half-wide pill hang off both edges. Keep a full half-pill inside
+  // the canvas (guarded so a tiny canvas never inverts the range).
+  const mx=Math.min(104,Math.max(34,W/2-10)),my=Math.min(64,Math.max(28,H/2-10));
   visible.forEach(n=>{
    if(n.key===rootKey)return;
    const p=pos.get(n.key),d=disp.get(n.key);
-   p.x=Math.max(34,Math.min(W-34,p.x+d.x*0.5));
-   p.y=Math.max(52,Math.min(H-30,p.y+d.y*0.5));
+   p.x=Math.max(mx,Math.min(W-mx,p.x+d.x*0.5));
+   p.y=Math.max(my,Math.min(H-my,p.y+d.y*0.5));
   });
  }
  return pos;
@@ -11770,15 +13523,29 @@ function depResetZoomPan(){
  dependencyExplorerState={...s,zoom:1,panX:0,panY:0,labelMode:'all'};
  renderAdminTab();
 }
+// Bug 3 (Day 2): fit the NODE bounding box — not the canvas dims — into
+// the viewport. The old version fit depLastCanvasW/H, so a wide canvas
+// (min 880px) on a ~600px stage still clipped the right-hand nodes, and
+// the layout clamp (fixed above) now keeps pills inside the canvas, so
+// the bbox plus half a pill of padding is the true content size.
 function depFitToContent(){
  const vp=document.getElementById('depGraphViewport');
- if(!vp)return;
- const w=depLastCanvasW||vp.clientWidth,h=depLastCanvasH||vp.clientHeight;
- const vw=vp.clientWidth||w,vh=vp.clientHeight||h;
- const margin=0.9;
- const scale=Math.min(3,Math.max(0.25,Math.min(vw/w,vh/h)*margin));
- const panX=Math.round((vw-w*scale)/2);
- const panY=Math.round((vh-h*scale)/2);
+ if(!vp||!dependencyExplorerState.id)return;
+ const model=depGraphModel();
+ const pos=depLayoutPositions(model,depLastCanvasW,depLastCanvasH);
+ if(!model.nodes.length||!pos.size)return;
+ let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+ pos.forEach(p=>{minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y)});
+ // Pills are centered on their position, so grow the box by half a pill
+ // on each side (~110px wide, ~28px tall) or the outer labels clip.
+ const padX=110,padY=28;
+ minX-=padX;maxX+=padX;minY-=padY;maxY+=padY;
+ const vw=vp.clientWidth||1,vh=vp.clientHeight||1;
+ const bw=Math.max(1,maxX-minX),bh=Math.max(1,maxY-minY);
+ const margin=0.92;
+ const scale=Math.min(3,Math.max(0.25,Math.min(vw/bw,vh/bh)*margin));
+ const panX=Math.round((vw-bw*scale)/2-minX*scale);
+ const panY=Math.round((vh-bh*scale)/2-minY*scale);
  dependencyExplorerState={...dependencyExplorerState,zoom:scale,panX,panY,labelMode:scale<0.8?'neighborhood':'all'};
  renderAdminTab();
 }
@@ -12155,8 +13922,12 @@ function dependencyExplorerTab(body){
   const depModel=depGraphModel();
   truncatedHits=depModel.truncated;
   depModel.nodes.forEach(n=>{depCounts[n.type]=(depCounts[n.type]||0)+1});
-  const depW=Math.max(880,Math.min(1500,Math.round(560+depModel.nodes.length*5)));
-  const depH=Math.max(600,Math.min(940,Math.round(440+depModel.nodes.length*3.2)));
+  // Bug 3 (Day 2): the canvas used to be min 880x600 by node count
+  // alone, wider than a laptop stage (~600px) — the viewport's
+  // overflow:hidden clipped the right-hand nodes. Cap it to the
+  // measured viewport (two-pass below, floor 360px).
+  const depW=Math.max(360,Math.min(depCanvasCapW||1500,Math.min(1500,Math.round(560+depModel.nodes.length*5))));
+  const depH=Math.max(360,Math.min(depCanvasCapH||940,Math.min(940,Math.round(440+depModel.nodes.length*3.2))));
   depLastCanvasW=depW;depLastCanvasH=depH;
   const depZoom=dependencyExplorerState.zoom||1,depPanX=dependencyExplorerState.panX||0,depPanY=dependencyExplorerState.panY||0;
   graphHtml=`<div class="graph-stage" data-graph-stage><div class="graph-stage-head og-stage-head"><div><h3 class="og-stage-title">${systemGraphNodeLabel(dependencyExplorerState.type,dependencyExplorerState.id)} neighborhood</h3></div><div class="chip-row og-stage-chips"><span class="og-pill-chip">Depth ${String(dependencyExplorerState.depth)==='all'?'All':String(dependencyExplorerState.depth||'1')}</span><span class="og-pill-chip">${depModel.edges.length} relationships</span>${truncatedHits?`<span class="ontology-more-chip" title="Narrow the depth or hide types to see the rest">+${truncatedHits} more</span>`:''}</div></div>${depSimBannerHtml()}<div class="graph-canvas"><div id="depGraphViewport" class="ontology-graph-viewport"><div id="depGraphPan" class="ontology-graph-canvas" style="width:${depW}px;height:${depH}px;transform:translate(${depPanX}px,${depPanY}px) scale(${depZoom});transform-origin:0 0">${depRenderGraph(depModel,depW,depH)}</div></div></div><div class="graph-legend">${legendHtml(depExplorerHiddenTypes,depCounts)}</div></div><aside class="graph-detail" aria-label="Selected node">${depDetailPanelHtml(depModel)}</aside>`;
@@ -12179,6 +13950,28 @@ function dependencyExplorerTab(body){
  // PR3-A power tools: wire toolbar (zoom/pan, search, path, simulation, share link).
  depWireToolbar(body);
  if(dependencyExplorerState.id)depWriteShareHash();
+ // Bug 3 (Day 2): the canvas is sized by node count BEFORE the DOM
+ // exists, so on first paint measure the real viewport and shrink the
+ // canvas to it, then re-render once with the capped size. The cap is
+ // sticky, so this never loops; the re-render resets stale pan/zoom.
+ const vp=$('#depGraphViewport');
+ if(vp&&dependencyExplorerState.id){
+  const capW=Math.max(360,Math.floor(vp.clientWidth||0));
+  const capH=Math.max(360,Math.floor(vp.clientHeight||0));
+  if(capW&&capH&&(Math.abs((depCanvasCapW||0)-capW)>2||Math.abs((depCanvasCapH||0)-capH)>2)){
+   depCanvasCapW=capW;depCanvasCapH=capH;
+   dependencyExplorerState={...dependencyExplorerState,zoom:1,panX:0,panY:0};
+   renderAdminTab();
+   return;
+  }
+  // Auto-fit whenever the VIEW changes (type/component/depth/toggles) —
+  // zoom-to-fit on load and on every depth/filter/object change, so a
+  // previous pan/zoom never leaves the new graph half off-screen.
+  // Zoom/pan themselves are NOT in the signature, so a user's manual
+  // zoom survives re-renders.
+  const fitSig=[dependencyExplorerState.type,dependencyExplorerState.id,dependencyExplorerState.depth,dependencyExplorerState.showImpact,dependencyExplorerState.showLineage,[...depExplorerHiddenTypes].sort().join(','),JSON.stringify(dependencyExplorerState.collapsed||{})].join('|');
+  if(fitSig!==depLastFitSig){depLastFitSig=fitSig;depFitToContent();return;}
+ }
 }
 function adminRecentNavHtml(){
  const hist=(data.adminNavHistory||[]).slice().sort((a,b)=>b.lastViewedAt.localeCompare(a.lastViewedAt));
@@ -20464,7 +22257,25 @@ function demoDescribeApproval(a){
  const p=a.proposal||{};
  if(a.subjectType==='pipeline_run')return `${agentEsc(p.pipelineName||'A pipeline')} waits for approval of step ${(p.stepOrder||0)+1}`;
  if(a.subjectType==='execution_graph_node')return `Agent Team run waits at ${agentEsc(p.nodeKey||'an Approval node')}`;
+ if(a.subjectType==='warehouse_count_line')return `Count ${agentEsc(p.countNumber||'')} — accept ${agentEsc(p.sku||'')} counted ${p.countedQty} vs expected ${p.expectedQty} (variance ${p.variance>0?'+':''}${p.variance}, ${p.variancePct}%)?`;
+ if(a.subjectType==='warehouse_recount')return `Recount ${agentEsc(p.countNumber||'')} — ${agentEsc(p.sku||'')} counted ${p.countedQty} vs expected ${p.expectedQty} (variance ${p.variance}) was rejected; queue a recount?`;
+ if(a.subjectType==='warehouse_pick_shortfall')return `Shortfall on ${agentEsc(p.soNumber||'')} — ${agentEsc(p.sku||'')} × ${p.qtyOrdered} has ${p.qtyAvailable} available; confirm backorder?`;
+ if(a.subjectType==='warehouse_receipt_discrepancy')return `Receipt discrepancy on ${agentEsc(p.poNumber||'')} — ${agentEsc(p.sku||'')} ordered ${p.qtyOrdered}, received ${p.qtyReceived}, rejected ${p.qtyRejected}; release put-away for the ${p.qtyReceived} good units?`;
+ if(a.subjectType==='warehouse_draft_po')return `Draft PO for ${agentEsc(p.sku||'')} — order ${p.reorderQty} from ${agentEsc(p.supplierName||'')} (~$${Number(p.estCost||0).toFixed(2)} CAD)?`;
  return agentEsc(a.subjectType);
+}
+// One funnel for every Approve/Reject button (inbox + dashboard card):
+// the message states the effect that just posted, or that nothing did.
+function warehouseApprovalToast(id,approve){
+ const a=(data.aiApprovals||[]).find(x=>x.id===id);
+ const t=a?a.subjectType:'';
+ if(t==='warehouse_count_line')return approve?'Approved — COUNT_ADJUSTMENT posted, stock updated':'Rejected — no adjustment posted, record unchanged';
+ if(t==='warehouse_recount')return approve?'Approved — recount queued':'Rejected — count stays rejected';
+ if(t==='warehouse_pick_shortfall')return approve?'Approved — backorder confirmed, customer notified':'Rejected — no backorder created';
+ if(t==='warehouse_receipt_discrepancy')return approve?'Approved — put-away released for the good units':'Rejected — put-away stays on hold';
+ if(t==='warehouse_draft_po')return approve?'Approved — draft purchase order created':'Rejected — no purchase order created';
+ if(t==='pipeline_run'||t==='execution_graph_node')return approve?'Approved - the run resumed':'Rejected - the run ended';
+ return approve?'Approved':'Rejected';
 }
 // Decides an approval and resumes whatever waits on it.
 function demoDecideApproval(id,approve){
@@ -20478,9 +22289,175 @@ function demoDecideApproval(id,approve){
   }
  }else if(a.subjectType==='execution_graph_node'){
   agentTeamResolveApproval(a.subjectId,approve,true);
+ }else if(a.subjectType&&a.subjectType.startsWith('warehouse_')){
+  warehouseApprovalEffect(a,approve);
  }
  save();
 }
+// ---- Warehouse approvals + runner (Day 2) --------------------------------
+// APPROVAL SEMANTICS — the Manager decides, the effect posts here and
+// nowhere else. Approve = accept the proposed fact and post its effect;
+// reject = NO record changes at all (only the inbox entry moves, to
+// rejected). Every effect is idempotent-safe because demoDecideApproval
+// only decides pending approvals, once.
+//   count_line:  approve -> COUNT_ADJUSTMENT StockMove (qty = variance,
+//     from = to = the counted location, reference = the count, status
+//     DONE, performed_by user-01, move_date = frozen today 2026-11-13,
+//     next MV-2026-nnn) AND Stock.on_hand += variance. When every
+//     nonzero variance line of the count has been decided: all approved
+//     -> count APPROVED (approved_by user-01); any rejected -> count
+//     back to COUNTING (recount) + a recount task per rejected line.
+//     A line with no stock row yet gets one created (number STK-<SKU>)
+//     with on_hand = counted qty before the adjustment posts.
+//   recount:     approve -> count back to COUNTING + recount task.
+//   pick_shortfall: approve -> backorder task (notify customer); the SO
+//     stays WAITING_STOCK either way.
+//   receipt_discrepancy: approve -> put-away task (release hold); the
+//     rejected units are written off by the Receiving Agent off-demo.
+//   draft_po:    approve -> a DRAFT PurchaseOrder (next PO-2026-nnn,
+//     one line, supplier from the reorder rule's product) + task.
+function nextWarehouseMoveNumber(){
+ const nums=(data.stock_move||[]).map(m=>{const mt=/^MV-2026-(\d+)$/.exec(m.move_number||m.number||'');return mt?Number(mt[1]):0});
+ return 'MV-2026-'+String(Math.max(0,...nums)+1).padStart(3,'0');
+}
+function nextWarehousePoNumber(){
+ const nums=(data.purchase_order||[]).map(p=>{const mt=/^PO-2026-(\d+)$/.exec(p.po_number||p.number||'');return mt?Number(mt[1]):0});
+ return 'PO-2026-'+String(Math.max(0,...nums)+1).padStart(3,'0');
+}
+function warehouseCreateTask(title){
+ // Warehouse tasks are owned by the Manager (Sarah Chen, user-01) and due
+ // on the demo's frozen today — same convention as the seed's dated rows.
+ // Same-title open tasks are never duplicated (runner + engine both fire).
+ if((data.tasks||[]).some(t=>t.title===title&&t.status==='Open'))return null;
+ const task={id:uid(),taskNumber:nextNumber('tasks'),title,relatedType:'General',relatedId:'',due:WAREHOUSE_TODAY,priority:'Medium',status:'Open',...defaultOwnershipFields(null)};
+ data.tasks.unshift(task);
+ return task;
+}
+function warehouseCountLineDecided(countId,productId,locationId){
+ return (data.aiApprovals||[]).some(x=>x.subjectType==='warehouse_count_line'&&x.proposal&&x.proposal.countId===countId&&x.proposal.productId===productId&&x.proposal.locationId===locationId&&x.status!=='pending');
+}
+function warehouseApprovalEffect(a,approve){
+ const p=a.proposal||{};
+ if(!approve)return; // reject: no adjustment, no task, no status change
+ if(a.subjectType==='warehouse_count_line'){
+  let stock=(data.stock||[]).find(s=>s.id===p.stockId);
+  if(!stock){
+   // No stock row for this (product, location) yet: create one at the
+   // expected qty, then the shared adjustment below posts the variance.
+   const prod=(data.product||[]).find(x=>x.id===p.productId)||{};
+   const loc=(data.location||[]).find(x=>x.id===p.locationId)||{};
+   stock={id:'stock-wh-'+p.productId+'-'+p.locationId,number:'STK-'+(prod.sku||p.productId),name:(prod.name||p.productId)+' @ '+(loc.code||p.locationId),status:'IN_STOCK',owner:'Sarah Chen',notes:'',product_id:p.productId,location_id:p.locationId,lot_id:null,on_hand:Number(p.expectedQty||0),reserved:0};
+   data.stock.push(stock);
+  }
+  const n=nextWarehouseMoveNumber();
+  data.stock_move.unshift({id:'mv-wh-'+a.id,number:n,name:n+' · COUNT_ADJUSTMENT',status:'DONE',owner:'Sarah Chen',notes:'',move_number:n,move_type:'COUNT_ADJUSTMENT',product_id:p.productId,lot_id:stock.lot_id||null,qty:p.variance,from_location_id:p.locationId,to_location_id:p.locationId,reference_id:p.countId,performed_by:'user-01',move_date:WAREHOUSE_TODAY});
+  stock.on_hand=Number(stock.on_hand||0)+Number(p.variance||0);
+  const count=(data.cycle_count||[]).find(c=>c.id===p.countId);
+  if(count){
+   const lines=(count.lines||[]).filter(l=>Number(l.variance||0)!==0);
+   if(lines.length&&lines.every(l=>warehouseCountLineDecided(count.id,l.product_id,l.location_id))){
+    const rejected=(data.aiApprovals||[]).filter(x=>x.subjectType==='warehouse_count_line'&&x.proposal&&x.proposal.countId===count.id&&x.status==='rejected');
+    if(rejected.length){
+     count.status='COUNTING';
+     rejected.forEach(x=>warehouseCreateTask('Recount '+(x.proposal.sku||'')+' — variance rejected, count '+count.count_number+' reopened'));
+    }else{
+     count.status='APPROVED';count.approved_by='user-01';
+    }
+   }
+  }
+ }else if(a.subjectType==='warehouse_recount'){
+  const count=(data.cycle_count||[]).find(c=>c.id===p.countId);
+  if(count)count.status='COUNTING';
+  warehouseCreateTask('Recount '+p.sku+' at '+p.locationCode+' — count '+p.countNumber+' was rejected');
+ }else if(a.subjectType==='warehouse_pick_shortfall'){
+  warehouseCreateTask('Backorder '+p.soNumber+' — '+p.sku+' × '+p.qtyOrdered+' unavailable; notify customer');
+ }else if(a.subjectType==='warehouse_receipt_discrepancy'){
+  warehouseCreateTask('Put away '+p.qtyReceived+' × '+p.sku+' from '+p.poNumber+' — discrepancy accepted');
+ }else if(a.subjectType==='warehouse_draft_po'){
+  const n=nextWarehousePoNumber();
+  const supplier=(data.supplier||[]).find(s=>s.id===p.supplierId);
+  data.purchase_order.unshift({id:n.toLowerCase(),number:n,name:n+' — '+(supplier?supplier.name:''),status:'DRAFT',owner:'Sarah Chen',notes:'Draft PO from approved reorder rule '+(p.ruleId||''),po_number:n,supplier_id:p.supplierId,warehouse_id:'wh1',order_date:WAREHOUSE_TODAY,expected_date:WAREHOUSE_TODAY,lines:[{id:'pol-'+n.slice(3)+'-1',product_id:p.productId,qty_ordered:p.reorderQty,qty_received:0,qty_rejected:0,unit_cost:p.unitCost}]});
+  warehouseCreateTask('Send draft '+n+' to '+(supplier?supplier.name:'')+' — '+p.reorderQty+' × '+p.sku);
+ }
+}
+function warehouseEnsureDraftPoApproval(rule,prod){
+ const existing=(data.aiApprovals||[]).find(x=>x.subjectType==='warehouse_draft_po'&&x.proposal&&x.proposal.ruleId===rule.id);
+ if(existing)return;
+ const supplier=(data.supplier||[]).find(s=>s.id===prod.supplier_id)||{};
+ ensureDemoApprovals();
+ data.aiApprovals.unshift({id:'apr-wh-'+rule.id+'-dpo',subjectType:'warehouse_draft_po',subjectId:rule.id,proposal:{ruleId:rule.id,productId:prod.id,sku:prod.sku,productName:prod.name,reorderLevel:rule.reorder_level,reorderQty:rule.reorder_qty,supplierId:prod.supplier_id,supplierName:supplier.name||'',unitCost:prod.cost_price,estCost:Number(prod.cost_price||0)*Number(rule.reorder_qty||0)},status:'pending',requestedBy:'Inventory Agent',createdAt:new Date().toISOString(),resolvedAt:null});
+}
+function warehouseEnsureCountLineApproval(count,l){
+ const existing=(data.aiApprovals||[]).find(x=>x.subjectType==='warehouse_count_line'&&x.proposal&&x.proposal.countId===count.id&&x.proposal.productId===l.product_id&&x.proposal.locationId===l.location_id);
+ if(existing)return;
+ const prod=(data.product||[]).find(p=>p.id===l.product_id)||{};
+ const stock=(data.stock||[]).find(s=>s.product_id===l.product_id&&s.location_id===l.location_id);
+ const pct=Number(l.expected_qty||0)===0?(Number(l.variance||0)!==0?100:0):Math.round(Number(l.variance||0)/Number(l.expected_qty||0)*1000)/10;
+ ensureDemoApprovals();
+ data.aiApprovals.unshift({id:'apr-wh-'+count.id+'-'+l.product_id,subjectType:'warehouse_count_line',subjectId:count.id,proposal:{countId:count.id,countNumber:count.count_number,productId:l.product_id,sku:prod.sku||'',locationId:l.location_id,locationCode:((data.location||[]).find(x=>x.id===l.location_id)||{}).code||'',expectedQty:l.expected_qty,countedQty:l.counted_qty,variance:l.variance,variancePct:pct,severity:Math.abs(pct)>5?'major':'minor',stockId:stock?stock.id:null},status:'pending',requestedBy:'Counting & Audit Agent',createdAt:new Date().toISOString(),resolvedAt:null});
+}
+// ---- Warehouse workflow runner (Day 2) ------------------------------------
+// The flat workflow engine (evaluateWorkflowRulesFor above) can only watch
+// a record's own top-level fields. Warehouse triggers are quantitative and
+// line-level — variance %, reorder re-evaluation, rejected units, zero
+// stock — so this runner handles them, invoked from the same save hook
+// right after the engine, warehouse-mode only. Division of labour: the
+// engine posts the TASKS (its rules fire on the status change); the runner
+// posts the APPROVALS (one per line, id-guarded, no duplicates on
+// re-save). A flipped reorder_rule re-enters the engine through
+// evaluateWorkflowRulesFor, so W2's own workflow fires.
+function runWarehouseWorkflows(entityKey,record,before){
+ if(entityKey==='stock'){
+  const prod=(data.product||[]).find(p=>p.id===record.product_id);
+  if(!prod)return;
+  const rule=(data.reorder_rule||[]).find(r=>r.product_id===record.product_id);
+  if(!rule)return;
+  const available=Number(record.on_hand||0)-Number(record.reserved||0);
+  const nowTriggered=available<=Number(rule.reorder_level||0);
+  if(nowTriggered===(rule.triggered===true))return;
+  const ruleBefore={...rule};
+  rule.triggered=nowTriggered;
+  rule.last_triggered_date=nowTriggered?WAREHOUSE_TODAY:null;
+  if(nowTriggered){
+   evaluateWorkflowRulesFor('reorder_rule',rule,ruleBefore,rule);
+   warehouseEnsureDraftPoApproval(rule,prod);
+  }
+  return;
+ }
+ if(entityKey==='cycle_count'){
+  if(record.status!=='PENDING_APPROVAL')return;
+  (record.lines||[]).forEach(l=>{
+   if(Number(l.variance||0)===0)return;
+   warehouseEnsureCountLineApproval(record,l);
+  });
+  return;
+ }
+ if(entityKey==='purchase_order'){
+  const bad=(record.lines||[]).find(l=>Number(l.qty_rejected||0)>0);
+  if(!bad)return;
+  const existing=(data.aiApprovals||[]).find(x=>x.subjectType==='warehouse_receipt_discrepancy'&&x.proposal&&x.proposal.poId===record.id);
+  if(existing)return;
+  const prod=(data.product||[]).find(p=>p.id===bad.product_id)||{};
+  ensureDemoApprovals();
+  data.aiApprovals.unshift({id:'apr-wh-'+record.id+'-disc',subjectType:'warehouse_receipt_discrepancy',subjectId:record.id,proposal:{poId:record.id,poNumber:record.po_number,productId:bad.product_id,sku:prod.sku||'',qtyOrdered:bad.qty_ordered,qtyReceived:bad.qty_received,qtyRejected:bad.qty_rejected},status:'pending',requestedBy:'Receiving Agent',createdAt:new Date().toISOString(),resolvedAt:null});
+  return;
+ }
+ if(entityKey==='sales_order'){
+  if(record.status!=='WAITING_STOCK')return;
+  (record.lines||[]).forEach(l=>{
+   const stock=(data.stock||[]).find(s=>s.product_id===l.product_id);
+   const avail=stock?Number(stock.on_hand||0)-Number(stock.reserved||0):0;
+   if(avail>0||Number(l.qty_ordered||0)===0)return;
+   const existing=(data.aiApprovals||[]).find(x=>x.subjectType==='warehouse_pick_shortfall'&&x.proposal&&x.proposal.soId===record.id&&x.proposal.productId===l.product_id);
+   if(existing)return;
+   const prod=(data.product||[]).find(p=>p.id===l.product_id)||{};
+   ensureDemoApprovals();
+   data.aiApprovals.unshift({id:'apr-wh-'+record.id+'-'+l.product_id,subjectType:'warehouse_pick_shortfall',subjectId:record.id,proposal:{soId:record.id,soNumber:record.so_number,productId:l.product_id,sku:prod.sku||'',qtyOrdered:l.qty_ordered,qtyAvailable:avail},status:'pending',requestedBy:'Picking Agent',createdAt:new Date().toISOString(),resolvedAt:null});
+  });
+  return;
+ }
+}
+
 function renderApprovalsInboxPanel(wrap){
  ensureDemoApprovals();
  const pending=data.aiApprovals.filter(a=>a.status==='pending');
@@ -20494,8 +22471,8 @@ function renderApprovalsInboxPanel(wrap){
   <div class="actions"><button class="btn btn-primary" data-approve-approval="${a.id}">Approve</button><button class="btn" data-reject-approval="${a.id}">Reject</button></div>
  </div>`).join(''):'<div class="empty">Nothing pending right now.</div>'}
  </div>`;
- wrap.querySelectorAll('[data-approve-approval]').forEach(b=>b.onclick=()=>{demoDecideApproval(b.dataset.approveApproval,true);toast('Approved - the run resumed');renderView()});
- wrap.querySelectorAll('[data-reject-approval]').forEach(b=>b.onclick=()=>{demoDecideApproval(b.dataset.rejectApproval,false);toast('Rejected - the run ended');renderView()});
+ wrap.querySelectorAll('[data-approve-approval]').forEach(b=>b.onclick=()=>{demoDecideApproval(b.dataset.approveApproval,true);toast(warehouseApprovalToast(b.dataset.approveApproval,true));renderView()});
+  wrap.querySelectorAll('[data-reject-approval]').forEach(b=>b.onclick=()=>{demoDecideApproval(b.dataset.rejectApproval,false);toast(warehouseApprovalToast(b.dataset.rejectApproval,false));renderView()});
 }
 // AI & Agentic Layer: Agent Hierarchy - combines a Pipeline's own step
 // order (deterministic, admin-authored - see aiAgentPipelinesTab above)
@@ -21369,6 +23346,30 @@ function executeWorkflowAction(a,key,record){
  data.tasks.unshift({id:uid(),taskNumber:nextNumber('tasks'),title:a.taskTitle,relatedType:relatedTypeFor[key]||'General',relatedId:relatedTypeFor[key]?record.id:'',due:due.toISOString().slice(0,10),priority:'Medium',status:'Open',...defaultOwnershipFields(record)});
  return `created task "${a.taskTitle}"`;
 }
+// The workflow engine's save-time evaluation, extracted verbatim from the
+// record-modal save path so the warehouse runner can evaluate rules for
+// records IT mutates (e.g. a reorder_rule whose `triggered` flag flips
+// during a stock save) through the same code path. Fires only when a field
+// a rule's conditions watch actually changed on this save AND the full
+// condition set matches the just-saved record.
+function evaluateWorkflowRulesFor(key,obj,before,record){
+ (data.workflowRules||[]).filter(r=>r.entity===key&&r.active).forEach(r=>{
+  const conditions=r.conditions||[];
+  if(!conditions.length)return;
+  const watchedFields=new Set();
+  conditions.forEach(c=>{watchedFields.add(c.fieldKey);if(c.compareField)watchedFields.add(c.compareField)});
+  const anyChanged=[...watchedFields].some(f=>obj[f]!==undefined&&obj[f]!==before[f]);
+  if(!anyChanged)return;
+  if(!conditionsMatch(r.matchType||'all',conditions,obj))return;
+  const descriptions=(r.actions||[]).map(a=>executeWorkflowAction(a,key,record)).filter(Boolean);
+  if(!descriptions.length)return; // e.g. update_related_record with nothing linked yet - a silent no-op, same as desktop
+  if(r.notify){
+   const label=obj.name||obj.title||obj.number||entityLabel(key);
+   data.notifications.unshift({id:uid(),message:`${entityLabel(key).replace(/s$/,'')} "${label}" — ${describeConditions(key,conditions,r.matchType||'all')} — ${descriptions.join('; ')}`,createdAt:new Date().toISOString(),read:false});
+  }
+ });
+}
+
 function workflowTab(body){
  if(wfBuilderMode){renderWorkflowBuilder(body);return}
  const keys=[...Object.keys(relatedTypeFor),...activeCustomObjectKeys()];
