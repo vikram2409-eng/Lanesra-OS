@@ -46,6 +46,7 @@ pub mod organization;
 pub mod ownership;
 pub mod page_layout;
 pub mod page_template;
+pub mod process_lane;
 pub mod product;
 pub mod publisher;
 pub mod quote;
