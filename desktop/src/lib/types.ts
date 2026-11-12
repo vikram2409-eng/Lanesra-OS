@@ -4820,3 +4820,106 @@ export interface ToolRateLimitInput {
   max_calls: number;
   per_seconds: number;
 }
+
+// WP-0712: the lane blueprint (REQ-LANE-020). Mirrors
+// core::models::process_lane (LaneDefinition et al) and
+// core::services::process_lane_blueprint (LaneBlueprint,
+// LaneBlueprintSummary) - snake_case, as the API returns them.
+
+export interface LaneRunDataField {
+  key: string;
+  type: string;
+  required?: boolean;
+  per_child?: boolean;
+  description?: string | null;
+}
+
+export interface LaneFormField {
+  key: string;
+  label: string;
+  type: string;
+  binds_to: string;
+  required: boolean;
+}
+
+export interface LaneWriteOp {
+  action_type: string;
+  inputs: Record<string, unknown>;
+}
+
+export interface LaneBranchTarget {
+  stage: string;
+  step: string;
+}
+
+export interface LaneBranch {
+  on: string;
+  target?: LaneBranchTarget | null;
+  end?: { outcome: string } | null;
+}
+
+export interface LaneCheck {
+  scope: string;
+  message: string;
+  condition?: unknown | null;
+  expression?: string | null;
+  aggregate?: string | null;
+}
+
+export interface LaneStep {
+  id: string;
+  name: string;
+  kind: string;
+  role?: string | null;
+  required?: boolean;
+  description?: string | null;
+  assistance?: { autonomy: string; agent?: string | null } | null;
+  fields?: LaneFormField[] | null;
+  writes?: LaneWriteOp[] | null;
+  check?: LaneCheck | null;
+  validation?: { condition?: unknown | null; expression?: string | null; message: string } | null;
+  branches?: LaneBranch[] | null;
+  repeat_over?: { field: string; item_id_field: string } | null;
+  ends_run?: { outcome: string } | null;
+  notify?: { to_role: string; message: string }[] | null;
+  replaces?: { workflow_id: string; action_index: number }[] | null;
+  child_lane?: { lane_id: string; anchor_record: string } | null;
+}
+
+export interface LaneStage {
+  id: string;
+  name: string;
+  steps: LaneStep[];
+  entry_condition?: unknown | null;
+  skip_condition?: unknown | null;
+}
+
+export interface LaneDefinition {
+  id: string;
+  name: string;
+  description?: string | null;
+  object_key: string;
+  version: number;
+  status: string;
+  stages: LaneStage[];
+  run_data?: { fields: LaneRunDataField[] } | null;
+  start_condition?: unknown | null;
+  excludes?: string[] | null;
+}
+
+export interface LaneBlueprint {
+  lane_key: string;
+  name: string;
+  object_key: string;
+  version: number;
+  status: string;
+  definition: LaneDefinition;
+}
+
+export interface LaneBlueprintSummary {
+  lane_key: string;
+  name: string;
+  object_key: string;
+  latest_version: number;
+  latest_status: string;
+}

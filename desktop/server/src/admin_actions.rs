@@ -93,6 +93,10 @@ pub fn router() -> Router<SharedState> {
             post(start_process_lane_run_admin),
         )
         .route(
+            "/api/admin/process-lanes/drafts",
+            post(draft_process_lane_admin),
+        )
+        .route(
             "/api/admin/execution-graph-runs/:id/resume",
             post(resume_graph_run_admin),
         )
@@ -425,6 +429,40 @@ async fn start_graph_run_admin(
 #[derive(Debug, Deserialize)]
 struct StartProcessLaneRunBody {
     anchor_record_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DraftProcessLaneBody {
+    description: String,
+    object_key: String,
+}
+
+/// WP-0715: drafts a lane from a plain-language description (the async
+/// half of the draft operation; the desktop Tauri command
+/// `draft_lane_from_description` calls the same service). The result is
+/// always a draft - this route has no publish path, same as the command.
+async fn draft_process_lane_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Json(body): Json<DraftProcessLaneBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        lanesra_core::services::assistant_draft_lane_service::draft_lane(
+            &conn,
+            &workspace_id,
+            &master_key,
+            Some(&actor),
+            &body.description,
+            &body.object_key,
+        )
+        .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
 }
 
 /// WP-0703: starts a lane run on an anchor record (the async half of the

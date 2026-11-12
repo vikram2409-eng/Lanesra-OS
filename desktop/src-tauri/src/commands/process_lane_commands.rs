@@ -16,7 +16,8 @@ use crate::state::AppState;
 use lanesra_core::domain::AppResult;
 use lanesra_core::models::graph_run::GraphRun;
 use lanesra_core::models::process_lane::{ProcessLane, ProcessLaneVersion};
-use lanesra_core::services::process_lane_service;
+use lanesra_core::services::process_lane_blueprint::{LaneBlueprint, LaneBlueprintSummary};
+use lanesra_core::services::{process_lane_blueprint, process_lane_service};
 
 #[tauri::command]
 pub fn import_process_lane(
@@ -48,6 +49,34 @@ pub fn get_process_lane(state: State<AppState>, lane_key: String) -> AppResult<P
         &conn,
         &workspace_id,
         &lane_key,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// The blueprint of a lane (WP-0712, REQ-LANE-020): the latest version's
+/// definition, read-only, for any authenticated workspace member - a
+/// Viewer reads the same blueprint an Administrator does, and it carries
+/// no run and no record data.
+#[tauri::command]
+pub fn get_lane_blueprint(state: State<AppState>, lane_key: String) -> AppResult<LaneBlueprint> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    process_lane_blueprint::get_lane_blueprint(
+        &conn,
+        &workspace_id,
+        &lane_key,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// Every lane in the workspace, one summary row each (WP-0712).
+#[tauri::command]
+pub fn list_lane_blueprints(state: State<AppState>) -> AppResult<Vec<LaneBlueprintSummary>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    process_lane_blueprint::list_lane_blueprints(
+        &conn,
+        &workspace_id,
         current_actor(&state).as_deref(),
     )
 }
@@ -104,6 +133,36 @@ pub async fn start_process_lane_run(
             &lane_key,
             &anchor_record_id,
             actor.as_deref(),
+        )
+        .await
+    })
+    .await
+}
+
+/// WP-0715: describe a process - the Admin Assistant drafts a lane from a
+/// plain-language description. The result is always a draft (see
+/// `assistant_draft_lane_service`); publishing stays a separate admin
+/// action, so this command has no publish path.
+#[tauri::command]
+pub async fn draft_lane_from_description(
+    state: State<'_, AppState>,
+    description: String,
+    object_key: String,
+) -> AppResult<ProcessLane> {
+    let master_key = crate::commands::resolve_master_key(&state)?;
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    run_with_own_connection(db_path, move |conn| async move {
+        lanesra_core::services::assistant_draft_lane_service::draft_lane(
+            &conn,
+            &workspace_id,
+            &master_key,
+            actor.as_deref(),
+            &description,
+            &object_key,
         )
         .await
     })

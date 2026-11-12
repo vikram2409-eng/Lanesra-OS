@@ -19,6 +19,7 @@ import { Tasks } from "./features/tasks/Tasks";
 import { Reports } from "./features/reports/Reports";
 import { AdminPanel, type AdminTab } from "./features/settings/Settings";
 import { AssistantPage } from "./features/assistant/AssistantPage";
+import { LaneBlueprintPage } from "./features/lanes/LaneBlueprint";
 import { CustomObjectRecords } from "./features/customObjects/CustomObjectRecords";
 import { Account } from "./features/account/Account";
 import { VoiceContextProvider } from "./features/voice/VoiceContext";
@@ -227,6 +228,7 @@ function Ready({
         {section === "assistant" && (
           <AssistantPage user={user} onOpenAdminTab={(tab) => openAdminTab(tab as AdminTab)} />
         )}
+        {section === "lanes" && <LaneBlueprintPage />}
         {section === "admin" && <AdminPanel openAdminTab={pendingAdminTab} />}
         {section === "account" && <Account user={user} />}
         {activeCustomObject && (

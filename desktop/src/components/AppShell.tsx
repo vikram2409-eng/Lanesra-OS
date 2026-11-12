@@ -25,6 +25,7 @@ export type Section =
   | "tasks"
   | "reports"
   | "assistant"
+  | "lanes"
   | "admin"
   | "account"
   | `custom:${string}`;
@@ -103,6 +104,9 @@ const NAV_ITEMS: { section: Section; label: string; adminOnly?: boolean }[] = [
   // admin-mode assistant lives inside the Admin panel instead, alongside
   // every other admin-only capability - see ADMIN_CATEGORIES in Settings.tsx.
   { section: "assistant", label: "Assistant" },
+  // WP-0712: the lane blueprint is readable by any signed-in user, so it
+  // is a top-level section, not an admin-only one.
+  { section: "lanes", label: "Process Lanes" },
   // Users lives inside the Admin panel now, alongside branding, custom
   // fields, business rules, workflow automation, numbering and Dashboard
   // KPIs - one nav item for every administrator-facing capability.
