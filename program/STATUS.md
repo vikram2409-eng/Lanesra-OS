@@ -33,7 +33,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
 | [WP-0701](work/P7/WP-0701-adr-process-lanes-on-the-run-engine-and-the-lane-definition.md) | ADR: Process Lanes on the run engine, and the lane definition schema | in_review | muse | `wp/WP-0701-lane-model-and-schema` | https://github.com/vikram2409-eng/Lanesra-OS/pull/755 |
-| [WP-0702](work/P7/WP-0702-online-demo-the-receive-shipment-lane-on-the-warehouse-demo.md) | Online demo: the Receive Shipment lane on the warehouse demo | in_progress | muse | `wp/WP-0702-receive-shipment-lane-demo-r2` | - |
+| [WP-0702](work/P7/WP-0702-online-demo-the-receive-shipment-lane-on-the-warehouse-demo.md) | Online demo: the Receive Shipment lane on the warehouse demo | in_review | muse | `wp/WP-0702-receive-shipment-lane-demo-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/758 |
 | [WP-0703](work/P7/WP-0703-lane-definitions-in-the-core-store-lifecycle-and-compile-to.md) | Lane definitions in the core: store, lifecycle and compile to a graph | in_review | muse | `wp/WP-0703-lane-definitions-in-core` | https://github.com/vikram2409-eng/Lanesra-OS/pull/756 |
 
 ## Ready to start (all dependencies done)
@@ -333,7 +333,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | WP | Title | Epic | Status | Est | Editions (✓ delivered) | Depends on |
 |---|---|---|---|---|---|---|
 | [WP-0701](work/P7/WP-0701-adr-process-lanes-on-the-run-engine-and-the-lane-definition.md) | ADR: Process Lanes on the run engine, and the lane definition schema | E7.1 Lane foundation | 👀 in review | M | — | - |
-| [WP-0702](work/P7/WP-0702-online-demo-the-receive-shipment-lane-on-the-warehouse-demo.md) | Online demo: the Receive Shipment lane on the warehouse demo | E7.6 Shipped lanes | 🔨 in progress | L | ○Online demo | WP-0701 |
+| [WP-0702](work/P7/WP-0702-online-demo-the-receive-shipment-lane-on-the-warehouse-demo.md) | Online demo: the Receive Shipment lane on the warehouse demo | E7.6 Shipped lanes | 👀 in review | L | ○Online demo | WP-0701 |
 | [WP-0703](work/P7/WP-0703-lane-definitions-in-the-core-store-lifecycle-and-compile-to.md) | Lane definitions in the core: store, lifecycle and compile to a graph | E7.1 Lane foundation | 👀 in review | L | ○Desktop ○Team Workspace | WP-0701 |
 | [WP-0704](work/P7/WP-0704-human-steps-and-run-data.md) | Human steps and run data | E7.1 Lane foundation | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0703 |
 | [WP-0705](work/P7/WP-0705-record-and-check-steps-real-atomic-repeat-safe-writes.md) | Record and check steps: real, atomic, repeat-safe writes | E7.2 Steps and rules | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0703, WP-0141 |
