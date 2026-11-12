@@ -2457,3 +2457,14 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
 /* Fixed header: banner(36px) + topbar offset */
 body.has-demo-banner{padding-top:36px}
 @media(max-width:900px){.sidebar.open{top:0;height:100vh}}
+
+/* Print / Save as PDF (WP-0712): the lane blueprint's Print button calls
+window.print(); the print sheet shows only the blueprint itself - the
+sidebar, topbar, demo banner, bottom nav and toasts stay on screen. */
+@media print{
+ .sidebar,.topbar,.demo-banner,.bottom-nav,.toast,#voiceConversation,#cmdPalette{display:none!important}
+ body.has-demo-banner{padding-top:0}
+ .app-shell{display:block}
+ .main-area{display:block}
+ .content{padding:0}
+}

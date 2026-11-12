@@ -409,6 +409,8 @@ pub fn run() {
             commands::process_lane_commands::import_process_lane,
             commands::process_lane_commands::list_process_lanes,
             commands::process_lane_commands::get_process_lane,
+            commands::process_lane_commands::get_lane_blueprint,
+            commands::process_lane_commands::list_lane_blueprints,
             commands::process_lane_commands::create_process_lane_version,
             commands::process_lane_commands::publish_process_lane,
             commands::process_lane_commands::start_process_lane_run,

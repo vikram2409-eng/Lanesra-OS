@@ -103,15 +103,15 @@ use lanesra_core::services::{
     industry_package_service, integration_job_service, integration_log_service, invoice_service,
     mapping_service, mcp_client_service, metric_service, numbering_service, ontology_service,
     opportunity_service, order_service, org_unit_service, organization_service, ownership_service,
-    page_layout_service, page_template_service, policy_engine_service, process_lane_service,
-    product_service,
-    publisher_service, quote_service, relationship_service, report_service, saved_view_service,
-    screen_layout_service, search_service, security_settings_service, semantic_mapping_service,
-    solution_component_service, solution_service, status_transition_service, system_graph_service,
-    task_service, test_eval_service, theme_service, tool_registry_service, user_service,
-    vector_search_service, voice_audit_service, voice_execution_service, voice_llm_service,
-    voice_policy_service, voice_provider_service, voice_session_service, webhook_service,
-    work_team_service, workflow_service, workspace_service,
+    page_layout_service, page_template_service, policy_engine_service, process_lane_blueprint,
+    process_lane_service, product_service, publisher_service, quote_service, relationship_service,
+    report_service, saved_view_service, screen_layout_service, search_service,
+    security_settings_service, semantic_mapping_service, solution_component_service,
+    solution_service, status_transition_service, system_graph_service, task_service,
+    test_eval_service, theme_service, tool_registry_service, user_service, vector_search_service,
+    voice_audit_service, voice_execution_service, voice_llm_service, voice_policy_service,
+    voice_provider_service, voice_session_service, webhook_service, work_team_service,
+    workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -3218,6 +3218,22 @@ pub fn dispatch(
                 actor,
             )?)
         }
+        // WP-0712: the lane blueprint reads (REQ-LANE-020) - same service
+        // as the desktop commands, so both editions behave the same.
+        "get_lane_blueprint" => {
+            let lane_key: String = arg(args, "laneKey")?;
+            to_value(process_lane_blueprint::get_lane_blueprint(
+                conn,
+                &require_workspace_id(conn)?,
+                &lane_key,
+                actor,
+            )?)
+        }
+        "list_lane_blueprints" => to_value(process_lane_blueprint::list_lane_blueprints(
+            conn,
+            &require_workspace_id(conn)?,
+            actor,
+        )?),
         "create_process_lane_version" => {
             let lane_key: String = arg(args, "laneKey")?;
             let definition_json: String = arg(args, "definitionJson")?;
