@@ -2457,3 +2457,48 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
 /* Fixed header: banner(36px) + topbar offset */
 body.has-demo-banner{padding-top:36px}
 @media(max-width:900px){.sidebar.open{top:0;height:100vh}}
+
+/* Process Lanes (WP-0702): the runner screen on the warehouse demo. */
+.lane-stages{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:14px 0}
+.lane-stage{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--muted)}
+.lane-stage.current{border-color:var(--brand);color:var(--text);font-weight:600}
+.lane-stage.done{color:var(--success)}
+.lane-stage-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);font-size:12px;flex-shrink:0}
+.lane-stage.current .lane-stage-num{background:var(--brand);border-color:var(--brand);color:#fff}
+.lane-stage-sep{color:var(--muted)}
+.lane-layout{display:grid;grid-template-columns:220px 1fr 340px;gap:16px;align-items:start}
+.lane-steps h4{margin-top:0}
+.lane-step{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:8px 10px;border:1px solid transparent;border-radius:8px;background:none;cursor:pointer;color:var(--text)}
+.lane-step.current{background:var(--panel);border-color:var(--brand);font-weight:600}
+.lane-step.done{color:var(--muted)}
+.lane-step.locked{color:var(--muted);cursor:default}
+.lane-step-mark{width:18px;flex-shrink:0;text-align:center}
+.lane-step-kind{margin-left:auto;font-size:11px;color:var(--muted)}
+.lane-note{font-size:12px}
+.lane-step-card h3{margin:6px 0}
+.lane-line-group{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+.lane-line-head{font-weight:600;margin-bottom:8px}
+.lane-form .field{display:block;margin-bottom:10px}
+.lane-assist{font-size:13px;color:var(--muted)}
+.lane-error{color:var(--danger);min-height:18px;margin:6px 0}
+.lane-actions{display:flex;gap:8px;margin-top:12px}
+.lane-viewing{font-size:13px;color:var(--warn)}
+.lane-step-note{font-size:13px;color:var(--muted)}
+.lane-writes{margin:8px 0;padding-left:18px}
+.lane-writes li{margin-bottom:4px}
+.lane-step-writes{margin:8px 0;padding-left:18px}
+.lane-step-writes li{margin-bottom:4px}
+.lane-audit-row{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
+.lane-audit-time{color:var(--muted);white-space:nowrap}
+.tbl{width:100%;border-collapse:collapse;font-size:13px}
+.tbl th,.tbl td{padding:6px;border-bottom:1px solid var(--line);text-align:left}
+.tbl .num{text-align:right}
+.lane-po-lines{width:100%;border-collapse:collapse;font-size:13px}
+.lane-po-lines th,.lane-po-lines td{padding:4px 6px;text-align:left;border-bottom:1px solid var(--line)}
+.lane-po-lines .num{text-align:right}
+.lane-outcome{border-color:var(--success)}
+.kv{display:flex;justify-content:space-between;padding:3px 0;font-size:13px}
+.kv span{color:var(--muted)}
+.lane-o360-run{margin-bottom:12px}
+.lane-o360-run-head{margin-bottom:6px}
+@media(max-width:1100px){.lane-layout{grid-template-columns:1fr}}
