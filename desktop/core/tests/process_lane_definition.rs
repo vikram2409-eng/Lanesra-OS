@@ -36,7 +36,7 @@ fn master_key() -> [u8; 32] {
 
 fn example_path() -> String {
     format!(
-        "{}/../../../program/spec/schemas/examples/lane-wh-receiving.json",
+        "{}/../../program/spec/schemas/examples/lane-wh-receiving.json",
         env!("CARGO_MANIFEST_DIR")
     )
 }
@@ -87,9 +87,9 @@ fn published_lane_compiles_to_a_graph_that_passes_validate_for_publish() {
     // `create_from_source`); run it again on the stored graph directly.
     execution_graph_service::validate_for_publish(&graph).unwrap();
 
-    // 12 steps + 4 repeating steps wrapped in a loop node + trigger + end.
-    assert_eq!(graph.nodes.len(), 18);
-    assert_eq!(graph.edges.len(), 22);
+    // 12 steps + 5 repeating steps wrapped in a loop node + trigger + end.
+    assert_eq!(graph.nodes.len(), 19);
+    assert_eq!(graph.edges.len(), 25);
 
     let node_by_key = |key: &str| {
         graph
@@ -170,7 +170,7 @@ fn published_lane_compiles_to_a_graph_that_passes_validate_for_publish() {
     assert_eq!(stage_nodes("verify"), 3); // 2 steps + 1 loop
     assert_eq!(stage_nodes("record-receipt"), 3);
     assert_eq!(stage_nodes("hold-review"), 2);
-    assert_eq!(stage_nodes("stage-put-away"), 6); // 4 steps + 2 loops
+    assert_eq!(stage_nodes("stage-put-away"), 7); // 4 steps + 3 loops
     assert_eq!(stage_nodes("confirm"), 2);
 
     // Repeat steps are wrapped in a loop with the safety bound.
@@ -178,6 +178,7 @@ fn published_lane_compiles_to_a_graph_that_passes_validate_for_publish() {
         "loop:verify:match-delivery-note",
         "loop:record-receipt:enter-quantities",
         "loop:stage-put-away:post-receipt-moves",
+        "loop:stage-put-away:confirm-putaway-bins",
         "loop:stage-put-away:post-putaway-moves",
     ] {
         let loop_node = node_by_key(loop_key);
