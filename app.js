@@ -8813,6 +8813,36 @@ function ensureAdminData(){
 // ensureWarehouseDay2() below, run at the end of this function). The
 // scaffolding in ensureAdminData() (roles, dashboards, org root, audit /
 // ownership backfills, empty arrays) still runs.
+// Warehouse demo: the six warehouse roles (WAREHOUSE_MANAGER, RECEIVER,
+// PICKER, PACKER, ADMIN, VIEWER) exist only as strings on the warehouse
+// users — data.roles only ever held Administrator / Sales Rep / Viewer,
+// so demoUserCanReadRecords() found no grant for Sarah Chen and the
+// Tool-Call Firewall refused every record tool in every pipeline run
+// ("Sarah Chen cannot read records"). These are REAL role rows in the
+// demo's own permission model, seeded id-guardedly like every other
+// warehouse row: the Manager reads/writes everything, Receivers /
+// Pickers / Packers read + low-write, ADMIN reads/writes but is NOT the
+// Administrator role (no admin tools), VIEWER reads only. Main-demo
+// roles are untouched — this only runs in warehouse mode, and it heals
+// stored pre-fix workspaces on next load.
+function ensureWarehouseRoles(){
+ if(!data.roles)data.roles=defaultRoles();
+ const defs=[
+  ['role_wh_warehouse_manager','WAREHOUSE_MANAGER','Warehouse Manager — runs the Toronto DC, decides approvals.',accessGrant({canDelete:true,canAssign:false,recordScope:'ORGANIZATION'})],
+  ['role_wh_receiver','RECEIVER','Receives POs, verifies and stages stock.',accessGrant({canDelete:false,canAssign:false,recordScope:'ORGANIZATION'})],
+  ['role_wh_picker','PICKER','Picks waves along the serpentine route.',accessGrant({canDelete:false,canAssign:false,recordScope:'ORGANIZATION'})],
+  ['role_wh_packer','PACKER','Packs, verifies and ships orders.',accessGrant({canDelete:false,canAssign:false,recordScope:'ORGANIZATION'})],
+  ['role_wh_admin','ADMIN','Warehouse admin — reads/writes records, no Administrator tools.',accessGrant({canDelete:true,canAssign:false,recordScope:'ORGANIZATION'})],
+  ['role_wh_viewer','VIEWER','Read-only across the warehouse.',accessGrant({canCreate:false,canUpdate:false,canDelete:false,recordScope:'ORGANIZATION'})],
+ ];
+ defs.forEach(([id,name,description,grant])=>{
+  if((data.roles||[]).some(r=>r.name===name))return;
+  data.roles.push({id,name,description,isSystem:true,
+   objectPermissions:{'*':grant},
+   aiPermissions:{assistantAccess:name!=='VIEWER',agentFoundryAccess:name==='WAREHOUSE_MANAGER',manageAiSettings:false,allowedAgentIds:[]},
+   themePermissions:{manageThemes:false}});
+ });
+}
 function ensureWarehouseData(){
  if(!data.customObjects)data.customObjects=[];
  (warehouseSeed.customObjects||[]).forEach(def=>{if(!data.customObjects.some(o=>o.key===def.key))data.customObjects.push(JSON.parse(JSON.stringify(def)))});
@@ -8824,6 +8854,7 @@ function ensureWarehouseData(){
  if(!data.workspace)data.workspace={name:'Toronto Distribution Centre',address:'125 Industrial Parkway, Toronto, ON M8Z 4R7',city:'Toronto, ON',phone:'416-555-0142',logo:''};
  data.workspace.aiFoundrySeeded=true;data.workspace.ontologyGraphSeeded=true;data.workspace.object360Seeded=true;
  ensureAdminData();
+ ensureWarehouseRoles();
  ensureWarehouseDay2();
 }
 // ---- Warehouse demo (Day 2): agents, workflows, approvals, glossary ----
@@ -9082,10 +9113,10 @@ const ADMIN_CATEGORIES=[
 ];
 let dependencyExplorerState={type:'custom_object',id:null,depth:'1',inspectType:null,inspectId:null,showImpact:true,showLineage:true,expanded:{},collapsed:{},zoom:1,panX:0,panY:0,labelMode:'all',pathMode:false,pathFrom:null,pathTo:null,pathKeys:null,pathEdges:null,pathUnreachable:false,simKeys:null,simChange:null,simRoot:null};
 // PR3-A power tools: last canvas size (for centering) + one-time document-level pan listeners.
-let depLastCanvasW=0,depLastCanvasH=0,depPanWired=false,depDragPanEl=null,depDragState=null;
+let depLastCanvasW=0,depLastCanvasH=0,depPanWired=false,depDragPanEl=null,depDragState=null,depSuppressClick=false,depDragRafPending=false,depDragRafId=null;
 // Bug 3 (Day 2): viewport-measured canvas caps (two-pass, see
 // dependencyExplorerTab) + the last auto-fit view signature.
-let depCanvasCapW=null,depCanvasCapH=null,depLastFitSig=null;
+let depCanvasCapW=null,depCanvasCapH=null,depLastFitSig=null,depLastHashApplied=null;
 function depMaxDepth(){const d=dependencyExplorerState.depth;return d==='all'?25:(parseInt(d,10)||1)}
 // Legend toggle-filter (issue #339's own design text: "identify/toggle
 // what's showing") - kept as its own module-level Set rather than inside
@@ -11198,7 +11229,7 @@ function o360PivotTo(entityType,entityId,label,newTrail){
 // Cross-links both ways (issue #374).
 function openOntologyGraphFor(entityTypeKey){
  closeModal();
- dependencyExplorerState={type:'custom_object',id:entityTypeKey,depth:'1',inspectType:'custom_object',inspectId:entityTypeKey,showImpact:true,showLineage:true,expanded:{},collapsed:{}};
+ dependencyExplorerState={...dependencyExplorerState,type:'custom_object',id:entityTypeKey,depth:'1',inspectType:'custom_object',inspectId:entityTypeKey,showImpact:true,showLineage:true,expanded:{},collapsed:{}};
  current='admin';adminTab='dependencyExplorer';adminView='tool';renderView();
 }
 function openObject360ForEntity(entityTypeKey){
@@ -13093,30 +13124,106 @@ function depApplyCollapse(model,collapsed,typeLabel){
   .filter(e=>e.fromKey!==e.toKey&&liveKeys.has(e.fromKey)&&liveKeys.has(e.toKey))
   .filter(e=>{const k=e.fromKey+'>'+e.toKey+':'+e.edgeType;if(seen.has(k))return false;seen.add(k);return true});
 }
-// Seeded force-directed layout with per-type cluster gravity: same-type
-// nodes pull toward a shared anchor on an ellipse, so each type forms a
-// visible clump. Deterministic per node-set (seeded PRNG), so re-renders
-// (e.g. selecting a node) never reshuffle the graph.
+// Pill size estimate for layout: labels render truncated to 18 chars at
+// 12px (13px root) with 12px side padding + dot + gap, so width is
+// ~38px + ~7px/char (root: 32px + ~7.5px/char, no dot). The same
+// estimate drives the harness's overlap checks, so layout and test agree.
+function depPillSize(label,isRoot){
+ const chars=Math.min(String(label||'').length,18);
+ const w=isRoot?Math.min(208,32+Math.ceil(chars*7.5)):Math.min(208,38+Math.ceil(chars*7));
+ const h=isRoot?33:28;
+ return {w,h,hw:w/2,hh:h/2};
+}
+// De-overlap pass: push overlapping pills apart along the axis of least
+// penetration, a few deterministic passes. Force-directed layout alone
+// cannot do this — LINK_LEN (220) is barely wider than a pill, and
+// same-cluster nodes share one anchor, so pills stacked on each other
+// (the Suppliers D1 "Contact name pill overlapped" case). Runs after the
+// force loop, before the canvas clamp, so the result stays on-canvas.
+function depDeoverlapPositions(model,pos,W,H,rootKey){
+ const GAP=6;
+ const size=new Map();
+ model.nodes.forEach(n=>size.set(n.key,depPillSize(n.label,n.key===rootKey)));
+ for(let pass=0;pass<60;pass++){
+  let moved=false;
+  for(let i=0;i<model.nodes.length;i++)for(let j=i+1;j<model.nodes.length;j++){
+   const a=model.nodes[i],b=model.nodes[j];
+   const pa=pos.get(a.key),pb=pos.get(b.key);
+   if(!pa||!pb)continue;
+   const sa=size.get(a.key),sb=size.get(b.key);
+   const needX=sa.hw+sb.hw+GAP,needY=sa.hh+sb.hh+GAP;
+   const dx=pb.x-pa.x,dy=pb.y-pa.y;
+   const ox=needX-Math.abs(dx),oy=needY-Math.abs(dy);
+   if(ox<=0||oy<=0)continue;
+   moved=true;
+   // The root stays pinned at the canvas center, so when it is one of
+   // the pair the other node takes the whole push; otherwise they split it.
+   const eitherRoot=a.key===rootKey||b.key===rootKey;
+   const share=eitherRoot?1:0.5;
+   if(ox<oy){
+    const push=ox*share*(dx>=0?1:-1);
+    if(a.key!==rootKey)pa.x-=push;
+    if(b.key!==rootKey)pb.x+=push;
+   }else{
+    const push=oy*share*(dy>=0?1:-1);
+    if(a.key!==rootKey)pa.y-=push;
+    if(b.key!==rootKey)pb.y+=push;
+   }
+  }
+  if(!moved)break;
+ }
+ // Re-clamp to the canvas with each pill's own half-size, so a pushed
+ // pill never hangs off an edge.
+ model.nodes.forEach(n=>{
+  const p=pos.get(n.key);if(!p)return;
+  const s=size.get(n.key);
+  p.x=Math.max(s.hw,Math.min(W-s.hw,p.x));
+  p.y=Math.max(s.hh,Math.min(H-s.hh,p.y));
+ });
+ return pos;
+}
 // layout: {rootKey, clusterOrder[], W, H} - rootKey/clusterOrder are the
 // contract; W/H (canvas size) ride along since the body needs them.
 function graphLayoutPositions(model,layout){
  const W=layout.W,H=layout.H;
  const visible=model.nodes;
+ const rootKey=layout.rootKey;
  const rng=depSeededRandom(depHashStr(visible.map(n=>n.key).sort().join('|')));
+ // Cluster anchors: one shared point per type piles every same-type
+ // node on top of each other (one anchor + LINK_LEN barely wider than
+ // a pill), and no amount of repulsion or post-hoc de-overlap can
+ // unstack 14 fields cleanly. Each type instead gets an ARC of the
+ // cluster ellipse — ~40px of arc per node, capped so all types + gaps
+ // fit around the circle — and each node has its own anchor point on
+ // that arc. Gravity then pulls nodes to distinct spots; the cluster
+ // still reads as one group (PR4 centroid cohesion is unchanged).
  const anchors={};
- (layout.clusterOrder||[]).forEach((t,i)=>{
-  const a=(i/layout.clusterOrder.length)*Math.PI*2-Math.PI/2;
-  anchors[t]={x:W/2+Math.cos(a)*W*0.36,y:H/2+Math.sin(a)*H*0.36};
+ const nodeAnchor=new Map();
+ const byType=new Map();
+ visible.forEach(n=>{if(n.key===rootKey)return;if(!byType.has(n.type))byType.set(n.type,[]);byType.get(n.type).push(n)});
+ const order=(layout.clusterOrder&&layout.clusterOrder.length?layout.clusterOrder:[...byType.keys()]).filter(t=>byType.has(t));
+ const GAP=0.3;
+ const arcSum=order.reduce((a,t)=>a+Math.min(2.0,(byType.get(t).length)*0.16),0);
+ const arcScale=(arcSum+GAP*order.length)>Math.PI*2?(Math.PI*2-GAP*order.length)/arcSum:1;
+ let cursor=-Math.PI/2;
+ order.forEach(t=>{
+  const members=byType.get(t);
+  const arcW=Math.min(2.0,members.length*0.16)*arcScale;
+  members.forEach((n,k)=>{
+   const a=cursor+(members.length>1?(k/(members.length-1))*arcW:arcW/2);
+   nodeAnchor.set(n.key,{x:W/2+Math.cos(a)*W*0.36,y:H/2+Math.sin(a)*H*0.36});
+  });
+  anchors[t]={x:W/2+Math.cos(cursor+arcW/2)*W*0.36,y:H/2+Math.sin(cursor+arcW/2)*H*0.36};
+  cursor+=arcW+GAP;
  });
  const pos=new Map();
- const rootKey=layout.rootKey;
  visible.forEach(n=>{
   if(n.key===rootKey){pos.set(n.key,{x:W/2,y:H/2});return}
-  const a=anchors[n.type]||{x:W/2,y:H/2};
-  pos.set(n.key,{x:a.x+(rng()-0.5)*90,y:a.y+(rng()-0.5)*90});
+  const a=nodeAnchor.get(n.key)||anchors[n.type]||{x:W/2,y:H/2};
+  pos.set(n.key,{x:a.x+(rng()-0.5)*30,y:a.y+(rng()-0.5)*30});
  });
  const TICKS=visible.length>260?60:110;
- const K=82,LINK_LEN=185;
+ const LINK_LEN=220;
  for(let t=0;t<TICKS;t++){
   const disp=new Map(visible.map(n=>[n.key,{x:0,y:0}]));
   for(let i=0;i<visible.length;i++)for(let j=i+1;j<visible.length;j++){
@@ -13125,7 +13232,12 @@ function graphLayoutPositions(model,layout){
    let dx=pa.x-pb.x,dy=pa.y-pb.y,d2=dx*dx+dy*dy;
    if(d2<1){dx=rng()-0.5;dy=rng()-0.5;d2=1}
    const d=Math.sqrt(d2);
-   const f=Math.min(K*K/d,9);
+   // Short-range repulsion only: strong enough to keep pills from
+   // stacking (they are ~130x28), zero beyond a pill width. The old
+   // K*K/d law pushed at near-full strength even 400px away, so the
+   // summed pairwise force exploded every node to the canvas walls.
+   const REPEL_R=110,REPEL_F=30;
+   const f=d<REPEL_R?REPEL_F*(1-d/REPEL_R):0;
    const fx=f*dx/d,fy=f*dy/d;
    const da=disp.get(a.key),db=disp.get(b.key);
    da.x+=fx;da.y+=fy;db.x-=fx;db.y-=fy;
@@ -13143,7 +13255,7 @@ function graphLayoutPositions(model,layout){
   visible.forEach(n=>{
    if(n.key===rootKey)return;
    const p=pos.get(n.key),d=disp.get(n.key);
-   const a=anchors[n.type]||{x:W/2,y:H/2};
+   const a=nodeAnchor.get(n.key)||anchors[n.type]||{x:W/2,y:H/2};
    d.x+=(a.x-p.x)*0.14+(W/2-p.x)*0.006;
    d.y+=(a.y-p.y)*0.14+(H/2-p.y)*0.006;
   });
@@ -13170,10 +13282,28 @@ function graphLayoutPositions(model,layout){
    p.y=Math.max(my,Math.min(H-my,p.y+d.y*0.5));
   });
  }
+ // De-overlap: the force loop alone stacks same-cluster pills (shared
+ // anchor + LINK_LEN barely wider than a pill). Runs before offsets so a
+ // dragged node keeps exactly where the user put it.
+ depDeoverlapPositions(model,pos,W,H,rootKey);
+ // Node-drag offsets (Ontology Graph only — Object 360 passes none): a
+ // dragged node keeps its offset across re-renders, clamped inside the
+ // canvas by its own half-pill size.
+ const offsets=layout.nodeOffsets||null;
+ if(offsets){
+  visible.forEach(n=>{
+   const off=offsets instanceof Map?offsets.get(n.key):offsets[n.key];
+   if(!off)return;
+   const p=pos.get(n.key);if(!p)return;
+   const s=depPillSize(n.label,n.key===rootKey);
+   p.x=Math.max(s.hw,Math.min(W-s.hw,p.x+(off.x||0)));
+   p.y=Math.max(s.hh,Math.min(H-s.hh,p.y+(off.y||0)));
+  });
+ }
  return pos;
 }
 function depLayoutPositions(model,W,H){
- return graphLayoutPositions(model,{rootKey:depNodeKey(dependencyExplorerState.type,dependencyExplorerState.id),clusterOrder:DEP_CLUSTER_ORDER,W:W,H:H});
+ return graphLayoutPositions(model,{rootKey:depNodeKey(dependencyExplorerState.type,dependencyExplorerState.id),clusterOrder:DEP_CLUSTER_ORDER,W:W,H:H,nodeOffsets:dependencyExplorerState.nodeOffsets||null});
 }
 // Andrew's monotone chain convex hull, for cluster halos.
 function depConvexHull(pts){
@@ -13200,7 +13330,7 @@ function depConvexHull(pts){
 // set) and dims the rest; labelMode 'neighborhood' renders edge-label pills
 // only for edges touching the inspected node (spec section 7.6 declutter).
 function graphRender(model,ui,W,H){
- const pos=graphLayoutPositions(model,{rootKey:ui.rootKey,clusterOrder:ui.clusterOrder||[],W:W,H:H});
+ const pos=graphLayoutPositions(model,{rootKey:ui.rootKey,clusterOrder:ui.clusterOrder||[],W:W,H:H,nodeOffsets:ui.nodeOffsets||null});
  const byKey=new Map(model.nodes.map(n=>[n.key,n]));
  const inspectKey=ui.inspectKey;
  const hl=ui.highlight||{};
@@ -13221,12 +13351,14 @@ function graphRender(model,ui,W,H){
   const minX=Math.min.apply(null,xs),maxX=Math.max.apply(null,xs);
   const minY=Math.min.apply(null,ys),maxY=Math.max.apply(null,ys);
   const padX=58,padY=44;
-  const ecx=((minX+maxX)/2).toFixed(1),ecy=((minY+maxY)/2).toFixed(1);
-  const erx=Math.max(70,((maxX-minX)/2+padX)).toFixed(1);
-  const ery=Math.max(48,((maxY-minY)/2+padY)).toFixed(1);
-  haloSvg.push('<ellipse data-cluster-type="'+type+'" cx="'+ecx+'" cy="'+ecy+'" rx="'+erx+'" ry="'+ery+'" fill="'+color+'" fill-opacity="0.04" stroke="'+color+'" stroke-opacity="0.6" stroke-width="1.5" stroke-dasharray="8 6"/>');
-  const lx=(minX+maxX)/2;
-  const ly=minY-14;
+  const ecx=(minX+maxX)/2,ecy=(minY+maxY)/2;
+  // Clamp the halo inside the canvas: a cluster near an edge used to
+  // have its ellipse cut off by the canvas bounds.
+  const erx=Math.max(24,Math.min(Math.max(70,(maxX-minX)/2+padX),ecx,W-ecx));
+  const ery=Math.max(24,Math.min(Math.max(48,(maxY-minY)/2+padY),ecy,H-ecy));
+  haloSvg.push('<ellipse data-cluster-type="'+type+'" cx="'+ecx.toFixed(1)+'" cy="'+ecy.toFixed(1)+'" rx="'+erx.toFixed(1)+'" ry="'+ery.toFixed(1)+'" fill="'+color+'" fill-opacity="0.04" stroke="'+color+'" stroke-opacity="0.6" stroke-width="1.5" stroke-dasharray="8 6"/>');
+  const lx=Math.max(40,Math.min(W-40,(minX+maxX)/2));
+  const ly=Math.max(12,minY-14);
   haloLabels.push('<button type="button" class="ontology-halo-label og-cluster-label" data-cluster-type="'+type+'" '+ui.collapseAttr+'="'+type+'" style="left:'+lx.toFixed(1)+'px;top:'+ly.toFixed(1)+'px;color:'+color+'" title="Collapse '+label+' into a single node">'+label+' ▾</button>');
  });
  // Collapsed clusters: dashed halo + expand affordance.
@@ -13416,6 +13548,7 @@ function depRenderGraph(model,W,H){
   nodeSize:ONTOLOGY_NODE_SIZE,rootSize:ONTOLOGY_ROOT_SIZE,
   rootClass:'ontology-node-root',
   clusterOrder:DEP_CLUSTER_ORDER,
+  nodeOffsets:s.nodeOffsets||null,
   highlight:{pathKeys:s.pathKeys||null,simKeys:s.simKeys||null,simChange:s.simChange||null},
   labelMode:s.labelMode||'all'
  },W,H);
@@ -13476,7 +13609,11 @@ function depReadShareHash(){
   const h=(typeof location==='undefined'?'':location.hash)||'';
   if(h.indexOf('#/ontology')!==0)return null;
   const params=new URLSearchParams(h.slice('#/ontology'.length).replace(/^\?/,''));
-  const out={type:params.get('type')||'',id:params.get('id')||'',depth:params.get('depth')||'2',showImpact:params.get('impact')!=='0',showLineage:params.get('lineage')!=='0',hidden:[],collapsed:{}};
+  const zoomRaw=parseFloat(params.get('zoom')||'');
+  const panXRaw=parseInt(params.get('panX')||'',10),panYRaw=parseInt(params.get('panY')||'',10);
+  const out={type:params.get('type')||'',id:params.get('id')||'',depth:params.get('depth')||'2',showImpact:params.get('impact')!=='0',showLineage:params.get('lineage')!=='0',hidden:[],collapsed:{},
+   zoom:Number.isFinite(zoomRaw)?Math.min(DEP_ZOOM_MAX,Math.max(DEP_ZOOM_MIN,zoomRaw)):null,
+   panX:Number.isFinite(panXRaw)?panXRaw:null,panY:Number.isFinite(panYRaw)?panYRaw:null};
   const hidden=params.get('hidden');
   if(hidden)out.hidden=hidden.split(',').filter(Boolean);
   const collapsed=params.get('collapsed');
@@ -13490,38 +13627,132 @@ function depWriteShareHash(){
   if(!s.id)return;
   const hidden=Array.from(depExplorerHiddenTypes).sort().join(',');
   const collapsed=Object.keys(s.collapsed||{}).filter(k=>s.collapsed[k]).sort().join(',');
-  const parts=[['type',s.type||''],['id',s.id||''],['depth',s.depth||'1'],['impact',s.showImpact?1:0],['lineage',s.showLineage?1:0],['hidden',hidden],['collapsed',collapsed]];
-  history.replaceState(null,'','#/ontology?'+parts.map(p=>p[0]+'='+encodeURIComponent(p[1])).join('&'));
+  const parts=[['type',s.type||''],['id',s.id||''],['depth',s.depth||'1'],['impact',s.showImpact?1:0],['lineage',s.showLineage?1:0],['hidden',hidden],['collapsed',collapsed],['zoom',Math.round((s.zoom||1)*1000)/1000],['panX',s.panX||0],['panY',s.panY||0]];
+  const hash='#/ontology?'+parts.map(p=>p[0]+'='+encodeURIComponent(p[1])).join('&');
+  if(location.hash===hash){depLastHashApplied=hash;return;}
+  // A change of VIEW (type/component/depth) is a history step, so Back
+  // walks back through graph views; a zoom/pan-only change replaces in
+  // place, so wheeling does not spam the history.
+  const prev=depReadShareHash();
+  const viewChanged=!prev||prev.type!==s.type||prev.id!==s.id||String(prev.depth)!==String(s.depth||'1');
+  if(viewChanged)history.pushState(null,'',hash);
+  else history.replaceState(null,'',hash);
+  depLastHashApplied=hash;
  }catch(e){}
 }
 function depApplyShareHashIfNeeded(){
  const s=dependencyExplorerState;
- if(s.id)return;
- if(typeof location==='undefined'||!location.hash||location.hash.indexOf('#/ontology')!==0)return;
+ if(typeof location==='undefined'||!location.hash||location.hash.indexOf('#/ontology')!==0)return false;
+ // Only the URL's own changes apply. In-app state is written back to
+ // the URL at the end of every render, so re-applying the same hash on
+ // the next render would clobber the fit / zoom / pan that render just
+ // computed with the previous render's stale values.
+ if(location.hash===depLastHashApplied)return false;
  const p=depReadShareHash();
- if(!p||!p.type||!p.id)return;
- dependencyExplorerState={...s,type:p.type,id:p.id,depth:p.depth,inspectType:p.type,inspectId:p.id,showImpact:p.showImpact,showLineage:p.showLineage};
+ if(!p||!p.type||!p.id)return false;
+ // Ignore a stale link (node deleted since): keep the current view.
+ if(!systemGraphNodes().some(n=>n.type===p.type&&n.id===p.id))return false;
+ const sameView=s.type===p.type&&s.id===p.id&&String(s.depth)===String(p.depth);
+ const sameZoom=(p.zoom===null||Math.abs((s.zoom||1)-p.zoom)<0.001)&&(p.panX===null||(s.panX||0)===p.panX)&&(p.panY===null||(s.panY||0)===p.panY);
+ if(sameView&&sameZoom&&s.showImpact===p.showImpact&&s.showLineage===p.showLineage){depLastHashApplied=location.hash;return false;}
+ dependencyExplorerState={...s,type:p.type,id:p.id,depth:p.depth,inspectType:p.type,inspectId:p.id,showImpact:p.showImpact,showLineage:p.showLineage,
+  zoom:p.zoom===null?(s.zoom||1):p.zoom,panX:p.panX===null?(s.panX||0):p.panX,panY:p.panY===null?(s.panY||0):p.panY};
  (p.hidden||[]).forEach(t=>depExplorerHiddenTypes.add(t));
  if(p.collapsed&&Object.keys(p.collapsed).length)dependencyExplorerState={...dependencyExplorerState,collapsed:p.collapsed};
+ depLastHashApplied=location.hash;
+ return true;
+}
+// Back / forward + direct hash URLs: the hash is the view's address, so
+// a hash change re-renders the graph (or opens it) instead of being
+// ignored once a component is already selected.
+function depWireHashNav(){
+ if(typeof window==='undefined'||window.__depHashWired)return;
+ window.__depHashWired=true;
+ window.addEventListener('hashchange',()=>{
+  try{
+   if(typeof location==='undefined'||!location.hash||location.hash.indexOf('#/ontology')!==0)return;
+   if(typeof current==='undefined')return;
+   if(current!=='admin'||adminTab!=='dependencyExplorer'){
+    current='admin';adminTab='dependencyExplorer';adminView='tool';
+    depApplyShareHashIfNeeded();
+    renderView();
+    return;
+   }
+   if(depApplyShareHashIfNeeded())renderAdminTab();
+  }catch(e){}
+ });
 }
 // Zoom / pan -----------------------------------------------------------------
+// Zoom limits: manual zoom runs 0.5–2.0 (the old 0.25 floor turned a few
+// wheel ticks into a 25% thumbnail; 3.0 was never readable). Fit may
+// still go to 0.25 when a very large graph genuinely needs it — that is a
+// fit, not a thumbnail.
+const DEP_ZOOM_MIN=0.5,DEP_ZOOM_MAX=2,DEP_FIT_MIN=0.25,DEP_PAN_SLACK=40;
+// Node bounding box (pill-aware) + viewport size, or null off-tab.
+function depContentBBox(){
+ const vp=document.getElementById('depGraphViewport');
+ if(!vp||!dependencyExplorerState.id)return null;
+ const model=depGraphModel();
+ const pos=depLayoutPositions(model,depLastCanvasW,depLastCanvasH);
+ if(!model.nodes.length||!pos.size)return null;
+ let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+ const rootKey=depNodeKey(dependencyExplorerState.type,dependencyExplorerState.id);
+ model.nodes.forEach(n=>{const p=pos.get(n.key);if(!p)return;const s=depPillSize(n.label,n.key===rootKey);minX=Math.min(minX,p.x-s.hw);maxX=Math.max(maxX,p.x+s.hw);minY=Math.min(minY,p.y-s.hh);maxY=Math.max(maxY,p.y+s.hh)});
+ return {minX,maxX,minY,maxY,vw:vp.clientWidth||0,vh:vp.clientHeight||0};
+}
+// Clamp a pan so the graph can never be dragged off-canvas: a graph
+// larger than the viewport must keep covering it (40px slack at most);
+// a smaller graph must stay fully on screen. Returns {panX,panY}.
+function depClampPan(panX,panY,zoom){
+ const b=depContentBBox();
+ if(!b||!b.vw||!b.vh)return {panX:Math.round(panX),panY:Math.round(panY)};
+ const z=zoom||dependencyExplorerState.zoom||1;
+ const clampAxis=(pan,min,max,v)=>{
+  const span=(max-min)*z;
+  if(span>=v-2*DEP_PAN_SLACK)return Math.max(v-DEP_PAN_SLACK-max*z,Math.min(DEP_PAN_SLACK-min*z,pan));
+  return Math.max(-min*z,Math.min(v-max*z,pan));
+ };
+ return {panX:Math.round(clampAxis(panX,b.minX,b.maxX,b.vw)),panY:Math.round(clampAxis(panY,b.minY,b.maxY,b.vh))};
+}
+// True when every pill is fully inside the viewport at the current
+// zoom/pan — the test for "keep this view" vs "refit" on a view change.
+function depFitsViewport(){
+ const b=depContentBBox();
+ if(!b||!b.vw||!b.vh)return false;
+ const z=dependencyExplorerState.zoom||1,panX=dependencyExplorerState.panX||0,panY=dependencyExplorerState.panY||0;
+ return b.minX*z+panX>=-2&&b.minY*z+panY>=-2&&b.maxX*z+panX<=b.vw+2&&b.maxY*z+panY<=b.vh+2;
+}
 function depSetZoom(z,focusX,focusY){
  const s=dependencyExplorerState;
- z=Math.min(3,Math.max(0.25,z));
+ z=Math.min(DEP_ZOOM_MAX,Math.max(DEP_ZOOM_MIN,z));
  let panX=s.panX||0,panY=s.panY||0;
+ // No focus point (toolbar +/- buttons): zoom about the viewport center
+ // instead of the top-left origin, so the graph does not slide away.
+ if(focusX===undefined){
+  const vp=document.getElementById('depGraphViewport');
+  if(vp&&vp.clientWidth){focusX=vp.clientWidth/2;focusY=vp.clientHeight/2}
+ }
  if(focusX!==undefined){
   const oz=s.zoom||1;
   const cx=(focusX-panX)/oz,cy=(focusY-panY)/oz;
   panX=focusX-z*cx;panY=focusY-z*cy;
  }
+ // No pan clamp here: a zoom must keep the point under the cursor
+ // exactly there — the clamp would fight the pinning whenever the
+ // content is near viewport size. Pan drags still clamp, and any zoom
+ // state is recoverable through them (or Fit).
  dependencyExplorerState={...s,zoom:z,panX:Math.round(panX),panY:Math.round(panY),labelMode:z<0.8?'neighborhood':'all'};
  renderAdminTab();
 }
-function depZoomStep(dir,focusX,focusY){depSetZoom((dependencyExplorerState.zoom||1)*(dir>0?1.2:1/1.2),focusX,focusY)}
+function depZoomStep(dir,focusX,focusY){depSetZoom((dependencyExplorerState.zoom||1)*(dir>0?1.1:1/1.1),focusX,focusY)}
 function depResetZoomPan(){
- const s=dependencyExplorerState;
- dependencyExplorerState={...s,zoom:1,panX:0,panY:0,labelMode:'all'};
- renderAdminTab();
+ // Reset restores the DEFAULT view, which is the fit — not zoom 1 / pan 0
+ // (the old Reset left the graph at 100% whether or not it fit).
+ if(!depFitToContent()){
+  const s=dependencyExplorerState;
+  dependencyExplorerState={...s,zoom:1,panX:0,panY:0,labelMode:'all'};
+  renderAdminTab();
+ }
 }
 // Bug 3 (Day 2): fit the NODE bounding box — not the canvas dims — into
 // the viewport. The old version fit depLastCanvasW/H, so a wide canvas
@@ -13530,10 +13761,10 @@ function depResetZoomPan(){
 // the bbox plus half a pill of padding is the true content size.
 function depFitToContent(){
  const vp=document.getElementById('depGraphViewport');
- if(!vp||!dependencyExplorerState.id)return;
+ if(!vp||!dependencyExplorerState.id)return false;
  const model=depGraphModel();
  const pos=depLayoutPositions(model,depLastCanvasW,depLastCanvasH);
- if(!model.nodes.length||!pos.size)return;
+ if(!model.nodes.length||!pos.size)return false;
  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
  pos.forEach(p=>{minX=Math.min(minX,p.x);maxX=Math.max(maxX,p.x);minY=Math.min(minY,p.y);maxY=Math.max(maxY,p.y)});
  // Pills are centered on their position, so grow the box by half a pill
@@ -13543,11 +13774,14 @@ function depFitToContent(){
  const vw=vp.clientWidth||1,vh=vp.clientHeight||1;
  const bw=Math.max(1,maxX-minX),bh=Math.max(1,maxY-minY);
  const margin=0.92;
- const scale=Math.min(3,Math.max(0.25,Math.min(vw/bw,vh/bh)*margin));
+ // Fit shrinks to fit, never magnifies: a small graph at 131% was the
+ // old default view, magnified past readability with pills overlapping.
+ const scale=Math.min(1,Math.max(DEP_FIT_MIN,Math.min(vw/bw,vh/bh)*margin));
  const panX=Math.round((vw-bw*scale)/2-minX*scale);
  const panY=Math.round((vh-bh*scale)/2-minY*scale);
  dependencyExplorerState={...dependencyExplorerState,zoom:scale,panX,panY,labelMode:scale<0.8?'neighborhood':'all'};
  renderAdminTab();
+ return true;
 }
 function depCenterOnNode(type,id){
  const model=depGraphModel();
@@ -13559,6 +13793,33 @@ function depCenterOnNode(type,id){
  dependencyExplorerState={...dependencyExplorerState,panX:Math.round(vp.clientWidth/2-z*p.x),panY:Math.round(vp.clientHeight/2-z*p.y)};
  renderAdminTab();
 }
+// (Re-)wire click handlers for the pills inside the graph canvas. The
+// canvas contents are swapped by depRerenderCanvas during a node drag,
+// which drops the handlers dependencyExplorerTab attached — so the
+// canvas re-wires itself after every swap, or a click after a drag
+// would silently do nothing.
+function depWireCanvasClicks(scope){
+ const root=scope||document;
+ root.querySelectorAll('[data-dep-inspect]').forEach(b=>b.onclick=()=>{if(depSuppressClick)return;const [type,id]=b.dataset.depInspect.split(':');if(dependencyExplorerState.pathMode){depPathPick(type,id);return}dependencyExplorerState={...dependencyExplorerState,inspectType:type,inspectId:id};renderAdminTab()});
+ root.querySelectorAll('[data-dep-collapse]').forEach(b=>b.onclick=()=>{if(depSuppressClick)return;const t=b.dataset.depCollapse;const c={...(dependencyExplorerState.collapsed||{})};if(c[t])delete c[t];else c[t]=true;dependencyExplorerState={...dependencyExplorerState,collapsed:c};renderAdminTab()});
+}
+// Canvas-only re-render during a node drag: re-runs the (deterministic)
+// layout with the in-progress offsets and swaps the canvas contents,
+// without rebuilding the whole admin tab (which would drop the drag).
+// requestAnimationFrame-throttled — one repaint per frame at most.
+function depRerenderCanvas(){
+ if(depDragRafPending)return;
+ depDragRafPending=true;
+ const run=()=>{
+  depDragRafPending=false;depDragRafId=null;
+  const pan=document.getElementById('depGraphPan');
+  if(!pan||!dependencyExplorerState.id)return;
+  pan.innerHTML=depRenderGraph(depGraphModel(),depLastCanvasW,depLastCanvasH);
+  depWireCanvasClicks(pan);
+ };
+ if(typeof requestAnimationFrame==='function')depDragRafId=requestAnimationFrame(run);
+ else run();
+}
 function depWirePanZoom(){
  const vp=document.getElementById('depGraphViewport'),pan=document.getElementById('depGraphPan');
  if(!vp||!pan)return;
@@ -13568,8 +13829,22 @@ function depWirePanZoom(){
   depZoomStep(e.deltaY<0?1:-1,e.clientX-r.left,e.clientY-r.top);
  },{passive:false});
  pan.addEventListener('mousedown',e=>{
-  if(e.button!==0||e.target.closest('button,[data-dep-inspect]'))return;
-  depDragState={x:e.clientX,y:e.clientY,panX:dependencyExplorerState.panX||0,panY:dependencyExplorerState.panY||0};
+  if(e.button!==0)return;
+  // Buttons (halo labels, toolbar) keep their click behavior.
+  if(e.target.closest('button'))return;
+  // A node pill starts a node drag: press + move repositions the node
+  // (edges follow on re-render); press + release with no movement is
+  // still a click, and the inspect handler runs on mouseup.
+  const pill=e.target.closest?e.target.closest('[data-dep-inspect],[data-dep-collapse]'):null;
+  if(pill){
+   const key=pill.hasAttribute('data-dep-inspect')?pill.getAttribute('data-dep-inspect'):'cluster:'+pill.getAttribute('data-dep-collapse');
+   const cur=(dependencyExplorerState.nodeOffsets||{})[key]||{x:0,y:0};
+   depDragState={kind:'node',key,x:e.clientX,y:e.clientY,offX:cur.x,offY:cur.y,moved:false};
+   depDragPanEl=pan;
+   e.preventDefault();
+   return;
+  }
+  depDragState={kind:'pan',x:e.clientX,y:e.clientY,panX:dependencyExplorerState.panX||0,panY:dependencyExplorerState.panY||0};
   depDragPanEl=pan;
   e.preventDefault();
  });
@@ -13577,13 +13852,45 @@ function depWirePanZoom(){
  depPanWired=true;
  document.addEventListener('mousemove',e=>{
   if(!depDragState||!depDragPanEl)return;
-  depDragPanEl.style.transform='translate('+(depDragState.panX+e.clientX-depDragState.x)+'px,'+(depDragState.panY+e.clientY-depDragState.y)+'px) scale('+(dependencyExplorerState.zoom||1)+')';
+  if(depDragState.kind==='node'){
+   const dx=e.clientX-depDragState.x,dy=e.clientY-depDragState.y;
+   if(!depDragState.moved&&Math.hypot(dx,dy)<4)return;
+   if(!depDragState.moved){
+    depDragState.moved=true;
+    depSuppressClick=true;
+    const vp2=document.getElementById('depGraphViewport');
+    if(vp2)vp2.classList.add('dep-dragging');
+   }
+   const z=dependencyExplorerState.zoom||1;
+   const offs={...(dependencyExplorerState.nodeOffsets||{})};
+   offs[depDragState.key]={x:depDragState.offX+dx/z,y:depDragState.offY+dy/z};
+   dependencyExplorerState={...dependencyExplorerState,nodeOffsets:offs};
+   depRerenderCanvas();
+   return;
+  }
+  const z=dependencyExplorerState.zoom||1;
+  const c=depClampPan(depDragState.panX+e.clientX-depDragState.x,depDragState.panY+e.clientY-depDragState.y,z);
+  depDragPanEl.style.transform='translate('+c.panX+'px,'+c.panY+'px) scale('+z+')';
  });
  document.addEventListener('mouseup',e=>{
   if(!depDragState)return;
-  const panX=Math.round(depDragState.panX+e.clientX-depDragState.x),panY=Math.round(depDragState.panY+e.clientY-depDragState.y);
+  const wasNode=depDragState.kind==='node',wasMoved=!!depDragState.moved;
+  const vp2=document.getElementById('depGraphViewport');
+  if(vp2)vp2.classList.remove('dep-dragging');
+  if(wasNode){
+   depDragState=null;depDragPanEl=null;
+   // A real drag moved the node: cancel any trailing drag frame (it
+   // would swap the canvas after the commit and drop the pill
+   // handlers), then one full re-render commits it.
+   if(depDragRafId!==null&&typeof cancelAnimationFrame==='function'){cancelAnimationFrame(depDragRafId);depDragRafId=null}
+   depDragRafPending=false;
+   if(wasMoved){renderAdminTab();setTimeout(()=>{depSuppressClick=false},0)}
+   return;
+  }
+  const z=dependencyExplorerState.zoom||1;
+  const c=depClampPan(depDragState.panX+e.clientX-depDragState.x,depDragState.panY+e.clientY-depDragState.y,z);
   depDragState=null;depDragPanEl=null;
-  dependencyExplorerState={...dependencyExplorerState,panX,panY};
+  dependencyExplorerState={...dependencyExplorerState,panX:c.panX,panY:c.panY};
   renderAdminTab();
  });
 }
@@ -13791,7 +14098,7 @@ function depWireToolbar(body){
  const zo=document.getElementById('depZoomOut');if(zo)zo.onclick=()=>depZoomStep(-1);
  const fit=document.getElementById('depFit');if(fit)fit.onclick=()=>depFitToContent();
  const rv=document.getElementById('depResetView');
- if(rv)rv.onclick=()=>{dependencyExplorerState={...dependencyExplorerState,zoom:1,panX:0,panY:0,labelMode:'all',pathMode:false,pathFrom:null,pathTo:null,pathKeys:null,pathEdges:null,pathUnreachable:false,simKeys:null,simChange:null,simRoot:null};renderAdminTab()};
+ if(rv)rv.onclick=()=>{dependencyExplorerState={...dependencyExplorerState,pathMode:false,pathFrom:null,pathTo:null,pathKeys:null,pathEdges:null,pathUnreachable:false,simKeys:null,simChange:null,simRoot:null};if(!depFitToContent())renderAdminTab()};
  depWirePanZoom();
  // __mobileAutoFit: on narrow screens, auto-fit graph after render
  try{
@@ -13886,6 +14193,7 @@ function depExpandAround(){
 
 
 function dependencyExplorerTab(body){
+ depWireHashNav();
  depApplyShareHashIfNeeded();
  const nodes=systemGraphNodes();
  // PR3-A: normalize power-tool view state on every render - fresh resets
@@ -13900,13 +14208,24 @@ function dependencyExplorerTab(body){
   dependencyExplorerState={...dependencyExplorerState,inspectType:dependencyExplorerState.type,inspectId:dependencyExplorerState.id};
  }
  const options=nodes.filter(n=>n.type===dependencyExplorerState.type);
+ // Two components can share a label (warehouse "Products" — the SKU
+ // master — vs the built-in CRM "Products"): suffix duplicates with
+ // their origin so the dropdown never shows two identical entries.
+ const depOptionLabelCounts={};
+ options.forEach(o=>{depOptionLabelCounts[o.label]=(depOptionLabelCounts[o.label]||0)+1});
+ const depOptionLabels=(()=>{const seen={};return options.map(o=>{
+  let label=o.label;
+  if(depOptionLabelCounts[o.label]>1)label=o.label+' ('+(depNodeOrigin(dependencyExplorerState.type,o.id)==='OOB'?'Built-in':'Custom')+')';
+  if(seen[label])label+=' · '+o.id;
+  seen[label]=true;return label;
+ })})();
 
  // PR-D/3: artifact workbench tools rail - .graph-tools with labeled tool
  // sections. Every id and data-* hook is unchanged, so the toolbar wiring
  // (zoom/pan/search/path/sim/share), the depth select, the impact/lineage
  // toggles and the fields toggle keep working exactly as before.
  const depToolsHtml=`<div class="graph-toolbar og-toolbar-card" role="toolbar" aria-label="Graph tools">
-  <div class="tool-group"><label class="tool-inline">Type <select id="depType" class="select">${types.map(t=>`<option value="${t}" ${t===dependencyExplorerState.type?'selected':''}>${SYSTEM_NODE_TYPE_LABELS[t]}</option>`).join('')}</select></label><label class="tool-inline">Component <select id="depComponent" class="select">${options.map(o=>`<option value="${o.id}" ${o.id===dependencyExplorerState.id?'selected':''}>${o.label}</option>`).join('')}</select></label></div>
+  <div class="tool-group"><label class="tool-inline">Type <select id="depType" class="select">${types.map(t=>`<option value="${t}" ${t===dependencyExplorerState.type?'selected':''}>${SYSTEM_NODE_TYPE_LABELS[t]}</option>`).join('')}</select></label><label class="tool-inline">Component <select id="depComponent" class="select">${options.map((o,i)=>`<option value="${o.id}" ${o.id===dependencyExplorerState.id?'selected':''}>${depOptionLabels[i]}</option>`).join('')}</select></label></div>
   <div class="tool-group"><div class="search-wrap" style="min-width:200px"><input type="search" id="depSearch" class="input ontology-search-input" placeholder="Search components…" autocomplete="off"><div id="depSearchResults" class="ontology-search-results" hidden></div></div></div>
   <div class="tool-group"><div class="path-fields"><button type="button" class="btn ${dependencyExplorerState.pathMode?'btn-primary':'btn-secondary'} btn-sm" id="depPathToggle" title="Click two nodes on the canvas to trace the shortest path between them">Find path</button>${depPathBarHtml()}</div></div>
   <div class="tool-group"><div class="zoom-row" role="group" aria-label="Viewport"><button type="button" class="btn btn-outline btn-sm" id="depZoomOut" title="Zoom out" aria-label="Zoom out">−</button><button type="button" class="btn btn-outline btn-sm" id="depFit" title="Fit graph to viewport">Fit</button><button type="button" class="btn btn-outline btn-sm" id="depZoomIn" title="Zoom in" aria-label="Zoom in">+</button><button type="button" class="btn btn-outline btn-sm" id="depResetView" title="Reset zoom, pan, path and simulation">Reset</button></div><div class="zoom-readout" data-zoom-readout>${Math.round((dependencyExplorerState.zoom||1)*100)}%</div></div>
@@ -13926,8 +14245,8 @@ function dependencyExplorerTab(body){
   // alone, wider than a laptop stage (~600px) — the viewport's
   // overflow:hidden clipped the right-hand nodes. Cap it to the
   // measured viewport (two-pass below, floor 360px).
-  const depW=Math.max(360,Math.min(depCanvasCapW||1500,Math.min(1500,Math.round(560+depModel.nodes.length*5))));
-  const depH=Math.max(360,Math.min(depCanvasCapH||940,Math.min(940,Math.round(440+depModel.nodes.length*3.2))));
+  const depW=Math.max(360,Math.min(depCanvasCapW||1500,Math.min(1500,Math.round(560+depModel.nodes.length*8))));
+  const depH=Math.max(360,Math.min(depCanvasCapH||940,Math.min(940,Math.round(440+depModel.nodes.length*5))));
   depLastCanvasW=depW;depLastCanvasH=depH;
   const depZoom=dependencyExplorerState.zoom||1,depPanX=dependencyExplorerState.panX||0,depPanY=dependencyExplorerState.panY||0;
   graphHtml=`<div class="graph-stage" data-graph-stage><div class="graph-stage-head og-stage-head"><div><h3 class="og-stage-title">${systemGraphNodeLabel(dependencyExplorerState.type,dependencyExplorerState.id)} neighborhood</h3></div><div class="chip-row og-stage-chips"><span class="og-pill-chip">Depth ${String(dependencyExplorerState.depth)==='all'?'All':String(dependencyExplorerState.depth||'1')}</span><span class="og-pill-chip">${depModel.edges.length} relationships</span>${truncatedHits?`<span class="ontology-more-chip" title="Narrow the depth or hide types to see the rest">+${truncatedHits} more</span>`:''}</div></div>${depSimBannerHtml()}<div class="graph-canvas"><div id="depGraphViewport" class="ontology-graph-viewport"><div id="depGraphPan" class="ontology-graph-canvas" style="width:${depW}px;height:${depH}px;transform:translate(${depPanX}px,${depPanY}px) scale(${depZoom});transform-origin:0 0">${depRenderGraph(depModel,depW,depH)}</div></div></div><div class="graph-legend">${legendHtml(depExplorerHiddenTypes,depCounts)}</div></div><aside class="graph-detail" aria-label="Selected node">${depDetailPanelHtml(depModel)}</aside>`;
@@ -13935,15 +14254,15 @@ function dependencyExplorerTab(body){
 
 
  body.innerHTML=`<div class="graph-toolbar-wrap">${depToolsHtml}</div><div class="workbench">${graphHtml||`<div class="graph-stage" data-graph-stage><div class="graph-stage-head"><div><div class="eyebrow">Ontology Graph</div><h3>Pick a component</h3></div></div><div class="graph-canvas"><div class="empty" style="padding:48px 24px;text-align:center;color:var(--muted-foreground)">Nothing synced yet for this type.</div></div></div>`}</div>`;
- $('#depType').onchange=(e)=>{const t=e.target.value;const first=nodes.find(n=>n.type===t);dependencyExplorerState={type:t,id:first?first.id:null,depth:dependencyExplorerState.depth||'1',inspectType:t,inspectId:first?first.id:null,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()};
+ $('#depType').onchange=(e)=>{const t=e.target.value;const first=nodes.find(n=>n.type===t);dependencyExplorerState={...dependencyExplorerState,type:t,id:first?first.id:null,depth:dependencyExplorerState.depth||'1',inspectType:t,inspectId:first?first.id:null,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()};
  $('#depComponent')&&($('#depComponent').onchange=(e)=>{dependencyExplorerState={...dependencyExplorerState,id:e.target.value,inspectType:dependencyExplorerState.type,inspectId:e.target.value,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()});
  $('#depDepth')&&($('#depDepth').onchange=(e)=>{dependencyExplorerState={...dependencyExplorerState,depth:e.target.value};renderAdminTab()});
  body.querySelectorAll('[data-dep-toggle]').forEach(b=>b.onclick=()=>{const k=b.dataset.depToggle;dependencyExplorerState={...dependencyExplorerState,[k]:!dependencyExplorerState[k]};renderAdminTab()});
- body.querySelectorAll('[data-dep-inspect]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depInspect.split(':');if(dependencyExplorerState.pathMode){depPathPick(type,id);return}dependencyExplorerState={...dependencyExplorerState,inspectType:type,inspectId:id};renderAdminTab()});
+ body.querySelectorAll('[data-dep-inspect]').forEach(b=>b.onclick=()=>{if(depSuppressClick)return;const [type,id]=b.dataset.depInspect.split(':');if(dependencyExplorerState.pathMode){depPathPick(type,id);return}dependencyExplorerState={...dependencyExplorerState,inspectType:type,inspectId:id};renderAdminTab()});
  wireGraphHoverFx(body,(k)=>{const ex={...(dependencyExplorerState.expanded||{})};ex[k]=true;dependencyExplorerState={...dependencyExplorerState,expanded:ex};renderAdminTab()});
- body.querySelectorAll('[data-dep-bullet]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depBullet.split(':');dependencyExplorerState={type,id,depth:dependencyExplorerState.depth||'1',inspectType:type,inspectId:id,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()});
+ body.querySelectorAll('[data-dep-bullet]').forEach(b=>b.onclick=()=>{const [type,id]=b.dataset.depBullet.split(':');dependencyExplorerState={...dependencyExplorerState,type,id,depth:dependencyExplorerState.depth||'1',inspectType:type,inspectId:id,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()});
  body.querySelectorAll('[data-legend-toggle]').forEach(b=>b.onclick=()=>{const t=b.dataset.legendToggle;if(depExplorerHiddenTypes.has(t))depExplorerHiddenTypes.delete(t);else depExplorerHiddenTypes.add(t);renderAdminTab()});
- body.querySelectorAll('[data-dep-collapse]').forEach(b=>b.onclick=()=>{const t=b.dataset.depCollapse;const c={...(dependencyExplorerState.collapsed||{})};if(c[t])delete c[t];else c[t]=true;dependencyExplorerState={...dependencyExplorerState,collapsed:c};renderAdminTab()});
+ body.querySelectorAll('[data-dep-collapse]').forEach(b=>b.onclick=()=>{if(depSuppressClick)return;const t=b.dataset.depCollapse;const c={...(dependencyExplorerState.collapsed||{})};if(c[t])delete c[t];else c[t]=true;dependencyExplorerState={...dependencyExplorerState,collapsed:c};renderAdminTab()});
  const expandBtn=$('#depExpand'); if(expandBtn)expandBtn.onclick=()=>depExpandAround();
  const recenterBtn=$('#depRecenter'); if(recenterBtn)recenterBtn.onclick=()=>{dependencyExplorerState={...dependencyExplorerState,type:dependencyExplorerState.inspectType,id:dependencyExplorerState.inspectId,inspectType:dependencyExplorerState.inspectType,inspectId:dependencyExplorerState.inspectId,showImpact:true,showLineage:true,expanded:{},collapsed:{}};renderAdminTab()};
  const openBtn=$('#depOpenAdmin'); if(openBtn)openBtn.onclick=()=>{adminTab=NODE_TYPE_ADMIN_TAB[dependencyExplorerState.inspectType];adminView='tool';renderView()};
@@ -13960,17 +14279,29 @@ function dependencyExplorerTab(body){
   const capH=Math.max(360,Math.floor(vp.clientHeight||0));
   if(capW&&capH&&(Math.abs((depCanvasCapW||0)-capW)>2||Math.abs((depCanvasCapH||0)-capH)>2)){
    depCanvasCapW=capW;depCanvasCapH=capH;
-   dependencyExplorerState={...dependencyExplorerState,zoom:1,panX:0,panY:0};
+   // The canvas changed size (first paint, or a window resize): the old
+   // zoom/pan no longer maps to this canvas, so force a refit below.
+   depLastFitSig=null;
    renderAdminTab();
    return;
   }
-  // Auto-fit whenever the VIEW changes (type/component/depth/toggles) —
-  // zoom-to-fit on load and on every depth/filter/object change, so a
-  // previous pan/zoom never leaves the new graph half off-screen.
-  // Zoom/pan themselves are NOT in the signature, so a user's manual
-  // zoom survives re-renders.
+  // Fit policy: the FIRST render of a tab session fits the graph, so
+  // the default view shows every node. Later view changes (type /
+  // component / depth / toggles) PRESERVE the user's zoom and pan —
+  // switching components used to reset the zoom — clamped to the new
+  // content so the graph stays on screen. Fit / Reset always refit.
   const fitSig=[dependencyExplorerState.type,dependencyExplorerState.id,dependencyExplorerState.depth,dependencyExplorerState.showImpact,dependencyExplorerState.showLineage,[...depExplorerHiddenTypes].sort().join(','),JSON.stringify(dependencyExplorerState.collapsed||{})].join('|');
-  if(fitSig!==depLastFitSig){depLastFitSig=fitSig;depFitToContent();return;}
+  if(fitSig!==depLastFitSig){
+   const first=depLastFitSig===null;
+   depLastFitSig=fitSig;
+   if(first){depFitToContent();return;}
+   const c=depClampPan(dependencyExplorerState.panX||0,dependencyExplorerState.panY||0,dependencyExplorerState.zoom||1);
+   if(c.panX!==(dependencyExplorerState.panX||0)||c.panY!==(dependencyExplorerState.panY||0)){
+    dependencyExplorerState={...dependencyExplorerState,panX:c.panX,panY:c.panY};
+    renderAdminTab();
+    return;
+   }
+  }
  }
 }
 function adminRecentNavHtml(){
@@ -14866,6 +15197,7 @@ function planRunPipelineFor(raw,pipeline,message){
    const run=runAiAgentPipelineNow(pipeline,message);
    if(run.status==='rejected')return {message:`Pipeline run rejected at an approval step - see ${pipeline.name}'s own run history for details.`,recordId:run.id};
    if(run.status==='awaiting_approval')return {message:`${pipeline.name} is waiting for an Administrator's approval in Pending Approvals (Admin → AI Agents).`,recordId:run.id};
+   if(run.status==='failed')return {message:run.error||`Pipeline run failed — a step was refused.`,recordId:run.id};
    return {message:run.finalOutput||'Pipeline finished with no output.',recordId:run.id,isFreeformReply:true};
   }};
 }
@@ -22028,6 +22360,13 @@ function runAiAgentPipelineNow(pipeline,triggerInput,identity){
  save();
  return run;
 }
+// A step whose simulated reply was refused by the firewall ("Refused:
+// <tool> was not run. ...") never did its work. A run whose steps were
+// refused must not report "succeeded" — the header is the run's outcome,
+// not its completion.
+function pipelineRefusedStep(steps){
+ return (steps||[]).find(s=>typeof s.output==='string'&&s.output.indexOf('Refused:')===0)||null;
+}
 function runAiAgentPipelineSteps(pipeline,triggerInput){
  const topology=pipeline.topology||'sequential';
  let pause=null;
@@ -22095,7 +22434,15 @@ function runAiAgentPipelineSteps(pipeline,triggerInput){
   }
   finalOutput=previousOutput;
  }
+ // A refused step means the run did not do its work, even though every
+ // step "ran": never report "succeeded" when a step was refused.
+ let runError=null;
+ if(runStatus==='succeeded'){
+  const refused=pipelineRefusedStep(steps);
+  if(refused){runStatus='failed';runError=String(refused.output).slice(0,300)}
+ }
  const run={id:uid(),startedAt:new Date().toISOString(),triggerInput:triggerInput||'',steps,finalOutput,status:runStatus};
+ if(runError)run.error=runError;
  if(pause)demoPausePipelineRun(pipeline,run,pause);
  pipeline.runs=pipeline.runs||[];
  pipeline.runs.unshift(run);
@@ -22250,6 +22597,12 @@ function demoResumePipelineRun(pipeline,run,approve){
    }
   }
   run.finalOutput=previousOutput;
+ }
+ // Same honesty rule as a fresh run: resumed steps that were refused
+ // mean the run failed, even though the resume itself completed.
+ if(run.status==='succeeded'){
+  const refused=pipelineRefusedStep(run.steps);
+  if(refused){run.status='failed';run.error=String(refused.output).slice(0,300)}
  }
  return run;
 }
