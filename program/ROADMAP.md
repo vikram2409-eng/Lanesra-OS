@@ -16,6 +16,7 @@ flowchart LR
   G3 --> P5["Phase 5 · Platform and ecosystem<br/>42 WPs · 140 pts<br/>runs beside Phase 4"] --> G5{{"G5 · Platform release"}}
   G4 --> V2["v2 · Open interop"]
   P6["Phase 6 · Admin console and Experience Studio<br/>31 WPs · 96 pts<br/>parallel track, starts now"] --> G6{{"G6 · Admin and Experience"}}
+  P7["Phase 7 · Process Lanes<br/>19 WPs · 58 pts<br/>parallel track, starts now"] --> G7{{"G7 · Process Lanes"}}
 ```
 
 Live progress per phase is in [`STATUS.md`](STATUS.md).
@@ -115,6 +116,25 @@ online demo, with website help.
 | Navigation and theme | 0650; 0651 → 0652 | Codex; Muse for themes | `AppsAdmin.tsx`, `theme_service` |
 | Gate | 0699 | Claude | `gates/G6-experience-and-admin.md` |
 
+## Phase 7 · Process Lanes (ADR-0023)
+
+Added 2026-11-12 from the owner's Process Lane spec. A guided, single-screen execution of one
+business process for one record, with a stage bar and steps. A lane compiles to the existing
+execution graph, so it is not a second engine. The online demo previews it first (WP-0702).
+
+| Lane of work | Work packages | Planned for | Main code area |
+|---|---|---|---|
+| Decision, schema, demo | 0701 → 0702 | Muse (0701), Claude (0702) | `decisions/`, `app.js` warehouse demo |
+| Core foundation | 0703 → 0704 | Claude | `execution_graph`, `graph_runtime_service`, new `process_lane_*` |
+| Steps and rules | 0705, 0706, 0709, 0710, 0716 | Codex | `graph_runtime_service`, `action_type_service`, `approval_service`, workflows |
+| Runner and visibility | 0707; 0711, 0713 | Claude; Muse | new `desktop/src/features/lanes/`, Object 360 |
+| Agents in lanes | 0708 | Codex | agent loop, tool firewall |
+| Authoring | 0712 → 0715; 0714; 0718 | Muse; Codex | lane blueprint, publish checks, canvas |
+| More lanes | 0717 | Muse | warehouse app package |
+| Gate | 0799 | Claude | `gates/G7-process-lanes.md` |
+
+Outside dependency: WP-0705 needs WP-0141 (idempotency keys), which is not built yet.
+
 ## Sequencing rationale
 
 1. **Precursors before features.** CI, a green `main`, reproducible installs, a model test double
@@ -150,5 +170,5 @@ measured throughput:
 4. Write the forecast in the gate file. If the budget is short, cut or defer scope explicitly
    (an ADR), never quality.
 
-Rough order of magnitude for planning only: about 750 points in total, 144 of them added by ADR-0020 and 96 by ADR-0022. The spec's own proposal
+Rough order of magnitude for planning only: about 810 points in total, 144 of them added by ADR-0020, 96 by ADR-0022 and 58 by ADR-0023. The spec's own proposal
 was 28 weeks for Phases 1–4 with a human team; it is not a commitment here.

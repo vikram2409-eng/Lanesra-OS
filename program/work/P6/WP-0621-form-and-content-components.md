@@ -47,6 +47,7 @@ Forms, steps and content anywhere on a page.
 ## Notes
 
 - ADR-0022; design in SOLUTION-DESIGN.md sections 15 (Admin console) and 16 (Experience Studio). Refine acceptance criteria before moving to `ready`.
+- ADR-0023: the Path component is the Process Lane stage bar; one implementation serves both (WP-0707).
 
 ## Progress log
 
