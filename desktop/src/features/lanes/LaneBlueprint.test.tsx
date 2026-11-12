@@ -14,7 +14,14 @@ import { describe, expect, it } from "vitest";
 
 import { LaneBlueprintView } from "./LaneBlueprint";
 import type { LaneBlueprint, LaneDefinition } from "../../lib/types";
-import example from "../../../../program/spec/schemas/examples/lane-wh-receiving.json";
+// The Receive Shipment example, copied from
+// program/spec/schemas/examples/lane-wh-receiving.json (byte-identical).
+// The test must NOT import the shared file directly: the Team Workspace
+// server image builds the frontend from a desktop/-only Docker context
+// (see desktop/Dockerfile), so an import that escapes desktop/ breaks
+// `tsc` in the image build (WP-0712, PR #761). Keep this copy in sync
+// with the shared example when it changes.
+import example from "./lane-wh-receiving.example.json";
 
 function receiveShipmentBlueprint(): LaneBlueprint {
   return {
