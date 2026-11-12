@@ -34,7 +34,7 @@ LOGS = PROGRAM / "log"
 TEST_DIRS = [ROOT / "desktop", ROOT / "tests", ROOT / "program" / "tools"]
 
 STATUSES = ["proposed", "ready", "in_progress", "in_review", "blocked", "done", "dropped"]
-PHASES = ["0", "1", "2", "3", "4", "5", "6", "v2"]
+PHASES = ["0", "1", "2", "3", "4", "5", "6", "7", "v2"]
 PLANNED_FOR = ["claude", "codex", "muse"]  # optional default lane per work package (ADR-0021)
 ESTIMATES = ["S", "M", "L", "XL"]
 EDITIONS = ["desktop", "workspace", "demo"]  # Tauri desktop app, Team Workspace server, online demo
@@ -127,7 +127,7 @@ def load_requirements():
     for n, line in enumerate(REQS.read_text(encoding="utf-8").splitlines(), start=1):
         if line.startswith("## "):
             head = line[3:].strip()
-            if head.startswith(("Platform extension", "Admin console and Experience Studio")):
+            if head.startswith(("Platform extension", "Admin console and Experience Studio", "Process Lanes")):
                 extension = True          # every area below this heading was added by ADR-0020 ...
             elif " — " in head:
                 area_title = head.split(" — ", 1)[1].split(" (")[0].strip()
@@ -139,7 +139,7 @@ def load_requirements():
             if rid in reqs:
                 raise Problem(f"{rel(REQS)}:{n}: duplicate requirement {rid}")
             reqs[rid] = {"id": rid, "phase": phase, "text": text, "line": n,
-                         "area_title": area_title, "extension": extension or "ADR-0020" in text or "ADR-0022" in text}
+                         "area_title": area_title, "extension": extension or "ADR-0020" in text or "ADR-0022" in text or "ADR-0023" in text}
             order.append(rid)
         elif line.startswith("- **REQ-"):
             raise Problem(f"{rel(REQS)}:{n}: malformed requirement line; expected "
@@ -329,7 +329,7 @@ def render_status(wps, reqs):
               "|---|---|---|---|---|---|---|---|---|"]
     names = {"0": "0 · Precursors", "1": "1 · Foundations", "2": "2 · Playground",
              "3": "3 · Teams and modes", "4": "4 · Enterprise scale", "5": "5 · Platform and ecosystem",
-             "6": "6 · Admin console and Experience Studio", "v2": "v2 · Open interop"}
+             "6": "6 · Admin console and Experience Studio", "7": "7 · Process Lanes", "v2": "v2 · Open interop"}
     weight = {"S": 1, "M": 2, "L": 4, "XL": 8}
     for ph in PHASES:
         items = [w for w in by_phase.get(ph, []) if w.get("status") != "dropped"]
@@ -520,7 +520,7 @@ Help articles to create or update: {", ".join(HELP_BASE + d for d in (w.get("doc
 WEIGHT = {"S": 1, "M": 2, "L": 4, "XL": 8}
 PHASE_TITLES = {"0": "Precursors", "1": "Foundations", "2": "Playground", "3": "Teams and modes",
                 "4": "Enterprise scale", "5": "Platform and ecosystem",
-                "6": "Admin console and Experience Studio", "v2": "Open interop"}
+                "6": "Admin console and Experience Studio", "7": "Process Lanes", "v2": "Open interop"}
 LOG_HEAD = re.compile(r"^(\d{4}-\d{2}-\d{2})\s+(.+)$")
 
 

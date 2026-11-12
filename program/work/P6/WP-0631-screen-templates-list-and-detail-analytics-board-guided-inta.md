@@ -47,6 +47,7 @@ Three complete screens an admin can publish in minutes, with no AI feature neede
 ## Notes
 
 - ADR-0022; design in SOLUTION-DESIGN.md sections 15 (Admin console) and 16 (Experience Studio). Refine acceptance criteria before moving to `ready`.
+- ADR-0023: the Guided Intake template is the form-only case of a Process Lane; where WP-0707 has shipped, it uses the lane runner's stage bar and step list.
 
 ## Progress log
 

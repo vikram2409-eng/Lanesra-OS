@@ -1,8 +1,8 @@
 # Lanesra OS — Solution design
 
 The complete design of the Agent Foundry and Orchestration platform: what the October spec already
-defines (the baseline), and what the extensions of 2026-11-11 add (marked [NEW]): the platform extension (ADR-0020)
-and the Admin console and Experience Studio (ADR-0022). The October spec (`spec/agent-playground-design-spec-v1.html`) stays the source for
+defines (the baseline), and what the extensions of 2026-11-11 add (marked [NEW]): the platform extension (ADR-0020),
+the Admin console and Experience Studio (ADR-0022), and Process Lanes (ADR-0023, 2026-11-12). The October spec (`spec/agent-playground-design-spec-v1.html`) stays the source for
 baseline detail; this document is the source for the extension and for how the parts fit together.
 
 Table and endpoint names for [NEW] parts are proposals. The design work packages (WP-0114,
@@ -27,10 +27,10 @@ server and an online demo from one Rust core.
 The platform is ten layers over one core. Items marked with a star are added by the extension.
 
 ```arch
-Experience :: Admin console*; Experience Studio (pages, blocks, templates, navigation, themes)*; Agent Studio; Playground; Team canvas; Approvals inbox; Work queue*; Fleet view*; Compliance centre*
+Experience :: Admin console*; Lane runner*; Experience Studio (pages, blocks, templates, navigation, themes)*; Agent Studio; Playground; Team canvas; Approvals inbox; Work queue*; Fleet view*; Compliance centre*
 Channels and access :: REST API; MCP server; CLI; Team as an endpoint; A2A server*; MCP gateway*; Slack*; Microsoft Teams*; Email*; Web widget*; Python and TypeScript SDKs*
 Control plane :: Lifecycle and versions; Publish gate; Budgets; Kill switch; Feature flags; External agent registry*; Promotion between environments*; Alerts and SLOs*
-Orchestration :: Mode compiler; Run controller; Graph runtime; Checkpoints; Replay and fork; Human seats*; A2A client seats*
+Orchestration :: Mode compiler; Run controller; Graph runtime; Checkpoints; Replay and fork; Process Lanes*; Human seats*; A2A client seats*
 Agent runtime :: Agent loop; Context assembly; Reasoning modes; Limits and partial results; Compaction; Policy hooks
 Model gateway :: Provider adapters; Model catalog; Fallback chain; Data boundaries; Forced air-gap; Right-sizing report*
 Tool plane :: Tool catalog; Firewall; Connectors; MCP client; Sandbox; Token vault*; MCP registry and pinning*; Signed custom tools*
@@ -63,6 +63,7 @@ Governance and operations :: Identity and SSO; Policies and guardrails; Approval
 | Work item | A task waiting on a human seat | [NEW] |
 | Proposal | An optimizer suggestion with its diff, evidence and scores | [NEW] |
 | Control mapping | A link from a platform control to a framework obligation and its evidence | [NEW] |
+| Process Lane | A guided process on one object, made of stages and steps; its run is a Run (section 17) | [NEW] |
 
 Agents, Teams and Playbooks follow Draft → Test → Published → Deprecated → Disabled. A published
 version is immutable. External agents follow Registered → Approved → Paused → Retired.
@@ -396,7 +397,109 @@ online demo, and updates the website help with what the feature does, how to set
 it is in the menu (REQ-ADM-009). When the menu changes, every help article that names an old path
 is rewritten in the same release (WP-0608); the help names an "Admin →" path 138 times today.
 
-## 17. Data model additions
+## 17. Process Lanes [NEW]
+
+Decided in ADR-0023, from the owner's Process Lane spec. A Process Lane is a guided,
+single-screen, step-by-step execution of one business process for one record. The record travels
+along the lane: it has a current stage and a current step, and the screen shows where it is.
+
+Today, finishing one job means visiting several screens (the order, a pipeline, the ledger, stock,
+approvals). A lane puts the job on one screen with one answer to "where is this".
+
+### Model
+
+| Term | Meaning |
+|---|---|
+| Process Lane | The definition: a named process on one object, made of ordered stages and steps. Versioned, Draft → Published. |
+| Stage | A named phase, one chevron in the stage bar. Grouping only; it does not execute. |
+| Step | One unit of work. One step is current at a time. |
+| Anchor record | The record the run is about. |
+| Run | One execution of a lane for one record. It is a Run on the graph runtime, not a new kind of object. |
+| Run data | Values the lane collects that are not record fields, with a declared schema. |
+
+A lane compiles to an execution graph with source kind `lane`. This gives lanes the same
+durability, checkpoints, trace, approvals and audit as Workflows and Teams. The runtime gains one
+node type, the human step.
+
+```arch
+Definition :: Lane; Stages; Steps; Run data schema; Branches with exits; Replaced workflow actions
+Compiles to :: Execution graph (source kind lane); Human step node*; Action node; Condition node; Approval node; Agent node
+Runs as :: Run and Steps (same tables); Checkpoints; Trace; Approvals inbox; Audit
+Seen through :: Lane runner*; Object 360; Board by stage*; My steps*; Blueprint view*
+```
+
+### Step kinds
+
+| Kind | The person | Runs as | Writes |
+|---|---|---|---|
+| Form | Fills fields | Human step node | Run data or mapped record fields |
+| Record | Confirms a record action | Action node calling an Action Type | Real records, all-or-nothing, repeat-safe |
+| Check | Nothing; sees pass or fail and why | Condition node | None |
+| Approval | Decides | Approval node, through the approvals inbox | The guarded write, only on approve |
+| Agent | Watches, confirms where required | Agent node | Through the tool firewall |
+
+Notification is an effect of completing a step, never a step.
+
+### Rules
+
+- **Writes are real.** Completing a step writes the real records at once. A step's writes commit together and are never repeated by a retry, a double click or a restart (idempotency key per step attempt, WP-0141). Business Rules and access apply exactly as for a direct edit. Posted ledger rows are never edited; corrections are new writes.
+- **Nothing entered is lost.** Every value a person types goes to run data or a named record field.
+- **Gating.** A required step must be complete and valid before the next unlocks. A failed check shows its reason. Only an optional step can be skipped, with who, when and why.
+- **Branches have exits.** Branches are declared (outcome to target step). Hold and rejection branches must declare a way out: continue, another step, or end with a named outcome. A dead end cannot be published.
+- **Life of a run.** It survives leaving the screen and a restart. It can be paused, resumed and handed over. A finished step reopens only while its stage is current, and reopening reverses nothing. A finished run is final. Cancel stops the run, leaves posted writes and lists them.
+- **One run per lane per record.** A second start is refused with a link. Other lanes may run on the same record unless they declare an exclusion.
+- **Access.** A step for another role shows its name and who it waits on, locked; its content appears only as far as the viewer's access allows. An agent in a run a person started acts as that person narrowed by the agent's scope.
+- **Workflows.** Workflows fire by default on what a lane writes. A step may declare the workflow actions it replaces; only those are skipped, and both editors and the Dependency Explorer show the link. A workflow can start a lane.
+
+### Agents inside a lane
+
+Any step can carry agent assistance and an autonomy level.
+
+| Level | What happens |
+|---|---|
+| Person does it | No agent |
+| Agent proposes | Values are prefilled as a proposal; the person confirms or overrides |
+| Agent does it with approval | The write waits in the approvals inbox |
+| Agent does it | The write goes through the tool firewall like any agent call |
+
+Each acceptance and override is recorded per step. The override rate shows when a step is safe to
+move up a level, and feeds lessons from corrections (REQ-MEM-010).
+
+### Screens
+
+- **Runner.** Stage bar across the top showing every stage; the step list for the current stage; the current step's work in the centre; a summary of the anchor record and of what this run has written; Back, Complete step, Pause. The same parts stack on a phone. Notes, attachments and reassign are available at every step.
+- **Object 360** lists the record's runs with their audit trail.
+- **Board by stage** shows where every record of a lane is. **My steps** lists the signed-in person's lane steps with their approvals.
+- **Blueprint view.** A read-only page of a lane: purpose, stage chevrons with their steps (kind, role, writes) and data fields, exportable for sign-off.
+
+### Authoring
+
+Lanes are defined as data first, in one JSON Schema shared by the online demo and the core
+(WP-0701). Then: dry run and publish checks (WP-0714), drafting from a description by the Admin
+Assistant (WP-0715), and a visual builder that produces the same format (WP-0718).
+
+### How it relates to other parts
+
+| Part | Relation |
+|---|---|
+| Human seats (WP-0560) | A human seat's work item is a lane human step; one mechanism for waiting on a person |
+| Guided Intake template (WP-0631) | The form-only case of a lane |
+| Path component (WP-0621) | The stage bar |
+| Pipelines and Teams | An agent step runs one; its trace attaches to the lane run |
+| Approvals inbox | Every approval step is an inbox entry |
+| Repeat, stage and start conditions | A step can repeat over child records; stages can skip; a lane can refuse to start (WP-0710) |
+| Child lanes | A step starts a lane on a related record and waits (WP-0716) |
+
+### First lane
+
+Receive Shipment on the warehouse demo, for one purchase order: Verify → Record receipt → Stage
+and put away → Confirm, with a discrepancy branch to manager review. The online demo previews it
+first (WP-0702, an agreed exception to the editions-first rule); desktop and Team Workspace follow
+from the same definition. Pick and Pack, Count and Replenish come next (WP-0717).
+
+Out of scope: timers and SLA escalation, parallel steps in a stage, lanes on more than one record.
+
+## 18. Data model additions
 
 All follow the existing conventions: UUID ids, `workspace_id` on every row, audit columns, JSON
 config columns, migrations numbered by ADR-0003. Names are proposals.
@@ -416,10 +519,11 @@ config columns, migrations numbered by ADR-0003. Names are proposals.
 | `ai_risk_assessments`, `ai_control_mappings` | Risk class per agent or Team; control mapping data |
 | `ai_promotions` | Who promoted which version between which environments |
 | `pages` (extends `page_layouts`), `page_blocks`, `page_block_versions` | The unified page model with page type and data sources; reusable blocks and their versions |
+| `process_lanes`, `process_lane_versions`; `ai_runs` gains anchor record and run data; `ai_run_nodes` gains stage and step times | Lane definitions and versions; a lane run is a row of the existing run tables |
 | `app_navigation` | Menu groups and entries per app, role visibility, home page per role |
 | `theme_assignments` | Which theme an app uses; light and dark values live in the theme version |
 
-## 18. API and event additions
+## 19. API and event additions
 
 | Surface | Additions |
 |---|---|
@@ -430,7 +534,7 @@ config columns, migrations numbered by ADR-0003. Names are proposals.
 
 Every new endpoint sits behind its own scope with an allow test and a deny test, as ADR-0018 requires.
 
-## 19. Security
+## 20. Security
 
 New surfaces and the control that covers each:
 
@@ -447,7 +551,7 @@ New surfaces and the control that covers each:
 
 The G5 gate includes a security review of all of these (WP-0599).
 
-## 20. Build sequence and workload
+## 21. Build sequence and workload
 
 Phase 5 runs beside Phase 4 once the G3 security gate has passed. Each lane starts when its entry
 dependencies are done. The two design packages run now, in Phase 1.
@@ -486,12 +590,29 @@ screens to the menu.
 | After AI features | AI components and templates | WP-0622 → WP-0632; WP-0623; WP-0643 | Approvals inbox, run endpoints, human seats | Codex, Muse, Claude |
 | Last | Gate G6 | WP-0699 | Findability test, parity walkthrough, help audit | Claude |
 
-Workload at the time of writing: Codex 45 packages and 158 points (including sign-in, provider
-coverage and toolchain upgrades from the existing plan); Muse AI 28 packages and 74 points; Claude
-Code keeps the critical path of Phases 1 to 4 plus 13 planned packages (40 points). Live numbers are in
+### Phase 7: Process Lanes
+
+A parallel track (ADR-0023). The only package outside the track that the first usable version
+waits for is WP-0141 (idempotency keys).
+
+| Order | Lane of work | Work packages | Enters after | Planned for |
+|---|---|---|---|---|
+| Now | Decision and schema | WP-0701 | Nothing | Claude |
+| 1 | Online demo preview | WP-0702 | The schema | Claude |
+| 1 | Core foundation | WP-0703 → WP-0704 | The schema | Claude |
+| 2 | Steps and rules | WP-0705, WP-0706 | Definitions, human steps, WP-0141 | Codex |
+| 3 | Runner screen | WP-0707 | Steps and rules | Claude |
+| 4 | Around the runner | WP-0708, WP-0709, WP-0710, WP-0711, WP-0713, WP-0714, WP-0716 | Runner or writes | Codex; Muse for 0711, 0713 |
+| 4 | Authoring | WP-0712 → WP-0715; WP-0718 | Definitions | Muse; Codex for the builder |
+| 5 | More lanes | WP-0717 | Runner, repeat step | Muse |
+| Last | Gate G7 | WP-0799 | First-time-user test, parity walkthrough | Claude |
+
+Workload at the time of writing: Codex 53 packages and 182 points (including sign-in, provider
+coverage and toolchain upgrades from the existing plan); Muse AI 33 packages and 88 points; Claude
+Code keeps the critical path of Phases 1 to 4 plus 19 planned packages (60 points). Live numbers are in
 `STATUS.md`. The reasoning for the split is in ADR-0021.
 
-## 21. Deferred
+## 22. Deferred
 
 Not planned; each needs its own ADR before it enters the plan.
 
@@ -502,10 +623,11 @@ Not planned; each needs its own ADR before it enters the plan.
 - Policy as code with what-if simulation
 - Event-stream triggers (queues and streams)
 
-## 22. Open questions for the owner
+## 23. Open questions for the owner
 
 - RAID Q-27: how Codex works on this repo (shell, network, who merges).
 - RAID Q-28: confirm the ten areas and the six deferred ones.
+- Should the owner's Process Lane spec be committed to `program/spec/`? It is not in the repository today.
 - When may the Screen layouts and Dashboards aliases be removed: two releases after the unified builder ships, as with Pipelines? (decided in WP-0610)
 - Should the first external-agent protocol be A2A only, or A2A plus a plain HTTP adapter for agents that do not speak it? (decided in WP-0114)
 - Which key management services are required for the first release of WP-0581: all four, or the one the first customer uses?

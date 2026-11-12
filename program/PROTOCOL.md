@@ -168,7 +168,8 @@ any unmerged commits across) and a new PR. This happened once, on PR #492 (RAID 
 - **Refinement:** at each gate review, the next phase's WPs are refined (acceptance criteria made
   precise, split to L or smaller) and moved from `proposed` to `ready`.
 - **Spec change or requirement meaning change:** ADR + owner acceptance, then update REQUIREMENTS.md.
-- Work package id ranges: Phase 0 `WP-00xx`, 1 `WP-01xx`, 2 `WP-02xx`, 3 `WP-03xx`, 4 `WP-04xx`, 5 `WP-05xx`, 6 `WP-06xx`, v2 `WP-09xx`.
+- Work package id ranges: Phase 0 `WP-00xx`, 1 `WP-01xx`, 2 `WP-02xx`, 3 `WP-03xx`, 4 `WP-04xx`, 5 `WP-05xx`, 6 `WP-06xx`, 7 `WP-07xx`, v2 `WP-09xx`.
+- Phase 7 (ADR-0023, Process Lanes) is a parallel track like Phase 6. One exception to the editions rule: WP-0702 previews the feature in the online demo before the editions (ADR-0023, decision 6).
 - Phase 6 (ADR-0022, Admin console and Experience Studio) is a parallel track: a Phase 6 work package may start as soon as its own `depends_on` are done. Each one ships in desktop, Team Workspace and the online demo and updates the website help (REQ-ADM-009).
 - Phase 5 (ADR-0020) runs beside Phase 4: a Phase 5 work package may start once its `depends_on` are done and G3 has passed.
 
@@ -178,7 +179,7 @@ Each phase closes with a gate (`gates/G<n>-*.md`). The next phase's WPs stay `pr
 gate passes. To run a gate: fill in every check with evidence (CI run links, test names, `trace`
 output, demo notes), list open RAID items, and ask the owner to sign. Gates come from the spec's
 roadmap: G1 every run produces a full trace; G2 templates pass their evaluation suites; G3 security
-review signed off; G4 GA. G0 (engineering readiness) is added by this plan. G5 (platform release) closes Phase 5 and is added by ADR-0020. G6 closes Phase 6 (ADR-0022).
+review signed off; G4 GA. G0 (engineering readiness) is added by this plan. G5 (platform release) closes Phase 5 and is added by ADR-0020. G6 closes Phase 6 (ADR-0022). G7 closes Phase 7 (ADR-0023).
 
 ## 10. What to update, when
 

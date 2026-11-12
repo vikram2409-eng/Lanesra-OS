@@ -6,7 +6,7 @@ epic: E5.7 Humans as seats
 status: proposed
 owner: unassigned
 planned_for: codex
-depends_on: [WP-0301, WP-0323]
+depends_on: [WP-0301, WP-0323, WP-0704]
 requirements: [REQ-HUM-001, REQ-HUM-002]
 estimate: L
 editions: [desktop, workspace, demo]
@@ -44,6 +44,7 @@ Model real processes where some steps are done by people, in the same Team and t
 
 - Builds on approvals (WP-0150) and approval routing (WP-0323).
 - Scoped from ADR-0020 and SOLUTION-DESIGN.md; refine acceptance criteria (and split if larger than L) before moving to `ready`.
+- ADR-0023: a human seat's work item is a Process Lane human step. Build on the human step node from WP-0704 and the "my steps" list from WP-0713; do not add a second wait-for-a-person mechanism.
 
 ## Progress log
 

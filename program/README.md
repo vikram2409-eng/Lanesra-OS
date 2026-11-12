@@ -20,8 +20,8 @@ program/
 ├── dashboard/           Source of the one-page program dashboard (data from `programctl export`)
 ├── spec/                The design spec (immutable copy) and REQUIREMENTS.md (stable IDs)
 ├── design/              SOLUTION-DESIGN.md (the whole solution, shown on the dashboard Design tab), TOKENS.md
-├── work/P0..P6, Pv2/    One file per work package (YAML front matter + body + progress log)
-├── gates/               G0..G6 checklists with evidence and sign-off
+├── work/P0..P7, Pv2/    One file per work package (YAML front matter + body + progress log)
+├── gates/               G0..G7 checklists with evidence and sign-off
 ├── decisions/           Architecture decision records (ADR-XXXX)
 ├── testing/             Test strategy, regression baseline, performance baseline
 ├── research/            Clean-room analyst notes and the spec-vs-code gap audit

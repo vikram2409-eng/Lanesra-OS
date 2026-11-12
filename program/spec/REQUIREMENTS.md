@@ -424,6 +424,38 @@ A parallel track (Phase 6): it does not wait for the Phase 1 to 5 gates.
 - **REQ-EXP-019** [P6] Themes can be set per app, come as light and dark pairs, and carry component styles (density, corner shape); the contrast check gates both modes
 - **REQ-EXP-020** [P6] The published theme also styles printed and PDF documents and system email
 
+## Process Lanes (added 2026-11-12, owner spec "Process Lane" and owner decision, ADR-0023; design in `program/design/SOLUTION-DESIGN.md` section 17)
+
+A parallel track (Phase 7). The online demo previews the feature first (ADR-0023).
+
+## LANE — Process Lanes: guided, single-screen execution of a business process for one record
+
+- **REQ-LANE-001** [P7] A Process Lane is a named business process on one object, made of ordered stages and steps, defined as data in one JSON Schema shared by the online demo, desktop and Team Workspace; it is versioned, follows Draft → Published, and a run keeps the version it started with
+- **REQ-LANE-002** [P7] A lane compiles to an execution graph and a lane run is a Run on the existing graph runtime, so lanes share one durability, checkpoint, trace, approval and audit path with Workflows and Teams; run statuses are those of ADR-0007 plus waiting for a person
+- **REQ-LANE-003** [P7] In the product a live lane run is labelled by its anchor record, lane and stage (for example "PO-2026-001 · Receive Shipment · stage 2 of 4"); the words lane, stage and step are used consistently and "case" and "flow" are not used
+- **REQ-LANE-004** [P7] Step kinds are form, record, check, approval and agent; notification is an automatic effect of completing a step and is never a step a person performs
+- **REQ-LANE-005** [P7] A lane has its own run data with a declared schema; every value a person enters in a step is stored in run data or mapped to a named record field, so nothing entered is lost; the runner shows which
+- **REQ-LANE-006** [P7] Completing a step performs its writes immediately in the real records through governed Action Types; a step's writes are all-or-nothing, are not repeated by a retry or a double click, obey Business Rules and access exactly as a direct edit does, and never edit a posted ledger row
+- **REQ-LANE-007** [P7] A required step must be complete and valid before the next unlocks; a failed check blocks with its reason shown; only an optional step can be skipped, and the skip records who, when and why
+- **REQ-LANE-008** [P7] Branches are declared in the lane definition (outcome to target step); every branch, including hold and rejection, has a declared way out (continue, another step, or end with a named outcome); a lane with a dead end cannot be published
+- **REQ-LANE-009** [P7] A run survives leaving the screen and a restart; it can be paused, resumed and handed to another person or role with the handoff audited; a finished step can be reopened only while its stage is current and reopening reverses nothing; a finished run is final; cancelling a run stops it, leaves posted writes in place and lists them
+- **REQ-LANE-010** [P7] At most one active run of the same lane exists for one record; a second start is refused with a link to the active run; different lanes may run on the same record unless the lanes declare that they exclude each other
+- **REQ-LANE-011** [P7] A step assigned to a role the viewer lacks shows its name and who it is waiting on but is locked, and its content is shown only as far as the viewer's record and field access allows; an agent step in a run a person started acts as that person narrowed by the agent's scope, and in an unattended run as its Agent Identity
+- **REQ-LANE-012** [P7] An approval step creates an entry in the approvals inbox, the run waits until it is decided, and the decision (who, when, which response) routes the run along the declared branch
+- **REQ-LANE-013** [P7] Workflows fire by default on changes a lane makes; a lane step may declare the workflow actions it replaces, and only those are not fired for that step's writes; the declaration is visible in the lane, in the workflow and in the Dependency Explorer; a workflow can start a lane run
+- **REQ-LANE-014** [P7] The runner is one screen: a stage bar showing every stage, the step list for the current stage, the current step's work, a summary of the anchor record and of what this run has written, and Back, Complete step and Pause; on a phone the same parts stack
+- **REQ-LANE-015** [P7] A record's Object 360 shows its lane runs with lane, stage, step and status, and each run's audit trail lists every advance and every write with actor and time
+- **REQ-LANE-016** [P7] Any step can carry agent assistance and an autonomy level: a person does it, an agent proposes and a person confirms, an agent does it with approval, or an agent does it; every acceptance and override of an agent proposal is recorded per step
+- **REQ-LANE-017** [P7] A step can repeat over child records of the anchor record (for example each order line); stages can declare entry and skip conditions and a lane a start condition, using the same conditions Business Rules use
+- **REQ-LANE-018** [P7] Actions available at any point of a run: add a note, attach a file, reassign the current step; each is audited
+- **REQ-LANE-019** [P7] Every stage and step records when it was entered and completed; a board shows records by stage for a lane, and one "my steps" list shows what waits on the signed-in person together with their approvals; a lane reports time per stage, completion rate and rework
+- **REQ-LANE-020** [P7] Blueprint view: a read-only page of a lane showing its purpose, stages, steps with their kind, role and writes, and its data fields, exportable for sign-off
+- **REQ-LANE-021** [P7] A lane can be run as a dry run with writes simulated; publishing checks the definition (bindings, roles, branches, replaced workflows); lanes are covered by the Unified Test Run and export in a Solution
+- **REQ-LANE-022** [P7] Describe a process: the Admin Assistant drafts a lane (stages, steps, data fields) from a plain-language description as a draft for review
+- **REQ-LANE-023** [P7] A step can start a child lane on a related record and wait for its outcome; depth is limited and the parent shows the child's stage
+- **REQ-LANE-024** [P7] A visual lane builder composes stages and steps on a canvas and produces the same definition format
+- **REQ-LANE-025** [P7] Shipped lanes: Receive Shipment on the warehouse demo with the worked example of the Process Lane spec (PO-2026-001 and the seeded discrepancy run on PO-2026-005), then Pick and Pack, Count and Replenish, each also offered as a lane template
+
 ## NFR — Success metrics and quality bars
 
 - **REQ-NFR-001** [P4] New admin builds a first working multi-agent team in under 15 minutes (measured in usability tests before GA) (phase: plan)
@@ -433,3 +465,4 @@ A parallel track (Phase 6): it does not wait for the Phase 1 to 5 gates.
 - **REQ-NFR-005** [P4] Telemetry to measure the share of Playground runs promoted to a published team (target 30%) (phase: plan)
 - **REQ-NFR-006** [P5] An admin registers an external agent, puts it under policy and sees its first governed run in the run history in under 30 minutes (measured before the Phase 5 gate) (added by ADR-0020)
 - **REQ-NFR-007** [P6] In a findability test before the Phase 6 gate, at least 80% of first-time admins locate each of ten common tasks in the new menu at the first attempt, including one task in each of the three AI areas (added by ADR-0022)
+- **REQ-NFR-008** [P7] A first-time user completes the Receive Shipment lane for one purchase order on the lane screen alone, without opening another screen, and the resulting records match the worked example (added by ADR-0023)
