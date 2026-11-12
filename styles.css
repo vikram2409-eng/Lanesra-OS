@@ -2486,6 +2486,8 @@ body.has-demo-banner{padding-top:36px}
 .lane-step-note{font-size:13px;color:var(--muted)}
 .lane-writes{margin:8px 0;padding-left:18px}
 .lane-writes li{margin-bottom:4px}
+.lane-step-writes{margin:8px 0;padding-left:18px}
+.lane-step-writes li{margin-bottom:4px}
 .lane-audit-row{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
 .lane-audit-time{color:var(--muted);white-space:nowrap}
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
