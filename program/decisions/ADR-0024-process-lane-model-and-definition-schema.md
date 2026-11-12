@@ -1,6 +1,6 @@
 # ADR-0024: Process Lane model and definition schema
 
-- Status: Proposed
+- Status: Accepted (owner accepted it 2026-11-12 with the instruction to merge this pull request once CI is green)
 - Date: 2026-11-12
 - Work package: WP-0701
 - Requirements: REQ-LANE-001..025, REQ-NFR-008
