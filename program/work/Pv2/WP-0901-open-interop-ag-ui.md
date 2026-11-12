@@ -1,12 +1,12 @@
 ---
 id: WP-0901
-title: Open interop: A2A, AG-UI and YAML export
+title: Open interop: AG-UI
 phase: v2
 epic: Ev2 Open interop
 status: proposed
 owner: unassigned
 depends_on: [WP-0419]
-requirements: [REQ-API-010, REQ-API-011, REQ-API-012]
+requirements: [REQ-API-011]
 estimate: L
 editions: [desktop, workspace]
 delivered: []
@@ -14,14 +14,14 @@ editions_reason: protocol endpoints need a running server
 docs: [api-access-and-webhooks]
 branch: 
 pr: 
-updated: 2026-10-16
+updated: 2026-11-11
 ---
 
-# WP-0901 — Open interop: A2A, AG-UI and YAML export
+# WP-0901 — Open interop: AG-UI
 
 ## Goal
 
-Post-GA interop.
+Post-GA interop: Playground events over AG-UI. A2A moved to WP-0502 and declarative export to WP-0570 (ADR-0020).
 
 ## Scope
 

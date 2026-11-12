@@ -57,6 +57,7 @@ Rebuild the agent editor around the eight plain-language groups with essentials,
 
 - Must follow (WP-0009): ADR-0010 migration conventions; ADR-0012 feature flags. ADR-0010 applies to any migration this work package adds.
 - Refine at the Gate 0 review: confirm scope against the gap audit (WP-0008) and ADRs (WP-0009), then set status to ready.
+- ADR-0022: the agent editor is listed under AI Studio in the Admin console menu registry (WP-0601).
 
 ## Progress log
 

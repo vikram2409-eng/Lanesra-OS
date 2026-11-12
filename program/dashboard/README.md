@@ -2,7 +2,17 @@
 
 One page with everything about the build: every requirement, every work package with its full
 details and handoff history, the build sequence with gates, who built what, what is next, and the
-"when a work package finishes" checklist.
+"when a work package finishes" checklist, and the solution design.
+
+Tabs and where each gets its content (all from `programctl export`, nothing typed into the page):
+
+| Tab | Source |
+|---|---|
+| Overview, Build sequence, Work packages | `work/**/WP-*.md` (including `planned_for:`), `gates/` |
+| Requirements | `spec/REQUIREMENTS.md` and `Covers:` tags in tests |
+| Design | `design/SOLUTION-DESIGN.md` (headings, tables, lists, and `arch` blocks: `Layer :: item; new item*`) |
+| When work finishes | `FINISH-CHECKLIST.md`, `AGENT-PROFILES.md` |
+| Gates and risks | `gates/G*.md`, open rows of `RAID.md` |
 
 - **Always current:** https://vikram2409-eng.github.io/Lanesra-OS/ - rebuilt by the `Program dashboard` workflow on every merge to `main` (WP-0019). Public, like the repo.
 - **claude.ai copy:** https://claude.ai/artifact/TANp9Vzmur4A37bsgHEtKg - refreshed by Claude Code at the start and end of every session; it states its data commit and time

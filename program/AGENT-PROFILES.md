@@ -1,29 +1,34 @@
 # Agent profiles
 
-The build uses two AI agents, **Claude Code** and **Muse AI** (ADR-0004). **Neither owns any part of
-the work** (ADR-0005): the owner uses whichever one has weekly usage left, and switches to the other
-when that runs out — at any point, including in the middle of a work package. Both follow
-[`PROTOCOL.md`](PROTOCOL.md) and [`../AGENTS.md`](../AGENTS.md).
+The build uses three AI agents: **Claude Code**, **Codex** and **Muse AI** (ADR-0004, ADR-0021).
+All follow [`PROTOCOL.md`](PROTOCOL.md) and [`../AGENTS.md`](../AGENTS.md).
 
-What differs between them is only **how** they work, which changes the mechanics of claiming,
-testing and delivering — never which work they may take.
+A work package may name the agent it is planned for in `planned_for:` (ADR-0021). That is the
+default, not a lock: when the planned agent has no usage left, another agent takes the package over
+under "Switching" below. Agents may work in parallel on different work packages; the pushed
+`wp/WP-XXXX-*` branch is the claim.
 
-> **Since 2026-11-01 (owner, RAID Q-26): Muse AI is not building. Claude Code takes all build work.**
-> The rest of this file still describes how either agent works, should that change.
+| Agent | Planned work (live list: `STATUS.md`, "Planned workload") |
+|---|---|
+| Claude Code | The critical path in Phases 1 to 4; channel framework, Slack and Microsoft Teams; the Phase 5 gate; in Phase 6 the two ADRs, the console shell, the page store, forms carry-over and the gate; every package with no `planned_for` |
+| Codex | Enterprise sign-in (WP-0102 to WP-0105), provider coverage (WP-0146), toolchain upgrades (WP-0194 to WP-0197), performance baseline (WP-0015); in Phase 5 the agent control plane, delegated credentials and MCP gateway, knowledge, enterprise operations, Python SDK, custom tools, simulated users, red-team suite, optimizer, human seats; in Phase 6 components, custom screens, blocks, builder experience, dashboards carry-over and app navigation |
+| Muse AI | Design ADRs (WP-0114, WP-0147), SaaS architecture plan (WP-0422); in Phase 5 the compliance pack, Teams as code and promotion, TypeScript SDK, email channel, web widget, synthetic cases, annotation queues, model right-sizing, human-seat SLAs, Helm chart; in Phase 6 Admin Home, side panels, findability, the website help refresh, form and content components, starter blocks, layouts, templates and themes |
 
-> If anything below about an agent's capabilities is wrong, correct this file. Open question for
-> the owner: RAID Q-12.
+> Muse AI was paused from 2026-11-01 (RAID Q-26) and is building again from 2026-11-11 (ADR-0021).
+> Codex joined on 2026-11-11. How Codex works is assumed below until the owner confirms (RAID Q-27).
+
+> If anything below about an agent's capabilities is wrong, correct this file.
 
 ## How each agent works
 
-| | Claude Code | Muse AI |
-|---|---|---|
-| Works through | Its own shell and git in a cloud container, plus GitHub tools | GitHub only: reads the repo, creates branches, commits and opens PRs through the GitHub web UI and API — no shell, no git CLI |
-| Can run tests itself | Yes: `cargo`, `npm`, Playwright, `programctl` | No: CI is its test run — it reads the CI results and the program-bot PR comment (WP-0018) |
-| Reads instructions from | `CLAUDE.md` → `AGENTS.md` automatically | `BRIEFING.md` + the work package file |
-| Claims a work package by | Pushing `wp/WP-XXXX-*` (or a claim marker) | Creating the `wp/WP-XXXX-*` branch and draft PR itself through GitHub |
-| Delivers by | Commits on the branch, draft PR | Commits on the branch, draft PR — written through GitHub; CI regenerates `STATUS.md` on the branch and posts validation, trace and test results as a PR comment |
-| Watch out for | The container is temporary: push before the session ends. Debug builds use ~30 GB: `cargo clean` on "No space left on device" | Cannot run `programctl` or any test; marks criteria "untested locally - see CI" and cites the bot comment; the patch-relay route (`program/inbox/`) is retired for build program work |
+| | Claude Code | Codex | Muse AI |
+|---|---|---|---|
+| Works through | Its own shell and git in a cloud container, plus GitHub tools | Its own shell and git in a cloud sandbox, plus GitHub (assumed, Q-27) | GitHub only: reads the repo, creates branches, commits and opens PRs through the GitHub web UI and API — no shell, no git CLI |
+| Can run tests itself | Yes: `cargo`, `npm`, Playwright, `programctl` | Yes, if its sandbox has network for `cargo` and `npm` (confirm on its first package) | No: CI is its test run — it reads the CI results and the program-bot PR comment (WP-0018) |
+| Reads instructions from | `CLAUDE.md` → `AGENTS.md` automatically | `AGENTS.md` automatically | `BRIEFING.md` + the work package file |
+| Claims a work package by | Pushing `wp/WP-XXXX-*` (or a claim marker) | Pushing `wp/WP-XXXX-*` | Creating the `wp/WP-XXXX-*` branch and draft PR itself through GitHub |
+| Delivers by | Commits on the branch, draft PR | Commits on the branch, draft PR | Commits on the branch, draft PR — written through GitHub; CI regenerates `STATUS.md` on the branch and posts validation, trace and test results as a PR comment |
+| Watch out for | The container is temporary: push before the session ends. Debug builds use ~30 GB: `cargo clean` on "No space left on device" | New to this repo: start with WP-0196 or WP-0197; sandbox disk and network limits are not yet known | Cannot run `programctl` or any test; marks criteria "untested locally - see CI" and cites the bot comment; the patch-relay route (`program/inbox/`) is retired for build program work |
 
 Because Muse cannot run tests, **CI (WP-0003) and the program-bot workflows (WP-0018) are what make
 Muse-only weeks possible.** They are early in Phase 0 for that reason.

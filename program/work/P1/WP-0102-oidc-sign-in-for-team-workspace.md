@@ -5,6 +5,7 @@ phase: 1
 epic: E1.1 Enterprise sign-in
 status: proposed
 owner: unassigned
+planned_for: codex
 depends_on: [WP-0101, WP-0010, WP-0106]
 requirements: [REQ-GOV-001]
 threats: [T-11]

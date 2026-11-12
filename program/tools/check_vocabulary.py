@@ -25,7 +25,9 @@ BANNED = ["Crew", "Kickoff", "Superstep", "Magentic", "StateGraph", "GraphFlow",
 # and this checker itself).
 ALLOWLIST_DIRS = {"program/research", "program/decisions"}
 ALLOWLIST_EXTS = {".md", ".html"}
-ALLOWLIST_FILES = {"program/tools/check_vocabulary.py", "THIRD_PARTY_NOTICES"}
+# programctl.py prints the clean-room rule on every task card, and that rule has to
+# name the projects implementers must not open, so it is exempt like this checker.
+ALLOWLIST_FILES = {"program/tools/check_vocabulary.py", "program/tools/programctl.py", "THIRD_PARTY_NOTICES"}
 
 # Code file extensions to scan.
 CODE_EXTS = {".py", ".rs", ".js", ".ts", ".tsx", ".jsx", ".sql"}

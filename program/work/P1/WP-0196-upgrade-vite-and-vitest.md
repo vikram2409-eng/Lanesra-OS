@@ -5,6 +5,7 @@ phase: 1
 epic: E0.1 Program and engineering readiness
 status: proposed
 owner: unassigned
+planned_for: codex
 depends_on: []
 requirements: [REQ-PRE-002, REQ-PRE-001]
 threats: []

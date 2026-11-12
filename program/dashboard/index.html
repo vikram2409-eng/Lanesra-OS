@@ -108,7 +108,8 @@ section.view { display: grid; gap: 22px; }
 table { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
 th, td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-family: var(--font-mono); font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--bg); }
-td.num { font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 0.8rem; }
+[data-design] { white-space: nowrap; }
+td.num { white-space: nowrap; font-variant-numeric: tabular-nums; font-family: var(--font-mono); font-size: 0.8rem; }
 tr.gate-row td { background: var(--accent-bg); color: var(--accent-fg); font-weight: 600; }
 tr.phase-head td { padding-top: 18px; border-bottom: 2px solid var(--line); }
 tr.clickable { cursor: pointer; }
@@ -150,10 +151,33 @@ tr.clickable:hover td { background: var(--surface); }
 .gate { border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 8px; align-content: start; }
 .gate ul { margin: 0; padding-left: 1.1rem; display: grid; gap: 4px; font-size: 0.88rem; }
 
+/* design tab */
+.doc { display: grid; gap: 14px; min-width: 0; }
+.doc h2 { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--line); scroll-margin-top: calc(env(safe-area-inset-top, 0px) + 56px); }
+.doc h3 { margin-top: 10px; }
+.doc p, .doc li { max-width: 78ch; overflow-wrap: anywhere; }
+.doc ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 6px; }
+.doc pre { background: var(--surface); padding: 10px 12px; border-radius: 8px; overflow-x: auto; margin: 0; font-size: 0.8rem; }
+.doc table { min-width: 560px; }
+.doc td:first-child { font-weight: 600; }
+.new { background: var(--accent-bg); color: var(--accent-fg); }
+.toc { display: flex; flex-wrap: wrap; gap: 6px; }
+.toc a { font-size: 0.82rem; text-decoration: none; padding: 3px 10px; border-radius: 999px; background: var(--surface); color: var(--fg); }
+.toc a:hover { background: var(--surface-2); }
+.arch { display: grid; gap: 4px; }
+.arch-row { display: grid; grid-template-columns: 11rem minmax(0, 1fr); gap: 10px; align-items: start; background: var(--surface); border-radius: 8px; padding: 8px 10px; }
+.arch-row > b { font-family: var(--font-display); font-size: 0.92rem; padding-top: 2px; }
+.arch-items { display: flex; flex-wrap: wrap; gap: 5px; }
+.chip { font-size: 0.8rem; padding: 2px 9px; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
+.chip.is-new { background: var(--accent-bg); color: var(--accent-fg); border-color: transparent; font-weight: 600; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 0.82rem; color: var(--muted); align-items: center; }
+.lanes3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+
 .loading { padding: 40px 0; color: var(--muted); }
 @media (max-width: 760px) {
   .kpis, .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cols, .two, .check-groups, .gates, .edition-rows { grid-template-columns: minmax(0, 1fr); }
+  .cols, .two, .check-groups, .gates, .edition-rows, .lanes3 { grid-template-columns: minmax(0, 1fr); }
+  .arch-row { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .phase-row { grid-template-columns: 1fr auto; }
   .phase-row .meter { grid-column: 1 / -1; }
 }
@@ -163,7 +187,7 @@ tr.clickable:hover td { background: var(--surface); }
 <header class="top pad">
   <div class="inner">
     <div>
-      <div class="eyebrow">Lanesra OS · Agent Playground and Orchestration</div>
+      <div class="eyebrow">Lanesra OS · Agent Foundry and Orchestration platform</div>
       <h1>Build program</h1>
     </div>
     <div class="stamp"><span id="stamp">Loading program data…</span><br><a href="https://vikram2409-eng.github.io/Lanesra-OS/" target="_blank" rel="noopener">Always-current copy, updated on every merge</a></div>
@@ -175,6 +199,7 @@ tr.clickable:hover td { background: var(--surface); }
     <a href="#sequence" data-tab="sequence">Build sequence</a>
     <a href="#packages" data-tab="packages">Work packages</a>
     <a href="#requirements" data-tab="requirements">Requirements</a>
+    <a href="#design" data-tab="design">Design</a>
     <a href="#finish" data-tab="finish">When work finishes</a>
     <a href="#gates" data-tab="gates">Gates and risks</a>
   </div>
@@ -192,9 +217,10 @@ tr.clickable:hover td { background: var(--surface); }
           <select id="pk-phase" aria-label="Phase"></select>
           <select id="pk-status" aria-label="Status"></select>
           <select id="pk-edition" aria-label="Edition"></select>
+          <select id="pk-planned" aria-label="Planned for"></select>
           <span class="count" id="pk-count"></span>
         </div>
-        <div class="table-wrap"><table><thead><tr><th>Seq</th><th>WP</th><th>Title</th><th>Status</th><th>Editions</th><th>Built by</th><th>Est</th><th>Depends on</th></tr></thead><tbody id="pk-rows"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Seq</th><th>WP</th><th>Title</th><th>Status</th><th>Editions</th><th>Planned for</th><th>Built by</th><th>Est</th><th>Depends on</th></tr></thead><tbody id="pk-rows"></tbody></table></div>
       </div>
       <div id="pk-detail" class="detail" hidden></div>
     </section>
@@ -204,10 +230,12 @@ tr.clickable:hover td { background: var(--surface); }
         <select id="rq-area" aria-label="Area"></select>
         <select id="rq-phase" aria-label="Phase"></select>
         <select id="rq-state" aria-label="State"></select>
+        <select id="rq-src" aria-label="Source"></select>
         <span class="count" id="rq-count"></span>
       </div>
-      <div class="table-wrap"><table><thead><tr><th>ID</th><th>Phase</th><th>Requirement</th><th>State</th><th>Work packages</th><th>Tests</th></tr></thead><tbody id="rq-rows"></tbody></table></div>
+      <div class="table-wrap"><table><thead><tr><th>ID</th><th>Area</th><th>Phase</th><th>Requirement</th><th>State</th><th>Work packages</th><th>Tests</th></tr></thead><tbody id="rq-rows"></tbody></table></div>
     </section>
+    <section class="view" id="view-design" hidden></section>
     <section class="view" id="view-finish" hidden></section>
     <section class="view" id="view-gates" hidden></section>
   </div>
@@ -220,7 +248,9 @@ tr.clickable:hover td { background: var(--surface); }
   var WP = {};
   var STATUS_ORDER = ["in_progress", "in_review", "blocked", "ready", "proposed", "done", "dropped"];
   var STATUS_LABEL = { done: "Done", in_progress: "In progress", in_review: "In review", ready: "Ready", proposed: "Planned", blocked: "Blocked", dropped: "Dropped" };
-  var AGENT_LABEL = { claude: "Claude Code", muse: "Muse AI" };
+  var AGENT_LABEL = { claude: "Claude Code", codex: "Codex", muse: "Muse AI" };
+  var PLANNED = ["codex", "muse", "claude"];
+  function planned(w) { return w.planned_for ? '<span class="pill agent">' + esc(AGENT_LABEL[w.planned_for] || w.planned_for) + "</span>" : '<span class="muted">any</span>'; }
   var EDITIONS = [["desktop", "Desktop", "D"], ["workspace", "Team Workspace", "W"], ["demo", "Online demo", "O"]];
   function eds(w) {
     if (!w.editions.length) return '<span class="muted" title="Program or test infrastructure">infra</span>';
@@ -283,7 +313,19 @@ tr.clickable:hover td { background: var(--surface); }
     return "https://github.com/" + slug + "/blob/" + branch + "/" + file;
   }
   function phaseName(id) { var p = D.phases.filter(function (x) { return x.id === id; })[0]; return (id === "v2" ? "v2" : "Phase " + id) + " · " + (p ? p.title : ""); }
-  var GATE_FOR = { "0": "G0", "1": "G1", "2": "G2", "3": "G3", "4": "G4" };
+  var GATE_FOR = { "0": "G0", "1": "G1", "2": "G2", "3": "G3", "4": "G4", "5": "G5", "6": "G6" };
+  var PHASE_NOTE = { "5": "Added by the platform extension (ADR-0020). Runs beside Phase 4 once the Phase 3 gate has passed.", "6": "Admin console and Experience Studio (ADR-0022). A parallel track: it starts now and waits for no other gate. Every package ships in desktop, Team Workspace and the online demo, with website help." };
+  var PHASE_SHORT = { "5": "runs beside Phase 4", "6": "parallel track, starts now" };
+  // Design document section (its "## N." heading) for each lane of the platform extension.
+  var DESIGN_FOR = { "E5.1": 8, "E5.2": 6, "E5.3": 9, "E5.4": 11, "E5.5": 11, "E5.6": 10, "E5.7": 4, "E5.8": 12, "E5.9": 14, "E5.10": 13, "E5.11": 20, "WP-0114": 8, "WP-0147": 6, "E6.1": 15, "E6.2": 16, "E6.3": 16, "E6.4": 16, "E6.5": 16, "E6.6": 16, "E6.7": 20 };
+  function designSection(w) { return DESIGN_FOR[w.id] || DESIGN_FOR[String(w.epic || "").split(" ")[0]] || 0; }
+  function designBtn(n, label) { return n ? '<button class="wp-link" data-design="' + n + '" style="font-family:inherit">' + esc(label || ("Design §" + n)) + "</button>" : ""; }
+  function openDesign(n) {
+    show("design");
+    try { history.replaceState(null, "", "#design"); } catch (e) {}
+    var t = document.getElementById("design-" + (n - 1));
+    if (t) t.scrollIntoView({ block: "start" }); else window.scrollTo(0, 0);
+  }
 
   // ------------------------------------------------------------- overview
   function renderOverview() {
@@ -308,11 +350,28 @@ tr.clickable:hover td { background: var(--surface); }
       var t = ws.reduce(function (a, w) { return a + w.points; }, 0);
       var d = ws.filter(function (w) { return w.status === "done"; }).reduce(function (a, w) { return a + w.points; }, 0);
       var g = D.gates.filter(function (x) { return x.id === GATE_FOR[p.id]; })[0];
-      h.push('<div class="phase-row"><div><b>' + esc(phaseName(p.id)) + '</b><div class="muted" style="font-size:.8rem">' + (g ? esc(g.title.replace(/^G\d — /, "Gate: ")) : "") + '</div></div>' +
+      h.push('<div class="phase-row"><div><b>' + esc(phaseName(p.id)) + '</b><div class="muted" style="font-size:.8rem">' + (g ? esc(g.title.replace(/^G\d — /, "Gate: ")) : "") + (PHASE_SHORT[p.id] ? " · " + PHASE_SHORT[p.id] : "") + '</div></div>' +
         '<div class="meter"><i style="width:' + (t ? Math.round(100 * d / t) : 0) + '%"></i></div>' +
         '<div class="nums">' + d + " / " + t + ' pts</div><div class="nums">' + ws.filter(function (w) { return w.status === "done"; }).length + " / " + ws.length + " WPs</div></div>");
     });
     h.push("</div></div>");
+
+    var ext = wps.filter(function (w) { return designSection(w) && w.status !== "dropped"; }), areas = [], byArea = {};
+    ext.forEach(function (w) { var k = (w.phase === "5" || w.phase === "6") ? w.epic : "E1 Design decisions (Phase 1)"; if (!byArea[k]) { byArea[k] = []; areas.push(k); } byArea[k].push(w); });
+    if (areas.length) {
+      var rank = function (a) { var m = a.match(/^E(\d+)\.(\d+)/); return a.indexOf("E1 ") === 0 ? 0 : m ? parseInt(m[1], 10) * 100 + parseInt(m[2], 10) : 9999; };
+      areas.sort(function (a, b) { return rank(a) - rank(b); });
+      h.push('<div class="block"><h2>New work by area</h2><p class="muted" style="font-size:.85rem">Added on 2026-11-11: the platform extension (Phase 5, ADR-0020) with its two early design decisions, and the Admin console and Experience Studio (Phase 6, ADR-0022). Each area links to its section of the design.</p><div class="table-wrap"><table><thead><tr><th>Area</th><th>Phase</th><th>Work packages</th><th>Done</th><th>Points</th><th>Planned for</th><th>Starts after</th><th>Design</th></tr></thead><tbody>');
+      areas.forEach(function (k) {
+        var ws = byArea[k], ids = {}; ws.forEach(function (w) { ids[w.id] = 1; });
+        var who = []; ws.forEach(function (w) { var a = AGENT_LABEL[w.planned_for] || "any"; if (who.indexOf(a) < 0) who.push(a); });
+        var entry = []; ws.forEach(function (w) { w.depends_on.forEach(function (d) { if (!ids[d] && entry.indexOf(d) < 0) entry.push(d); }); });
+        var open = entry.filter(function (d) { return WP[d] && WP[d].status !== "done" && WP[d].status !== "dropped"; });
+        h.push("<tr><td><b>" + esc(k.replace(/^E[\d.]+ /, "")) + "</b></td><td class=\"num\">" + esc(ws[0].phase) + "</td><td>" + ws.map(function (w) { return wpBtn(w.id); }).join(" ") + '</td><td class="num">' + ws.filter(function (w) { return w.status === "done"; }).length + " / " + ws.length + '</td><td class="num">' + ws.reduce(function (a, w) { return a + w.points; }, 0) + "</td><td>" + esc(who.join(", ")) + "</td><td>" +
+          (open.length ? open.slice(0, 5).map(wpBtn).join(" ") + (open.length > 5 ? " +" + (open.length - 5) : "") : '<span class="pill st-ready">can start</span>') + "</td><td>" + designBtn(designSection(ws[0])) + "</td></tr>");
+      });
+      h.push("</tbody></table></div></div>");
+    }
 
     h.push('<div class="block"><h2>Edition coverage</h2><p class="muted" style="font-size:.85rem">Every capability ships in each edition it applies to. On the online demo it is simulated on sample data. A work package is done only when every one of its editions is delivered.</p><div class="edition-rows">');
     EDITIONS.forEach(function (e) {
@@ -335,6 +394,19 @@ tr.clickable:hover td { background: var(--surface); }
     });
     h.push("</div></div></div>");
 
+    var lanes = PLANNED.map(function (a) {
+      var ws = wps.filter(function (w) { return w.planned_for === a && w.status !== "done" && w.status !== "dropped"; });
+      return { a: a, ws: ws, pts: ws.reduce(function (x, w) { return x + w.points; }, 0), ready: ws.filter(function (w) { return w.depends_on.every(function (d) { return !WP[d] || WP[d].status === "done" || WP[d].status === "dropped"; }); }) };
+    }).filter(function (l) { return l.ws.length; });
+    if (lanes.length) {
+      h.push('<div class="block"><h2>Planned workload</h2><p class="muted" style="font-size:.85rem">The default AI for each open work package (ADR-0021). A plan, not a lock: another AI takes a package over when the planned one has no usage left. Packages with no plan go to whoever is free.</p><div class="lanes3">');
+      lanes.forEach(function (l) {
+        h.push('<div class="edition"><b>' + esc(AGENT_LABEL[l.a]) + '</b><div class="nums">' + l.ws.length + " work packages · " + l.pts + " pts" + (l.a === "claude" ? ", plus every package with no plan" : "") + '</div><div style="font-size:.85rem">' +
+          (l.ready.length ? "Can start now: " + l.ready.slice(0, 6).map(function (w) { return wpBtn(w.id); }).join(" ") + (l.ready.length > 6 ? " +" + (l.ready.length - 6) : "") : '<span class="muted">Nothing unblocked yet</span>') + "</div></div>");
+      });
+      h.push("</div></div>");
+    }
+
     h.push('<div class="block"><h2>Critical path</h2><p class="muted" style="font-size:.85rem">The heaviest chain of dependencies by effort points. Delays here delay everything.</p><div class="path">');
     D.critical_path.forEach(function (id, i) {
       var w = WP[id];
@@ -356,22 +428,22 @@ tr.clickable:hover td { background: var(--surface); }
 
   // ------------------------------------------------------------- sequence
   function renderSequence() {
-    var h = ['<div class="block"><h2>Build sequence</h2><p class="muted">Every work package in build order: by phase, then dependency wave (a wave can start once the waves before it are done), then id. A gate closes each phase. Work packages in the same wave can be built in parallel.</p></div>'];
-    h.push('<div class="table-wrap"><table><thead><tr><th>Seq</th><th>Wave</th><th>WP</th><th>Title</th><th>Status</th><th>Editions</th><th>Built by</th><th>Est</th><th>Depends on</th><th>Unblocks</th></tr></thead><tbody>');
+    var h = ['<div class="block"><h2>Build sequence</h2><p class="muted">Every work package in build order: by phase, then dependency wave (a wave can start once the waves before it are done), then id. A gate closes each phase. Work packages in the same wave can be built in parallel, and each shows the AI it is planned for. Phase 5 (the platform extension) runs beside Phase 4 once the Phase 3 gate has passed, and Phase 6 (Admin console and Experience Studio) is a parallel track that starts now, so their place lower in the list is not a wait.</p></div>'];
+    h.push('<div class="table-wrap"><table><thead><tr><th>Seq</th><th>Wave</th><th>WP</th><th>Title</th><th>Status</th><th>Editions</th><th>Planned for</th><th>Built by</th><th>Est</th><th>Depends on</th><th>Unblocks</th></tr></thead><tbody>');
     var lastPhase = null;
     D.work_packages.forEach(function (w) {
       if (w.phase !== lastPhase) {
         if (lastPhase !== null && GATE_FOR[lastPhase]) {
           var g = D.gates.filter(function (x) { return x.id === GATE_FOR[lastPhase]; })[0];
-          if (g) h.push('<tr class="gate-row"><td colspan="10">◆ ' + esc(g.title) + " · " + esc(g.status) + "</td></tr>");
+          if (g) h.push('<tr class="gate-row"><td colspan="11">◆ ' + esc(g.title) + " · " + esc(g.status) + "</td></tr>");
         }
-        h.push('<tr class="phase-head"><td colspan="10"><h3>' + esc(phaseName(w.phase)) + "</h3></td></tr>");
+        h.push('<tr class="phase-head"><td colspan="11"><h3>' + esc(phaseName(w.phase)) + "</h3>" + (PHASE_NOTE[w.phase] ? '<div class="muted" style="font-size:.85rem">' + esc(PHASE_NOTE[w.phase]) + " " + designBtn(20, "Build order in the design") + "</div>" : "") + "</td></tr>");
         lastPhase = w.phase;
       }
-      h.push('<tr class="clickable" data-wp="' + esc(w.id) + '"><td class="num">' + w.seq + '</td><td class="num">' + w.wave + "</td><td>" + wpBtn(w.id) + "</td><td>" + esc(w.title) + (w.critical ? ' <span class="pill crit">critical</span>' : "") + "</td><td>" + pill(w.status) + "</td><td>" + eds(w) + "</td><td>" + agents(w.built_by) + '</td><td class="num">' + esc(w.estimate) + "</td><td>" + (w.depends_on.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td><td>" + (w.unblocks.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td></tr>");
+      h.push('<tr class="clickable" data-wp="' + esc(w.id) + '"><td class="num">' + w.seq + '</td><td class="num">' + w.wave + "</td><td>" + wpBtn(w.id) + "</td><td>" + esc(w.title) + (w.critical ? ' <span class="pill crit">critical</span>' : "") + "</td><td>" + pill(w.status) + "</td><td>" + eds(w) + "</td><td>" + planned(w) + "</td><td>" + agents(w.built_by) + '</td><td class="num">' + esc(w.estimate) + "</td><td>" + (w.depends_on.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td><td>" + (w.unblocks.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td></tr>");
     });
-    var g4 = D.gates.filter(function (x) { return x.id === "G4"; })[0];
-    if (g4) h.push('<tr class="gate-row"><td colspan="10">◆ ' + esc(g4.title) + " · " + esc(g4.status) + "</td></tr>");
+    var gEnd = D.gates.filter(function (x) { return x.id === GATE_FOR[lastPhase]; })[0];
+    if (gEnd) h.push('<tr class="gate-row"><td colspan="11">◆ ' + esc(gEnd.title) + " · " + esc(gEnd.status) + "</td></tr>");
     h.push("</tbody></table></div>");
     document.getElementById("view-sequence").innerHTML = h.join("");
   }
@@ -382,18 +454,19 @@ tr.clickable:hover td { background: var(--surface); }
   }
   function renderPackageList() {
     var q = document.getElementById("pk-q").value.trim().toLowerCase();
-    var ph = document.getElementById("pk-phase").value, st = document.getElementById("pk-status").value, ed = document.getElementById("pk-edition").value;
+    var ph = document.getElementById("pk-phase").value, st = document.getElementById("pk-status").value, ed = document.getElementById("pk-edition").value, pl = document.getElementById("pk-planned").value;
     var rows = D.work_packages.filter(function (w) {
       if (ph && w.phase !== ph) return false;
       if (st && w.status !== st) return false;
       if (ed && w.editions.indexOf(ed) < 0) return false;
+      if (pl && (pl === "none" ? w.planned_for : w.planned_for !== pl)) return false;
       if (q && (w.id + " " + w.title + " " + w.epic + " " + w.goal).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
     document.getElementById("pk-count").textContent = rows.length + " of " + D.work_packages.length;
     document.getElementById("pk-rows").innerHTML = rows.map(function (w) {
-      return '<tr class="clickable" data-wp="' + esc(w.id) + '"><td class="num">' + w.seq + "</td><td>" + wpBtn(w.id) + "</td><td>" + esc(w.title) + '<div class="muted" style="font-size:.78rem">' + esc(w.epic) + "</div></td><td>" + pill(w.status) + "</td><td>" + eds(w) + "</td><td>" + agents(w.built_by) + '</td><td class="num">' + esc(w.estimate) + "</td><td>" + (w.depends_on.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td></tr>";
-    }).join("") || '<tr><td colspan="8" class="empty">No work package matches these filters.</td></tr>';
+      return '<tr class="clickable" data-wp="' + esc(w.id) + '"><td class="num">' + w.seq + "</td><td>" + wpBtn(w.id) + "</td><td>" + esc(w.title) + '<div class="muted" style="font-size:.78rem">' + esc(w.epic) + "</div></td><td>" + pill(w.status) + "</td><td>" + eds(w) + "</td><td>" + planned(w) + "</td><td>" + agents(w.built_by) + '</td><td class="num">' + esc(w.estimate) + "</td><td>" + (w.depends_on.map(wpBtn).join(" ") || '<span class="muted">—</span>') + "</td></tr>";
+    }).join("") || '<tr><td colspan="9" class="empty">No work package matches these filters.</td></tr>';
   }
   function renderDetail(id) {
     var w = WP[id]; if (!w) return;
@@ -403,6 +476,8 @@ tr.clickable:hover td { background: var(--surface); }
     h.push('<div class="detail-head"><div class="eyebrow">' + esc(phaseName(w.phase)) + " · " + esc(w.epic) + ' · sequence #' + w.seq + ", wave " + w.wave + '</div><h2>' + esc(w.id) + " — " + esc(w.title) + "</h2><div>" + pill(w.status) + (w.critical ? ' <span class="pill crit">critical path</span>' : "") + "</div></div>");
     h.push('<div class="facts">' +
       '<div class="fact"><div class="k">Built by</div><div class="v">' + agents(w.built_by) + "</div></div>" +
+      '<div class="fact"><div class="k">Planned for</div><div class="v">' + planned(w) + "</div></div>" +
+      (designSection(w) ? '<div class="fact"><div class="k">Design</div><div class="v">' + designBtn(designSection(w), "Open design section " + designSection(w)) + "</div></div>" : "") +
       '<div class="fact"><div class="k">Current owner</div><div class="v">' + esc(w.owner || "unassigned") + "</div></div>" +
       '<div class="fact"><div class="k">Estimate</div><div class="v">' + esc(w.estimate) + " · " + w.points + " pts</div></div>" +
       '<div class="fact"><div class="k">Criteria proven</div><div class="v">' + doneCrit + " / " + w.criteria.length + "</div></div>" +
@@ -463,18 +538,74 @@ tr.clickable:hover td { background: var(--surface); }
   // --------------------------------------------------------- requirements
   function renderReqs() {
     var q = document.getElementById("rq-q").value.trim().toLowerCase();
-    var ar = document.getElementById("rq-area").value, ph = document.getElementById("rq-phase").value, st = document.getElementById("rq-state").value;
+    var ar = document.getElementById("rq-area").value, ph = document.getElementById("rq-phase").value, st = document.getElementById("rq-state").value, sr = document.getElementById("rq-src").value;
     var rows = D.requirements.filter(function (r) {
       if (ar && r.area !== ar) return false;
       if (ph && r.phase !== ph) return false;
       if (st && r.state !== st) return false;
-      if (q && (r.id + " " + r.text).toLowerCase().indexOf(q) < 0) return false;
+      if (sr && (sr === "ext") !== !!r.extension) return false;
+      if (q && (r.id + " " + r.text + " " + (r.area_title || "")).toLowerCase().indexOf(q) < 0) return false;
       return true;
     });
     document.getElementById("rq-count").textContent = rows.length + " of " + D.requirements.length;
     document.getElementById("rq-rows").innerHTML = rows.map(function (r) {
-      return '<tr><td class="mono" style="white-space:nowrap">' + esc(r.id) + '</td><td class="num">' + esc(r.phase) + "</td><td>" + esc(r.text) + '</td><td><span class="pill rq-' + esc(r.state).replace(" ", "-") + '">' + esc(r.state) + "</span></td><td>" + (r.wps.map(wpBtn).join(" ") || '<span class="muted">—</span>') + '</td><td class="num">' + (r.tests.length ? r.tests.length + " file" + (r.tests.length > 1 ? "s" : "") : "—") + "</td></tr>";
-    }).join("") || '<tr><td colspan="6" class="empty">No requirement matches these filters.</td></tr>';
+      return '<tr><td class="mono" style="white-space:nowrap">' + esc(r.id) + "</td><td>" + esc(r.area_title || r.area) + (r.extension ? ' <span class="pill new">New</span>' : "") + '</td><td class="num">' + esc(r.phase) + "</td><td>" + esc(r.text) + '</td><td><span class="pill rq-' + esc(r.state).replace(" ", "-") + '">' + esc(r.state) + "</span></td><td>" + (r.wps.map(wpBtn).join(" ") || '<span class="muted">—</span>') + '</td><td class="num">' + (r.tests.length ? r.tests.length + " file" + (r.tests.length > 1 ? "s" : "") : "—") + "</td></tr>";
+    }).join("") || '<tr><td colspan="7" class="empty">No requirement matches these filters.</td></tr>';
+  }
+
+  // ---------------------------------------------------------------- design
+  function newTag(html) { return html.replace(/\[NEW\]/g, '<span class="pill new">New</span>'); }
+  function docInline(s) { return newTag(inline(s)); }
+  function renderDesign() {
+    var el = document.getElementById("view-design"), src = (D.design && D.design.markdown) || "";
+    if (!src) { el.innerHTML = '<div class="empty">No design document in this build.</div>'; return; }
+    var lines = src.split("\n"), h = [], toc = [], para = [], list = false, i = 0, title = "";
+    function flush() { if (para.length) { h.push("<p>" + docInline(para.join(" ")) + "</p>"); para = []; } if (list) { h.push("</ul>"); list = false; } }
+    function cells(l) { return l.trim().replace(/^\||\|$/g, "").split("|").map(function (c) { return c.trim(); }); }
+    while (i < lines.length) {
+      var l = lines[i];
+      if (/^```/.test(l)) {
+        flush();
+        var kind = l.slice(3).trim(), buf = [];
+        i++;
+        while (i < lines.length && !/^```/.test(lines[i])) { buf.push(lines[i]); i++; }
+        i++;
+        if (kind === "arch") {
+          h.push('<div class="arch">' + buf.filter(function (b) { return b.indexOf("::") > 0; }).map(function (b) {
+            var parts = b.split("::");
+            return '<div class="arch-row"><b>' + esc(parts[0].trim()) + '</b><div class="arch-items">' + parts[1].split(";").map(function (it) {
+              it = it.trim(); var isNew = /\*$/.test(it);
+              return '<span class="chip' + (isNew ? " is-new" : "") + '">' + esc(it.replace(/\*$/, "")) + "</span>";
+            }).join("") + "</div></div>";
+          }).join("") + '</div><div class="legend"><span class="chip">In the October spec</span><span class="chip is-new">Added by the extension</span></div>');
+        } else h.push("<pre>" + esc(buf.join("\n")) + "</pre>");
+        continue;
+      }
+      if (/^\|/.test(l) && i + 1 < lines.length && /^\|[\s:|-]+\|$/.test(lines[i + 1].trim())) {
+        flush();
+        var head = cells(l), rows = [];
+        i += 2;
+        while (i < lines.length && /^\|/.test(lines[i])) { rows.push(cells(lines[i])); i++; }
+        h.push('<div class="table-wrap"><table><thead><tr>' + head.map(function (c) { return "<th>" + esc(c) + "</th>"; }).join("") + "</tr></thead><tbody>" +
+          rows.map(function (r) { return "<tr>" + r.map(function (c) { return "<td>" + docInline(c) + "</td>"; }).join("") + "</tr>"; }).join("") + "</tbody></table></div>");
+        continue;
+      }
+      var m;
+      if ((m = l.match(/^# (.+)$/))) { flush(); title = m[1]; }
+      else if ((m = l.match(/^## (.+)$/))) { flush(); var id = "design-" + toc.length; toc.push({ id: id, t: m[1] }); h.push('<h2 id="' + id + '">' + docInline(m[1]) + "</h2>"); }
+      else if ((m = l.match(/^### (.+)$/))) { flush(); h.push("<h3>" + docInline(m[1]) + "</h3>"); }
+      else if ((m = l.match(/^\s*- (.+)$/))) { if (para.length) flush(); if (!list) { h.push("<ul>"); list = true; } h.push("<li>" + docInline(m[1]) + "</li>"); }
+      else if (!l.trim()) flush();
+      else { if (list) flush(); para.push(l.trim()); }
+      i++;
+    }
+    flush();
+    el.innerHTML = '<div class="block"><h2>' + esc(title || "Solution design") + '</h2><p class="muted" style="font-size:.85rem">Rendered from <a href="' + esc(repoUrl(D.design.file)) + '" target="_blank" rel="noopener"><code>' + esc(D.design.file) + '</code></a>. <span class="pill new">New</span> marks what the extensions of 2026-11-11 add (ADR-0020, ADR-0022).</p>' +
+      '<nav class="toc" aria-label="Design sections">' + toc.map(function (t) { return '<a href="#' + t.id + '" data-jump="' + t.id + '">' + esc(t.t.replace(/\s*\[NEW\]/, "")) + "</a>"; }).join("") + "</nav></div>" +
+      '<div class="doc">' + h.join("") + "</div>";
+    el.querySelectorAll("[data-jump]").forEach(function (a) {
+      a.addEventListener("click", function (ev) { ev.preventDefault(); var t = document.getElementById(a.getAttribute("data-jump")); if (t) t.scrollIntoView({ block: "start" }); });
+    });
   }
 
   // ---------------------------------------------------------------- finish
@@ -485,15 +616,21 @@ tr.clickable:hover td { background: var(--surface); }
       h.push('<div class="check-group"><h3>' + esc(g.group) + "</h3><ol>" + g.items.map(function (it) { return "<li><b>" + inline(it.name) + "</b><span>" + inline(it.detail) + "</span></li>"; }).join("") + "</ol></div>");
     });
     h.push("</div>");
-    h.push('<div class="two"><div class="block who"><h3>If the AI is Claude Code</h3><p>It runs every step itself: the full test suite, <code>programctl status</code>, the push and the pull request. At its next session it also republishes this page.</p></div>' +
-      '<div class="block who"><h3>If the AI is Muse AI</h3><p>It works through GitHub: it reads the repo, commits on the work package branch and opens the pull request. It cannot run tests or <code>programctl</code>, so it marks criteria "untested locally – see CI". CI runs the suite, regenerates <code>STATUS.md</code> on the branch and posts the results on the pull request (WP-0018).</p></div></div>');
-    h.push('<div class="block"><h3>Switching AI part-way</h3><p>Stopping mid-way is normal when a weekly limit runs out. Push everything, leave the status as in progress, and write a Progress log entry precise enough for the other AI to continue on the same branch tomorrow. The other AI starts from that entry, using <code>programctl brief WP-XXXX</code>.</p></div>');
+    h.push('<div class="block"><h2>How each AI works</h2><p class="muted" style="font-size:.85rem">From <code>program/AGENT-PROFILES.md</code>. Each open work package names the AI it is planned for; the plan is a default, not a lock (ADR-0021).</p></div><div class="lanes3">');
+    (D.agents || []).forEach(function (a) {
+      var key = PLANNED.filter(function (k) { return AGENT_LABEL[k] === a.name; })[0];
+      var open = D.work_packages.filter(function (w) { return key && w.planned_for === key && w.status !== "done" && w.status !== "dropped"; });
+      h.push('<div class="check-group"><h3>' + esc(a.name) + '</h3><div class="muted" style="font-size:.82rem">' + (open.length ? open.length + " open work packages planned" + (key === "claude" ? ", plus every package with no plan" : "") : "") + '</div><div class="who">' +
+        a.facts.map(function (f) { return '<div><div class="eyebrow">' + esc(f.k) + '</div><div style="font-size:.9rem;overflow-wrap:anywhere">' + inline(f.v) + "</div></div>"; }).join("") + "</div></div>");
+    });
+    h.push("</div>");
+    h.push('<div class="block"><h3>Switching AI part-way</h3><p>Stopping mid-way is normal when a usage limit runs out. Push everything, leave the status as in progress, and write a Progress log entry precise enough for another AI to continue on the same branch tomorrow. The AI that takes over starts from that entry, using <code>programctl brief WP-XXXX</code>, and sets <code>owner:</code> to itself. The three AIs can work in parallel on different work packages, so the pushed <code>wp/</code> branch is the claim.</p></div>');
     document.getElementById("view-finish").innerHTML = h.join("");
   }
 
   // ----------------------------------------------------------------- gates
   function renderGates() {
-    var h = ['<div class="block"><h2>Phase gates</h2><p class="muted">Each phase ends with a gate. The owner signs it once every check has evidence. The next phase\'s work stays planned until then.</p></div><div class="gates">'];
+    var h = ['<div class="block"><h2>Phase gates</h2><p class="muted">Each phase ends with a gate. The owner signs it once every check has evidence. The next phase\'s work stays planned until then. One exception: Phase 5, the platform extension, opens once the Phase 3 gate has passed and runs beside Phase 4, so G5 does not hold back general availability (ADR-0020). Phase 6, the Admin console and Experience Studio, is a parallel track with its own gate G6 (ADR-0022).</p></div><div class="gates">'];
     D.gates.forEach(function (g) {
       h.push('<div class="gate"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><h3>' + esc(g.title) + '</h3><span class="pill ' + (/pass|signed|done/i.test(g.status) ? "st-done" : "st-proposed") + '">' + esc(g.status) + "</span></div><ul>" + g.checks.map(function (c) { return "<li>" + (c.done ? "✓ " : "") + inline(c.text) + "</li>"; }).join("") + '</ul><a href="' + esc(repoUrl(g.file)) + '" target="_blank" rel="noopener">Gate file</a></div>');
     });
@@ -504,7 +641,7 @@ tr.clickable:hover td { background: var(--surface); }
   }
 
   // ------------------------------------------------------------- routing
-  var TABS = ["overview", "sequence", "packages", "requirements", "finish", "gates"];
+  var TABS = ["overview", "sequence", "packages", "requirements", "design", "finish", "gates"];
   function show(tab, keepDetail) {
     TABS.forEach(function (t) { document.getElementById("view-" + t).hidden = t !== tab; });
     document.querySelectorAll("#tabs a").forEach(function (a) { if (a.dataset.tab === tab) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
@@ -520,6 +657,8 @@ tr.clickable:hover td { background: var(--surface); }
   }
 
   document.addEventListener("click", function (ev) {
+    var d = ev.target.closest("[data-design]");
+    if (d) { ev.preventDefault(); openDesign(parseInt(d.getAttribute("data-design"), 10)); return; }
     var b = ev.target.closest("[data-wp]");
     if (b && !ev.target.closest("a")) { ev.preventDefault(); openWP(b.getAttribute("data-wp")); }
   });
@@ -534,13 +673,16 @@ tr.clickable:hover td { background: var(--surface); }
     fillSelect(document.getElementById("pk-phase"), "All phases", D.phases.map(function (p) { return p.id; }), phaseName);
     fillSelect(document.getElementById("pk-status"), "All statuses", STATUS_ORDER, function (s) { return STATUS_LABEL[s]; });
     var areas = []; D.requirements.forEach(function (r) { if (areas.indexOf(r.area) < 0) areas.push(r.area); });
-    fillSelect(document.getElementById("rq-area"), "All areas", areas);
+    var areaTitle = {}; D.requirements.forEach(function (r) { areaTitle[r.area] = r.area_title || r.area; });
+    fillSelect(document.getElementById("rq-area"), "All areas", areas, function (a) { return a + " · " + areaTitle[a]; });
+    fillSelect(document.getElementById("rq-src"), "Spec and extension", ["spec", "ext"], function (v) { return v === "ext" ? "Added on 2026-11-11 only" : "October spec and plan only"; });
     fillSelect(document.getElementById("rq-phase"), "All phases", D.phases.map(function (p) { return p.id; }), function (v) { return v === "v2" ? "v2" : "Phase " + v; });
     fillSelect(document.getElementById("rq-state"), "All states", ["delivered", "in progress", "planned"]);
     fillSelect(document.getElementById("pk-edition"), "All editions", EDITIONS.map(function (e) { return e[0]; }), function (v) { return EDITIONS.filter(function (e) { return e[0] === v; })[0][1]; });
-    ["pk-q", "pk-phase", "pk-status", "pk-edition"].forEach(function (id) { document.getElementById(id).addEventListener("input", renderPackageList); });
-    ["rq-q", "rq-area", "rq-phase", "rq-state"].forEach(function (id) { document.getElementById(id).addEventListener("input", renderReqs); });
-    renderOverview(); renderSequence(); renderPackageList(); renderReqs(); renderFinish(); renderGates();
+    fillSelect(document.getElementById("pk-planned"), "Planned for anyone", PLANNED.concat(["none"]), function (v) { return v === "none" ? "No plan" : AGENT_LABEL[v]; });
+    ["pk-q", "pk-phase", "pk-status", "pk-edition", "pk-planned"].forEach(function (id) { document.getElementById(id).addEventListener("input", renderPackageList); });
+    ["rq-q", "rq-area", "rq-phase", "rq-state", "rq-src"].forEach(function (id) { document.getElementById(id).addEventListener("input", renderReqs); });
+    renderOverview(); renderSequence(); renderPackageList(); renderReqs(); renderDesign(); renderFinish(); renderGates();
     document.getElementById("loading").hidden = true;
     route();
   }

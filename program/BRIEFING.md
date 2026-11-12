@@ -3,7 +3,7 @@
 Give this file (and the work package you want done) to any AI at the start of a session. It is
 self-contained; the files it links to have the detail.
 
-Repository: `github.com/vikram2409-eng/Lanesra-OS` · Owner: Vikram Grover · Builders: Claude Code and Muse AI, used in turn as usage limits allow — neither owns any part of the work
+Repository: `github.com/vikram2409-eng/Lanesra-OS` · Owner: Vikram Grover · Builders: Claude Code, Codex and Muse AI. A work package may name the AI it is planned for (`planned_for:`, ADR-0021); that is a default, not a lock
 
 ---
 
@@ -60,7 +60,8 @@ never a human's login or an Administrator's rights.
 | Order of work and why | `program/ROADMAP.md` |
 | Your task | `program/work/P<phase>/WP-XXXX-*.md` — Goal, Scope, Acceptance criteria, Test plan, **Progress log** |
 | What the spec requires | `program/spec/REQUIREMENTS.md` (stable IDs, e.g. `REQ-LOOP-008`) |
-| Decisions already made | `program/decisions/ADR-*.md` (ADR-0004 = the owner's decisions) |
+| Decisions already made | `program/decisions/ADR-*.md` (ADR-0004 = the owner's decisions; ADR-0020 = Phase 5; ADR-0021 = planned lanes) |
+| The design of the whole solution, including the platform extension | `program/design/SOLUTION-DESIGN.md` (also the dashboard's Design tab) |
 | Risks, open questions | `program/RAID.md` |
 | How to test | `program/testing/TEST-STRATEGY.md`, baseline in `program/testing/REGRESSION.md` |
 
@@ -73,7 +74,10 @@ never a human's login or an Administrator's rights.
 | 2 · Playground | Templates pass their evaluation suites | 24 WPs · 90 pts | Three-pane Playground, live trace, step-through, simulate writes, fork/replay, compare, save as test case, publish gate, Guided Setup, three industry templates, online demo Playground |
 | 3 · Teams and modes | Security review signed off | 31 WPs · 120 pts | Teams, seats, compiler, run controller, Manager-led / Round Table / Handoff / Debate / Graph modes, team-level roles, budgets, memory recall, team editor and canvas |
 | 4 · Enterprise scale | General availability | 19 WPs · 75 pts | Worker pool, hash-chained audit, retention, kill switch, four-eyes, content labels, Missions, shadow mode, A/B, team endpoints |
+| 5 · Platform and ecosystem (ADR-0020) | Platform release | 42 WPs · 140 pts | Runs beside Phase 4 once G3 has passed: agent control plane for external agents (registry, A2A both ways, trace ingest, fleet governance), delegated credentials and MCP gateway, channels (Slack, Microsoft Teams, email, web widget), evaluation depth (simulated users, annotation queues, red-team suite), optimizer, ontology-grounded knowledge, humans as seats, Teams as code and SDKs, enterprise operations (SCIM, KMS, SIEM, alerts, Helm, high availability), AI compliance pack. Two design packages (WP-0114, WP-0147) sit in Phase 1 |
+| 6 · Admin console and Experience Studio (ADR-0022) | Admin and Experience | 31 WPs · 96 pts | A parallel track that starts now: a ten-area Admin menu in three bands; one page builder replacing Screen layouts, Page Builder and Dashboards; custom screens; reusable blocks; five layouts and six templates; app menus; themes per app. Every package ships in desktop, Team Workspace and the online demo, with website help |
 
+Sizes in this table for Phases 0 to 4 are from the first plan; live numbers are in `program/STATUS.md`.
 Points: S=1, M=2, L=4, XL=8. Pace depends on available AI tokens, not calendar weeks.
 
 ## 4. How to start a session
@@ -98,7 +102,8 @@ python3 program/tools/programctl.py show WP-XXXX    # your task, its dependencie
 - Never skip, delete, ignore or weaken a test to get green. A red `main` stops the line.
 - Clean room: never open CrewAI, Microsoft Agent Framework, LangGraph or AutoGen source; write all
   prompts fresh; use Lanesra words (Team, Playbook, Run, Step).
-- One WP per branch and PR; never push to `main`; the other agent reviews; the owner merges.
+- One WP per branch and PR; never push to `main`; a different agent reviews; the owner merges.
+- Take the work planned for you first (`planned_for:` in the work package, "Planned workload" in STATUS.md). Agents work in parallel, so the pushed `wp/` branch is the claim.
 - Migrations take the next free number above `main`'s maximum at rebase time (ADR-0003).
 - Runs, events, errors, migrations, prompts and feature flags follow ADR-0007 to ADR-0012 in `program/decisions/`: use their statuses, event envelope, error classes, table conventions, prompt catalog and flag registry; never invent your own.
 - The product is **bring-your-own-model**: organisations connect OpenAI, Gemini, Claude, Azure OpenAI,
@@ -117,6 +122,7 @@ python3 program/tools/programctl.py show WP-XXXX    # your task, its dependencie
   baseline, **WP-0012** clean-room controls, **WP-0013** online demo architecture,
   **WP-0018** tracker upkeep and test feedback for Muse (after CI).
 - Live state: `program/STATUS.md`.
+- Update 2026-11-11: Phase 5 added (ADR-0020) and work split between Claude Code, Codex and Muse AI (ADR-0021). Muse can start WP-0147 and WP-0114; Codex starts with WP-0196 or WP-0197.
 
 ## 7. Paste-in starter prompts
 
@@ -128,6 +134,9 @@ python3 program/tools/programctl.py show WP-XXXX    # your task, its dependencie
 > Progress log entry on the same branch. Read its Progress log first. Build it to its acceptance criteria with tests, keep
 > the full regression suite green, update the Progress log, session log and STATUS.md, push, and
 > open a draft PR titled "[WP-XXXX] …". Stop and ask me if the spec is unclear.
+
+**For Codex** (it reads `AGENTS.md` automatically): use the Claude Code prompt above; add "take the
+work packages planned for codex first".
 
 **For Muse AI** (it reads the repo itself; name the work package, or let it take the next ready one):
 
