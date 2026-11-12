@@ -452,6 +452,7 @@ fn build_export_manifest(
     let mut screen_layouts = Vec::new();
     let mut ai_skills = Vec::new();
     let mut ai_agents = Vec::new();
+    let mut process_lanes = Vec::new();
     // Phase 7c: which ai_skill/ai_agent ids this same export also owns -
     // an agent's skill/delegate reference outside this set is dropped on
     // export, the same "a reference this export doesn't own is dropped"
@@ -698,6 +699,27 @@ fn build_export_manifest(
             // function's own doc comment. Still visible in the Components
             // tab (solution_component_service::list_for_workspace), just
             // not part of the exported manifest.
+            "process_lane" => {
+                // WP-0703: the lane's latest published definition, verbatim.
+                // A lane with no published version exports nothing.
+                if let Some(lane) =
+                    crate::repositories::process_lane_repo::get_lane(conn, metadata_id)?
+                {
+                    if let Some(published) =
+                        crate::repositories::process_lane_repo::latest_published_version(
+                            conn, &lane.id,
+                        )?
+                    {
+                        if let Ok(definition) =
+                            serde_json::from_str::<serde_json::Value>(&published.definition_json)
+                        {
+                            process_lanes.push(
+                                crate::models::industry_package::ManifestProcessLane { definition },
+                            );
+                        }
+                    }
+                }
+            }
             _ => {}
         }
     }
@@ -785,6 +807,7 @@ fn build_export_manifest(
         seed_data: Vec::new(),
         ai_skills,
         ai_agents,
+        process_lanes,
     })
 }
 

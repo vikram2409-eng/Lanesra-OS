@@ -16,6 +16,9 @@ fn map_run_row(row: &rusqlite::Row) -> rusqlite::Result<GraphRun> {
         workspace_id: row.get("workspace_id")?,
         graph_id: row.get("graph_id")?,
         status: row.get("status")?,
+        anchor_object_key: row.get("anchor_object_key")?,
+        anchor_record_id: row.get("anchor_record_id")?,
+        run_data_json: row.get("run_data_json")?,
         trigger_input: row.get("trigger_input")?,
         context_json: row.get("context_json")?,
         current_node_id: row.get("current_node_id")?,
@@ -48,6 +51,7 @@ fn map_run_node_row(row: &rusqlite::Row) -> rusqlite::Result<RunNode> {
         node_type: row.get("node_type")?,
         attempt: row.get("attempt")?,
         status: row.get("status")?,
+        stage_id: row.get("stage_id")?,
         input_json: row.get("input_json")?,
         output_json: row.get("output_json")?,
         error_message: row.get("error_message")?,
@@ -251,4 +255,43 @@ pub fn run_waiting_on(
         |r| r.get(0),
     )
     .optional()
+}
+
+/// WP-0703 (Process Lanes): binds a run to the anchor record it is about
+/// and to the run data it collects (ADR-0024 §1). Called by
+/// `process_lane_service::start_lane_run` right after the graph runtime
+/// creates the run row - the runtime's own `start_run` does not know about
+/// lanes, and no node executes against the anchor columns before this stamp
+/// lands (the trigger node seeds its context from `trigger_input`, which the
+/// lane service builds from the same record). Run data is scrubbed the same
+/// way every other run write is (WP-0127).
+pub fn set_lane_anchor(
+    conn: &Connection,
+    id: &str,
+    anchor_object_key: &str,
+    anchor_record_id: &str,
+    run_data_json: &str,
+) -> rusqlite::Result<()> {
+    let run_data_json = crate::do_not_persist::scrub(run_data_json);
+    conn.execute(
+        "UPDATE ai_runs SET anchor_object_key = ?1, anchor_record_id = ?2, run_data_json = ?3 WHERE id = ?4",
+        (anchor_object_key, anchor_record_id, &run_data_json, id),
+    )?;
+    Ok(())
+}
+
+/// WP-0703 (Process Lanes): records which lane stage a run node belongs to
+/// (SOLUTION-DESIGN §18). The seam WP-0704's human-step execution calls
+/// when it appends a step row - the runtime's own `append_run_node` does not
+/// know about stages.
+pub fn set_run_node_stage(
+    conn: &Connection,
+    run_node_id: &str,
+    stage_id: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE ai_run_nodes SET stage_id = ?1 WHERE id = ?2",
+        (stage_id, run_node_id),
+    )?;
+    Ok(())
 }

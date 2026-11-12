@@ -84,6 +84,11 @@ pub struct RunNode {
     pub node_type: String,
     pub attempt: i64,
     pub status: String,
+    /// The lane stage this node belongs to (SOLUTION-DESIGN §18), e.g.
+    /// `verify` - the runner's stage bar and the stage timing reports read
+    /// the grouping from here. `None` for nodes that are not lane steps.
+    /// Step times are `started_at` / `finished_at`, which already exist.
+    pub stage_id: Option<String>,
     pub input_json: Option<String>,
     pub output_json: Option<String>,
     pub error_message: Option<String>,
@@ -104,6 +109,18 @@ pub struct GraphRun {
     pub workspace_id: String,
     pub graph_id: String,
     pub status: String,
+    /// The Custom Object the run is about, for a lane run (ADR-0024 §1) -
+    /// e.g. `purchase_order`. `None` for runs that are not lane runs.
+    pub anchor_object_key: Option<String>,
+    /// The anchor record's id. Together with `anchor_object_key` this is
+    /// the one record the lane run is about; one active run per lane per
+    /// record (ADR-0024 §6).
+    pub anchor_record_id: Option<String>,
+    /// Values the lane collects that are not record fields, as JSON, with
+    /// the schema declared in the lane definition (ADR-0024 §1). `None`
+    /// (not `{}`) for runs that are not lane runs; WP-0704 validates
+    /// entered values against the declared schema.
+    pub run_data_json: Option<String>,
     pub trigger_input: String,
     /// Every completed node's output, keyed by `node_key`, as a JSON
     /// object - `graph_runtime_service::resolve_template` substitutes

@@ -25,6 +25,12 @@ pub const NODE_TYPES: &[&str] = &[
     "transform",
     "loop",
     "end",
+    // Process Lanes (ADR-0024 §4): the engine's one mechanism for waiting
+    // on a person to do work - a form step compiled from a lane definition.
+    // A `human_step` node is a single-unconditional-outgoing node, like
+    // `action`/`agent`: one edge to the next step. Its runtime behaviour
+    // (waiting for a person, validating the submission) is WP-0704's.
+    "human_step",
     // Workflow Studio 2.0 (issue #193): two additions beyond Phase 3's
     // original 12. `run_agent_team` is a single-unconditional-outgoing
     // node (see below) - a synchronous call to an existing Orchestration
@@ -49,7 +55,7 @@ pub const NODE_TYPES: &[&str] = &[
 pub fn is_single_unconditional_outgoing(node_type: &str) -> bool {
     matches!(
         node_type,
-        "trigger" | "action" | "agent" | "delay" | "transform" | "run_agent_team"
+        "trigger" | "action" | "agent" | "delay" | "transform" | "run_agent_team" | "human_step"
     )
 }
 
@@ -58,9 +64,10 @@ pub const JOIN_MODES: &[&str] = &["all", "first_successful", "n_of_m", "timeout_
 /// `ai_execution_graphs.source_kind` - set only when this graph was
 /// generated as a compatibility-shape mapping of an existing Workflow or
 /// Pipeline (see `execution_graph_service::graph_from_workflow`/
-/// `graph_from_pipeline`); `None` for a graph authored directly against
-/// this engine.
-pub const GRAPH_SOURCE_KINDS: &[&str] = &["workflow", "pipeline"];
+/// `graph_from_pipeline`), or compiled from a Process Lane definition
+/// (see `services::process_lane_service::compile_lane`, ADR-0024 §3);
+/// `None` for a graph authored directly against this engine.
+pub const GRAPH_SOURCE_KINDS: &[&str] = &["workflow", "pipeline", "lane"];
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct GraphNode {

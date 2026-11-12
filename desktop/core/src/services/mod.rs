@@ -76,6 +76,7 @@ pub mod page_layout_service;
 pub mod page_template_service;
 pub mod policy_engine_service;
 pub mod postgres_service;
+pub mod process_lane_service;
 pub mod product_service;
 pub mod publisher_service;
 pub mod quote_service;

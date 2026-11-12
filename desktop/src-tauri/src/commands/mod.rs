@@ -44,6 +44,7 @@ pub mod order_commands;
 pub mod organization_commands;
 pub mod page_layout_commands;
 pub mod page_template_commands;
+pub mod process_lane_commands;
 pub mod product_commands;
 pub mod publisher_commands;
 pub mod quote_commands;

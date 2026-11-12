@@ -13,8 +13,9 @@
 //! `graph_runtime_service`'s executor relies on:
 //! - exactly one `trigger` node, reachable-from-trigger covers every node,
 //!   at least one `end` node is reachable;
-//! - a `trigger`/`action`/`agent`/`delay`/`transform` node has exactly one
-//!   unconditional outgoing edge; `condition` has exactly `true`+`false`;
+//! - a `trigger`/`action`/`agent`/`delay`/`transform`/`human_step` node has
+//!   exactly one unconditional outgoing edge; `condition` has exactly
+//!   `true`+`false`;
 //!   `approval` has exactly `approved`+`rejected`; `loop` has exactly
 //!   `body`+`exit`; `parallel_split` has 2+ unconditional edges; `join` has
 //!   2+ incoming edges; `end` has none;
