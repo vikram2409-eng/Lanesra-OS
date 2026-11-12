@@ -714,9 +714,7 @@ fn build_export_manifest(
                             serde_json::from_str::<serde_json::Value>(&published.definition_json)
                         {
                             process_lanes.push(
-                                crate::models::industry_package::ManifestProcessLane {
-                                    definition,
-                                },
+                                crate::models::industry_package::ManifestProcessLane { definition },
                             );
                         }
                     }

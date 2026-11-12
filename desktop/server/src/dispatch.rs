@@ -104,14 +104,13 @@ use lanesra_core::services::{
     mapping_service, mcp_client_service, metric_service, numbering_service, ontology_service,
     opportunity_service, order_service, org_unit_service, organization_service, ownership_service,
     page_layout_service, page_template_service, policy_engine_service, process_lane_service,
-    product_service,
-    publisher_service, quote_service, relationship_service, report_service, saved_view_service,
-    screen_layout_service, search_service, security_settings_service, semantic_mapping_service,
-    solution_component_service, solution_service, status_transition_service, system_graph_service,
-    task_service, test_eval_service, theme_service, tool_registry_service, user_service,
-    vector_search_service, voice_audit_service, voice_execution_service, voice_llm_service,
-    voice_policy_service, voice_provider_service, voice_session_service, webhook_service,
-    work_team_service, workflow_service, workspace_service,
+    product_service, publisher_service, quote_service, relationship_service, report_service,
+    saved_view_service, screen_layout_service, search_service, security_settings_service,
+    semantic_mapping_service, solution_component_service, solution_service,
+    status_transition_service, system_graph_service, task_service, test_eval_service,
+    theme_service, tool_registry_service, user_service, vector_search_service, voice_audit_service,
+    voice_execution_service, voice_llm_service, voice_policy_service, voice_provider_service,
+    voice_session_service, webhook_service, work_team_service, workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {

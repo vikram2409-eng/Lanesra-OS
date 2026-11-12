@@ -56,13 +56,12 @@ use crate::models::execution_graph::{
 };
 use crate::models::graph_run::GraphRun;
 use crate::models::process_lane::{
-    parse_definition, validate_definition, ConditionOrGroup, LaneDefinition, LaneStep,
-    ProcessLane, ProcessLaneVersion, LANE_REPEAT_MAX_ITERATIONS,
+    parse_definition, validate_definition, ConditionOrGroup, LaneDefinition, LaneStep, ProcessLane,
+    ProcessLaneVersion, LANE_REPEAT_MAX_ITERATIONS,
 };
 use crate::repositories::{audit_repo, graph_run_repo, process_lane_repo};
 use crate::services::{
-    builtin_field_service, custom_record_service, execution_graph_service,
-    graph_runtime_service,
+    builtin_field_service, custom_record_service, execution_graph_service, graph_runtime_service,
 };
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
@@ -203,9 +202,7 @@ pub fn create_version(
     if file.lane.version != next_version {
         return Err(classified_validation(
             "validation.arguments",
-            format!(
-                "the definition's version must be {next_version} for this lane",
-            ),
+            format!("the definition's version must be {next_version} for this lane",),
         ));
     }
     let created = process_lane_repo::create_version(
@@ -264,12 +261,7 @@ pub fn publish_lane(
         &lane_graph_source_id(&lane.lane_key, draft.version),
         actor_user_id,
     )?;
-    process_lane_repo::set_version_published(
-        conn,
-        &draft.id,
-        &graph.id,
-        actor_user_id,
-    )?;
+    process_lane_repo::set_version_published(conn, &draft.id, &graph.id, actor_user_id)?;
     audit_repo::record(
         conn,
         workspace_id,
@@ -290,10 +282,7 @@ pub fn publish_lane(
 /// own publish validator over it, before anything is written - so a lane
 /// that cannot compile fails the publish with the validator's reason and
 /// leaves no orphan draft graph behind.
-fn validate_compiled(
-    input: &ExecutionGraphInput,
-    lane: &LaneDefinition,
-) -> AppResult<()> {
+fn validate_compiled(input: &ExecutionGraphInput, lane: &LaneDefinition) -> AppResult<()> {
     let mut key_to_id: HashMap<String, String> = HashMap::new();
     let mut nodes = Vec::new();
     for node in &input.nodes {
@@ -315,13 +304,19 @@ fn validate_compiled(
         let from = key_to_id.get(&edge.from_node_key).ok_or_else(|| {
             classified_validation(
                 "validation.arguments",
-                format!("compiled lane edge references unknown node '{}'", edge.from_node_key),
+                format!(
+                    "compiled lane edge references unknown node '{}'",
+                    edge.from_node_key
+                ),
             )
         })?;
         let to = key_to_id.get(&edge.to_node_key).ok_or_else(|| {
             classified_validation(
                 "validation.arguments",
-                format!("compiled lane edge references unknown node '{}'", edge.to_node_key),
+                format!(
+                    "compiled lane edge references unknown node '{}'",
+                    edge.to_node_key
+                ),
             )
         })?;
         edges.push(crate::models::execution_graph::GraphEdge {
@@ -360,7 +355,10 @@ fn validate_compiled(
 /// node is. The step JSON is stored verbatim - no lane field is renamed.
 fn step_config(step: &LaneStep, stage_id: &str) -> AppResult<Value> {
     let mut config = serde_json::to_value(step).map_err(|e| {
-        classified_validation("validation.arguments", format!("lane step is not valid JSON: {e}"))
+        classified_validation(
+            "validation.arguments",
+            format!("lane step is not valid JSON: {e}"),
+        )
     })?;
     let object = config.as_object_mut().ok_or_else(|| {
         classified_validation("validation.arguments", "lane step is not an object")
@@ -423,7 +421,14 @@ fn runtime_conditions(rule: &ConditionOrGroup) -> Option<(String, Vec<RuntimeCon
     ) -> Option<String> {
         match rule {
             ConditionOrGroup::Condition(c) => {
-                if leaf(&c.field, &c.operator, &c.value, &c.compare_field, group, out) {
+                if leaf(
+                    &c.field,
+                    &c.operator,
+                    &c.value,
+                    &c.compare_field,
+                    group,
+                    out,
+                ) {
                     Some(String::new()) // no group of its own
                 } else {
                     None
@@ -444,8 +449,14 @@ fn runtime_conditions(rule: &ConditionOrGroup) -> Option<(String, Vec<RuntimeCon
                             } else {
                                 None
                             };
-                            if !leaf(&c.field, &c.operator, &c.value, &c.compare_field, child_group, &mut nested)
-                            {
+                            if !leaf(
+                                &c.field,
+                                &c.operator,
+                                &c.value,
+                                &c.compare_field,
+                                child_group,
+                                &mut nested,
+                            ) {
                                 return None;
                             }
                         }
@@ -481,7 +492,9 @@ fn step_node_type(step: &LaneStep) -> &'static str {
 /// The config a compiled step node carries, on top of its own JSON.
 fn step_node_config(step: &LaneStep, stage_id: &str) -> AppResult<Value> {
     let mut config = step_config(step, stage_id)?;
-    let object = config.as_object_mut().expect("step_config returns an object");
+    let object = config
+        .as_object_mut()
+        .expect("step_config returns an object");
     match step.kind.as_str() {
         "record" => {
             // The runtime's action arm reads `action_type` + `params_json`
@@ -499,8 +512,14 @@ fn step_node_config(step: &LaneStep, stage_id: &str) -> AppResult<Value> {
             }
         }
         "check" => {
-            let rule = step.check.as_ref().expect("validated: check steps have a check");
-            object.insert("lane_check".into(), serde_json::to_value(rule).unwrap_or(json!(null)));
+            let rule = step
+                .check
+                .as_ref()
+                .expect("validated: check steps have a check");
+            object.insert(
+                "lane_check".into(),
+                serde_json::to_value(rule).unwrap_or(json!(null)),
+            );
             let (match_type, conditions) = match &rule.condition {
                 Some(condition) => {
                     runtime_conditions(condition).unwrap_or_else(|| ("all".to_string(), Vec::new()))
@@ -605,8 +624,7 @@ fn resolve_branch(
     for branch in branches {
         if branch.on == outcome {
             if let Some(target) = &branch.target {
-                if let Some(entry) = step_entry.get(&format!("{}:{}", target.stage, target.step))
-                {
+                if let Some(entry) = step_entry.get(&format!("{}:{}", target.stage, target.step)) {
                     return entry.clone();
                 }
             }
@@ -704,19 +722,15 @@ pub fn compile_lane(lane: &LaneDefinition) -> AppResult<ExecutionGraphInput> {
             let node_key = format!("step:{}:{}", stage.id, step.id);
             let node_type = step_node_type(step);
             let config = step_node_config(step, &stage.id)?;
-            let loop_key = if step.repeat_over.is_some() {
+            let loop_key = if let Some(repeat_over) = &step.repeat_over {
                 let key = format!("loop:{}:{}", stage.id, step.id);
                 let mut loop_config = Map::new();
-                loop_config.insert(
-                    "max_iterations".into(),
-                    json!(LANE_REPEAT_MAX_ITERATIONS),
-                );
+                loop_config.insert("max_iterations".into(), json!(LANE_REPEAT_MAX_ITERATIONS));
                 loop_config.insert("lane_stage_id".into(), json!(stage.id));
                 loop_config.insert("lane_step_id".into(), json!(step.id));
                 loop_config.insert(
                     "repeat_over".into(),
-                    serde_json::to_value(step.repeat_over.as_ref().unwrap())
-                        .unwrap_or(json!(null)),
+                    serde_json::to_value(repeat_over).unwrap_or(json!(null)),
                 );
                 nodes.push(GraphNodeInput {
                     node_key: key.clone(),
@@ -831,19 +845,19 @@ pub fn compile_lane(lane: &LaneDefinition) -> AppResult<ExecutionGraphInput> {
                                 .iter()
                                 .find(|b| b.on == outcome)
                                 .and_then(|b| {
-                                    b.target.as_ref().and_then(|t| {
-                                        step_entry
-                                            .get(&format!("{}:{}", t.stage, t.step))
-                                            .cloned()
-                                    })
-                                    .or_else(|| b.end.as_ref().map(|_| "end".to_string()))
+                                    b.target
+                                        .as_ref()
+                                        .and_then(|t| {
+                                            step_entry
+                                                .get(&format!("{}:{}", t.stage, t.step))
+                                                .cloned()
+                                        })
+                                        .or_else(|| b.end.as_ref().map(|_| "end".to_string()))
                                 })
                                 .ok_or_else(|| {
                                     classified_validation(
                                         "validation.arguments",
-                                        format!(
-                                            "approval step must declare an '{outcome}' branch"
-                                        ),
+                                        format!("approval step must declare an '{outcome}' branch"),
                                     )
                                 })?;
                             edges.push(branched(node, &target, outcome, edge_sort));
@@ -885,10 +899,7 @@ pub fn compile_lane(lane: &LaneDefinition) -> AppResult<ExecutionGraphInput> {
 /// An `expression` cannot be evaluated here - that is WP-0710's grammar -
 /// and a `$item` reference has no meaning outside a repeating step, so
 /// both are refused with a clear error instead of silently passing.
-fn evaluate_condition(
-    rule: &ConditionOrGroup,
-    ctx: &HashMap<String, String>,
-) -> AppResult<bool> {
+fn evaluate_condition(rule: &ConditionOrGroup, ctx: &HashMap<String, String>) -> AppResult<bool> {
     match rule {
         ConditionOrGroup::Condition(c) => {
             let field_key = match c.field.strip_prefix("$record.") {
@@ -989,8 +1000,8 @@ pub async fn start_lane_run(
 ) -> AppResult<GraphRun> {
     let lane = process_lane_repo::get_lane_by_key(conn, workspace_id, lane_key)?
         .ok_or_else(|| AppError::NotFound("Process lane".into()))?;
-    let version = process_lane_repo::latest_published_version(conn, &lane.id)?
-        .ok_or_else(|| {
+    let version =
+        process_lane_repo::latest_published_version(conn, &lane.id)?.ok_or_else(|| {
             classified_validation(
                 "validation.arguments",
                 format!("lane '{lane_key}' has no published version to run"),
@@ -999,7 +1010,10 @@ pub async fn start_lane_run(
     let graph_id = version.graph_id.clone().ok_or_else(|| {
         classified_validation(
             "validation.arguments",
-            format!("published version {} of lane '{lane_key}' has no compiled graph", version.version),
+            format!(
+                "published version {} of lane '{lane_key}' has no compiled graph",
+                version.version
+            ),
         )
     })?;
     let record = custom_record_service::get(conn, anchor_record_id)?;
@@ -1033,12 +1047,11 @@ pub async fn start_lane_run(
         }
     }
     if let Some(start_condition) = &definition.lane.start_condition {
-        let mut ctx = builtin_field_service::field_values(
-            conn,
-            &lane.object_key,
-            anchor_record_id,
-        )?;
-        for (key, value) in crate::repositories::custom_field_repo::get_values(conn, anchor_record_id)? {
+        let mut ctx =
+            builtin_field_service::field_values(conn, &lane.object_key, anchor_record_id)?;
+        for (key, value) in
+            crate::repositories::custom_field_repo::get_values(conn, anchor_record_id)?
+        {
             ctx.insert(key, value);
         }
         // Run data is empty at the start - no `run_data.*` keys yet.
@@ -1051,12 +1064,10 @@ pub async fn start_lane_run(
             ));
         }
     }
-    let mut trigger_fields = builtin_field_service::field_values(
-        conn,
-        &lane.object_key,
-        anchor_record_id,
-    )?;
-    for (key, value) in crate::repositories::custom_field_repo::get_values(conn, anchor_record_id)? {
+    let mut trigger_fields =
+        builtin_field_service::field_values(conn, &lane.object_key, anchor_record_id)?;
+    for (key, value) in crate::repositories::custom_field_repo::get_values(conn, anchor_record_id)?
+    {
         trigger_fields.insert(key, value);
     }
     // Flat record fields at the top level (the condition executor looks
@@ -1067,8 +1078,8 @@ pub async fn start_lane_run(
         trigger_object.insert(key, json!(value));
     }
     trigger_object.insert("run_data".into(), json!({}));
-    let trigger_input = serde_json::to_string(&Value::Object(trigger_object))
-        .unwrap_or_else(|_| "{}".to_string());
+    let trigger_input =
+        serde_json::to_string(&Value::Object(trigger_object)).unwrap_or_else(|_| "{}".to_string());
     let run = graph_runtime_service::start_run(
         conn,
         workspace_id,
@@ -1081,12 +1092,6 @@ pub async fn start_lane_run(
         Some(anchor_record_id),
     )
     .await?;
-    graph_run_repo::set_lane_anchor(
-        conn,
-        &run.id,
-        &lane.object_key,
-        anchor_record_id,
-        "{}",
-    )?;
+    graph_run_repo::set_lane_anchor(conn, &run.id, &lane.object_key, anchor_record_id, "{}")?;
     Ok(graph_run_repo::get_run(conn, &run.id)?.expect("just started"))
 }
