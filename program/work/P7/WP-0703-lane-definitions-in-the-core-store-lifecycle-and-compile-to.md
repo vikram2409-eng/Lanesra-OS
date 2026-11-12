@@ -3,7 +3,7 @@ id: WP-0703
 title: Lane definitions in the core: store, lifecycle and compile to a graph
 phase: 7
 epic: E7.1 Lane foundation
-status: in_progress
+status: in_review
 owner: muse
 planned_for: muse
 depends_on: [WP-0701]
@@ -14,7 +14,7 @@ delivered: []
 editions_reason: core storage and API; the demo already has its definition from WP-0702
 docs: [process-lanes]
 branch: wp/WP-0703-lane-definitions-in-core
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/756
 updated: 2026-11-12
 ---
 
