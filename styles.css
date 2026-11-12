@@ -1173,6 +1173,8 @@ details.rm-cat .rm-cat-meta{display:flex;align-items:center;gap:10px}
 /* PR3-A power tools */
 .ontology-graph-viewport{position:relative;overflow:hidden;max-height:600px;border:1px solid var(--line);border-radius:10px;background-color:var(--card);background-image:radial-gradient(color-mix(in srgb,var(--foreground) 13%,transparent) 1.5px,transparent 1.5px);background-size:24px 24px;cursor:grab}
 .ontology-graph-viewport:active{cursor:grabbing}
+.ontology-graph-viewport.dep-dragging{cursor:grabbing}
+.ontology-graph-viewport.dep-dragging *{user-select:none!important}
 .ontology-graph-canvas{will-change:transform}
 
 
@@ -2189,6 +2191,7 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
  box-shadow:0 1px 3px rgba(0,0,0,0.1);
  font-size:12px;font-weight:500;color:#1f2937;white-space:nowrap;
  cursor:pointer;transition:all 0.2s ease;z-index:2;
+ user-select:none;
 }
 .og-pill:hover{transform:translate(-50%,-50%) scale(1.08);box-shadow:0 4px 12px rgba(0,0,0,0.15);z-index:10;}
 .og-pill-root{
