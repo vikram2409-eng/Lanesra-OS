@@ -46,6 +46,8 @@ import type {
   ExecutionGraph,
   ExecutionGraphInput,
   GraphRun,
+  LaneBlueprint,
+  LaneBlueprintSummary,
   SystemNodeType,
   SystemNode,
   SystemGraphHit,
@@ -508,6 +510,12 @@ export const api = {
   setExecutionGraphDisabled: (id: string, disabled: boolean) => call<ExecutionGraph>("set_execution_graph_disabled", { id, disabled }),
   getGraphRun: (id: string) => call<GraphRun>("get_graph_run", { id }),
   listGraphRuns: (graphId: string) => call<GraphRun[]>("list_graph_runs", { graphId }),
+
+  // WP-0712: the lane blueprint reads (REQ-LANE-020) - the same commands
+  // in both editions, readable by any authenticated member (a Viewer reads
+  // the same blueprint an Administrator does; it carries no record data).
+  listLaneBlueprints: () => call<LaneBlueprintSummary[]>("list_lane_blueprints", {}),
+  getLaneBlueprint: (laneKey: string) => call<LaneBlueprint>("get_lane_blueprint", { laneKey }),
   // These may run agents, so on Team Workspace they are async admin actions
   // (`server/src/admin_actions.rs`), not `/api/invoke` commands.
   startGraphRun: (graphId: string, triggerInput: string) =>

@@ -16,7 +16,8 @@ use crate::state::AppState;
 use lanesra_core::domain::AppResult;
 use lanesra_core::models::graph_run::GraphRun;
 use lanesra_core::models::process_lane::{ProcessLane, ProcessLaneVersion};
-use lanesra_core::services::process_lane_service;
+use lanesra_core::services::process_lane_blueprint::{LaneBlueprint, LaneBlueprintSummary};
+use lanesra_core::services::{process_lane_blueprint, process_lane_service};
 
 #[tauri::command]
 pub fn import_process_lane(
@@ -48,6 +49,34 @@ pub fn get_process_lane(state: State<AppState>, lane_key: String) -> AppResult<P
         &conn,
         &workspace_id,
         &lane_key,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// The blueprint of a lane (WP-0712, REQ-LANE-020): the latest version's
+/// definition, read-only, for any authenticated workspace member - a
+/// Viewer reads the same blueprint an Administrator does, and it carries
+/// no run and no record data.
+#[tauri::command]
+pub fn get_lane_blueprint(state: State<AppState>, lane_key: String) -> AppResult<LaneBlueprint> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    process_lane_blueprint::get_lane_blueprint(
+        &conn,
+        &workspace_id,
+        &lane_key,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// Every lane in the workspace, one summary row each (WP-0712).
+#[tauri::command]
+pub fn list_lane_blueprints(state: State<AppState>) -> AppResult<Vec<LaneBlueprintSummary>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    process_lane_blueprint::list_lane_blueprints(
+        &conn,
+        &workspace_id,
         current_actor(&state).as_deref(),
     )
 }

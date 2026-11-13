@@ -2502,3 +2502,13 @@ body.has-demo-banner{padding-top:36px}
 .lane-o360-run{margin-bottom:12px}
 .lane-o360-run-head{margin-bottom:6px}
 @media(max-width:1100px){.lane-layout{grid-template-columns:1fr}}
+/* Print / Save as PDF (WP-0712): the lane blueprint's Print button calls
+window.print(); the print sheet shows only the blueprint itself - the
+sidebar, topbar, demo banner, bottom nav and toasts stay on screen. */
+@media print{
+ .sidebar,.topbar,.demo-banner,.bottom-nav,.toast,#voiceConversation,#cmdPalette{display:none!important}
+ body.has-demo-banner{padding-top:0}
+ .app-shell{display:block}
+ .main-area{display:block}
+ .content{padding:0}
+}
