@@ -3,7 +3,7 @@ id: WP-0141
 title: Idempotency keys and side-effect-safe resume
 phase: 1
 epic: E1.5 Tools and firewall
-status: in_progress
+status: in_review
 owner: claude
 planned_for: claude
 depends_on: [WP-0110]
@@ -16,7 +16,7 @@ editions_reason: internal engine work with no user-visible surface of its own; t
 docs: []
 docs_reason: internal write ledger
 branch: wp/WP-0141-idempotency-keys-and-side-effect-safe-resume
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/771
 updated: 2026-11-14
 ---
 
