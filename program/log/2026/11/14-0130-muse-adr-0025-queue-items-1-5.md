@@ -119,3 +119,6 @@ are done except owner acceptance of the two ADRs.
 - PR #769 (ADR-0027) folded into PR #768 (ADR-0026); the two ADRs now ride in one combined PR. #769 closed.
 - Open PRs after consolidation: #772 (WP-0715, incl. #764 + #766), #767 (WP-0719), #768 (ADR-0026 + ADR-0027). #764, #765, #766, #769 closed.
 - Lesson for the next session: the push tool cannot preserve a merge commit — a branch that merges main must be rebuilt from main (the -r2 pattern) before it can merge. Prefer branches cut fresh from main; do not merge main into a long-lived branch and push it with this tool.
+## Addendum 2 — owner acceptance (2026-11-14 ~01:00 EST)
+
+The owner said "I accept. Move forward." — taken as accepting both ADR-0026 and ADR-0027 (and the consolidation). ADR-0026 and ADR-0027 are now Accepted; AC-1 ticked on WP-0147 and WP-0114; both WPs set to done (delivered [] — design documents, no product edition). If that reading is wrong, the owner can say so and the status flips back to Proposed with one commit.

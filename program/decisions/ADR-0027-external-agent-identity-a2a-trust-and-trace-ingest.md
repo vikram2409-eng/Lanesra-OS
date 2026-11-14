@@ -1,6 +1,6 @@
 # ADR-0027: External agent identity, A2A trust and trace ingest
 
-- Status: Proposed
+- Status: Accepted (program owner, 2026-11-14: "I accept. Move forward")
 - Date: 2026-11-14
 - Requirements: REQ-FLEET-001
 - Work packages: WP-0114 (this ADR); WP-0501 to WP-0505 build on it

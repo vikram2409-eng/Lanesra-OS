@@ -1,6 +1,6 @@
 # ADR-0026: Delegated credentials, the token vault and the MCP gateway
 
-- Status: Proposed
+- Status: Accepted (program owner, 2026-11-14: "I accept. Move forward")
 - Date: 2026-11-14
 - Requirements: REQ-CRED-001
 - Work packages: WP-0147 (this ADR); WP-0510, WP-0511, WP-0512, WP-0513 build on it
