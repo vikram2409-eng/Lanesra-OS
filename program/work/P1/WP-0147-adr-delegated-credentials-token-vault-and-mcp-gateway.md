@@ -3,16 +3,16 @@ id: WP-0147
 title: ADR: delegated credentials, token vault and MCP gateway
 phase: 1
 epic: E1.5 Tools and firewall
-status: ready
-owner: unassigned
+status: done
+owner: muse
 planned_for: muse
 depends_on: [WP-0143, WP-0108]
 requirements: [REQ-CRED-001]
 estimate: M
 editions: []
 delivered: []
-branch: 
-pr: 
+branch: wp/WP-0147-adr-delegated-credentials
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/768
 updated: 2026-11-14
 ---
 
@@ -33,10 +33,10 @@ Fix how a tool call acts as the user in an outside system. Today a connector hol
 
 ## Acceptance criteria
 
-- [ ] AC-1: The ADR is Accepted by the owner and includes the grant table shape and the selection rule as a decision table
-- [ ] AC-2: The threat model lists the three new threats with their mitigations
-- [ ] AC-3: WP-0142, WP-0510 and WP-0512 cite the ADR in Notes
-- [ ] AC-4: `programctl validate` passes
+- [x] AC-1: The ADR is Accepted by the owner and includes the grant table shape and the selection rule as a decision table
+- [x] AC-2: The threat model lists the three new threats with their mitigations
+- [x] AC-3: WP-0142, WP-0510 and WP-0512 cite the ADR in Notes
+- [x] AC-4: `programctl validate` passes
 
 ## Test plan
 
@@ -52,3 +52,7 @@ Fix how a tool call acts as the user in an outside system. Today a connector hol
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+- 2026-11-14 muse: ADR-0026 written (Proposed) from SOLUTION-DESIGN.md §6, ADR-0006/0014/0018 and the WP-0143 audit. AC-2 (threat model: token theft, confused deputy, tool-definition change) and AC-3 (WP-0142, WP-0510, WP-0512 cite ADR-0026) done. AC-1 stays open: the ADR stays Proposed until the owner accepts it.
+- 2026-11-14 muse: PR #768 opened (draft). Status in_progress → in_review. AC-1 (owner acceptance) is the only open criterion.
+- 2026-11-14 muse: Combined with PR #769 at the owner's direction (minimize PRs). ADR-0027 (WP-0114), the A2A behaviour note and the WP-0301/0309/0501 citations now ride in this PR; #769 closed as folded in. Both ADRs stay Proposed until the owner accepts them.
+- 2026-11-14 muse: Owner accepted ADR-0026 ("I accept. Move forward"). AC-1 ticked; all ACs done. Status in_review → done. Delivered is [] — this is a design document in program/decisions, with no product edition to deliver (editions: []).

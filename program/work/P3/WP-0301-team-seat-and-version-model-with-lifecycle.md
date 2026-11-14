@@ -39,6 +39,7 @@ ai_teams, ai_team_seats, ai_team_versions.
 ## Notes
 
 - Scoped from the spec; refine into detailed acceptance criteria (and split if larger than L) at the review of the previous phase's gate.
+- ADR-0027 (WP-0114): external agent identity, A2A trust and trace ingest — the seat fields a seat needs to hold an external agent.
 
 ## Progress log
 
