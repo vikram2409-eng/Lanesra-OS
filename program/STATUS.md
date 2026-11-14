@@ -32,7 +32,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0715](work/P7/WP-0715-describe-a-process-the-admin-assistant-drafts-a-lane.md) | Describe a process: the Admin Assistant drafts a lane | in_progress | muse | `wp/WP-0715-describe-a-process-drafts-a-lane-r2` | - |
+| [WP-0715](work/P7/WP-0715-describe-a-process-the-admin-assistant-drafts-a-lane.md) | Describe a process: the Admin Assistant drafts a lane | in_review | muse | `wp/WP-0715-describe-a-process-drafts-a-lane-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/772 |
 
 ## Ready to start (all dependencies done)
 
@@ -349,7 +349,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0712](work/P7/WP-0712-blueprint-view-and-export-of-a-lane.md) | Blueprint view and export of a lane | E7.5 Authoring | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0703 |
 | [WP-0713](work/P7/WP-0713-board-by-stage-my-steps-and-lane-timing.md) | Board by stage, "my steps" and lane timing | E7.3 Runner and visibility | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0707 |
 | [WP-0714](work/P7/WP-0714-dry-run-publish-checks-test-framework-and-solution-export.md) | Dry run, publish checks, test framework and Solution export | E7.5 Authoring | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0705, WP-0706 |
-| [WP-0715](work/P7/WP-0715-describe-a-process-the-admin-assistant-drafts-a-lane.md) | Describe a process: the Admin Assistant drafts a lane | E7.5 Authoring | 🔨 in progress | M | ○Desktop ○Team Workspace ○Online demo | WP-0703, WP-0712 |
+| [WP-0715](work/P7/WP-0715-describe-a-process-the-admin-assistant-drafts-a-lane.md) | Describe a process: the Admin Assistant drafts a lane | E7.5 Authoring | 👀 in review | M | ○Desktop ○Team Workspace ○Online demo | WP-0703, WP-0712 |
 | [WP-0716](work/P7/WP-0716-child-lanes.md) | Child lanes | E7.2 Steps and rules | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0706 |
 | [WP-0717](work/P7/WP-0717-three-more-warehouse-lanes-and-lane-templates.md) | Three more warehouse lanes and lane templates | E7.6 Shipped lanes | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0707, WP-0710 |
 | [WP-0718](work/P7/WP-0718-visual-lane-builder.md) | Visual lane builder | E7.5 Authoring | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0712, WP-0714 |
