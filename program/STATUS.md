@@ -13,7 +13,7 @@
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
 | 5 · Platform and ecosystem | 42 | 0 | 0 | 0 | 0 | 42 | 0 / 140 | `░░░░░░░░░░` 0% |
 | 6 · Admin console and Experience Studio | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 96 | `░░░░░░░░░░` 0% |
-| 7 · Process Lanes | 21 | 2 | 3 | 2 | 0 | 14 | 6 / 61 | `█░░░░░░░░░` 10% |
+| 7 · Process Lanes | 21 | 2 | 4 | 1 | 0 | 14 | 6 / 61 | `█░░░░░░░░░` 10% |
 | v2 · Open interop | 1 | 0 | 0 | 0 | 0 | 1 | 0 / 4 | `░░░░░░░░░░` 0% |
 
 ## Edition coverage
@@ -35,6 +35,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0702](work/P7/WP-0702-online-demo-the-receive-shipment-lane-on-the-warehouse-demo.md) | Online demo: the Receive Shipment lane on the warehouse demo | in_review | muse | `wp/WP-0702-receive-shipment-lane-demo-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/758 |
 | [WP-0704](work/P7/WP-0704-human-steps-and-run-data.md) | Human steps and run data | in_review | claude | `wp/WP-0704-human-steps-and-run-data` | https://github.com/vikram2409-eng/Lanesra-OS/pull/770 |
 | [WP-0712](work/P7/WP-0712-blueprint-view-and-export-of-a-lane.md) | Blueprint view and export of a lane | in_review | muse | `wp/WP-0712-blueprint-view-and-export-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/761 |
+| [WP-0719](work/P7/WP-0719-count-and-replenish-lanes-as-definitions-with-an-authoring-log.md) | Count and Replenish lanes as definitions, with an authoring log | in_review | muse | `wp/WP-0719-count-and-replenish-lanes` | https://github.com/vikram2409-eng/Lanesra-OS/pull/767 |
 
 ## Ready to start (all dependencies done)
 
@@ -44,7 +45,6 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 |---|---|---|---|
 | [WP-0141](work/P1/WP-0141-idempotency-keys-and-side-effect-safe-resume.md) | Idempotency keys and side-effect-safe resume | 1 | L |
 | [WP-0160](work/P1/WP-0160-agent-editor-in-eight-settings-groups.md) | Agent editor in eight settings groups | 1 | L |
-| [WP-0719](work/P7/WP-0719-count-and-replenish-lanes-as-definitions-with-an-authoring-log.md) | Count and Replenish lanes as definitions, with an authoring log | 7 | S |
 
 ## Planned workload (ADR-0021)
 
@@ -352,7 +352,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0716](work/P7/WP-0716-child-lanes.md) | Child lanes | E7.2 Steps and rules | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0706 |
 | [WP-0717](work/P7/WP-0717-three-more-warehouse-lanes-and-lane-templates.md) | Three more warehouse lanes and lane templates | E7.6 Shipped lanes | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0707, WP-0710 |
 | [WP-0718](work/P7/WP-0718-visual-lane-builder.md) | Visual lane builder | E7.5 Authoring | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0712, WP-0714 |
-| [WP-0719](work/P7/WP-0719-count-and-replenish-lanes-as-definitions-with-an-authoring-log.md) | Count and Replenish lanes as definitions, with an authoring log | E7.6 Shipped lanes | 🟢 ready | S | — | WP-0701 |
+| [WP-0719](work/P7/WP-0719-count-and-replenish-lanes-as-definitions-with-an-authoring-log.md) | Count and Replenish lanes as definitions, with an authoring log | E7.6 Shipped lanes | 👀 in review | S | — | WP-0701 |
 | [WP-0720](work/P7/WP-0720-lane-runner-second-cut-approvals-branches-pause-and-handoff.md) | Lane runner, second cut: approvals, branches, pause and handoff | E7.3 Runner and visibility | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0707, WP-0706 |
 | [WP-0799](work/P7/WP-0799-phase-7-gate-process-lanes-ready.md) | Phase 7 gate: Process Lanes ready | E7.7 Track gate | ⚪ proposed | M | — | WP-0708, WP-0709, WP-0713, WP-0714, WP-0717, WP-0720 |
 
