@@ -3,14 +3,14 @@ id: WP-0704
 title: Human steps and run data
 phase: 7
 epic: E7.1 Lane foundation
-status: in_review
+status: done
 owner: claude
 planned_for: claude
 depends_on: [WP-0703]
 requirements: [REQ-LANE-004, REQ-LANE-005, REQ-LANE-011]
 estimate: L
 editions: [desktop, workspace]
-delivered: []
+delivered: [desktop, workspace]
 editions_reason: core runtime; shown to users by WP-0707
 docs: [process-lanes]
 branch: wp/WP-0704-human-steps-and-run-data

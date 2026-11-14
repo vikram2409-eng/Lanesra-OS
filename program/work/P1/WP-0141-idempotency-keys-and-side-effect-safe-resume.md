@@ -3,7 +3,7 @@ id: WP-0141
 title: Idempotency keys and side-effect-safe resume
 phase: 1
 epic: E1.5 Tools and firewall
-status: in_review
+status: done
 owner: claude
 planned_for: claude
 depends_on: [WP-0110]
@@ -11,7 +11,7 @@ requirements: [REQ-TOOL-005, REQ-GOV-023]
 threats: [T-03, T-06]
 estimate: L
 editions: [desktop, workspace]
-delivered: []
+delivered: [desktop, workspace]
 editions_reason: internal engine work with no user-visible surface of its own; the online demo's simulated runs reflect it through the Playground work packages
 docs: []
 docs_reason: internal write ledger

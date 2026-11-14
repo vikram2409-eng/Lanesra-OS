@@ -4923,3 +4923,106 @@ export interface LaneBlueprintSummary {
   latest_version: number;
   latest_status: string;
 }
+
+// WP-0707: the viewer-facing state of a lane run (REQ-LANE-014). Mirrors
+// core::services::process_lane_service::LaneRunView - snake_case, as the
+// API returns it. The `current` step is the WP-0704 shape (unchanged);
+// `steps` / `writes` / `waiting` are the extended run shape the Rust piece
+// builds in parallel: the full step list with per-step status, the plain
+// words for what the run has written so far, and what the run is waiting
+// on. They are optional here so the runner also renders the WP-0704 view
+// (current step only) while that extension lands - when they are absent
+// the stage bar and step list fall back to the lane definition.
+// Do NOT use the frontend `GraphRun` type for lane runs: it is stale (no
+// anchor fields, no waiting_person).
+export type LaneStepProgressStatus = "completed" | "current" | "locked" | "skipped" | "waiting";
+
+export interface LaneStepProgress {
+  step_id: string;
+  stage_id: string;
+  status: LaneStepProgressStatus;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface LaneRunWaiting {
+  step_id: string;
+  step_name: string;
+  /** What the run waits on: "person" | "approval" | "agent" | "branch". */
+  kind: string;
+}
+
+/// One field of the current human step as a viewer sees it (WP-0704,
+/// REQ-LANE-011). `type` is the field type ("text" | "number" | "date" |
+/// "boolean" | "textarea" | ...). A record-bound field the viewer cannot
+/// read has `value` None and `readable` false.
+export interface FormFieldView {
+  key: string;
+  label: string;
+  type: string;
+  binds_to: string;
+  required: boolean;
+  value: unknown | null;
+  readable: boolean;
+}
+
+/// The current human step as a viewer sees it (WP-0704, REQ-LANE-011),
+/// plus the step's own kind, writes and check outcome when the run view
+/// carries them (the extended shape; optional until the Rust piece lands).
+/// A viewer who lacks the step's role sees everything here except that
+/// `can_complete` is false.
+export interface LaneStepView {
+  stage_id: string | null;
+  stage_name: string | null;
+  step_id: string;
+  step_name: string;
+  role: string | null;
+  /** Who the step is waiting on - the role it is assigned to, or None when it is open to anyone. */
+  waiting_on: string | null;
+  /** Whether the viewer may complete this step (holds its role, or is an administrator, or the step names no role). */
+  can_complete: boolean;
+  fields: FormFieldView[];
+  kind?: string | null;
+  required?: boolean | null;
+  description?: string | null;
+  writes?: LaneWriteOp[] | null;
+  /** A check step's auto-evaluated outcome: true passed, false failed, null not yet evaluated. */
+  check_passed?: boolean | null;
+  check_reason?: string | null;
+}
+
+export interface LaneRunView {
+  run_id: string;
+  status: string;
+  anchor_object_key: string | null;
+  anchor_record_id: string | null;
+  run_data: Record<string, unknown>;
+  current: LaneStepView | null;
+  /** The lane's key (the blueprint key, e.g. "lane-wh-receiving"). */
+  lane_key?: string | null;
+  /** The lane's id as the list endpoint returns it. */
+  lane_id?: string | null;
+  lane_name?: string | null;
+  current_stage_id?: string | null;
+  current_stage_name?: string | null;
+  current_step_id?: string | null;
+  current_step_name?: string | null;
+  steps?: LaneStepProgress[] | null;
+  /** Plain words for what this run has written so far, in order. */
+  writes?: string[] | null;
+  waiting?: LaneRunWaiting | null;
+}
+
+/// One lane run on a record, as Object 360 lists it (WP-0707, REQ-LANE-015).
+export interface LaneRunListItem {
+  run_id: string;
+  lane_id: string;
+  lane_name: string;
+  status: string;
+  current_stage_id: string | null;
+  current_stage_name: string | null;
+  current_step_id: string | null;
+  current_step_name: string | null;
+  started_at: string;
+  finished_at: string | null;
+}

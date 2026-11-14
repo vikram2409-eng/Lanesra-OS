@@ -91,6 +91,9 @@ export function Object360Modal({
   const ownership = useQuery({ queryKey: ["recordOwner", root.entityType, root.entityId], queryFn: () => api.getRecordOwner(root.entityType, root.entityId) });
   const orgUnits = useQuery({ queryKey: ["orgUnits"], queryFn: () => api.listOrgUnits() });
   const auditEvents = useQuery({ queryKey: ["auditEventsForEntity", root.entityType, root.entityId], queryFn: () => api.listAuditEvents(root.entityType, root.entityId) });
+  // WP-0707 (REQ-LANE-015): the record's lane runs, alongside the other
+  // eight queries above - lane, stage, step and status per run.
+  const laneRuns = useQuery({ queryKey: ["laneRunsForRecord", root.entityType, root.entityId], queryFn: () => api.listLaneRunsForRecord(root.entityType, root.entityId) });
 
   const activeWorkflows = (workflows.data ?? []).filter((w) => w.is_active);
   const orgUnit = ownership.data?.owning_org_unit_id ? orgUnits.data?.find((o) => o.id === ownership.data!.owning_org_unit_id) : null;
@@ -196,6 +199,37 @@ export function Object360Modal({
           label: "AI Agents scoped to this object type",
           items: (scopedAgents.data ?? []).map((a) => ({ key: a.id, label: a.name, dotColor: entityTypeColor("ai_agent") })),
         });
+      }
+      // WP-0707 (REQ-LANE-015): the record's lane runs - lane, stage, step
+      // and status per run, and each run's audit trail: the record's audit
+      // events that name the run (advances and writes are recorded against
+      // the anchor record with the run id in the summary; see
+      // process_lane_service's lane_run_cancelled / lane_step_handoff
+      // events), with actor and time from the event.
+      if ((laneRuns.data ?? []).length > 0) {
+        const items: InspectorGroup["items"] = [];
+        for (const run of laneRuns.data ?? []) {
+          items.push({
+            key: run.run_id,
+            label: `${run.lane_name} · ${run.current_stage_name ?? "—"} — ${run.current_step_name ?? "—"} (${run.status})`,
+            dotColor: entityTypeColor("workflow"),
+          });
+          const trail = (auditEvents.data ?? []).filter(
+            (e) => e.summary.includes(run.run_id) || (e.details_json ?? "").includes(run.run_id),
+          );
+          for (const event of trail.slice(0, 10)) {
+            items.push({
+              key: `audit-${event.id}`,
+              label: event.summary,
+              right: (
+                <span style={{ display: "block", fontSize: 11, color: "var(--text-muted)" }}>
+                  {new Date(event.occurred_at).toLocaleString()}
+                </span>
+              ),
+            });
+          }
+        }
+        inspectorGroups.push({ key: "lane-runs", label: "Lane runs", items });
       }
       if ((auditEvents.data ?? []).length > 0) {
         inspectorGroups.push({

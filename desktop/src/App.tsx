@@ -20,6 +20,7 @@ import { Reports } from "./features/reports/Reports";
 import { AdminPanel, type AdminTab } from "./features/settings/Settings";
 import { AssistantPage } from "./features/assistant/AssistantPage";
 import { LaneBlueprintPage } from "./features/lanes/LaneBlueprint";
+import { LaneRunnerPage } from "./features/lanes/LaneRunner";
 import { CustomObjectRecords } from "./features/customObjects/CustomObjectRecords";
 import { Account } from "./features/account/Account";
 import { VoiceContextProvider } from "./features/voice/VoiceContext";
@@ -120,6 +121,9 @@ function Ready({
     setSection("dashboard");
   }
   const [prefill, setPrefill] = useState<Prefill | null>(null);
+  // WP-0707: the lane runner is a full screen opened from a record or a
+  // list ("Start lane run"); closing it returns to the section underneath.
+  const [laneRun, setLaneRun] = useState<{ runId: string; recordLabel: string } | null>(null);
   function navigateTo(target: Section, pre: Prefill) {
     setPrefill(pre);
     setSection(target);
@@ -177,6 +181,10 @@ function Ready({
         activeAppId={activeAppId}
         onSwitchApp={switchApp}
       >
+        {laneRun ? (
+          <LaneRunnerPage runId={laneRun.runId} recordLabel={laneRun.recordLabel} onClose={() => setLaneRun(null)} />
+        ) : (
+          <>
         {section === "dashboard" && (
           <Dashboard
             onNavigate={setSection}
@@ -232,7 +240,14 @@ function Ready({
         {section === "admin" && <AdminPanel openAdminTab={pendingAdminTab} />}
         {section === "account" && <Account user={user} />}
         {activeCustomObject && (
-          <CustomObjectRecords definition={activeCustomObject} prefill={prefill} onPrefillConsumed={clearPrefill} />
+          <CustomObjectRecords
+            definition={activeCustomObject}
+            prefill={prefill}
+            onPrefillConsumed={clearPrefill}
+            onOpenLaneRun={(runId, recordLabel) => setLaneRun({ runId, recordLabel })}
+          />
+        )}
+          </>
         )}
       </AppShell>
       </VoiceContextProvider>

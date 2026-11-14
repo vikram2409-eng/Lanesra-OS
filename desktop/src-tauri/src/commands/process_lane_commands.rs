@@ -17,7 +17,7 @@ use lanesra_core::domain::AppResult;
 use lanesra_core::models::graph_run::GraphRun;
 use lanesra_core::models::process_lane::{ProcessLane, ProcessLaneVersion};
 use lanesra_core::services::process_lane_blueprint::{LaneBlueprint, LaneBlueprintSummary};
-use lanesra_core::services::process_lane_service::LaneRunView;
+use lanesra_core::services::process_lane_service::{LaneRunList, LaneRunView};
 use lanesra_core::services::{process_lane_blueprint, process_lane_service};
 use serde_json::{Map, Value};
 
@@ -180,6 +180,21 @@ pub fn get_process_lane_run_view(state: State<AppState>, run_id: String) -> AppR
     let workspace_id = require_workspace_id(&conn)?;
     let actor = current_actor(&state);
     process_lane_service::get_run_view(&conn, &workspace_id, &run_id, actor.as_deref())
+}
+
+/// WP-0707 (REQ-LANE-015 AC-3): every lane run on one record, across lanes,
+/// newest first - what Object 360 lists. The record is identified by the
+/// same `{object_key, record_id}` pair the demo's `laneRunsForRecord` and
+/// the core's one-active-run guard use.
+#[tauri::command]
+pub fn list_lane_runs_for_record(
+    state: State<AppState>,
+    object_key: String,
+    record_id: String,
+) -> AppResult<LaneRunList> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    process_lane_service::list_lane_runs_for_record(&conn, &workspace_id, &object_key, &record_id)
 }
 
 /// WP-0704: submits the current human step of a `waiting_person` lane run -

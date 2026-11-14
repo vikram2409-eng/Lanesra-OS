@@ -25,6 +25,7 @@ vi.mock("../lib/api", () => ({
     getRecordOwner: vi.fn(),
     listOrgUnits: vi.fn(),
     listAuditEvents: vi.fn(),
+    listLaneRunsForRecord: vi.fn(),
   },
 }));
 
@@ -73,6 +74,21 @@ function mockApi() {
   vi.mocked(api.listOrgUnits).mockResolvedValue([{ id: "ou1", name: "Northstar" }] as never);
   vi.mocked(api.listAuditEvents).mockResolvedValue([
     { id: "e1", summary: "Record created", occurred_at: "2026-01-02T10:00:00Z" },
+    { id: "e2", summary: "Cancelled lane run run-1: supplier short-shipped", occurred_at: "2026-01-03T11:00:00Z" },
+  ] as never);
+  vi.mocked(api.listLaneRunsForRecord).mockResolvedValue([
+    {
+      run_id: "run-1",
+      lane_id: "lane-wh-receiving",
+      lane_name: "Receive Shipment",
+      status: "waiting_person",
+      current_stage_id: "verify",
+      current_stage_name: "Verify",
+      current_step_id: "confirm-arrival",
+      current_step_name: "Confirm shipment arrived",
+      started_at: "2026-01-02T10:00:00Z",
+      finished_at: null,
+    },
   ] as never);
 }
 
@@ -202,5 +218,30 @@ describe("Object360Modal", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     fireEvent.click(container.querySelector(".modal-overlay")!);
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it("lists the record's lane runs with lane, stage, step and status, and each run's audit trail", async () => {
+    // Covers: REQ-LANE-015 (WP-0707 AC-3)
+    const { container } = open();
+    await screen.findByText("Object 360 · BrightPath Logistics");
+    expect((await screen.findAllByText("Ava Martin")).length).toBeGreaterThan(0);
+    const groups = container.querySelector(".ontology-inspector-groups")!;
+    const text = groups.textContent ?? "";
+    expect(text).toContain("Lane runs");
+    expect(text).toContain("Receive Shipment · Verify — Confirm shipment arrived (waiting_person)");
+    // The run's audit trail: the record's audit event naming the run,
+    // with its time.
+    expect(text).toContain("Cancelled lane run run-1: supplier short-shipped");
+    expect(api.listLaneRunsForRecord).toHaveBeenCalledWith("Company", "c1");
+  });
+
+  it("shows no Lane runs group when the record has no runs", async () => {
+    // Covers: REQ-LANE-015 (WP-0707 AC-3)
+    vi.mocked(api.listLaneRunsForRecord).mockResolvedValue([] as never);
+    const { container } = open();
+    await screen.findByText("Object 360 · BrightPath Logistics");
+    expect((await screen.findAllByText("Ava Martin")).length).toBeGreaterThan(0);
+    const groups = container.querySelector(".ontology-inspector-groups")!;
+    expect(groups.textContent ?? "").not.toContain("Lane runs");
   });
 });

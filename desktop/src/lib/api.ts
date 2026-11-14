@@ -48,6 +48,8 @@ import type {
   GraphRun,
   LaneBlueprint,
   LaneBlueprintSummary,
+  LaneRunListItem,
+  LaneRunView,
   SystemNodeType,
   SystemNode,
   SystemGraphHit,
@@ -516,6 +518,44 @@ export const api = {
   // the same blueprint an Administrator does; it carries no record data).
   listLaneBlueprints: () => call<LaneBlueprintSummary[]>("list_lane_blueprints", {}),
   getLaneBlueprint: (laneKey: string) => call<LaneBlueprint>("get_lane_blueprint", { laneKey }),
+
+  // WP-0707: the lane runner (REQ-LANE-014, REQ-LANE-015). `getLaneRunView`
+  // and `listLaneRunsForRecord` are sync `call`s; starting, submitting and
+  // skipping a step are genuinely async (resuming the run may reach an
+  // Agent node), so they go through `callAdminAction` like `startGraphRun`.
+  // `listLaneRunsForRecord` is the new Tauri command the Rust piece builds
+  // in parallel (args { objectKey, recordId }, response { runs: [...] });
+  // this wrapper is written against that contract and the coordinator
+  // verifies the live wiring at assembly.
+  getLaneRunView: (runId: string) => call<LaneRunView>("get_process_lane_run_view", { runId }),
+  listLaneRunsForRecord: async (objectKey: string, recordId: string) => {
+    const res = await call<{ runs: LaneRunListItem[] }>("list_lane_runs_for_record", { objectKey, recordId });
+    return res.runs;
+  },
+  startLaneRun: (laneKey: string, anchorRecordId: string) =>
+    callAdminAction<GraphRun>(
+      "start_process_lane_run",
+      { laneKey, anchorRecordId },
+      "POST",
+      `/api/admin/process-lanes/${encodeURIComponent(laneKey)}/runs`,
+      { anchor_record_id: anchorRecordId },
+    ),
+  submitLaneStep: (runId: string, values: Record<string, unknown>) =>
+    callAdminAction<GraphRun>(
+      "submit_process_lane_step",
+      { runId, values },
+      "POST",
+      `/api/admin/process-lane-runs/${encodeURIComponent(runId)}/submit-step`,
+      { values },
+    ),
+  skipLaneStep: (runId: string, reason: string) =>
+    callAdminAction<GraphRun>(
+      "skip_process_lane_step",
+      { runId, reason },
+      "POST",
+      `/api/admin/process-lane-runs/${encodeURIComponent(runId)}/skip-step`,
+      { reason },
+    ),
   // These may run agents, so on Team Workspace they are async admin actions
   // (`server/src/admin_actions.rs`), not `/api/invoke` commands.
   startGraphRun: (graphId: string, triggerInput: string) =>

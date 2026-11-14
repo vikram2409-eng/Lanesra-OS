@@ -27,6 +27,7 @@ import { useBulkSelection } from "../../lib/useBulkSelection";
 import { useCanWriteObject } from "../../lib/useCanWriteObject";
 import { useReportVoiceContext } from "../voice/VoiceContext";
 import { Object360Modal } from "../../components/Object360Modal";
+import { StartLaneRunButton } from "../../features/lanes/StartLaneRun";
 import { Button } from "../../components/ui/button";
 import { Card, CardContent } from "../../components/ui/card";
 
@@ -70,13 +71,17 @@ export function CustomObjectRecords({
   definition,
   prefill,
   onPrefillConsumed,
+  onOpenLaneRun,
 }: {
   definition: CustomObjectDefinition;
   prefill?: Prefill | null;
   onPrefillConsumed?: () => void;
+  /** Opens the lane runner for a run (WP-0707 entry point). */
+  onOpenLaneRun?: (runId: string, recordLabel: string) => void;
 }) {
   const [view, setView] = useState<View>(() => (prefill?.openId ? { mode: "edit", id: prefill.openId } : { mode: "list" }));
   const [previewId, setPreviewId] = useState<string | null>(null);
+  const [startLaneFor, setStartLaneFor] = useState<{ id: string; label: string } | null>(null);
   useEffect(() => {
     if (prefill?.openId) onPrefillConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -146,6 +151,7 @@ export function CustomObjectRecords({
           setView({ mode: "list" });
         }}
         onCancel={() => setView({ mode: "list" })}
+        onOpenLaneRun={onOpenLaneRun}
       />
     );
   }
@@ -175,6 +181,25 @@ export function CustomObjectRecords({
       />
       <CustomFieldFilterBar filters={fieldFilters} />
       <BulkActionBar selection={selection} actions={bulkActions} onDone={invalidate} />
+      {startLaneFor && onOpenLaneRun && (
+        <div className="card" style={{ marginBottom: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <span>
+            Start a lane run on <strong>{startLaneFor.label}</strong>
+          </span>
+          <StartLaneRunButton
+            objectKey={definition.key}
+            recordId={startLaneFor.id}
+            recordLabel={startLaneFor.label}
+            onOpenRun={(runId, label) => {
+              setStartLaneFor(null);
+              onOpenLaneRun(runId, label);
+            }}
+          />
+          <Button size="sm" variant="ghost" onClick={() => setStartLaneFor(null)}>
+            Cancel
+          </Button>
+        </div>
+      )}
       {records.isLoading && <p>Loading...</p>}
       {records.data && records.data.length === 0 && (
         <p className="empty-state">No {definition.plural_label.toLowerCase()} yet.</p>
@@ -195,15 +220,22 @@ export function CustomObjectRecords({
             selection={selection}
             resolveUser={(id) => users.data?.find((u) => u.id === id)?.display_name}
             actionsColumn={(r) => (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setView({ mode: "edit", id: r.id })}
-                disabled={!canWrite}
-                title={canWrite ? undefined : `You have view-only access to ${definition.plural_label} through an app`}
-              >
-                Edit
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setView({ mode: "edit", id: r.id })}
+                  disabled={!canWrite}
+                  title={canWrite ? undefined : `You have view-only access to ${definition.plural_label} through an app`}
+                >
+                  Edit
+                </Button>
+                {onOpenLaneRun && (
+                  <Button size="sm" variant="ghost" onClick={() => setStartLaneFor({ id: r.id, label: r.primary_name })}>
+                    Start lane run
+                  </Button>
+                )}
+              </>
             )}
           />
         );
@@ -232,11 +264,13 @@ function RecordForm({
   recordId,
   onDone,
   onCancel,
+  onOpenLaneRun,
 }: {
   definition: CustomObjectDefinition;
   recordId?: string;
   onDone: () => void;
   onCancel: () => void;
+  onOpenLaneRun?: (runId: string, recordLabel: string) => void;
 }) {
   const users = useQuery({ queryKey: ["users"], queryFn: () => api.listUsers() });
   const existing = useQuery({
@@ -309,9 +343,19 @@ function RecordForm({
         <>
           <div className="page-header">
             <div />
-            <Button variant="outline" size="sm" onClick={() => setShowObject360(true)}>
-              View in Object 360
-            </Button>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {onOpenLaneRun && (
+                <StartLaneRunButton
+                  objectKey={definition.key}
+                  recordId={existing.data.id}
+                  recordLabel={existing.data.primary_name}
+                  onOpenRun={onOpenLaneRun}
+                />
+              )}
+              <Button variant="outline" size="sm" onClick={() => setShowObject360(true)}>
+                View in Object 360
+              </Button>
+            </div>
           </div>
           {showObject360 && (
             <Object360Modal

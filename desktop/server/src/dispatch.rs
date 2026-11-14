@@ -3266,6 +3266,18 @@ pub fn dispatch(
                 actor,
             )?)
         }
+        // WP-0707 (REQ-LANE-015 AC-3): every lane run on one record, across
+        // lanes - what Object 360 lists. Sync, like `get_run_view`.
+        "list_lane_runs_for_record" => {
+            let object_key: String = arg(args, "objectKey")?;
+            let record_id: String = arg(args, "recordId")?;
+            to_value(process_lane_service::list_lane_runs_for_record(
+                conn,
+                &require_workspace_id(conn)?,
+                &object_key,
+                &record_id,
+            )?)
+        }
         "get_graph_run" => {
             let id: String = arg(args, "id")?;
             to_value(graph_runtime_service::get_run(
