@@ -3,8 +3,8 @@ id: WP-0714
 title: Dry run, publish checks, test framework and Solution export
 phase: 7
 epic: E7.5 Authoring
-status: proposed
-owner: unassigned
+status: in_progress
+owner: muse
 planned_for: muse
 depends_on: [WP-0705, WP-0706]
 requirements: [REQ-LANE-021]
@@ -12,8 +12,8 @@ estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
-branch: wp/WP-0714-design-spec-r2
-pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/778
+branch: wp/WP-0714-dry-run-publish-checks
+pr: ""
 updated: 2026-11-14
 ---
 
@@ -301,9 +301,9 @@ spec or in WP-0718.
 - No engine change. The dry run simulates; it does not execute. The
   runner is WP-0707; the condition and loop evaluation the dry run
   needs is WP-0710.
-- No demo change (ADR-0025 demo freeze). The demo E2E for this WP
-  (AC-5) is written when the freeze lifts, against the same behaviour
-  on the warehouse sample data.
+- No demo change while the ADR-0025 demo freeze held. The freeze LIFTED with the WP-0707 merge (PR #779, 2026-11-14), so the demo E2E for this WP (AC-5) is now in scope, against the same behaviour on the warehouse sample data.
+
+## Acceptance criteria
 
 - [ ] AC-1: A dry run walks the lane and writes nothing
 - [ ] AC-2: Publish is refused with a named reason for each failed check
@@ -326,3 +326,4 @@ spec or in WP-0718.
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 - 2026-11-14 muse: Design spec written as a Design section (ADR-0025 prep track, Claude's instruction via the owner). Publish checks P-01..P-17 enumerated (P-01..P-08 already enforced by validate_definition / validate_compiled / publish_lane; P-09..P-15 new), dry-run assertions, lane-case assertion format, Solution export shape; grounded in the five hardest items from program/research/lane-authoring-log.md. Docs only — no core, no app.js, no schema change. WP stays proposed and unassigned: the build is blocked on WP-0705 + WP-0706 and the ADR-0025 demo freeze. ACs untouched.
+- 2026-11-14 muse: CLAIMED for the build (Phase 7 batch, owner directed the batch to Muse AI; Claude out of tokens). WP-0707 merged (PR #779, b836acb4), so the demo freeze has LIFTED — AC-5 demo work is now in scope (the Design §7 freeze note no longer applies). Deps WP-0705 + WP-0706 both done. Open RAID I-34 (check staleness: checks read run-start snapshot, per-item checks always fail) is directly in this WP's path — the dry run evaluates checks; decide whether checks re-read live values at evaluation time, and record the decision (or a Q- item if it needs the engine owner).
