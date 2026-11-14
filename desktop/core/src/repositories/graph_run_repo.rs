@@ -243,6 +243,25 @@ pub fn append_run_node(
     Ok(id)
 }
 
+/// WP-0704 (Process Lanes): completes a run node row that was appended in a
+/// waiting status (a `human_step` left in `waiting_person`) - sets its final
+/// status, its output and `finished_at`. The row's `started_at` is kept, so
+/// `finished_at - started_at` is the step's wait time (ADR-0024 §4).
+pub fn complete_run_node(
+    conn: &Connection,
+    run_node_id: &str,
+    status: &str,
+    output_json: Option<&str>,
+    finished_at: &str,
+) -> rusqlite::Result<()> {
+    let output_json = crate::do_not_persist::scrub_opt(output_json);
+    conn.execute(
+        "UPDATE ai_run_nodes SET status = ?1, output_json = ?2, finished_at = ?3 WHERE id = ?4",
+        (status, output_json, finished_at, run_node_id),
+    )?;
+    Ok(())
+}
+
 /// WP-0150: the graph run of this workspace waiting on `approval_id`.
 pub fn run_waiting_on(
     conn: &Connection,

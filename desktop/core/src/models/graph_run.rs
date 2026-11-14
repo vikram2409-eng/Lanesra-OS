@@ -16,6 +16,13 @@ pub const RUN_STATUSES: &[&str] = &[
     "waiting_budget",
     "waiting_model",
     "waiting_scheduled",
+    // ADR-0024 §6 (WP-0704): a lane run waits here for a person to do a
+    // human step. The step row sits in `waiting_person` too. No worker
+    // holds a lease while a person works; it survives a restart exactly as
+    // `waiting_approval` does. `waiting_child` (ADR-0024 §6, a run waiting
+    // on a child lane) is added by WP-0716, which brings the machinery that
+    // enters and leaves it.
+    "waiting_person",
     "completed",
     "completed_partial",
     "failed",
@@ -34,6 +41,7 @@ pub fn is_waiting_status(status: &str) -> bool {
             | "waiting_budget"
             | "waiting_model"
             | "waiting_scheduled"
+            | "waiting_person"
     )
 }
 
@@ -50,6 +58,10 @@ pub const RUN_NODE_STATUSES: &[&str] = &[
     "pending",
     "running",
     "waiting_approval",
+    // ADR-0024 §4 (WP-0704): a human step's row sits here while the run is
+    // `waiting_person`, from when the step is reached (`started_at`) until it
+    // is submitted (`finished_at`) - that span is the step's wait time.
+    "waiting_person",
     "completed",
     "completed_partial",
     "failed",

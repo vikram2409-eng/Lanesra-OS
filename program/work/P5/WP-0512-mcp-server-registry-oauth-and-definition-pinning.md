@@ -49,7 +49,7 @@ Stop an MCP server from changing what a tool does after an admin approved it, an
 
 ## Notes
 
-- ADR from WP-0147. Mitigates tool poisoning in the threat model.
+- ADR-0026 (WP-0147): delegated credentials, the token vault and the MCP gateway — the registry and definition pinning this builds. Mitigates tool poisoning in the threat model.
 - Scoped from ADR-0020 and SOLUTION-DESIGN.md; refine acceptance criteria (and split if larger than L) before moving to `ready`.
 
 ## Progress log

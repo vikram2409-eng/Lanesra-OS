@@ -47,21 +47,28 @@
 use std::collections::HashMap;
 
 use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 
 use crate::domain::conditions::{condition_matches, CONDITION_OPERATORS};
+use crate::domain::ids::now_iso;
 use crate::domain::{AppError, AppResult, ErrorClass};
+use crate::models::access_role::Capability;
+use crate::models::custom_field::CustomFieldValues;
 use crate::models::execution_graph::{
     ExecutionGraph, ExecutionGraphInput, GraphEdgeInput, GraphNodeInput,
 };
 use crate::models::graph_run::GraphRun;
 use crate::models::process_lane::{
-    parse_definition, validate_definition, ConditionOrGroup, LaneDefinition, LaneStep, ProcessLane,
-    ProcessLaneVersion, LANE_REPEAT_MAX_ITERATIONS,
+    parse_definition, validate_definition, ConditionOrGroup, FormField, LaneDefinition, LaneStep,
+    ProcessLane, ProcessLaneVersion, StepValidation, LANE_REPEAT_MAX_ITERATIONS,
 };
-use crate::repositories::{audit_repo, graph_run_repo, process_lane_repo};
+use crate::repositories::{
+    audit_repo, custom_field_repo, execution_graph_repo, graph_run_repo, process_lane_repo,
+};
 use crate::services::{
-    builtin_field_service, custom_record_service, execution_graph_service, graph_runtime_service,
+    access_role_service, access_service, builtin_field_service, custom_field_service,
+    custom_record_service, execution_graph_service, graph_runtime_service,
 };
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
@@ -1094,4 +1101,489 @@ pub async fn start_lane_run(
     .await?;
     graph_run_repo::set_lane_anchor(conn, &run.id, &lane.object_key, anchor_record_id, "{}")?;
     Ok(graph_run_repo::get_run(conn, &run.id)?.expect("just started"))
+}
+
+// ===========================================================================
+// WP-0704: human steps and run data.
+//
+// A lane run reaches a `human_step` node (a form step) and waits in
+// `waiting_person` (graph_runtime_service). The person reads the current
+// step through `get_run_view` - access-limited - and submits it through
+// `submit_person_step`, which validates the entered values against the
+// step's fields and its `validation`, stores them (run-data fields on the
+// run, record-bound fields through the governed field-write path), records
+// the step's wait time on its run-node row, and advances the run.
+//
+// What this package deliberately leaves to later Phase 7 packages:
+// - `record` steps (Action Type writes, all-or-nothing and repeat-safe):
+//   WP-0705. A form step's own `record.<field>` bindings are written here
+//   through `custom_field_service::set_entity_values` (the same governed,
+//   business-rule-checked path a direct edit uses), not through an Action
+//   Type.
+// - A step `validation` that is only an arithmetic `expression` (no
+//   `condition`): WP-0710 evaluates the expression grammar. Until then such
+//   a validation is treated as "no blocking condition" and noted here, so a
+//   value is never silently rejected by a rule that cannot yet run.
+// ===========================================================================
+
+/// The viewer-facing state of a lane run (WP-0704): its status, its run
+/// data, and the current step if the run is waiting on a person. The
+/// runner screen (WP-0707) renders this; here it is the access-limited read
+/// behind that screen.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaneRunView {
+    pub run_id: String,
+    pub status: String,
+    pub anchor_object_key: Option<String>,
+    pub anchor_record_id: Option<String>,
+    pub run_data: Value,
+    pub current: Option<LaneStepView>,
+}
+
+/// The current human step as a viewer sees it (WP-0704, REQ-LANE-011). A
+/// viewer who lacks the step's role sees everything here except that
+/// `can_complete` is false; a viewer who cannot read the anchor record gets
+/// no value for a record-bound field (`readable` false, `value` None).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaneStepView {
+    pub stage_id: Option<String>,
+    pub stage_name: Option<String>,
+    pub step_id: String,
+    pub step_name: String,
+    pub role: Option<String>,
+    /// Who the step is waiting on - the role it is assigned to, or None when
+    /// it is open to anyone.
+    pub waiting_on: Option<String>,
+    /// Whether the viewer may complete this step (holds its role, or is an
+    /// administrator, or the step names no role).
+    pub can_complete: bool,
+    pub fields: Vec<FormFieldView>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FormFieldView {
+    pub key: String,
+    pub label: String,
+    #[serde(rename = "type")]
+    pub field_type: String,
+    pub binds_to: String,
+    pub required: bool,
+    /// The current value, when the viewer may read it. None for a
+    /// record-bound field the viewer cannot read (REQ-LANE-011).
+    pub value: Option<Value>,
+    pub readable: bool,
+}
+
+/// Loads a `waiting_person` run's current `human_step` node and the lane
+/// step behind it (the node config is the serialized step, ADR-0024 §3/§4).
+fn current_human_step(
+    conn: &Connection,
+    run: &GraphRun,
+) -> AppResult<(crate::models::execution_graph::GraphNode, LaneStep)> {
+    let graph = execution_graph_repo::get(conn, &run.graph_id)?
+        .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+    let current = run
+        .current_node_id
+        .clone()
+        .ok_or_else(|| classified_validation("validation.state", "run has no current step"))?;
+    let node = graph
+        .nodes
+        .into_iter()
+        .find(|n| n.id == current)
+        .ok_or_else(|| {
+            classified_validation("validation.state", "current step not in the graph")
+        })?;
+    if node.node_type != "human_step" {
+        return Err(classified_validation(
+            "validation.state",
+            "the current step is not a form step a person submits",
+        ));
+    }
+    let step: LaneStep = serde_json::from_str(&node.config_json).map_err(|e| {
+        classified_validation(
+            "validation.state",
+            format!("current step config is not a lane step: {e}"),
+        )
+    })?;
+    Ok((node, step))
+}
+
+/// Whether `actor` may complete a step assigned to `role` - holds the role,
+/// or is an administrator, or the step names no role (REQ-LANE-011).
+fn actor_may_act(
+    conn: &Connection,
+    actor_user_id: Option<&str>,
+    role: Option<&str>,
+) -> AppResult<bool> {
+    let Some(role_id) = role else {
+        return Ok(true);
+    };
+    let Some(actor_id) = actor_user_id else {
+        // An unattributed/system caller is allowed, the same convention the
+        // access layer uses elsewhere (`require_capability` with None).
+        return Ok(true);
+    };
+    if require_admin(conn, actor_user_id).is_ok() {
+        return Ok(true);
+    }
+    Ok(access_role_service::list_roles_for_user(conn, actor_id)?
+        .iter()
+        .any(|r| r.id == role_id))
+}
+
+/// Reads the anchor record's fields (built-in + custom), keyed by bare name,
+/// with `run_data.<field>` entries for the run data - the context the lane
+/// condition language resolves against (mirrors `start_lane_run`).
+fn run_condition_ctx(
+    conn: &Connection,
+    object_key: &str,
+    record_id: &str,
+    run_data: &Map<String, Value>,
+) -> AppResult<CustomFieldValues> {
+    let mut ctx = builtin_field_service::field_values(conn, object_key, record_id)?;
+    for (key, value) in custom_field_repo::get_values(conn, record_id)? {
+        ctx.insert(key, value);
+    }
+    for (key, value) in run_data {
+        ctx.insert(
+            format!("run_data.{key}"),
+            match value {
+                Value::String(s) => s.clone(),
+                other => other.to_string(),
+            },
+        );
+    }
+    Ok(ctx)
+}
+
+/// Evaluates a form step's `validation` against the record and the candidate
+/// run data. A `condition` validation runs now; an arithmetic-only
+/// `expression` validation is deferred to WP-0710 and does not block here
+/// (so a value is never rejected by a rule that cannot yet run). Returns the
+/// validation message on failure.
+fn check_step_validation(
+    conn: &Connection,
+    validation: &StepValidation,
+    object_key: &str,
+    record_id: &str,
+    run_data: &Map<String, Value>,
+) -> AppResult<()> {
+    if let Some(condition) = &validation.condition {
+        let ctx = run_condition_ctx(conn, object_key, record_id, run_data)?;
+        if !evaluate_condition(condition, &ctx)? {
+            return Err(classified_validation(
+                "validation.arguments",
+                validation.message.clone(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The run as a viewer sees it (WP-0704, REQ-LANE-011): status, run data,
+/// and the current human step with its fields - record-bound values withheld
+/// when the viewer cannot read the anchor record, `can_complete` false when
+/// the viewer lacks the step's role.
+pub fn get_run_view(
+    conn: &Connection,
+    workspace_id: &str,
+    run_id: &str,
+    viewer_user_id: Option<&str>,
+) -> AppResult<LaneRunView> {
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.workspace_id != workspace_id {
+        return Err(AppError::NotFound("Run".into()));
+    }
+    let run_data: Value = run
+        .run_data_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str(s).ok())
+        .unwrap_or_else(|| json!({}));
+
+    let current = if run.status == "waiting_person" {
+        let (node, step) = current_human_step(conn, &run)?;
+        let stage_id = serde_json::from_str::<Value>(&node.config_json)
+            .ok()
+            .and_then(|c| {
+                c.get("lane_stage_id")
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+            });
+        let stage_name = stage_id
+            .as_deref()
+            .and_then(|sid| stage_name_for(conn, &run, sid));
+        let can_complete = actor_may_act(conn, viewer_user_id, step.role.as_deref())?;
+
+        // A record-bound field's value is shown only to a viewer who may
+        // read the anchor record (REQ-LANE-011); run-data fields have no
+        // per-record ACL in v1 and are shown to anyone who can see the run.
+        let may_read_record = match (&run.anchor_object_key, &run.anchor_record_id) {
+            (Some(object_key), Some(record_id)) => access_service::require_capability(
+                conn,
+                viewer_user_id,
+                object_key,
+                Capability::Read,
+                Some(record_id),
+            )
+            .is_ok(),
+            _ => false,
+        };
+        let record_values = match (&run.anchor_object_key, &run.anchor_record_id) {
+            (Some(object_key), Some(record_id)) if may_read_record => {
+                let mut v = builtin_field_service::field_values(conn, object_key, record_id)?;
+                for (k, val) in custom_field_repo::get_values(conn, record_id)? {
+                    v.insert(k, val);
+                }
+                v
+            }
+            _ => CustomFieldValues::new(),
+        };
+        let run_data_obj = run_data.as_object().cloned().unwrap_or_default();
+
+        let fields = step
+            .fields
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .map(|f| field_view(f, &record_values, &run_data_obj, may_read_record))
+            .collect();
+
+        Some(LaneStepView {
+            stage_id,
+            stage_name,
+            step_id: step.id.clone(),
+            step_name: step.name.clone(),
+            role: step.role.clone(),
+            waiting_on: step.role.clone(),
+            can_complete,
+            fields,
+        })
+    } else {
+        None
+    };
+
+    Ok(LaneRunView {
+        run_id: run.id,
+        status: run.status,
+        anchor_object_key: run.anchor_object_key,
+        anchor_record_id: run.anchor_record_id,
+        run_data,
+        current,
+    })
+}
+
+fn field_view(
+    field: &FormField,
+    record_values: &CustomFieldValues,
+    run_data: &Map<String, Value>,
+    may_read_record: bool,
+) -> FormFieldView {
+    let (value, readable) = if let Some(key) = field.binds_to.strip_prefix("run_data.") {
+        (run_data.get(key).cloned(), true)
+    } else if let Some(key) = field.binds_to.strip_prefix("record.") {
+        if may_read_record {
+            (
+                record_values.get(key).map(|s| Value::String(s.clone())),
+                true,
+            )
+        } else {
+            (None, false)
+        }
+    } else {
+        (None, true)
+    };
+    FormFieldView {
+        key: field.key.clone(),
+        label: field.label.clone(),
+        field_type: field.field_type.clone(),
+        binds_to: field.binds_to.clone(),
+        required: field.required,
+        value,
+        readable,
+    }
+}
+
+/// The lane stage's human name, read from the definition behind the run's
+/// graph. Best-effort: None when it cannot be resolved (the view still shows
+/// the stage id).
+fn stage_name_for(conn: &Connection, run: &GraphRun, stage_id: &str) -> Option<String> {
+    let version = process_lane_repo::get_version_by_graph_id(conn, &run.graph_id).ok()??;
+    let definition = parse_definition(&version.definition_json).ok()?;
+    definition
+        .lane
+        .stages
+        .iter()
+        .find(|s| s.id == stage_id)
+        .map(|s| s.name.clone())
+}
+
+/// Submits the current human step of a `waiting_person` lane run
+/// (WP-0704). Validates the entered values against the step's fields and its
+/// `validation`, stores them (run-data fields on the run, record-bound
+/// fields through the governed field-write path), completes the step's row,
+/// and advances the run. Nothing is written when validation fails, when the
+/// viewer lacks the step's role, or when a required field is missing.
+pub async fn submit_person_step(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    run_id: &str,
+    values: &Map<String, Value>,
+    actor_user_id: Option<&str>,
+) -> AppResult<GraphRun> {
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.workspace_id != workspace_id {
+        return Err(AppError::NotFound("Run".into()));
+    }
+    if run.status != "waiting_person" {
+        return Err(classified_validation(
+            "validation.state",
+            format!("run is '{}', not waiting on a person", run.status),
+        ));
+    }
+    let (object_key, record_id) = match (&run.anchor_object_key, &run.anchor_record_id) {
+        (Some(o), Some(r)) => (o.clone(), r.clone()),
+        _ => {
+            return Err(classified_validation(
+                "validation.state",
+                "this run is not a lane run (no anchor record)",
+            ))
+        }
+    };
+    let (node, step) = current_human_step(conn, &run)?;
+
+    // REQ-LANE-011: only the step's role (or an admin) may complete it.
+    if !actor_may_act(conn, actor_user_id, step.role.as_deref())? {
+        return Err(AppError::classified(
+            ErrorClass::Validation,
+            "validation.permission",
+            format!(
+                "this step is waiting on {}; you cannot complete it",
+                step.role.as_deref().unwrap_or("another role")
+            ),
+        ));
+    }
+
+    let form_fields = step.fields.clone().unwrap_or_default();
+    // Reject a value for a field this step does not declare - nothing is
+    // stored outside the step's own schema (REQ-LANE-005).
+    for key in values.keys() {
+        if !form_fields.iter().any(|f| &f.key == key) {
+            return Err(classified_validation(
+                "validation.arguments",
+                format!("'{key}' is not a field of this step"),
+            ));
+        }
+    }
+    // Required fields must be present and non-empty.
+    for field in &form_fields {
+        if field.required {
+            let present = values
+                .get(&field.key)
+                .map(|v| !is_blank(v))
+                .unwrap_or(false);
+            if !present {
+                return Err(classified_validation(
+                    "validation.arguments",
+                    format!("'{}' is required", field.label),
+                ));
+            }
+        }
+    }
+
+    // Partition the entered values by where they bind: run data or a record
+    // field. An unknown binding is a definition error caught at publish; be
+    // defensive here too.
+    let mut run_data_updates: Map<String, Value> = Map::new();
+    let mut record_updates: CustomFieldValues = CustomFieldValues::new();
+    for field in &form_fields {
+        let Some(value) = values.get(&field.key) else {
+            continue;
+        };
+        if let Some(key) = field.binds_to.strip_prefix("run_data.") {
+            run_data_updates.insert(key.to_string(), value.clone());
+        } else if let Some(key) = field.binds_to.strip_prefix("record.") {
+            record_updates.insert(key.to_string(), value_to_field_string(value));
+        } else {
+            return Err(classified_validation(
+                "validation.arguments",
+                format!(
+                    "field '{}' binds to '{}', which is neither run_data nor record",
+                    field.key, field.binds_to
+                ),
+            ));
+        }
+    }
+
+    // The candidate run data is the existing run data with these updates
+    // applied - the state the step's `validation` is checked against, so a
+    // failing validation blocks before anything is written.
+    let mut run_data: Map<String, Value> = run
+        .run_data_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str::<Value>(s).ok())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    for (k, v) in &run_data_updates {
+        run_data.insert(k.clone(), v.clone());
+    }
+    if let Some(validation) = &step.validation {
+        check_step_validation(conn, validation, &object_key, &record_id, &run_data)?;
+    }
+
+    // Writes. Record-bound fields go first, through the governed path (it
+    // runs the object's Business Rules and can block); only if they succeed
+    // is the run data persisted, so a blocked record write leaves nothing
+    // changed. Full all-or-nothing posting of record *steps* is WP-0705.
+    if !record_updates.is_empty() {
+        custom_field_service::set_entity_values(
+            conn,
+            &object_key,
+            &record_id,
+            &record_updates,
+            actor_user_id,
+        )?;
+    }
+    let run_data_json =
+        serde_json::to_string(&Value::Object(run_data)).unwrap_or_else(|_| "{}".into());
+    graph_run_repo::set_lane_anchor(conn, run_id, &object_key, &record_id, &run_data_json)?;
+
+    // Complete the step's waiting row (its open interval is the wait time,
+    // AC-4). The row was appended by the human_step node arm.
+    if let Some(row) = graph_run_repo::list_run_nodes(conn, run_id)?
+        .into_iter()
+        .filter(|n| n.node_id == node.id && n.status == "waiting_person")
+        .max_by(|a, b| a.attempt.cmp(&b.attempt))
+    {
+        graph_run_repo::complete_run_node(
+            conn,
+            &row.id,
+            "completed",
+            Some(&Value::Object(values.clone()).to_string()),
+            &now_iso(),
+        )?;
+    }
+
+    graph_runtime_service::resume_person_step(conn, workspace_id, master_key, run_id, actor_user_id)
+        .await
+}
+
+fn is_blank(value: &Value) -> bool {
+    match value {
+        Value::Null => true,
+        Value::String(s) => s.trim().is_empty(),
+        _ => false,
+    }
+}
+
+/// A form value as the field-value store keeps it (strings). Numbers and
+/// booleans are stringified; a string is used as-is.
+fn value_to_field_string(value: &Value) -> String {
+    match value {
+        Value::String(s) => s.clone(),
+        Value::Null => String::new(),
+        other => other.to_string(),
+    }
 }
