@@ -16,6 +16,9 @@ fn master_key() -> [u8; 32] {
 
 /// ADR-0007 §3, row by row.
 fn adr_allows(from: &str, to: &str) -> bool {
+    // ADR-0024 §6 (WP-0704) amends ADR-0007 by adding `waiting_person`: a
+    // run waits here for a person to do a human step. It is a waiting status
+    // (resumes to `queued`, cancels) reached from `running`.
     const WAITING_OR_PAUSED: &[&str] = &[
         "planning",
         "paused",
@@ -23,6 +26,7 @@ fn adr_allows(from: &str, to: &str) -> bool {
         "waiting_budget",
         "waiting_model",
         "waiting_scheduled",
+        "waiting_person",
     ];
     let from_waiting = WAITING_OR_PAUSED.contains(&from);
     matches!(
@@ -33,6 +37,7 @@ fn adr_allows(from: &str, to: &str) -> bool {
             | ("running", "waiting_budget")
             | ("running", "waiting_model")
             | ("running", "waiting_scheduled")
+            | ("running", "waiting_person")
             | ("running", "paused")
             | ("running", "completed")
             | ("running", "completed_partial")
@@ -121,10 +126,10 @@ fn ac2_the_guard_allows_exactly_the_adr_transitions_for_every_pair() {
             }
         }
     }
-    // 2 from queued, 9 from running, 1 approval rejection, 2 from each of
-    // the six waiting-or-paused statuses.
-    assert_eq!(allowed, 2 + 9 + 1 + 6 * 2);
-    assert_eq!(RUN_STATUSES.len() * RUN_STATUSES.len(), 144);
+    // 2 from queued, 10 from running (ADR-0024 §6 adds running -> waiting_person),
+    // 1 approval rejection, 2 from each of the seven waiting-or-paused statuses.
+    assert_eq!(allowed, 2 + 10 + 1 + 7 * 2);
+    assert_eq!(RUN_STATUSES.len() * RUN_STATUSES.len(), 169);
 }
 
 #[test]
