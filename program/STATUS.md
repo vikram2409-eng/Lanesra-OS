@@ -32,7 +32,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0714](work/P7/WP-0714-dry-run-publish-checks-test-framework-and-solution-export.md) | Dry run, publish checks, test framework and Solution export | in_progress | muse | `wp/WP-0714-dry-run-publish-checks` | - |
+| [WP-0714](work/P7/WP-0714-dry-run-publish-checks-test-framework-and-solution-export.md) | Dry run, publish checks, test framework and Solution export | in_progress | muse | `wp/WP-0714-dry-run-publish-checks` | https://github.com/vikram2409-eng/Lanesra-OS/pull/781 |
 
 ## Ready to start (all dependencies done)
 
