@@ -236,7 +236,12 @@ async fn draft_made_by_the_service_is_the_draft_the_workspace_api_serves() {
     // The draft is made by the same service the route and the desktop
     // command both call - on this thread, where the scripted reply lives.
     let lane = {
-        let conn = state.conn.lock().unwrap();
+        // Open a fresh connection to the same file DB rather than holding the
+        // shared `state.conn` mutex guard across the `.await`
+        // (clippy::await_holding_lock). The scripted provider is thread-local
+        // and `block_on` runs on this thread, so the draft still sees the
+        // scripted reply.
+        let conn = open_workspace_db(&state.db_path).unwrap();
         assistant_draft_lane_service::draft_lane(
             &conn,
             &workspace_id,
