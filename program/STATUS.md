@@ -32,7 +32,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0707](work/P7/WP-0707-lane-runner-screen-entry-points-and-object-360.md) | Lane runner, first cut: the straight path on desktop and Team Workspace | in_progress | muse | `wp/WP-0707-lane-runner` | - |
+| [WP-0707](work/P7/WP-0707-lane-runner-screen-entry-points-and-object-360.md) | Lane runner, first cut: the straight path on desktop and Team Workspace | in_progress | muse | `wp/WP-0707-lane-runner` | https://github.com/vikram2409-eng/Lanesra-OS/pull/779 |
 
 ## Ready to start (all dependencies done)
 

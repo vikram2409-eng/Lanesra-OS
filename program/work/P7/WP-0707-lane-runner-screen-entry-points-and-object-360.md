@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
 branch: wp/WP-0707-lane-runner
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/779
 updated: 2026-11-14
 ---
 
