@@ -46,7 +46,9 @@ Model line-by-line work and conditional stages instead of hand-building them.
 ## Notes
 
 - ADR-0023; design in SOLUTION-DESIGN.md section 17 (Process Lanes). Refine acceptance criteria before moving to `ready`.
+- Schema-extension proposal for RAID Q-33..Q-36: `program/spec/schema-extension-proposal-q33-q36.md` (prep track, 2026-11-14). Q-33 proposes `repeat_over.assign` (per-item assignment — this WP implements it on acceptance); Q-34 proposes `skip_when` on a repeating step (this WP implements it on acceptance). Q-35 (`resolve` lookup) is WP-0705's; Q-36 (`role_wh_counter`) is a role-model / seed change, not a schema change. No schema change until the owner accepts each item separately.
 
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+- 2026-11-14 muse: Schema-extension proposal for RAID Q-33..Q-36 written at program/spec/schema-extension-proposal-q33-q36.md (prep track, separate PR). Q-33 (`repeat_over.assign`) and Q-34 (`skip_when`) are this WP's to implement on owner acceptance; Q-35 is WP-0705's, Q-36 is a role-model change. This WP stays proposed and unassigned — the proposal settles the design so the engine can build it cleanly; it does not start the build.
