@@ -8,8 +8,8 @@ use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
 use lanesra_core::models::custom_record::CustomRecordInput;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::{
-    custom_object_service, custom_record_service, execution_graph_service,
-    process_lane_service, workspace_service,
+    custom_object_service, custom_record_service, execution_graph_service, process_lane_service,
+    workspace_service,
 };
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
@@ -36,7 +36,7 @@ fn master_key() -> [u8; 32] {
 
 fn example_path() -> String {
     format!(
-        "{}/../../../program/spec/schemas/examples/lane-wh-receiving.json",
+        "{}/../../program/spec/schemas/examples/lane-wh-receiving.json",
         env!("CARGO_MANIFEST_DIR")
     )
 }
@@ -63,8 +63,8 @@ fn published_lane_compiles_to_a_graph_that_passes_validate_for_publish() {
 
     // AC-3: the demo lane imports unchanged - the stored definition is the
     // file's bytes, same schema, no rewriting.
-    let lane = process_lane_service::import_lane_definition(&conn, &ws, &json, Some(&admin))
-        .unwrap();
+    let lane =
+        process_lane_service::import_lane_definition(&conn, &ws, &json, Some(&admin)).unwrap();
     assert_eq!(lane.lane_key, "lane-wh-receiving");
     assert_eq!(lane.object_key, "purchase_order");
     assert_eq!(lane.versions.len(), 1);
@@ -73,24 +73,23 @@ fn published_lane_compiles_to_a_graph_that_passes_validate_for_publish() {
     assert_eq!(lane.versions[0].definition_json, json);
 
     let published =
-        process_lane_service::publish_lane(&conn, &ws, "lane-wh-receiving", Some(&admin))
-            .unwrap();
+        process_lane_service::publish_lane(&conn, &ws, "lane-wh-receiving", Some(&admin)).unwrap();
     assert_eq!(published.status, "published");
-    let graph_id = published.graph_id.clone().expect("publish compiles a graph");
+    let graph_id = published
+        .graph_id
+        .clone()
+        .expect("publish compiles a graph");
     let graph = execution_graph_service::get(&conn, &graph_id, &ws, Some(&admin)).unwrap();
     assert_eq!(graph.source_kind.as_deref(), Some("lane"));
-    assert_eq!(
-        graph.source_id.as_deref(),
-        Some("lane-wh-receiving@v1")
-    );
+    assert_eq!(graph.source_id.as_deref(), Some("lane-wh-receiving@v1"));
 
     // The publish itself already ran validate_for_publish (see
     // `create_from_source`); run it again on the stored graph directly.
     execution_graph_service::validate_for_publish(&graph).unwrap();
 
-    // 12 steps + 4 repeating steps wrapped in a loop node + trigger + end.
-    assert_eq!(graph.nodes.len(), 18);
-    assert_eq!(graph.edges.len(), 22);
+    // 12 steps + 5 repeating steps wrapped in a loop node + trigger + end.
+    assert_eq!(graph.nodes.len(), 19);
+    assert_eq!(graph.edges.len(), 25);
 
     let node_by_key = |key: &str| {
         graph
@@ -100,24 +99,56 @@ fn published_lane_compiles_to_a_graph_that_passes_validate_for_publish() {
             .unwrap_or_else(|| panic!("node {key} exists"))
     };
     // Step -> node mapping (ADR-0024 section 3).
-    assert_eq!(node_by_key("step:verify:confirm-arrival").node_type, "human_step");
-    assert_eq!(node_by_key("step:verify:match-delivery-note").node_type, "human_step");
-    assert_eq!(node_by_key("step:record-receipt:enter-quantities").node_type, "human_step");
-    assert_eq!(node_by_key("step:record-receipt:discrepancy-check").node_type, "condition");
-    assert_eq!(node_by_key("step:hold-review:review-discrepancy").node_type, "approval");
-    assert_eq!(node_by_key("step:hold-review:record-hold").node_type, "human_step");
-    assert_eq!(node_by_key("step:stage-put-away:assign-staging-bin").node_type, "human_step");
-    assert_eq!(node_by_key("step:stage-put-away:post-receipt-moves").node_type, "action");
-    assert_eq!(node_by_key("step:stage-put-away:confirm-putaway-bins").node_type, "human_step");
-    assert_eq!(node_by_key("step:stage-put-away:post-putaway-moves").node_type, "action");
-    assert_eq!(node_by_key("step:confirm:review-summary").node_type, "human_step");
+    assert_eq!(
+        node_by_key("step:verify:confirm-arrival").node_type,
+        "human_step"
+    );
+    assert_eq!(
+        node_by_key("step:verify:match-delivery-note").node_type,
+        "human_step"
+    );
+    assert_eq!(
+        node_by_key("step:record-receipt:enter-quantities").node_type,
+        "human_step"
+    );
+    assert_eq!(
+        node_by_key("step:record-receipt:discrepancy-check").node_type,
+        "condition"
+    );
+    assert_eq!(
+        node_by_key("step:hold-review:review-discrepancy").node_type,
+        "approval"
+    );
+    assert_eq!(
+        node_by_key("step:hold-review:record-hold").node_type,
+        "human_step"
+    );
+    assert_eq!(
+        node_by_key("step:stage-put-away:assign-staging-bin").node_type,
+        "human_step"
+    );
+    assert_eq!(
+        node_by_key("step:stage-put-away:post-receipt-moves").node_type,
+        "action"
+    );
+    assert_eq!(
+        node_by_key("step:stage-put-away:confirm-putaway-bins").node_type,
+        "human_step"
+    );
+    assert_eq!(
+        node_by_key("step:stage-put-away:post-putaway-moves").node_type,
+        "action"
+    );
+    assert_eq!(
+        node_by_key("step:confirm:review-summary").node_type,
+        "human_step"
+    );
     assert_eq!(node_by_key("step:confirm:close-po").node_type, "action");
 
     // Every step node carries its lane position; stages are grouping only.
     for node in &graph.nodes {
         if node.node_key.starts_with("step:") || node.node_key.starts_with("loop:") {
-            let config: serde_json::Value =
-                serde_json::from_str(&node.config_json).unwrap();
+            let config: serde_json::Value = serde_json::from_str(&node.config_json).unwrap();
             assert!(config.get("lane_stage_id").is_some(), "{}", node.node_key);
             assert!(config.get("lane_step_id").is_some(), "{}", node.node_key);
         }
@@ -139,7 +170,7 @@ fn published_lane_compiles_to_a_graph_that_passes_validate_for_publish() {
     assert_eq!(stage_nodes("verify"), 3); // 2 steps + 1 loop
     assert_eq!(stage_nodes("record-receipt"), 3);
     assert_eq!(stage_nodes("hold-review"), 2);
-    assert_eq!(stage_nodes("stage-put-away"), 6); // 4 steps + 2 loops
+    assert_eq!(stage_nodes("stage-put-away"), 7); // 4 steps + 3 loops
     assert_eq!(stage_nodes("confirm"), 2);
 
     // Repeat steps are wrapped in a loop with the safety bound.
@@ -147,12 +178,12 @@ fn published_lane_compiles_to_a_graph_that_passes_validate_for_publish() {
         "loop:verify:match-delivery-note",
         "loop:record-receipt:enter-quantities",
         "loop:stage-put-away:post-receipt-moves",
+        "loop:stage-put-away:confirm-putaway-bins",
         "loop:stage-put-away:post-putaway-moves",
     ] {
         let loop_node = node_by_key(loop_key);
         assert_eq!(loop_node.node_type, "loop");
-        let config: serde_json::Value =
-            serde_json::from_str(&loop_node.config_json).unwrap();
+        let config: serde_json::Value = serde_json::from_str(&loop_node.config_json).unwrap();
         assert_eq!(config["max_iterations"], 1000);
         assert!(config.get("repeat_over").is_some());
     }
@@ -170,7 +201,7 @@ fn published_lane_compiles_to_a_graph_that_passes_validate_for_publish() {
                     .any(|n| n.id == e.from_node_id && n.node_key == from)
                     && e.branch_label.as_deref() == label
             })
-            .unwrap_or_else(|| panic!("edge {from} --{label}--> ? exists"));
+            .unwrap_or_else(|| panic!("edge {from} --{label:?}--> ? exists"));
         graph
             .nodes
             .iter()
@@ -227,19 +258,14 @@ fn agent_step_compiles_to_an_agent_node() {
         }
     })
     .to_string();
-    let lane = process_lane_service::import_lane_definition(&conn, &ws, &json, Some(&admin))
-        .unwrap();
+    let lane =
+        process_lane_service::import_lane_definition(&conn, &ws, &json, Some(&admin)).unwrap();
     assert_eq!(lane.lane_key, "lane-agent-check");
     let published =
-        process_lane_service::publish_lane(&conn, &ws, "lane-agent-check", Some(&admin))
+        process_lane_service::publish_lane(&conn, &ws, "lane-agent-check", Some(&admin)).unwrap();
+    let graph =
+        execution_graph_service::get(&conn, &published.graph_id.unwrap(), &ws, Some(&admin))
             .unwrap();
-    let graph = execution_graph_service::get(
-        &conn,
-        &published.graph_id.unwrap(),
-        &ws,
-        Some(&admin),
-    )
-    .unwrap();
     execution_graph_service::validate_for_publish(&graph).unwrap();
     let agent = graph
         .nodes
@@ -326,8 +352,8 @@ async fn run_started_before_a_new_version_finishes_on_its_own_version() {
         Some(&admin),
     )
     .unwrap();
-    let v1 = process_lane_service::publish_lane(&conn, &ws, "lane-check-only", Some(&admin))
-        .unwrap();
+    let v1 =
+        process_lane_service::publish_lane(&conn, &ws, "lane-check-only", Some(&admin)).unwrap();
     let graph_v1 = v1.graph_id.clone().unwrap();
 
     // Started before v2 exists; finishes on v1.
@@ -353,8 +379,8 @@ async fn run_started_before_a_new_version_finishes_on_its_own_version() {
         Some(&admin),
     )
     .unwrap();
-    let v2 = process_lane_service::publish_lane(&conn, &ws, "lane-check-only", Some(&admin))
-        .unwrap();
+    let v2 =
+        process_lane_service::publish_lane(&conn, &ws, "lane-check-only", Some(&admin)).unwrap();
     let graph_v2 = v2.graph_id.clone().unwrap();
     assert_ne!(graph_v1, graph_v2);
     let run1_after = lanesra_core::repositories::graph_run_repo::get_run(&conn, &run1.id)
@@ -498,7 +524,10 @@ fn upgrade_creates_lane_tables_and_anchor_columns() {
         "definition_json",
         "graph_id",
     ] {
-        assert!(version_columns.contains(&expected.to_string()), "{expected}");
+        assert!(
+            version_columns.contains(&expected.to_string()),
+            "{expected}"
+        );
     }
     let run_columns = table_columns(&conn, "ai_runs");
     for expected in ["anchor_object_key", "anchor_record_id", "run_data_json"] {
@@ -554,9 +583,8 @@ fn import_refuses_a_branch_with_no_exit() {
 fn import_refuses_a_subtraction_expression() {
     let (conn, ws, admin) = setup_workspace();
     let json = mutated_example(|v| {
-        v["lane"]["stages"][1]["steps"][0]["validation"]["expression"] = serde_json::json!(
-            "$item.qty_received - $item.qty_rejected <= $item.qty_ordered"
-        );
+        v["lane"]["stages"][1]["steps"][0]["validation"]["expression"] =
+            serde_json::json!("$item.qty_received - $item.qty_rejected <= $item.qty_ordered");
     });
     assert!(process_lane_service::import_lane_definition(&conn, &ws, &json, Some(&admin)).is_err());
 }

@@ -43,9 +43,8 @@ pub fn list_versions(
     conn: &Connection,
     lane_id: &str,
 ) -> rusqlite::Result<Vec<ProcessLaneVersion>> {
-    let mut stmt = conn.prepare(
-        "SELECT * FROM process_lane_versions WHERE lane_id = ?1 ORDER BY version",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT * FROM process_lane_versions WHERE lane_id = ?1 ORDER BY version")?;
     let rows = stmt.query_map([lane_id], map_version_row)?.collect();
     rows
 }
@@ -106,7 +105,11 @@ pub fn create_version(
 
 pub fn get_lane(conn: &Connection, id: &str) -> rusqlite::Result<Option<ProcessLane>> {
     let row = conn
-        .query_row("SELECT * FROM process_lanes WHERE id = ?1", [id], map_lane_row)
+        .query_row(
+            "SELECT * FROM process_lanes WHERE id = ?1",
+            [id],
+            map_lane_row,
+        )
         .optional()?;
     row.map(|l| hydrate(conn, l)).transpose()
 }
@@ -126,13 +129,9 @@ pub fn get_lane_by_key(
     row.map(|l| hydrate(conn, l)).transpose()
 }
 
-pub fn list_lanes(
-    conn: &Connection,
-    workspace_id: &str,
-) -> rusqlite::Result<Vec<ProcessLane>> {
-    let mut stmt = conn.prepare(
-        "SELECT * FROM process_lanes WHERE workspace_id = ?1 ORDER BY name",
-    )?;
+pub fn list_lanes(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<ProcessLane>> {
+    let mut stmt =
+        conn.prepare("SELECT * FROM process_lanes WHERE workspace_id = ?1 ORDER BY name")?;
     let rows: Vec<ProcessLane> = stmt
         .query_map([workspace_id], map_lane_row)?
         .collect::<rusqlite::Result<_>>()?;

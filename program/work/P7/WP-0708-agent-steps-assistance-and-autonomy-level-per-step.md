@@ -5,7 +5,7 @@ phase: 7
 epic: E7.4 Agents in lanes
 status: proposed
 owner: unassigned
-planned_for: codex
+planned_for: claude
 depends_on: [WP-0707]
 requirements: [REQ-LANE-016, REQ-LANE-011]
 estimate: L
@@ -14,7 +14,7 @@ delivered: []
 docs: [process-lanes]
 branch: 
 pr: 
-updated: 2026-11-12
+updated: 2026-11-14
 ---
 
 # WP-0708 — Agent steps, assistance and autonomy level per step

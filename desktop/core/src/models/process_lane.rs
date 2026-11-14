@@ -336,9 +336,8 @@ pub struct ConditionGroup {
 /// lane imported from the demo (`program/spec/schemas/examples/`) keeps the
 /// exact bytes it was authored with.
 pub fn parse_definition(definition_json: &str) -> AppResult<LaneDefinitionFile> {
-    let file: LaneDefinitionFile = serde_json::from_str(definition_json).map_err(|e| {
-        validation_error(format!("lane definition is not valid JSON: {e}"))
-    })?;
+    let file: LaneDefinitionFile = serde_json::from_str(definition_json)
+        .map_err(|e| validation_error(format!("lane definition is not valid JSON: {e}")))?;
     validate_definition(&file.lane)?;
     Ok(file)
 }
@@ -438,8 +437,7 @@ pub fn validate_definition(lane: &LaneDefinition) -> AppResult<()> {
                 for branch in branches {
                     if let Some(target) = &branch.target {
                         let found = lane.stages.iter().any(|s| {
-                            s.id == target.stage
-                                && s.steps.iter().any(|st| st.id == target.step)
+                            s.id == target.stage && s.steps.iter().any(|st| st.id == target.step)
                         });
                         if !found {
                             return Err(validation_error(format!(
@@ -480,10 +478,7 @@ fn validate_step(
         )));
     }
     if step.name.trim().is_empty() {
-        return Err(validation_error(format!(
-            "step '{}' needs a name",
-            step.id
-        )));
+        return Err(validation_error(format!("step '{}' needs a name", step.id)));
     }
     // Kind-conditional rules (the schema's if/then, mirrored here).
     match step.kind.as_str() {
@@ -497,10 +492,7 @@ fn validate_step(
         }
         _ => {
             if step.role.as_deref().unwrap_or("").trim().is_empty() {
-                return Err(validation_error(format!(
-                    "step '{}' needs a role",
-                    step.id
-                )));
+                return Err(validation_error(format!("step '{}' needs a role", step.id)));
             }
         }
     }
@@ -513,7 +505,7 @@ fn validate_step(
                 )));
             }
         }
-        "check" | "approval" => {}
+        "check" => {}
         _ => {
             if step.branches.is_some() {
                 return Err(validation_error(format!(
@@ -622,8 +614,7 @@ fn validate_step(
                     field.key, step.id, field.field_type
                 )));
             }
-            if !field.binds_to.starts_with("run_data.") && !field.binds_to.starts_with("record.")
-            {
+            if !field.binds_to.starts_with("run_data.") && !field.binds_to.starts_with("record.") {
                 return Err(validation_error(format!(
                     "field '{}' on step '{}' must bind to run_data.<field> or record.<field>",
                     field.key, step.id

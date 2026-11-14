@@ -5,7 +5,7 @@ phase: 7
 epic: E7.2 Steps and rules
 status: proposed
 owner: unassigned
-planned_for: codex
+planned_for: muse
 depends_on: [WP-0706]
 requirements: [REQ-LANE-023]
 estimate: M
@@ -14,7 +14,7 @@ delivered: []
 docs: [process-lanes]
 branch: 
 pr: 
-updated: 2026-11-12
+updated: 2026-11-14
 ---
 
 # WP-0716 — Child lanes

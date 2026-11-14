@@ -5,7 +5,7 @@ phase: 7
 epic: E7.2 Steps and rules
 status: proposed
 owner: unassigned
-planned_for: codex
+planned_for: claude
 depends_on: [WP-0705]
 requirements: [REQ-LANE-013]
 estimate: M
@@ -14,7 +14,7 @@ delivered: []
 docs: [process-lanes]
 branch: 
 pr: 
-updated: 2026-11-12
+updated: 2026-11-14
 ---
 
 # WP-0709 — Lanes and workflows: declared replacement, and starting a lane from a workflow

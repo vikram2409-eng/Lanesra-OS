@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import http from 'node:http';
+import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -8,52 +8,31 @@ import path from 'node:path';
  * Covers: REQ-LANE-020 (WP-0712 AC-5).
  *
  * The warehouse demo is a static Netlify site, not the Team Workspace
- * server the Playwright config serves — so this spec starts its own
- * zero-dependency static server on port 4174 and drives /demo/warehouse
- * through it. Each test gets a fresh browser context, so localStorage
- * (the demo store) starts from the seed. The server is inline here
- * rather than shared with WP-0702's static-site-server.mjs: this WP's
- * branch stacks on WP-0703, which does not have that file, and the spec
- * must stay green on its own branch. Untested locally — see CI.
+ * server the Playwright config serves — so this spec starts the shared
+ * zero-dependency static server (desktop/e2e/static-site-server.mjs) on
+ * port 4174 and drives /demo/warehouse through it. Each test gets a fresh
+ * browser context, so localStorage (the demo store) starts from the seed.
+ * The server is shared with WP-0702's lane spec (port 4173 there); this
+ * spec uses 4174 so the two files never clash. FIX (PR #761): the first
+ * version of this spec inlined its own server and resolved the repo root
+ * from process.cwd() — it only worked when run from the repo root, and CI
+ * runs Playwright from desktop/, so the server never started there
+ * ("static site server did not start"). The shared server resolves the
+ * root from its own file location, so it works from either directory.
  */
 
 const STATIC_PORT = 4174;
 const BASE = `http://localhost:${STATIC_PORT}`;
-let server: http.Server | null = null;
+let server: ChildProcess | null = null;
 
 test.beforeAll(async () => {
-  const candidates = [path.resolve('..', '..'), process.cwd()];
-  const root =
-    candidates.find((p) => fs.existsSync(path.join(p, 'app.js'))) ?? candidates[0];
-  const types: Record<string, string> = {
-    '.html': 'text/html',
-    '.js': 'text/javascript',
-    '.css': 'text/css',
-    '.json': 'application/json',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.svg': 'image/svg+xml',
-    '.ico': 'image/x-icon',
-    '.txt': 'text/plain',
-    '.xml': 'application/xml',
-  };
-  server = http.createServer((req, res) => {
-    const url = decodeURIComponent((req.url || '/').split('?')[0]);
-    let file = path.join(root, url);
-    if (!file.startsWith(root) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
-      file = path.join(root, 'index.html');
-    }
-    fs.readFile(file, (err, body) => {
-      if (err) {
-        res.writeHead(404);
-        res.end('not found');
-        return;
-      }
-      res.writeHead(200, { 'content-type': types[path.extname(file)] || 'application/octet-stream' });
-      res.end(body);
-    });
-  });
-  await new Promise<void>((resolve) => server?.listen(STATIC_PORT, resolve));
+  const candidates = [
+    path.resolve('e2e/static-site-server.mjs'),
+    path.resolve('desktop/e2e/static-site-server.mjs'),
+  ];
+  const serverPath = candidates.find((p) => fs.existsSync(p));
+  if (!serverPath) throw new Error('static-site-server.mjs not found (run from desktop/ or the repo root)');
+  server = spawn(process.execPath, [serverPath, String(STATIC_PORT)], { stdio: 'pipe' });
   const deadline = Date.now() + 15000;
   for (;;) {
     try {
@@ -68,7 +47,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  await new Promise<void>((resolve) => server?.close(() => resolve()));
+  server?.kill();
 });
 
 test('the warehouse dashboard links to the Receive Shipment blueprint', async ({ page }) => {

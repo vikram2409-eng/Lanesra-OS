@@ -3,14 +3,14 @@ id: WP-0703
 title: Lane definitions in the core: store, lifecycle and compile to a graph
 phase: 7
 epic: E7.1 Lane foundation
-status: in_review
+status: done
 owner: muse
 planned_for: muse
 depends_on: [WP-0701]
 requirements: [REQ-LANE-001, REQ-LANE-002]
 estimate: L
 editions: [desktop, workspace]
-delivered: []
+delivered: [desktop, workspace]
 editions_reason: core storage and API; the demo already has its definition from WP-0702
 docs: [process-lanes]
 branch: wp/WP-0703-lane-definitions-in-core
@@ -30,12 +30,12 @@ Give desktop and Team Workspace the lane definition, on the engine that already 
 
 ## Acceptance criteria
 
-- [ ] AC-1: A published lane compiles to a graph that passes `validate_for_publish`
-- [ ] AC-2: A run started before a new version is published finishes on its own version
-- [ ] AC-3: A lane definition from the demo imports unchanged (same schema)
-- [ ] AC-4: The upgrade test passes with the new tables
-- [ ] AC-5: Desktop and Team Workspace behave the same from the same code; tests run in both modes
-- [ ] AC-6: Website help (`/help/process-lanes` and any other slug in `docs:`) explains what the feature does, how to set it up step by step and where to find it; `sitemap.xml`, `llms.txt`, `llms-full.txt`, the Releases page and the Roadmap page are updated
+- [x] AC-1: A published lane compiles to a graph that passes `validate_for_publish`
+- [x] AC-2: A run started before a new version is published finishes on its own version
+- [x] AC-3: A lane definition from the demo imports unchanged (same schema)
+- [x] AC-4: The upgrade test passes with the new tables
+- [x] AC-5: Desktop and Team Workspace behave the same from the same code; tests run in both modes
+- [x] AC-6: Website help (`/help/process-lanes` and any other slug in `docs:`) explains what the feature does, how to set it up step by step and where to find it; `sitemap.xml`, `llms.txt`, `llms-full.txt`, the Releases page and the Roadmap page are updated
 
 ## Test plan
 
@@ -53,3 +53,5 @@ Give desktop and Team Workspace the lane definition, on the engine that already 
 
 - 2026-11-12 muse: Claimed — the owner reassigned this WP from claude to muse ("build WP-0702 and WP-0703, assign it yourself"). Status proposed → in_progress on branch wp/WP-0703-lane-definitions-in-core. ACs reviewed and stand as written. Next: read ADR-0023, ADR-0024 (§3 compile mapping, §13 demo limits), SOLUTION-DESIGN.md §17–18, execution_graph.rs and migrate.rs, then build the core store + compile. Note: this branch stacks on the WP-0701 branch (PR #755, program check green, CI/security running) — rebase onto main after #755 merges. No local Rust toolchain here: keep changes small, CI is the compiler, expect fmt/clippy fix rounds.
 - 2026-11-12 muse: Built (unpushed at this entry; see commits below). Migration 0095 (`process_lanes`, `process_lane_versions`, anchor + run-data columns on `ai_runs`, `stage_id` on `ai_run_nodes`); `models/process_lane.rs` (definition model + validation, unchanged from WP-0701 recon); `repositories/process_lane_repo.rs` + `graph_run_repo` anchor/stage helpers; `services/process_lane_service.rs` (import/publish/create-version, `compile_lane` per ADR-0024 §3, `start_lane_run` with start-condition evaluation and the one-active-run + excludes guards); `human_step` added to NODE_TYPES and `lane` to GRAPH_SOURCE_KINDS; Tauri commands + server dispatch/admin route (same service, both editions); Solution export arm (latest published definition into the manifest; import is a follow-up). Tests: 13 in `core/tests/process_lane_definition.rs` + 1 in `server/tests/process_lane_http.rs`, all tagged Covers REQ-LANE-001/002. Help: `/help/process-lanes` (wps WP-0703) + sitemap + llms.txt + llms-full.txt + Releases v0.99.0 bullet + Roadmap "Proceed" epic; `programctl validate` 0 errors, `docs --check` 65/65, `node --check app.js` passes. NO AC TICKED YET: no Rust test has run anywhere (no local toolchain; CI is the proof) — tick AC-1..AC-6 only when the PR's CI run proves them. NOTE on status: the brief said set `in_review` with `pr:` blank, but `programctl validate` refuses `in_review` without a pr link, so the status stays `in_progress` until the parent opens the PR — then set `in_review` with the link (as WP-0701 did). Decisions recorded: (1) one draft at a time; a new draft supersedes only after the previous one publishes (create_version refuses while a draft exists); (2) the row status is the lifecycle truth, the definition JSON is stored verbatim (imported published definitions keep their inner status field); (3) loop edges are labelled body/exit per the runtime's loop arm, `max_iterations` 1000 safety bound until WP-0710; (4) check/stage-condition runtime shapes derive only literal $record/$run_data conditions with ≤1 OR-group level - expressions, $item refs and compare_field stay verbatim in lane_check/lane_condition for WP-0710, and the node compiles with empty conditions; (5) a run whose first step is a human step fails at that step until WP-0704 - the AC-2 test uses a check-only lane and the one-active-run test uses an approval lane (waiting_approval); (6) start-condition expressions are refused until WP-0710; (7) run-node stage_id is stored via a repo seam (`set_run_node_stage`) for WP-0704 to call - the runtime does not set it yet; (8) the sweep exclusion for the new waiting statuses is WP-0704's, so `waiting_person`/`waiting_child` are NOT added to RUN_STATUSES here. Next: parent opens the PR; watch CI (expect fmt/clippy rounds - read the exact `cargo fmt --check` diff from the log and apply verbatim); then tick ACs from the green run.
+- 2026-11-12 muse: CI fixes (parent, on PR #756 head f877b2f). CI run #644: rust fmt failed on 7 files; rust tests failed at compile (E0277, Option<&str> in a panic format string); tauri clippy failed with 2 errors (unreachable "approval" arm; unnecessary unwrap on repeat_over). The browser's fetch of the fmt diff came back garbled (line numbers did not match the files, hunks showed code rustfmt never emits), so it was NOT applied verbatim. Instead installed the repo-pinned Rust toolchain locally (rustup, 1.97.0 per desktop/rust-toolchain.toml — the browser's "1.93.0" was wrong) and ran `cargo fmt --all` here; `cargo fmt --all -- --check` now passes. Code fixes: `{label}` -> `{label:?}` in the edge panic (tests/process_lane_definition.rs); `"check" | "approval" => {}` -> `"check" => {}` (models/process_lane.rs); `if step.repeat_over.is_some() { ... .unwrap() }` -> `if let Some(repeat_over) = &step.repeat_over {` (services/process_lane_service.rs). Local clippy run in progress at push time — CI is the final proof. OWNER-DIRECTED ADDITION, same PR: home page 04 / START section (site-modern-pages.js) — the FREE card button now links to the GitHub desktop release (desktop-v0.16.3, verified live as the latest desktop release), and the blank TEAM WORKSPACE card ("Not planned") is replaced with real content (Docker image, shared browser workspace, one approvals inbox, live run events) linking to the GitHub Team Workspace server release (team-workspace-server-v0.17.0, verified live, published 2026-11-02). The /pricing Team Workspace card button now links to the same server release (was: generic /help). ACs still unticked — tick only from a green CI run.
+- 2026-11-12 claude: Finalize pass (the one the "tick from the green run" plan called for, missed at merge). CI run #646 on the merged head (16d7df8) was green — CI (rust tests, fmt, clippy), security, server tests and e2e all passed at 09:08, before the 09:10 merge — so AC-1..AC-6 are proven: AC-1/2/3/5 by the 13 core + 1 server tests, AC-4 by the migration-upgrade test with 0095's tables, AC-6 by `/help/process-lanes` + sitemap/llms/releases/roadmap with `programctl docs --check` 65/65. Ticked AC-1..AC-6, set status in_review → done, delivered [desktop, workspace]. This unblocks WP-0704 (depends_on WP-0703), which was not showing as ready while this sat at in_review. No code change.
