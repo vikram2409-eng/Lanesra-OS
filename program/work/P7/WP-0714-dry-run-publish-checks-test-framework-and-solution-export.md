@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
 branch: wp/WP-0714-dry-run-publish-checks
-pr: ""
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/781
 updated: 2026-11-14
 ---
 
