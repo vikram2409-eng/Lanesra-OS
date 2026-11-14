@@ -50,7 +50,7 @@ Give an organisation one place to record every agent it runs, including those bu
 
 ## Notes
 
-- ADR from WP-0114. Feature flag `agent_control_plane`.
+- ADR-0027 (WP-0114): external agent identity, A2A trust and trace ingest — the registry fields and the approval gate this builds. Feature flag `agent_control_plane`.
 - Scoped from ADR-0020 and SOLUTION-DESIGN.md; refine acceptance criteria (and split if larger than L) before moving to `ready`.
 
 ## Progress log
