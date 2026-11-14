@@ -57,7 +57,15 @@ where
             .and_then(|s| serde_json::from_str(s).ok())
             .unwrap_or(Value::Null));
     }
-    let tx = conn.unchecked_transaction()?;
+    // Open our own transaction only when there isn't one already. A run that
+    // executes inside a caller's transaction (a record-save trigger, a
+    // package install) must not nest one - SQLite refuses it - and the outer
+    // transaction already makes the write and its ledger row commit together.
+    let own_tx = if conn.is_autocommit() {
+        Some(conn.unchecked_transaction()?)
+    } else {
+        None
+    };
     let result = f()?;
     let result_json = serde_json::to_string(&result).ok();
     match run_write_ledger_repo::insert(
@@ -70,7 +78,9 @@ where
         result_json.as_deref(),
     ) {
         Ok(()) => {
-            tx.commit()?;
+            if let Some(tx) = own_tx {
+                tx.commit()?;
+            }
             Ok(result)
         }
         Err(rusqlite::Error::SqliteFailure(e, _))
@@ -78,8 +88,8 @@ where
         {
             // Another connection applied this key between our `find` and our
             // `insert` (a double submit from two workers). Roll back our own
-            // write and return the result the winner recorded.
-            drop(tx);
+            // write (if we own the transaction) and return the winner's result.
+            drop(own_tx);
             let stored = run_write_ledger_repo::find(conn, run_id, node_id, attempt, write_key)?
                 .ok_or_else(|| {
                     AppError::Conflict("idempotent write raced and left no ledger row".into())
