@@ -22,9 +22,9 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 195 | 37 | 99 / 638 |
-| Team Workspace | 222 | 43 | 109 / 732 |
-| Online demo | 150 | 20 | 50 / 500 |
+| Desktop | 195 | 38 | 103 / 638 |
+| Team Workspace | 222 | 44 | 113 / 732 |
+| Online demo | 150 | 21 | 54 / 500 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -32,7 +32,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0707](work/P7/WP-0707-lane-runner-screen-entry-points-and-object-360.md) | Lane runner, first cut: the straight path on desktop and Team Workspace | in_progress | muse | `wp/WP-0707-lane-runner` | https://github.com/vikram2409-eng/Lanesra-OS/pull/779 |
+| [WP-0707](work/P7/WP-0707-lane-runner-screen-entry-points-and-object-360.md) | Lane runner, first cut: the straight path on desktop and Team Workspace | in_review | muse | `wp/WP-0707-lane-runner` | https://github.com/vikram2409-eng/Lanesra-OS/pull/779 |
 
 ## Ready to start (all dependencies done)
 
@@ -336,7 +336,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0704](work/P7/WP-0704-human-steps-and-run-data.md) | Human steps and run data | E7.1 Lane foundation | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0703 |
 | [WP-0705](work/P7/WP-0705-record-and-check-steps-real-atomic-repeat-safe-writes.md) | Record and check steps: real, atomic, repeat-safe writes | E7.2 Steps and rules | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0703, WP-0141 |
 | [WP-0706](work/P7/WP-0706-approvals-branches-with-exits-pause-handoff-and-cancel.md) | Approvals, branches with exits, pause, handoff and cancel | E7.2 Steps and rules | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0704 |
-| [WP-0707](work/P7/WP-0707-lane-runner-screen-entry-points-and-object-360.md) | Lane runner, first cut: the straight path on desktop and Team Workspace | E7.3 Runner and visibility | 🔨 in progress | L | ○Desktop ○Team Workspace ○Online demo | WP-0704, WP-0705 |
+| [WP-0707](work/P7/WP-0707-lane-runner-screen-entry-points-and-object-360.md) | Lane runner, first cut: the straight path on desktop and Team Workspace | E7.3 Runner and visibility | 👀 in review | L | ✓Desktop ✓Team Workspace ✓Online demo | WP-0704, WP-0705 |
 | [WP-0708](work/P7/WP-0708-agent-steps-assistance-and-autonomy-level-per-step.md) | Agent steps, assistance and autonomy level per step | E7.4 Agents in lanes | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0707 |
 | [WP-0709](work/P7/WP-0709-lanes-and-workflows-declared-replacement-and-starting-a-lane.md) | Lanes and workflows: declared replacement, and starting a lane from a workflow | E7.2 Steps and rules | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0705 |
 | [WP-0710](work/P7/WP-0710-repeat-over-child-records-and-stage-and-start-conditions.md) | Repeat over child records, and stage and start conditions | E7.2 Steps and rules | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0705 |
