@@ -26,10 +26,18 @@ export default defineConfig({
   // The webServer starts lanesra-server on a temp data dir for the test run.
   // In CI this is handled by the workflow; locally run:
   //   E2E_BASE_URL=http://localhost:3000 npx playwright test
+  // The server reads its port, data dir and frontend dir from the
+  // environment (server/src/main.rs) and ignores --port / --data-dir
+  // flags, so the command sets them here. Playwright spawns the
+  // command with cwd = this config's directory (e2e/), so the frontend
+  // dir is ../dist, not ./dist: ./dist resolves to e2e/dist, which does
+  // not exist, and the server answers 404 on / (blank page) while the
+  // API still works — found by the WP-0707 assembly recheck.
   webServer: process.env.CI
     ? undefined
     : {
-        command: 'cargo run -p lanesra-server -- --data-dir /tmp/e2e-data --port 3000',
+        command:
+          'PORT=3000 LANESRA_DATA_DIR=/tmp/e2e-data LANESRA_FRONTEND_DIR=../dist cargo run -p lanesra-server',
         url: 'http://localhost:3000/api/health',
         reuseExistingServer: true,
         timeout: 120000,
