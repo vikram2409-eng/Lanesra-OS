@@ -3,14 +3,14 @@ id: WP-0705
 title: Record and check steps: real, atomic, repeat-safe writes
 phase: 7
 epic: E7.2 Steps and rules
-status: in_review
+status: done
 owner: claude
 planned_for: claude
 depends_on: [WP-0703, WP-0141]
 requirements: [REQ-LANE-006, REQ-LANE-007]
 estimate: L
 editions: [desktop, workspace]
-delivered: []
+delivered: [desktop, workspace]
 editions_reason: core runtime; shown to users by WP-0707
 docs: [process-lanes]
 branch: wp/WP-0705-record-and-check-step-writes

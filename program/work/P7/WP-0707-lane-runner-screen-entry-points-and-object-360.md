@@ -3,8 +3,8 @@ id: WP-0707
 title: Lane runner, first cut: the straight path on desktop and Team Workspace
 phase: 7
 epic: E7.3 Runner and visibility
-status: proposed
-owner: unassigned
+status: in_progress
+owner: muse
 planned_for: claude
 depends_on: [WP-0704, WP-0705]
 requirements: [REQ-LANE-014, REQ-LANE-015, REQ-LANE-003]
@@ -12,7 +12,7 @@ estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
-branch: 
+branch: wp/WP-0707-lane-runner
 pr: 
 updated: 2026-11-14
 ---
@@ -52,3 +52,11 @@ The one screen a person works on, in desktop and Team Workspace, matching the de
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+### 2026-11-14 muse
+Claim: branch wp/WP-0707-lane-runner from main 1a3b90a; draft PR to open. Taking over from claude (planned_for claude; out of session tokens, owner directed the batch to Muse AI — Claude's handoff 2026-11-14).
+Readiness: deps WP-0704 (#770) + WP-0705 (#775) merged; WP-0706 (#777) merged. ACs testable as written; no refinement needed beyond the WP-0621 note below.
+WP-0621 (Path/Form components) still proposed — runner builds its own stage-bar and form components, to be replaced when WP-0621 ships.
+Engine surface verified on main: get_run_view, submit_person_step, skip_step in desktop/core/src/services/process_lane_service.rs + graph_runtime_service.rs; Tauri commands in desktop/src-tauri/src/commands/process_lane_commands.rs; server dispatch in desktop/server/src/dispatch.rs. Use them, don't re-implement.
+Tracker closeout folded in: WP-0704, WP-0705, WP-0706 set done (PRs merged; delivered [desktop, workspace]).
+Next: map the existing runner surface + demo runner (app.js, WP-0702) + Object 360; write tests first (vitest + Playwright E2E both modes + axe), then implement.
