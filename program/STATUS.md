@@ -34,7 +34,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 |---|---|---|---|---|---|
 | [WP-0141](work/P1/WP-0141-idempotency-keys-and-side-effect-safe-resume.md) | Idempotency keys and side-effect-safe resume | in_review | claude | `wp/WP-0141-idempotency-keys-and-side-effect-safe-resume` | https://github.com/vikram2409-eng/Lanesra-OS/pull/771 |
 | [WP-0704](work/P7/WP-0704-human-steps-and-run-data.md) | Human steps and run data | in_review | claude | `wp/WP-0704-human-steps-and-run-data` | https://github.com/vikram2409-eng/Lanesra-OS/pull/770 |
-| [WP-0705](work/P7/WP-0705-record-and-check-steps-real-atomic-repeat-safe-writes.md) | Record and check steps: real, atomic, repeat-safe writes | in_review | claude | `wp/WP-0705-record-and-check-step-writes` | - |
+| [WP-0705](work/P7/WP-0705-record-and-check-steps-real-atomic-repeat-safe-writes.md) | Record and check steps: real, atomic, repeat-safe writes | in_review | claude | `wp/WP-0705-record-and-check-step-writes` | https://github.com/vikram2409-eng/Lanesra-OS/pull/775 |
 | [WP-0715](work/P7/WP-0715-describe-a-process-the-admin-assistant-drafts-a-lane.md) | Describe a process: the Admin Assistant drafts a lane | in_review | muse | `wp/WP-0715-describe-a-process-drafts-a-lane-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/772 |
 | [WP-0719](work/P7/WP-0719-count-and-replenish-lanes-as-definitions-with-an-authoring-log.md) | Count and Replenish lanes as definitions, with an authoring log | in_review | muse | `wp/WP-0719-count-and-replenish-lanes` | https://github.com/vikram2409-eng/Lanesra-OS/pull/767 |
 
