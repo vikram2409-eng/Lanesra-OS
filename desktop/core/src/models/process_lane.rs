@@ -450,6 +450,101 @@ pub fn validate_definition(lane: &LaneDefinition) -> AppResult<()> {
             }
         }
     }
+    // WP-0706 AC-2: every step must have a way out - a path that reaches the
+    // end of the lane. A hold or rejection branch that loops back with no
+    // exit, or that targets a step which can itself never finish, is a dead
+    // end; the publish is refused and the message names the step. This is the
+    // step-level reachability the generic graph validator only catches as a
+    // bare "no reachable End".
+    validate_every_step_reaches_an_end(lane)?;
+    Ok(())
+}
+
+/// WP-0706 AC-2: refuse a lane in which some step can never reach the end.
+/// A step reaches the end if it ends the run (`ends_run`), is the last step
+/// in definition order, declares a branch with an `end`, or has an out-edge
+/// (a branch target, or linear succession) to a step that itself reaches the
+/// end. Any step outside that set is stuck - the message names it.
+fn validate_every_step_reaches_an_end(lane: &LaneDefinition) -> AppResult<()> {
+    use std::collections::VecDeque;
+    let flat: Vec<(&str, &str)> = lane
+        .stages
+        .iter()
+        .flat_map(|s| {
+            s.steps
+                .iter()
+                .map(move |st| (s.id.as_str(), st.id.as_str()))
+        })
+        .collect();
+    let steps: Vec<&LaneStep> = lane.stages.iter().flat_map(|s| s.steps.iter()).collect();
+    let n = flat.len();
+    let index =
+        |stage: &str, step: &str| flat.iter().position(|&(sg, st)| sg == stage && st == step);
+
+    let mut out: Vec<Vec<usize>> = vec![Vec::new(); n];
+    let mut terminal: Vec<bool> = vec![false; n];
+    for i in 0..n {
+        let step = steps[i];
+        if step.ends_run.is_some() {
+            terminal[i] = true;
+            continue;
+        }
+        let linear_next = if i + 1 < n { Some(i + 1) } else { None };
+        match &step.branches {
+            Some(branches) if !branches.is_empty() => {
+                for branch in branches {
+                    if branch.end.is_some() {
+                        terminal[i] = true;
+                    } else if let Some(target) = &branch.target {
+                        if let Some(j) = index(&target.stage, &target.step) {
+                            out[i].push(j);
+                        }
+                    } else {
+                        // A branch with neither target nor end falls through
+                        // to the step's linear successor.
+                        match linear_next {
+                            Some(j) => out[i].push(j),
+                            None => terminal[i] = true,
+                        }
+                    }
+                }
+            }
+            _ => match linear_next {
+                Some(j) => out[i].push(j),
+                None => terminal[i] = true,
+            },
+        }
+    }
+
+    // Reverse-reachability from every terminal step.
+    let mut reaches = vec![false; n];
+    let mut rev: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for (i, outs) in out.iter().enumerate() {
+        for &j in outs {
+            rev[j].push(i);
+        }
+    }
+    let mut queue: VecDeque<usize> = VecDeque::new();
+    for i in 0..n {
+        if terminal[i] {
+            reaches[i] = true;
+            queue.push_back(i);
+        }
+    }
+    while let Some(i) = queue.pop_front() {
+        for &p in &rev[i] {
+            if !reaches[p] {
+                reaches[p] = true;
+                queue.push_back(p);
+            }
+        }
+    }
+    if let Some(i) = (0..n).find(|&i| !reaches[i]) {
+        let (stage_id, step_id) = flat[i];
+        return Err(validation_error(format!(
+            "step '{step_id}' in stage '{stage_id}' has no way out: no path from it reaches the end of the lane (a hold or rejection branch must lead to an end or onward)"
+        )));
+    }
     Ok(())
 }
 

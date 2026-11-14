@@ -101,6 +101,18 @@ pub fn router() -> Router<SharedState> {
             post(submit_process_lane_step_admin),
         )
         .route(
+            "/api/admin/process-lane-runs/:id/resolve-approval",
+            post(resolve_process_lane_approval_admin),
+        )
+        .route(
+            "/api/admin/process-lane-runs/:id/cancel",
+            post(cancel_process_lane_run_admin),
+        )
+        .route(
+            "/api/admin/process-lane-runs/:id/handoff",
+            post(handoff_process_lane_step_admin),
+        )
+        .route(
             "/api/admin/execution-graph-runs/:id/resume",
             post(resume_graph_run_admin),
         )
@@ -523,6 +535,96 @@ async fn submit_process_lane_step_admin(
             Some(&actor),
         )
         .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+struct ResolveProcessLaneApprovalBody {
+    #[serde(default)]
+    approve: bool,
+    #[serde(default)]
+    notes: Option<String>,
+}
+
+async fn resolve_process_lane_approval_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(body): Json<ResolveProcessLaneApprovalBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::resolve_lane_approval(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &id,
+            body.approve,
+            body.notes.as_deref(),
+            Some(&actor),
+        )
+        .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+struct CancelProcessLaneRunBody {
+    #[serde(default)]
+    reason: String,
+}
+
+async fn cancel_process_lane_run_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(body): Json<CancelProcessLaneRunBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, _master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::cancel_lane_run(&conn, &workspace_id, &id, &body.reason, Some(&actor))
+            .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+struct HandoffProcessLaneStepBody {
+    #[serde(default)]
+    to_role: String,
+    #[serde(default)]
+    reason: String,
+}
+
+async fn handoff_process_lane_step_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(body): Json<HandoffProcessLaneStepBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, _master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::handoff_step(
+            &conn,
+            &workspace_id,
+            &id,
+            &body.to_role,
+            &body.reason,
+            Some(&actor),
+        )
     })
     .await?;
     Ok(Json(

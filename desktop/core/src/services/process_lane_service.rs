@@ -1313,7 +1313,9 @@ pub fn get_run_view(
         let stage_name = stage_id
             .as_deref()
             .and_then(|sid| stage_name_for(conn, &run, sid));
-        let can_complete = actor_may_act(conn, viewer_user_id, step.role.as_deref())?;
+        // WP-0706: a handoff can change who the step waits on for this run.
+        let acting_role = effective_step_role(&run, &step);
+        let can_complete = actor_may_act(conn, viewer_user_id, acting_role.as_deref())?;
 
         // A record-bound field's value is shown only to a viewer who may
         // read the anchor record (REQ-LANE-011); run-data fields have no
@@ -1355,7 +1357,7 @@ pub fn get_run_view(
             step_id: step.id.clone(),
             step_name: step.name.clone(),
             role: step.role.clone(),
-            waiting_on: step.role.clone(),
+            waiting_on: acting_role.clone(),
             can_complete,
             fields,
         })
@@ -1454,14 +1456,16 @@ pub async fn submit_person_step(
     };
     let (node, step) = current_human_step(conn, &run)?;
 
-    // REQ-LANE-011: only the step's role (or an admin) may complete it.
-    if !actor_may_act(conn, actor_user_id, step.role.as_deref())? {
+    // REQ-LANE-011: only the step's role (or an admin) may complete it. A
+    // handoff (WP-0706) changes which role that is for this run.
+    let acting_role = effective_step_role(&run, &step);
+    if !actor_may_act(conn, actor_user_id, acting_role.as_deref())? {
         return Err(AppError::classified(
             ErrorClass::Validation,
             "validation.permission",
             format!(
                 "this step is waiting on {}; you cannot complete it",
-                step.role.as_deref().unwrap_or("another role")
+                acting_role.as_deref().unwrap_or("another role")
             ),
         ));
     }
@@ -1568,6 +1572,186 @@ pub async fn submit_person_step(
 
     graph_runtime_service::resume_person_step(conn, workspace_id, master_key, run_id, actor_user_id)
         .await
+}
+
+// ===========================================================================
+// WP-0706: approvals, branches with exits, pause, handoff and cancel.
+// ===========================================================================
+
+/// The role a lane step effectively waits on. A handoff (WP-0706) overrides
+/// the step's declared role for this run, stored in run data under
+/// `__handoffs.<step_id>`; absent one, the step's own declared role stands.
+fn effective_step_role(run: &GraphRun, step: &LaneStep) -> Option<String> {
+    let handoff = run
+        .run_data_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str::<Value>(s).ok())
+        .and_then(|v| {
+            v.get("__handoffs")
+                .and_then(|h| h.get(&step.id))
+                .and_then(|x| x.as_str())
+                .map(String::from)
+        });
+    handoff.or_else(|| step.role.clone())
+}
+
+/// WP-0706 (REQ-LANE-008, AC-1): resolves the approval a lane run waits on,
+/// routing the run down the step's declared `approved`/`rejected` branch - a
+/// lane guard over the graph runtime's one approval primitive (WP-0150).
+pub async fn resolve_lane_approval(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    run_id: &str,
+    approve: bool,
+    notes: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> AppResult<GraphRun> {
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.workspace_id != workspace_id {
+        return Err(AppError::NotFound("Run".into()));
+    }
+    if run.anchor_object_key.is_none() {
+        return Err(classified_validation(
+            "validation.state",
+            "this run is not a lane run (no anchor record)",
+        ));
+    }
+    graph_runtime_service::resolve_approval(
+        conn,
+        workspace_id,
+        master_key,
+        run_id,
+        approve,
+        notes,
+        actor_user_id,
+    )
+    .await
+}
+
+/// WP-0706 (REQ-LANE-010, AC-4): cancels a lane run. The writes it already
+/// posted stay in place - they are real, committed records, and a cancel
+/// never rolls a posted write back. This records a cancellation in the audit
+/// trail that lists every write posted so far, so the trail shows exactly
+/// what the half-finished run left behind.
+pub async fn cancel_lane_run(
+    conn: &Connection,
+    workspace_id: &str,
+    run_id: &str,
+    reason: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<GraphRun> {
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.workspace_id != workspace_id {
+        return Err(AppError::NotFound("Run".into()));
+    }
+    // The writes posted so far are the completed record (action) steps'
+    // outputs.
+    let posted: Vec<Value> = graph_run_repo::list_run_nodes(conn, run_id)?
+        .into_iter()
+        .filter(|n| n.node_type == "action" && n.status == "completed")
+        .filter_map(|n| {
+            n.output_json
+                .as_deref()
+                .and_then(|s| serde_json::from_str::<Value>(s).ok())
+        })
+        .filter_map(|o| o.get("applied").cloned())
+        .collect();
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "lane_run_cancelled",
+        run.anchor_object_key.as_deref(),
+        run.anchor_record_id.as_deref(),
+        &format!("Cancelled lane run {run_id}: {reason}"),
+        Some(&json!({"reason": reason, "posted_writes": posted}).to_string()),
+    )?;
+    graph_runtime_service::cancel_run(conn, workspace_id, run_id, actor_user_id).await
+}
+
+/// WP-0706 (REQ-LANE-009, AC-5): hands the current form step of a lane run to
+/// a different role. Whoever holds the new role (or an admin) can then act,
+/// and the previous role no longer can; the run keeps waiting on the same
+/// step. The handoff is audited (who, from which role, to which, and why).
+pub fn handoff_step(
+    conn: &Connection,
+    workspace_id: &str,
+    run_id: &str,
+    to_role: &str,
+    reason: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<GraphRun> {
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.workspace_id != workspace_id {
+        return Err(AppError::NotFound("Run".into()));
+    }
+    if run.status != "waiting_person" {
+        return Err(classified_validation(
+            "validation.state",
+            format!("run is '{}', not waiting on a person", run.status),
+        ));
+    }
+    if to_role.trim().is_empty() {
+        return Err(classified_validation(
+            "validation.arguments",
+            "a role to hand off to is required",
+        ));
+    }
+    let (_node, step) = current_human_step(conn, &run)?;
+    let from_role = effective_step_role(&run, &step);
+    // Only the current assignee (the role it waits on) or an admin may hand off.
+    if !actor_may_act(conn, actor_user_id, from_role.as_deref())? {
+        return Err(AppError::classified(
+            ErrorClass::Validation,
+            "validation.permission",
+            "only the current assignee or an administrator can hand off this step",
+        ));
+    }
+    let (object_key, record_id) = match (&run.anchor_object_key, &run.anchor_record_id) {
+        (Some(o), Some(r)) => (o.clone(), r.clone()),
+        _ => {
+            return Err(classified_validation(
+                "validation.state",
+                "this run is not a lane run (no anchor record)",
+            ))
+        }
+    };
+    let mut run_data: Map<String, Value> = run
+        .run_data_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str::<Value>(s).ok())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    let mut handoffs = run_data
+        .get("__handoffs")
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    handoffs.insert(step.id.clone(), json!(to_role));
+    run_data.insert("__handoffs".into(), Value::Object(handoffs));
+    let run_data_json =
+        serde_json::to_string(&Value::Object(run_data)).unwrap_or_else(|_| "{}".into());
+    graph_run_repo::set_lane_anchor(conn, run_id, &object_key, &record_id, &run_data_json)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "lane_step_handoff",
+        Some(&object_key),
+        Some(&record_id),
+        &format!(
+            "Handed step '{}' of run {run_id} to role '{to_role}': {reason}",
+            step.id
+        ),
+        Some(
+            &json!({"step_id": step.id, "to_role": to_role, "from_role": from_role, "reason": reason})
+                .to_string(),
+        ),
+    )?;
+    graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))
 }
 
 fn is_blank(value: &Value) -> bool {
