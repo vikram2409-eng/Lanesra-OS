@@ -101,6 +101,10 @@ pub fn router() -> Router<SharedState> {
             post(submit_process_lane_step_admin),
         )
         .route(
+            "/api/admin/process-lane-runs/:id/skip-step",
+            post(skip_process_lane_step_admin),
+        )
+        .route(
             "/api/admin/execution-graph-runs/:id/resume",
             post(resume_graph_run_admin),
         )
@@ -502,6 +506,12 @@ struct SubmitProcessLaneStepBody {
     values: serde_json::Map<String, Value>,
 }
 
+#[derive(serde::Deserialize)]
+struct SkipProcessLaneStepBody {
+    #[serde(default)]
+    reason: String,
+}
+
 /// WP-0704: submits the current human step of a `waiting_person` lane run
 /// (the async half, like starting a run). `get_process_lane_run_view` is
 /// sync and lives in `dispatch.rs`.
@@ -520,6 +530,31 @@ async fn submit_process_lane_step_admin(
             &master_key,
             &id,
             &body.values,
+            Some(&actor),
+        )
+        .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+async fn skip_process_lane_step_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(body): Json<SkipProcessLaneStepBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::skip_step(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &id,
+            &body.reason,
             Some(&actor),
         )
         .await

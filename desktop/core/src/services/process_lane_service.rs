@@ -1256,6 +1256,62 @@ fn run_condition_ctx(
     Ok(ctx)
 }
 
+/// Resolves a record step's write inputs (WP-0705, REQ-LANE-006) into the
+/// parameter map an Action Type's `invoke` reads. Each input value is either
+/// a token - `$record.<field>` (the anchor record's field value) or
+/// `$run_data.<key>` (a run-data value the run has collected) - or a literal
+/// passed through as its string form. A `$item.<...>` reference needs
+/// per-item execution inside a repeating step and is WP-0710; it is refused
+/// here with a clear reason rather than silently mis-resolved.
+pub fn resolve_write_params(
+    conn: &Connection,
+    object_key: &str,
+    record_id: &str,
+    run_data: &Map<String, Value>,
+    inputs: &Map<String, Value>,
+) -> AppResult<HashMap<String, String>> {
+    let ctx = run_condition_ctx(conn, object_key, record_id, run_data)?;
+    let mut resolved: HashMap<String, String> = HashMap::new();
+    for (key, raw) in inputs {
+        let value = match raw {
+            Value::String(s) if s.starts_with("$record.") => {
+                let field = &s["$record.".len()..];
+                ctx.get(field).cloned().ok_or_else(|| {
+                    classified_validation(
+                        "validation.arguments",
+                        format!(
+                            "write input '{key}' references $record.{field}, which the record has no value for"
+                        ),
+                    )
+                })?
+            }
+            Value::String(s) if s.starts_with("$run_data.") => {
+                let data_key = &s["$run_data.".len()..];
+                let value = run_data.get(data_key).ok_or_else(|| {
+                    classified_validation(
+                        "validation.arguments",
+                        format!(
+                            "write input '{key}' references $run_data.{data_key}, which the run has not set"
+                        ),
+                    )
+                })?;
+                value_to_field_string(value)
+            }
+            Value::String(s) if s.starts_with("$item.") => {
+                return Err(classified_validation(
+                    "validation.arguments",
+                    format!(
+                        "write input '{key}' references {s}; per-item writes in a repeating step are WP-0710"
+                    ),
+                ));
+            }
+            other => value_to_field_string(other),
+        };
+        resolved.insert(key.clone(), value);
+    }
+    Ok(resolved)
+}
+
 /// Evaluates a form step's `validation` against the record and the candidate
 /// run data. A `condition` validation runs now; an arithmetic-only
 /// `expression` validation is deferred to WP-0710 and does not block here
@@ -1562,6 +1618,85 @@ pub async fn submit_person_step(
             &row.id,
             "completed",
             Some(&Value::Object(values.clone()).to_string()),
+            &now_iso(),
+        )?;
+    }
+
+    graph_runtime_service::resume_person_step(conn, workspace_id, master_key, run_id, actor_user_id)
+        .await
+}
+
+/// Skips the current form step of a lane run (WP-0705, REQ-LANE-007). Only an
+/// *optional* step (`required: false`) may be skipped, and only by the step's
+/// role (or an administrator); a required step is refused so the run cannot
+/// move past work it must not drop. The skip records who, when and why on the
+/// step's run-node row (status `skipped`), then advances the run.
+pub async fn skip_step(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    run_id: &str,
+    reason: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<GraphRun> {
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.workspace_id != workspace_id {
+        return Err(AppError::NotFound("Run".into()));
+    }
+    if run.status != "waiting_person" {
+        return Err(classified_validation(
+            "validation.state",
+            format!("run is '{}', not waiting on a person", run.status),
+        ));
+    }
+    let (node, step) = current_human_step(conn, &run)?;
+
+    // Same role gate as completing it (REQ-LANE-011): only the step's role or
+    // an admin may act on it.
+    if !actor_may_act(conn, actor_user_id, step.role.as_deref())? {
+        return Err(AppError::classified(
+            ErrorClass::Validation,
+            "validation.permission",
+            format!(
+                "this step is waiting on {}; you cannot skip it",
+                step.role.as_deref().unwrap_or("another role")
+            ),
+        ));
+    }
+
+    // REQ-LANE-007: a required step cannot be skipped; only an optional one.
+    if step.required {
+        return Err(classified_validation(
+            "validation.state",
+            "a required step cannot be skipped; complete it or change the lane",
+        ));
+    }
+    if reason.trim().is_empty() {
+        return Err(classified_validation(
+            "validation.arguments",
+            "a reason is required to skip a step",
+        ));
+    }
+
+    // Record the skip on the step's waiting row: who, when and why (REQ-LANE-007).
+    if let Some(row) = graph_run_repo::list_run_nodes(conn, run_id)?
+        .into_iter()
+        .filter(|n| n.node_id == node.id && n.status == "waiting_person")
+        .max_by(|a, b| a.attempt.cmp(&b.attempt))
+    {
+        graph_run_repo::complete_run_node(
+            conn,
+            &row.id,
+            "skipped",
+            Some(
+                &json!({
+                    "skipped_by": actor_user_id,
+                    "reason": reason,
+                    "at": now_iso(),
+                })
+                .to_string(),
+            ),
             &now_iso(),
         )?;
     }
