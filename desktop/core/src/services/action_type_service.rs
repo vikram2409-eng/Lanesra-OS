@@ -226,6 +226,23 @@ pub fn get(conn: &Connection, id: &str) -> AppResult<Option<ActionTypeDefinition
     Ok(action_type_repo::get(conn, id)?)
 }
 
+/// Looks up an Action Type by its name on an object. Lane record steps
+/// (WP-0705) reference an Action Type by name on the lane's object; this is
+/// how the runtime resolves that reference to the definition it invokes.
+pub fn get_by_name(
+    conn: &Connection,
+    workspace_id: &str,
+    target_object_type: &str,
+    name: &str,
+) -> AppResult<Option<ActionTypeDefinition>> {
+    Ok(action_type_repo::get_by_name(
+        conn,
+        workspace_id,
+        target_object_type,
+        name,
+    )?)
+}
+
 pub fn list(
     conn: &Connection,
     workspace_id: &str,
