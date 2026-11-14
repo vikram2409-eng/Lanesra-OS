@@ -3,7 +3,7 @@ id: WP-0719
 title: Count and Replenish lanes as definitions, with an authoring log
 phase: 7
 epic: E7.6 Shipped lanes
-status: in_review
+status: done
 owner: muse
 planned_for: muse
 depends_on: [WP-0701]
@@ -56,3 +56,4 @@ Write the two remaining warehouse lanes as data only, to test the definition for
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 - 2026-11-14 muse: Built — both definitions validate against the schema (4 examples validate, up from 2); branch targets verified to resolve, no `run_data.set` in either new definition, each step that replaces a workflow action declares it (Count: wf-wh-06 action 0; Replenish: wf-wh-02 action 0). Authoring log written covering all four lanes, ending with the five hardest things. AC-2 answered in the log: several counters at once is per-item assignment (WP-0710), not parallel steps — but the schema cannot declare it yet (Q-33). Gaps raised as Q-33..Q-36. No app.js or core change (demo freeze). Next: PR opened; CI is the final proof (schema check on the two new examples).
 - 2026-11-14 muse: PR #767 opened (draft). Status in_progress → in_review. CI is the final proof.
+- 2026-11-14 muse: PR #767 merged (2b3c5ab). WP-0719 done. Delivered is [] — definitions and the authoring log only, no product edition to deliver (editions: []). Q-33..Q-36 stay Open; the schema-extension proposal for them is program/spec/schema-extension-proposal-q33-q36.md (separate prep-track PR).
