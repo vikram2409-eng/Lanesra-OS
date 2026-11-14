@@ -3,7 +3,7 @@ id: WP-0715
 title: Describe a process: the Admin Assistant drafts a lane
 phase: 7
 epic: E7.5 Authoring
-status: in_progress
+status: in_review
 owner: muse
 planned_for: muse
 depends_on: [WP-0703, WP-0712]
@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
 branch: wp/WP-0715-describe-a-process-drafts-a-lane-r2
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/772
 updated: 2026-11-14
 ---
 
@@ -56,3 +56,4 @@ A fast start: describe the job, review a drafted lane.
 - 2026-11-14 muse: PR #765 opened (draft) from the merged branch. Status in_progress → in_review. CI is the final proof.
 - 2026-11-14 muse: Folded in PR #764 and PR #766 at the owner's direction (minimize PRs). #764: run_data.set marked "provisional, demo only" in the Pick & Pack definition's description; embedded LANE_WH_PICKPACK copy in app.js regenerated (file-order minified dump, parsed-equal). #766: WP-0702 done, delivered [demo]; WP-0712 done, delivered [desktop, workspace, demo]. STATUS.md regenerated. Verified on this tree: node --check OK, programctl validate 0 errors, self-tests pass, lane harness 86/86. PRs #764 and #766 closed as folded into #765.
 - 2026-11-14 muse: Rebuilt as -r2: PR #765 could not merge (mergeable_state dirty). Cause: the push tool writes one linear commit per push, so the merge commit that brought main (3bf87f6) into this branch lost its second parent — GitHub computed the merge base as an old commit (f877b2f) and the 3-way merge conflicted in 9 files. Fix: fresh branch from main with the same tree (diff main...#765 head applied), branch field updated to -r2. PR #765 closed as superseded; new PR to be opened from -r2.
+- 2026-11-14 muse: PR #772 opened (draft) from the -r2 branch. Status in_progress → in_review. PR #765 closed as superseded.
