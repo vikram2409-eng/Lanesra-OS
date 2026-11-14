@@ -14,6 +14,10 @@ under "Switching" below. Agents may work in parallel on different work packages;
 | Codex | Enterprise sign-in (WP-0102 to WP-0105), provider coverage (WP-0146), toolchain upgrades (WP-0194 to WP-0197), performance baseline (WP-0015); in Phase 5 the agent control plane, delegated credentials and MCP gateway, knowledge, enterprise operations, Python SDK, custom tools, simulated users, red-team suite, optimizer, human seats; in Phase 6 components, custom screens, blocks, builder experience, dashboards carry-over and app navigation; in Phase 7 lane writes, branches, agent steps, workflow interplay, publish checks, child lanes and the builder |
 | Muse AI | Design ADRs (WP-0114, WP-0147), SaaS architecture plan (WP-0422); in Phase 5 the compliance pack, Teams as code and promotion, TypeScript SDK, email channel, web widget, synthetic cases, annotation queues, model right-sizing, human-seat SLAs, Helm chart; in Phase 6 Admin Home, side panels, findability, the website help refresh, form and content components, starter blocks, layouts, templates and themes; in Phase 7 the lane model ADR and schema (WP-0701), anytime actions, the blueprint view, board and metrics, describe a process and the further warehouse lanes |
 
+> **Codex is not building as of 2026-11-14** (ADR-0025). Its Phase 7 packages are re-planned to Claude
+> Code and Muse AI. Its other planned packages keep `planned_for: codex` but are unstaffed; any agent
+> may take one that becomes ready.
+
 > Muse AI was paused from 2026-11-01 (RAID Q-26) and is building again from 2026-11-11 (ADR-0021).
 > Codex joined on 2026-11-11. How Codex works is assumed below until the owner confirms (RAID Q-27).
 

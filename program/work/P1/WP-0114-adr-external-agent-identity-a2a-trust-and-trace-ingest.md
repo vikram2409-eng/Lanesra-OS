@@ -3,7 +3,7 @@ id: WP-0114
 title: ADR: external agent identity, A2A trust and trace ingest
 phase: 1
 epic: E1.0 Identity foundation
-status: proposed
+status: ready
 owner: unassigned
 planned_for: muse
 depends_on: [WP-0108, WP-0111]
@@ -13,7 +13,7 @@ editions: []
 delivered: []
 branch: 
 pr: 
-updated: 2026-11-11
+updated: 2026-11-14
 ---
 
 # WP-0114 — ADR: external agent identity, A2A trust and trace ingest

@@ -592,24 +592,29 @@ screens to the menu.
 
 ### Phase 7: Process Lanes
 
-A parallel track (ADR-0023). The only package outside the track that the first usable version
-waits for is WP-0141 (idempotency keys).
+A parallel track (ADR-0023), re-sequenced on 2026-11-14 (ADR-0025). The runner is built in two
+cuts so that desktop and Team Workspace get a working lane sooner. Engine work is one sequence
+done by one agent; work that does not touch the runtime runs beside it.
 
-| Order | Lane of work | Work packages | Enters after | Planned for |
+| Order | Lane of work | Work packages | State or what it waits for | Planned for |
 |---|---|---|---|---|
-| Now | Decision and schema | WP-0701 | Nothing | Muse |
-| 1 | Online demo preview | WP-0702 | The schema | Claude |
-| 1 | Core foundation | WP-0703 → WP-0704 | The schema | Claude |
-| 2 | Steps and rules | WP-0705, WP-0706 | Definitions, human steps, WP-0141 | Codex |
-| 3 | Runner screen | WP-0707 | Steps and rules | Claude |
-| 4 | Around the runner | WP-0708, WP-0709, WP-0710, WP-0711, WP-0713, WP-0714, WP-0716 | Runner or writes | Codex; Muse for 0711, 0713 |
-| 4 | Authoring | WP-0712 → WP-0715; WP-0718 | Definitions | Muse; Codex for the builder |
-| 5 | More lanes | WP-0717 | Runner, repeat step | Muse |
-| Last | Gate G7 | WP-0799 | First-time-user test, parity walkthrough | Claude |
+| Done | Model, schema, core definitions | WP-0701, WP-0703 | Done | Muse |
+| Done | Demo preview and blueprint view | WP-0702, WP-0712 | Merged | Muse |
+| 1 | Engine: waiting for a person, and repeat-safe writes | WP-0704, WP-0141 | Can start now | Claude |
+| 2 | Engine: record and check steps | WP-0705 | WP-0704, WP-0141 | Claude |
+| 3 | Runner, first cut (straight path) | WP-0707 | WP-0705 | Claude |
+| 4 | Engine and runner, second cut | WP-0706 → WP-0720 | WP-0704; then the first cut | Claude |
+| Beside 1–4 | Authoring | WP-0715; WP-0719 | Can start now | Muse |
+| After the first cut | Around the runner | WP-0708, WP-0709, WP-0710; WP-0711, WP-0713 | The first cut | Claude; Muse |
+| Later | Publish checks, child lanes, builder | WP-0714, WP-0716, WP-0718 | Second cut; the bar in ADR-0025 | Muse |
+| Later | More lanes in the product | WP-0717 | Runner, WP-0710 | Muse |
+| Last | Gate G7 | WP-0799 | All of the above | Claude |
 
-Workload at the time of writing: Codex 53 packages and 182 points (including sign-in, provider
-coverage and toolchain upgrades from the existing plan); Muse AI 34 packages and 90 points; Claude
-Code keeps the critical path of Phases 1 to 4 plus 18 planned packages (58 points). Live numbers are in
+No new lane behaviour goes into the online demo after pull request #762 until the first cut of
+the runner has shipped on desktop and Team Workspace.
+
+Workload: Codex is not building as of 2026-11-14 (ADR-0025); its Phase 7 packages are re-planned to
+Claude Code and Muse AI, and its other planned packages are unstaffed until the owner decides. Live numbers are in
 `STATUS.md`. The reasoning for the split is in ADR-0021.
 
 ## 22. Deferred

@@ -6,14 +6,14 @@ epic: E7.7 Track gate
 status: proposed
 owner: unassigned
 planned_for: claude
-depends_on: [WP-0708, WP-0709, WP-0713, WP-0714, WP-0717]
+depends_on: [WP-0708, WP-0709, WP-0713, WP-0714, WP-0717, WP-0720]
 requirements: [REQ-NFR-008]
 estimate: M
 editions: []
 delivered: []
 branch: 
 pr: 
-updated: 2026-11-12
+updated: 2026-11-14
 ---
 
 # WP-0799 — Phase 7 gate: Process Lanes ready

@@ -3,8 +3,9 @@ id: WP-0141
 title: Idempotency keys and side-effect-safe resume
 phase: 1
 epic: E1.5 Tools and firewall
-status: proposed
+status: ready
 owner: unassigned
+planned_for: claude
 depends_on: [WP-0110]
 requirements: [REQ-TOOL-005, REQ-GOV-023]
 threats: [T-03, T-06]
@@ -16,7 +17,7 @@ docs: []
 docs_reason: internal write ledger
 branch: 
 pr: 
-updated: 2026-10-16
+updated: 2026-11-14
 ---
 
 # WP-0141 — Idempotency keys and side-effect-safe resume
@@ -40,6 +41,9 @@ Write tools receive an idempotency key per step attempt; on resume after a pause
 
 - [ ] AC-1: Kill mid-step then resume → no duplicate record (test with process restart simulation)
 - [ ] AC-2: Retry after a transient failure never double-writes
+- [ ] AC-3: Two requests to complete the same step attempt (a double click) produce one write; the second returns the first result
+- [ ] AC-4: With `interrupted_run_policy: always_pause` a run interrupted mid-step is paused, not resumed; the change of setting is audited and refused for anyone but an AI Admin
+- [ ] AC-5: The startup sweep and the delay tick resume a due run on the server and on desktop without the UI open
 
 ## Test plan
 
@@ -50,7 +54,7 @@ Write tools receive an idempotency key per step attempt; on resume after a pause
 ## Notes
 
 - Must follow (WP-0009): ADR-0007 run and step states; ADR-0009 error taxonomy; ADR-0010 migration conventions; ADR-0012 feature flags. ADR-0010 applies to any migration this work package adds.
-- Refine at the Gate 0 review: confirm scope against the gap audit (WP-0008) and ADRs (WP-0009), then set status to ready.
+- Refined 2026-11-14 (ADR-0025): acceptance criteria added for double submit, the interrupted-run policy and the resume sweep; moved to `ready`. Process Lane writes (WP-0705) depend on this package.
 
 ## Progress log
 

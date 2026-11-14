@@ -5,7 +5,7 @@ phase: 7
 epic: E7.2 Steps and rules
 status: proposed
 owner: unassigned
-planned_for: codex
+planned_for: claude
 depends_on: [WP-0703, WP-0141]
 requirements: [REQ-LANE-006, REQ-LANE-007]
 estimate: L
@@ -15,7 +15,7 @@ editions_reason: core runtime; shown to users by WP-0707
 docs: [process-lanes]
 branch: 
 pr: 
-updated: 2026-11-12
+updated: 2026-11-14
 ---
 
 # WP-0705 — Record and check steps: real, atomic, repeat-safe writes
