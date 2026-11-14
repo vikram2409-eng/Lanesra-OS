@@ -3,8 +3,8 @@ id: WP-0141
 title: Idempotency keys and side-effect-safe resume
 phase: 1
 epic: E1.5 Tools and firewall
-status: ready
-owner: unassigned
+status: in_progress
+owner: claude
 planned_for: claude
 depends_on: [WP-0110]
 requirements: [REQ-TOOL-005, REQ-GOV-023]
@@ -15,7 +15,7 @@ delivered: []
 editions_reason: internal engine work with no user-visible surface of its own; the online demo's simulated runs reflect it through the Playground work packages
 docs: []
 docs_reason: internal write ledger
-branch: 
+branch: wp/WP-0141-idempotency-keys-and-side-effect-safe-resume
 pr: 
 updated: 2026-11-14
 ---
