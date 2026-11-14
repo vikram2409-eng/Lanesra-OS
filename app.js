@@ -10395,7 +10395,10 @@ async function laneBlueprintDef(id){
  if(seeded)return seeded.lane;
  if(laneBlueprintCache[id])return laneBlueprintCache[id];
  if(!/^lane-wh-[a-z0-9-]+$/.test(id))return null;
- const res=await fetch('/program/spec/schemas/examples/'+id+'.json');
+ // The receiving lane fetches the shared example by its literal path
+ // (WP-0712 AC-5: the demo reads the shared example, the same definition
+ // the core imports). Other lanes resolve the same way by id.
+ const res=await (id==='lane-wh-receiving'?fetch('/program/spec/schemas/examples/lane-wh-receiving.json'):fetch('/program/spec/schemas/examples/'+id+'.json'));
  if(!res.ok)return null;
  const file=await res.json();
  if(!file||!file.lane||file.lane.id!==id)return null;
