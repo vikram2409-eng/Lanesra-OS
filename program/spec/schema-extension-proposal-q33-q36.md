@@ -237,11 +237,12 @@ on purpose: one kind (`latest_record`), one field, no joins, no
 aggregation, no expressions in `where`. If the owner wants more, that
 is a separate proposal — this one does not grow into a query language.
 
-**On acceptance.** WP-0705 adopts the `resolve` shape (schema + the
-resolution at step time + the Action Type validation) and the Replenish
-lane is updated to use it. The builder (WP-0718) gains the
-related-record picker: pick a supplier from the product, instead of
-typing an id.
+**On acceptance.** A small follow-up after WP-0705 adopts the `resolve`
+shape (schema + the resolution at step time + the Action Type
+validation), and the Replenish lane is updated to use it. WP-0705 itself
+merged without it (PR #775) — so this is a follow-up, not inside WP-0705.
+The builder (WP-0718) gains the related-record picker: pick a supplier
+from the product, instead of typing an id.
 
 ## Q-36 — Add a Counter role, or keep reusing Picker?
 
@@ -290,7 +291,7 @@ change.
 |---|---|---|---|
 | Q-33 `repeat_over.assign` | Owner | WP-0710 (schema + runtime) | Count — count step assigns per item |
 | Q-34 `skip_when` | Owner | WP-0710 (schema + runtime) | Count — post-adjustments skips zero-variance lines |
-| Q-35 `resolve` (lookup) | Owner | WP-0705 (schema + resolution) | Replenish — supplier resolves from the latest PO |
+| Q-35 `resolve` (lookup) | Owner | Follow-up to WP-0705 (schema + resolution) | Replenish — supplier resolves from the latest PO |
 | Q-36 `role_wh_counter` | Owner | Role-model / seed change (no WP) | Count — count step role becomes Counter |
 
 Each RAID item closes when its row is accepted **and** implemented
