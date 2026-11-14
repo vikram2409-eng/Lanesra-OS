@@ -54,3 +54,4 @@ Fix how a tool call acts as the user in an outside system. Today a connector hol
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 - 2026-11-14 muse: ADR-0026 written (Proposed) from SOLUTION-DESIGN.md §6, ADR-0006/0014/0018 and the WP-0143 audit. AC-2 (threat model: token theft, confused deputy, tool-definition change) and AC-3 (WP-0142, WP-0510, WP-0512 cite ADR-0026) done. AC-1 stays open: the ADR stays Proposed until the owner accepts it.
 - 2026-11-14 muse: PR #768 opened (draft). Status in_progress → in_review. AC-1 (owner acceptance) is the only open criterion.
+- 2026-11-14 muse: Combined with PR #769 at the owner's direction (minimize PRs). ADR-0027 (WP-0114), the A2A behaviour note and the WP-0301/0309/0501 citations now ride in this PR; #769 closed as folded in. Both ADRs stay Proposed until the owner accepts them.

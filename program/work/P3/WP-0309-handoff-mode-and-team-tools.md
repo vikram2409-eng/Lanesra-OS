@@ -39,6 +39,7 @@ Seats hand control along an allowed routes matrix.
 ## Notes
 
 - Scoped from the spec; refine into detailed acceptance criteria (and split if larger than L) at the review of the previous phase's gate.
+- ADR-0027 (WP-0114): external agent identity, A2A trust and trace ingest — a handoff to an unapproved or paused external agent is refused (deny paths).
 
 ## Progress log
 
