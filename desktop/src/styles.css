@@ -2446,3 +2446,76 @@ tr:hover td {
   color: var(--text-muted);
   cursor: default;
 }
+
+/* Lane runner (WP-0707, REQ-LANE-014): one screen - stage bar, step list
+   for the current stage, the current step's work, and the anchor-record /
+   written / audit rail. The same parts stack to one column at phone width
+   (the 900px pattern used elsewhere in this file). */
+.lane-runner-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr 320px;
+  gap: 16px;
+  align-items: start;
+}
+.lane-stage-bar {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  list-style: none;
+  margin: 12px 0 16px;
+  padding: 0;
+}
+.lane-stage {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  background: var(--bg-elevated);
+}
+.lane-stage.done {
+  color: var(--text-muted);
+}
+.lane-stage.current {
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.lane-runner-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lane-step {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  text-align: left;
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+.lane-step:disabled {
+  cursor: default;
+  color: var(--text-muted);
+}
+.lane-step.current {
+  border-color: var(--accent);
+  font-weight: 600;
+}
+.lane-runner-main,
+.lane-runner-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .lane-runner-layout {
+    grid-template-columns: 1fr;
+  }
+}
