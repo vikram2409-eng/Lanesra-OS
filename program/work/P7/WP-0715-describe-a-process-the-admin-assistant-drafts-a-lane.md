@@ -3,7 +3,7 @@ id: WP-0715
 title: Describe a process: the Admin Assistant drafts a lane
 phase: 7
 epic: E7.5 Authoring
-status: proposed
+status: ready
 owner: unassigned
 planned_for: muse
 depends_on: [WP-0703, WP-0712]
@@ -14,7 +14,7 @@ delivered: []
 docs: [process-lanes]
 branch: 
 pr: 
-updated: 2026-11-12
+updated: 2026-11-14
 ---
 
 # WP-0715 — Describe a process: the Admin Assistant drafts a lane

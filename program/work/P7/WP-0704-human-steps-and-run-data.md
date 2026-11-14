@@ -3,7 +3,7 @@ id: WP-0704
 title: Human steps and run data
 phase: 7
 epic: E7.1 Lane foundation
-status: proposed
+status: ready
 owner: unassigned
 planned_for: claude
 depends_on: [WP-0703]
@@ -15,7 +15,7 @@ editions_reason: core runtime; shown to users by WP-0707
 docs: [process-lanes]
 branch: 
 pr: 
-updated: 2026-11-12
+updated: 2026-11-14
 ---
 
 # WP-0704 — Human steps and run data
@@ -46,7 +46,7 @@ Let a run wait for a person and keep what they enter.
 ## Notes
 
 - WP-0560 (human seats) builds on this node instead of adding its own.
-- ADR-0023; design in SOLUTION-DESIGN.md section 17 (Process Lanes). Refine acceptance criteria before moving to `ready`.
+- ADR-0023; design in SOLUTION-DESIGN.md section 17 (Process Lanes). Refined against ADR-0024 section 4 (the `human_step` node) and moved to `ready` on 2026-11-14 (ADR-0025).
 
 ## Progress log
 

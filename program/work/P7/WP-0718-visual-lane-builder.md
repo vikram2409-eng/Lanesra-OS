@@ -5,7 +5,7 @@ phase: 7
 epic: E7.5 Authoring
 status: proposed
 owner: unassigned
-planned_for: codex
+planned_for: muse
 depends_on: [WP-0712, WP-0714]
 requirements: [REQ-LANE-024]
 estimate: L
@@ -14,7 +14,7 @@ delivered: []
 docs: [process-lanes]
 branch: 
 pr: 
-updated: 2026-11-12
+updated: 2026-11-14
 ---
 
 # WP-0718 — Visual lane builder

@@ -5,7 +5,7 @@ phase: 7
 epic: E7.2 Steps and rules
 status: proposed
 owner: unassigned
-planned_for: codex
+planned_for: claude
 depends_on: [WP-0705]
 requirements: [REQ-LANE-017]
 estimate: M
@@ -14,7 +14,7 @@ delivered: []
 docs: [process-lanes]
 branch: 
 pr: 
-updated: 2026-11-12
+updated: 2026-11-14
 ---
 
 # WP-0710 — Repeat over child records, and stage and start conditions
@@ -26,10 +26,11 @@ Model line-by-line work and conditional stages instead of hand-building them.
 ## Scope
 
 - Repeating step over a relationship of the anchor record with per-item validation; stage entry and skip conditions; lane start condition
+- Items of a repeating step can be assigned to different people and worked at the same time (ADR-0025 decision 6); the step completes when every item is done
 
 ## Acceptance criteria
 
-- [ ] AC-1: A repeating step shows one entry per child record and validates each
+- [ ] AC-1: A repeating step shows one entry per child record and validates each; two people complete different items of the same step at the same time without overwriting each other
 - [ ] AC-2: A stage whose skip condition holds is skipped and the audit trail says why
 - [ ] AC-3: A lane cannot start on a record that fails its start condition, and the reason is shown
 - [ ] AC-4: Desktop and Team Workspace behave the same from the same code; tests run in both modes

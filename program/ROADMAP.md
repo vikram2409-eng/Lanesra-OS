@@ -135,6 +135,12 @@ execution graph, so it is not a second engine. The online demo previews it first
 
 Outside dependency: WP-0705 needs WP-0141 (idempotency keys), which is not built yet.
 
+**Re-sequenced 2026-11-14 (ADR-0025).** Codex is not building. The runner is split into a first cut
+(WP-0707, straight path) and a second cut (WP-0720). Engine work (WP-0704, WP-0141, WP-0705, WP-0706,
+WP-0707, WP-0720) is planned for Claude Code in sequence; Muse AI works beside it on WP-0715, WP-0719
+and the Phase 1 design packages. No new lane behaviour enters the online demo after pull request
+#762 until WP-0707 ships. The table above shows the original split; `STATUS.md` shows the current one.
+
 ## Sequencing rationale
 
 1. **Precursors before features.** CI, a green `main`, reproducible installs, a model test double

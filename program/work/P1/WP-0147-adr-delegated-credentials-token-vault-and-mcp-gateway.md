@@ -3,7 +3,7 @@ id: WP-0147
 title: ADR: delegated credentials, token vault and MCP gateway
 phase: 1
 epic: E1.5 Tools and firewall
-status: proposed
+status: ready
 owner: unassigned
 planned_for: muse
 depends_on: [WP-0143, WP-0108]
@@ -13,7 +13,7 @@ editions: []
 delivered: []
 branch: 
 pr: 
-updated: 2026-11-11
+updated: 2026-11-14
 ---
 
 # WP-0147 — ADR: delegated credentials, token vault and MCP gateway
