@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 19 | 0 | 0 | 0 | 1 | 34 / 36 | `█████████░` 94% |
-| 1 · Foundations | 62 | 35 | 0 | 4 | 0 | 23 | 82 / 162 | `█████░░░░░` 51% |
+| 1 · Foundations | 62 | 35 | 1 | 3 | 0 | 23 | 82 / 162 | `█████░░░░░` 51% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -32,6 +32,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
+| [WP-0147](work/P1/WP-0147-adr-delegated-credentials-token-vault-and-mcp-gateway.md) | ADR: delegated credentials, token vault and MCP gateway | in_progress | muse | `wp/WP-0147-adr-delegated-credentials` | - |
 | [WP-0702](work/P7/WP-0702-online-demo-the-receive-shipment-lane-on-the-warehouse-demo.md) | Online demo: the Receive Shipment lane on the warehouse demo | in_review | muse | `wp/WP-0702-receive-shipment-lane-demo-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/758 |
 | [WP-0712](work/P7/WP-0712-blueprint-view-and-export-of-a-lane.md) | Blueprint view and export of a lane | in_review | muse | `wp/WP-0712-blueprint-view-and-export-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/761 |
 
@@ -43,7 +44,6 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 |---|---|---|---|
 | [WP-0114](work/P1/WP-0114-adr-external-agent-identity-a2a-trust-and-trace-ingest.md) | ADR: external agent identity, A2A trust and trace ingest | 1 | M |
 | [WP-0141](work/P1/WP-0141-idempotency-keys-and-side-effect-safe-resume.md) | Idempotency keys and side-effect-safe resume | 1 | L |
-| [WP-0147](work/P1/WP-0147-adr-delegated-credentials-token-vault-and-mcp-gateway.md) | ADR: delegated credentials, token vault and MCP gateway | 1 | M |
 | [WP-0160](work/P1/WP-0160-agent-editor-in-eight-settings-groups.md) | Agent editor in eight settings groups | 1 | L |
 | [WP-0704](work/P7/WP-0704-human-steps-and-run-data.md) | Human steps and run data | 7 | L |
 | [WP-0719](work/P7/WP-0719-count-and-replenish-lanes-as-definitions-with-an-authoring-log.md) | Count and Replenish lanes as definitions, with an authoring log | 7 | S |
@@ -128,7 +128,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0144](work/P1/WP-0144-test-button-on-every-model-tool-connector-agent-and-team.md) | Test button on every model, tool, connector, agent and team | E1.5 Tools and firewall | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0010 |
 | [WP-0145](work/P1/WP-0145-minimal-untrusted-content-defence.md) | Minimal untrusted-content defence for tool results | E1.5 Tools and firewall | ✅ done | L | ✓Desktop ✓Team Workspace ✓Online demo | WP-0122, WP-0128, WP-0011, WP-0130 |
 | [WP-0146](work/P1/WP-0146-bring-your-own-model-provider-coverage.md) | Bring-your-own-model provider coverage and model catalog | E1.3 Agent loop | ⚪ proposed | XL | ○Desktop ○Team Workspace ○Online demo | WP-0005, WP-0122 |
-| [WP-0147](work/P1/WP-0147-adr-delegated-credentials-token-vault-and-mcp-gateway.md) | ADR: delegated credentials, token vault and MCP gateway | E1.5 Tools and firewall | 🟢 ready | M | — | WP-0143, WP-0108 |
+| [WP-0147](work/P1/WP-0147-adr-delegated-credentials-token-vault-and-mcp-gateway.md) | ADR: delegated credentials, token vault and MCP gateway | E1.5 Tools and firewall | 🔨 in progress | M | — | WP-0143, WP-0108 |
 | [WP-0150](work/P1/WP-0150-move-every-pause-for-human-onto-ai-approvals.md) | Move every pause-for-human onto ai_approvals | E1.6 Approvals | ✅ done | L | ✓Desktop ✓Team Workspace ✓Online demo | WP-0110, WP-0007 |
 | [WP-0151](work/P1/WP-0151-four-review-responses.md) | Four review responses | E1.6 Approvals | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0150 |
 | [WP-0152](work/P1/WP-0152-approvals-bound-to-exact-arguments.md) | Approvals bound to exact arguments | E1.6 Approvals | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0150 |

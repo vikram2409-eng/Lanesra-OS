@@ -50,7 +50,7 @@ Let each person connect their own account to an outside system, so agents act wi
 
 ## Notes
 
-- ADR from WP-0147; ADR-0014 for the data key.
+- ADR-0026 (WP-0147): delegated credentials, the token vault and the MCP gateway — the grant model and the vault rules this builds. ADR-0014 for the data key.
 - Scoped from ADR-0020 and SOLUTION-DESIGN.md; refine acceptance criteria (and split if larger than L) before moving to `ready`.
 
 ## Progress log
