@@ -13,7 +13,7 @@
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
 | 5 · Platform and ecosystem | 42 | 0 | 0 | 0 | 0 | 42 | 0 / 140 | `░░░░░░░░░░` 0% |
 | 6 · Admin console and Experience Studio | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 96 | `░░░░░░░░░░` 0% |
-| 7 · Process Lanes | 21 | 4 | 3 | 0 | 0 | 14 | 12 / 61 | `██░░░░░░░░` 20% |
+| 7 · Process Lanes | 21 | 6 | 1 | 0 | 0 | 14 | 15 / 61 | `██░░░░░░░░` 25% |
 | v2 · Open interop | 1 | 0 | 0 | 0 | 0 | 1 | 0 / 4 | `░░░░░░░░░░` 0% |
 
 ## Edition coverage
@@ -22,9 +22,9 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 195 | 32 | 81 / 638 |
-| Team Workspace | 222 | 38 | 91 / 732 |
-| Online demo | 150 | 19 | 48 / 500 |
+| Desktop | 195 | 33 | 83 / 638 |
+| Team Workspace | 222 | 39 | 93 / 732 |
+| Online demo | 150 | 20 | 50 / 500 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -34,8 +34,6 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 |---|---|---|---|---|---|
 | [WP-0141](work/P1/WP-0141-idempotency-keys-and-side-effect-safe-resume.md) | Idempotency keys and side-effect-safe resume | in_review | claude | `wp/WP-0141-idempotency-keys-and-side-effect-safe-resume` | https://github.com/vikram2409-eng/Lanesra-OS/pull/771 |
 | [WP-0704](work/P7/WP-0704-human-steps-and-run-data.md) | Human steps and run data | in_review | claude | `wp/WP-0704-human-steps-and-run-data` | https://github.com/vikram2409-eng/Lanesra-OS/pull/770 |
-| [WP-0715](work/P7/WP-0715-describe-a-process-the-admin-assistant-drafts-a-lane.md) | Describe a process: the Admin Assistant drafts a lane | in_review | muse | `wp/WP-0715-describe-a-process-drafts-a-lane-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/772 |
-| [WP-0719](work/P7/WP-0719-count-and-replenish-lanes-as-definitions-with-an-authoring-log.md) | Count and Replenish lanes as definitions, with an authoring log | in_review | muse | `wp/WP-0719-count-and-replenish-lanes` | https://github.com/vikram2409-eng/Lanesra-OS/pull/767 |
 
 ## Ready to start (all dependencies done)
 
@@ -53,13 +51,13 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 |---|---|---|---|
 | claude | 23 | 72 | WP-0141, WP-0520, WP-0521, WP-0522, WP-0525, WP-0599, WP-0601, WP-0602, WP-0605, WP-0610, WP-0611, WP-0613, WP-0643, WP-0699, WP-0704, WP-0705, WP-0706, WP-0707, WP-0708, WP-0709, WP-0710, WP-0720, WP-0799 |
 | codex | 45 | 158 | WP-0015, WP-0102, WP-0103, WP-0104, WP-0105, WP-0146, WP-0194, WP-0195, WP-0196, WP-0197, WP-0501, WP-0502, WP-0503, WP-0504, WP-0505, WP-0510, WP-0511, WP-0512, WP-0513, WP-0530, WP-0533, WP-0540, WP-0550, WP-0551, WP-0552, WP-0553, WP-0560, WP-0572, WP-0574, WP-0580, WP-0581, WP-0582, WP-0583, WP-0585, WP-0612, WP-0614, WP-0615, WP-0620, WP-0622, WP-0623, WP-0624, WP-0640, WP-0641, WP-0642, WP-0650 |
-| muse | 34 | 91 | WP-0422, WP-0523, WP-0524, WP-0531, WP-0532, WP-0541, WP-0561, WP-0570, WP-0571, WP-0573, WP-0584, WP-0590, WP-0591, WP-0592, WP-0603, WP-0604, WP-0606, WP-0607, WP-0608, WP-0621, WP-0625, WP-0630, WP-0631, WP-0632, WP-0651, WP-0652, WP-0711, WP-0713, WP-0714, WP-0715, WP-0716, WP-0717, WP-0718, WP-0719 |
+| muse | 32 | 88 | WP-0422, WP-0523, WP-0524, WP-0531, WP-0532, WP-0541, WP-0561, WP-0570, WP-0571, WP-0573, WP-0584, WP-0590, WP-0591, WP-0592, WP-0603, WP-0604, WP-0606, WP-0607, WP-0608, WP-0621, WP-0625, WP-0630, WP-0631, WP-0632, WP-0651, WP-0652, WP-0711, WP-0713, WP-0714, WP-0716, WP-0717, WP-0718 |
 
 ## Requirement coverage
 
 - Spec requirements tracked: **352**
 - Mapped to a work package: **352**
-- Delivered (every mapped work package done): **61**
+- Delivered (every mapped work package done): **62**
 
 ## Phase 0 · Precursors
 
@@ -347,11 +345,11 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0712](work/P7/WP-0712-blueprint-view-and-export-of-a-lane.md) | Blueprint view and export of a lane | E7.5 Authoring | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0703 |
 | [WP-0713](work/P7/WP-0713-board-by-stage-my-steps-and-lane-timing.md) | Board by stage, "my steps" and lane timing | E7.3 Runner and visibility | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0707 |
 | [WP-0714](work/P7/WP-0714-dry-run-publish-checks-test-framework-and-solution-export.md) | Dry run, publish checks, test framework and Solution export | E7.5 Authoring | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0705, WP-0706 |
-| [WP-0715](work/P7/WP-0715-describe-a-process-the-admin-assistant-drafts-a-lane.md) | Describe a process: the Admin Assistant drafts a lane | E7.5 Authoring | 👀 in review | M | ○Desktop ○Team Workspace ○Online demo | WP-0703, WP-0712 |
+| [WP-0715](work/P7/WP-0715-describe-a-process-the-admin-assistant-drafts-a-lane.md) | Describe a process: the Admin Assistant drafts a lane | E7.5 Authoring | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0703, WP-0712 |
 | [WP-0716](work/P7/WP-0716-child-lanes.md) | Child lanes | E7.2 Steps and rules | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0706 |
 | [WP-0717](work/P7/WP-0717-three-more-warehouse-lanes-and-lane-templates.md) | Three more warehouse lanes and lane templates | E7.6 Shipped lanes | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0707, WP-0710 |
 | [WP-0718](work/P7/WP-0718-visual-lane-builder.md) | Visual lane builder | E7.5 Authoring | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0712, WP-0714 |
-| [WP-0719](work/P7/WP-0719-count-and-replenish-lanes-as-definitions-with-an-authoring-log.md) | Count and Replenish lanes as definitions, with an authoring log | E7.6 Shipped lanes | 👀 in review | S | — | WP-0701 |
+| [WP-0719](work/P7/WP-0719-count-and-replenish-lanes-as-definitions-with-an-authoring-log.md) | Count and Replenish lanes as definitions, with an authoring log | E7.6 Shipped lanes | ✅ done | S | — | WP-0701 |
 | [WP-0720](work/P7/WP-0720-lane-runner-second-cut-approvals-branches-pause-and-handoff.md) | Lane runner, second cut: approvals, branches, pause and handoff | E7.3 Runner and visibility | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0707, WP-0706 |
 | [WP-0799](work/P7/WP-0799-phase-7-gate-process-lanes-ready.md) | Phase 7 gate: Process Lanes ready | E7.7 Track gate | ⚪ proposed | M | — | WP-0708, WP-0709, WP-0713, WP-0714, WP-0717, WP-0720 |
 
