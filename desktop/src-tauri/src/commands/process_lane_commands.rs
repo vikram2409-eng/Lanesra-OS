@@ -239,3 +239,80 @@ pub async fn skip_process_lane_step(
     })
     .await
 }
+
+/// WP-0706: resolves the approval a lane run waits on, routing it down the
+/// step's approved/rejected branch.
+#[tauri::command]
+pub async fn resolve_process_lane_approval(
+    state: State<'_, AppState>,
+    run_id: String,
+    approve: bool,
+    notes: Option<String>,
+) -> AppResult<GraphRun> {
+    let master_key = crate::commands::resolve_master_key(&state)?;
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::resolve_lane_approval(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &run_id,
+            approve,
+            notes.as_deref(),
+            actor.as_deref(),
+        )
+        .await
+    })
+    .await
+}
+
+/// WP-0706: cancels a lane run; posted writes stay, and the cancellation is
+/// recorded in the audit trail.
+#[tauri::command]
+pub async fn cancel_process_lane_run(
+    state: State<'_, AppState>,
+    run_id: String,
+    reason: String,
+) -> AppResult<GraphRun> {
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::cancel_lane_run(
+            &conn,
+            &workspace_id,
+            &run_id,
+            &reason,
+            actor.as_deref(),
+        )
+        .await
+    })
+    .await
+}
+
+/// WP-0706: hands the current form step of a lane run to a different role.
+#[tauri::command]
+pub fn handoff_process_lane_step(
+    state: State<'_, AppState>,
+    run_id: String,
+    to_role: String,
+    reason: String,
+) -> AppResult<GraphRun> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    let actor = current_actor(&state);
+    process_lane_service::handoff_step(
+        &conn,
+        &workspace_id,
+        &run_id,
+        &to_role,
+        &reason,
+        actor.as_deref(),
+    )
+}
