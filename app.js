@@ -1375,6 +1375,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-06",
    "expected_date": "2026-11-13",
+   "total": 2105,
    "lines": [
     {
      "id": "pol-001-1",
@@ -1406,6 +1407,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-07",
    "expected_date": "2026-11-18",
+   "total": 1160,
    "lines": [
     {
      "id": "pol-002-1",
@@ -1437,6 +1439,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-04",
    "expected_date": "2026-11-12",
+   "total": 1808,
    "lines": [
     {
      "id": "pol-003-1",
@@ -1468,6 +1471,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-08",
    "expected_date": "2026-11-20",
+   "total": 1752,
    "lines": [
     {
      "id": "pol-004-1",
@@ -1499,6 +1503,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-05",
    "expected_date": "2026-11-11",
+   "total": 570,
    "lines": [
     {
      "id": "pol-005-1",
@@ -1522,6 +1527,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-09",
    "expected_date": "2026-11-25",
+   "total": 840,
    "lines": [
     {
      "id": "pol-006-1",
@@ -1553,6 +1559,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-10-28",
    "expected_date": "2026-11-05",
+   "total": 1430,
    "lines": [
     {
      "id": "pol-007-1",
@@ -1584,6 +1591,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-10-29",
    "expected_date": "2026-11-06",
+   "total": 510,
    "lines": [
     {
      "id": "pol-008-1",
@@ -1607,6 +1615,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-10-30",
    "expected_date": "2026-11-08",
+   "total": 300,
    "lines": [
     {
      "id": "pol-009-1",
@@ -1630,6 +1639,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-01",
    "expected_date": "2026-11-09",
+   "total": 520,
    "lines": [
     {
      "id": "pol-010-1",
@@ -1653,6 +1663,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-11",
    "expected_date": "2026-11-28",
+   "total": 310,
    "lines": [
     {
      "id": "pol-011-1",
@@ -1676,6 +1687,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-03",
    "expected_date": "2026-11-10",
+   "total": 680,
    "lines": [
     {
      "id": "pol-012-1",
@@ -1701,6 +1713,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-10",
    "required_ship_date": "2026-11-13",
+   "total": 539.9,
    "ship_method": "Standard",
    "carrier": "Purolator",
    "tracking_number": null,
@@ -1737,6 +1750,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-10",
    "required_ship_date": "2026-11-13",
+   "total": 319.93,
    "ship_method": "Standard",
    "carrier": "Canada Post",
    "tracking_number": null,
@@ -1773,6 +1787,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-11",
    "required_ship_date": "2026-11-14",
+   "total": 309.96,
    "ship_method": "Express",
    "carrier": "FedEx",
    "tracking_number": null,
@@ -1809,6 +1824,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-11",
    "required_ship_date": "2026-11-14",
+   "total": 239.93,
    "ship_method": "Standard",
    "carrier": "Purolator",
    "tracking_number": null,
@@ -1845,6 +1861,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-11",
    "required_ship_date": "2026-11-14",
+   "total": 409.95,
    "ship_method": "Standard",
    "carrier": "UPS",
    "tracking_number": null,
@@ -1881,6 +1898,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-09",
    "required_ship_date": "2026-11-13",
+   "total": 339.96,
    "ship_method": "Standard",
    "carrier": "Purolator",
    "tracking_number": "PURO-1003",
@@ -1917,6 +1935,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-10",
    "required_ship_date": "2026-11-13",
+   "total": 99.96,
    "ship_method": "Express",
    "carrier": "FedEx",
    "tracking_number": "FDX-1005",
@@ -1944,6 +1963,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-10",
    "required_ship_date": "2026-11-13",
+   "total": 679.96,
    "ship_method": "Standard",
    "carrier": "UPS",
    "tracking_number": "UPS-1006",
@@ -1980,6 +2000,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-09",
    "required_ship_date": "2026-11-13",
+   "total": 319.94,
    "ship_method": "Express",
    "carrier": "Purolator",
    "tracking_number": "PURO-1007",
@@ -2016,6 +2037,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-09",
    "required_ship_date": "2026-11-13",
+   "total": 339.95,
    "ship_method": "Standard",
    "carrier": "Canada Post",
    "tracking_number": "CP-1009",
@@ -2052,6 +2074,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-09",
    "required_ship_date": "2026-11-13",
+   "total": 499.92,
    "ship_method": "Standard",
    "carrier": "FedEx",
    "tracking_number": "FDX-1011",
@@ -2088,6 +2111,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-12",
    "required_ship_date": "2026-11-16",
+   "total": 169.97,
    "ship_method": "Standard",
    "carrier": "Purolator",
    "tracking_number": null,
@@ -2124,6 +2148,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-12",
    "required_ship_date": "2026-11-16",
+   "total": 279.96,
    "ship_method": "Standard",
    "carrier": "Canada Post",
    "tracking_number": null,
@@ -2160,6 +2185,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-12",
    "required_ship_date": "2026-11-17",
+   "total": 284.93,
    "ship_method": "Standard",
    "carrier": "Purolator",
    "tracking_number": null,
@@ -2196,6 +2222,7 @@ const warehouseSeed = {
    "warehouse_id": "wh1",
    "order_date": "2026-11-12",
    "required_ship_date": "2026-11-17",
+   "total": 229.94,
    "ship_method": "Standard",
    "carrier": "FedEx",
    "tracking_number": null,
@@ -8346,7 +8373,9 @@ function ownershipByline(r){
 // program/spec/schemas/examples/lane-wh-receiving.json. Do not edit by hand:
 // program/tools/check_lane_schema.py verifies this copy matches the example
 // and validates it against the shared schema.
-const LANE_WH_RECEIVING = {"format_version":"1.0.0","lane":{"description":"Receive a shipment for one purchase order: verify the delivery, record what arrived, stage and put away the stock, and close the order. One run per purchase order. The discrepancy branch sends a short or damaged receipt to the Warehouse Manager for review. This is the Receive Shipment lane from Part B of the Process Lane spec, with the ADR-0023 changes applied: entered values are stored in run data (steps 1.1 and 1.2), record steps call governed Action Types, the hold branch has a declared exit (record the hold, end with outcome held), the workflow actions it replaces are declared (wf-wh-01 on step 4.2, wf-wh-07 on step 2B.1), and the per-line steps repeat over the order lines. The spec's hybrid 'form + record' steps are split (ADR-0024 section 3): 3.1 assigns the staging bin and 3.2 posts the receipt moves; 3.3 confirms the put-away bins and 3.4 posts the put-away moves. Action Type ids are provisional until WP-0705 adopts them (ADR-0024 section 14).","id":"lane-wh-receiving","name":"Receive Shipment","object_key":"purchase_order","run_data":{"fields":[{"description":"Carrier who delivered the shipment, entered at step 1.1.","key":"carrier","required":true,"type":"string"},{"description":"Delivery-note number from the carrier's paperwork, entered at step 1.1.","key":"delivery_note_number","required":true,"type":"string"},{"description":"Date the shipment arrived, entered at step 1.1. Must match the PO's expected date.","key":"received_date","required":true,"type":"date"},{"description":"Quantity on the delivery note, per order line, entered at step 1.2. Keyed by line id.","key":"delivery_note_qty","per_child":true,"required":true,"type":"integer"},{"description":"Rejection reason, per order line, entered at step 2.1 when units are rejected. Keyed by line id.","key":"rejection_reason","per_child":true,"type":"string"},{"description":"Receiving bin the goods are staged in (RCV-01 or RCV-02), entered at step 3.1.","key":"staging_bin","required":true,"type":"string"},{"description":"Put-away bin, per order line, confirmed at step 3.3. Suggested by the Receiving Agent from the product's preferred bin. Keyed by line id.","key":"putaway_bin","per_child":true,"required":true,"type":"string"},{"description":"Why the receipt is held, entered at step 2B.2 when the manager rejects the discrepancy.","key":"hold_reason","type":"string"}]},"stages":[{"id":"verify","name":"Verify","steps":[{"description":"Confirm the truck and delivery: carrier, delivery-note number, received date. The values are stored in run data (ADR-0023 change 1); the spec's step 1.1 wrote them nowhere.","fields":[{"binds_to":"run_data.carrier","key":"carrier","label":"Carrier","required":true,"type":"string"},{"binds_to":"run_data.delivery_note_number","key":"delivery_note_number","label":"Delivery-note number","required":true,"type":"string"},{"binds_to":"run_data.received_date","key":"received_date","label":"Received date","required":true,"type":"date"}],"id":"confirm-arrival","kind":"form","name":"Confirm shipment arrived","required":true,"role":"role_wh_receiver","validation":{"condition":{"compare_field":"$record.expected_date","field":"$run_data.received_date","operator":"equals"},"message":"Received date must match the PO's expected date."}},{"assistance":{"agent":"wh-agt-receiving","autonomy":"propose"},"description":"Match each order line to the delivery note: enter the quantity on the delivery note per line. The Receiving Agent proposes the match; the receiver confirms or overrides. Runs once per order line.","fields":[{"binds_to":"run_data.delivery_note_qty","key":"delivery_note_qty","label":"Delivery-note quantity","required":true,"type":"integer"}],"id":"match-delivery-note","kind":"form","name":"Match lines to the delivery note","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver"}]},{"id":"record-receipt","name":"Record receipt","steps":[{"description":"Per line: quantity received, quantity rejected and the rejection reason. The quantities are written to the PO lines; the reason is stored in run data. Runs once per order line.","fields":[{"binds_to":"record.lines[].qty_received","key":"qty_received","label":"Quantity received","required":true,"type":"integer"},{"binds_to":"record.lines[].qty_rejected","key":"qty_rejected","label":"Quantity rejected","required":true,"type":"integer"},{"binds_to":"run_data.rejection_reason","key":"rejection_reason","label":"Rejection reason","type":"string"}],"id":"enter-quantities","kind":"form","name":"Enter received quantities","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver","validation":{"expression":"$item.qty_received + $item.qty_rejected <= $item.qty_ordered","message":"Received + rejected must not exceed ordered for this line."}},{"branches":[{"on":"pass","target":{"stage":"stage-put-away","step":"assign-staging-bin"}},{"on":"fail","target":{"stage":"hold-review","step":"review-discrepancy"}}],"check":{"aggregate":"all","condition":{"conditions":[{"compare_field":"$item.qty_ordered","field":"$item.qty_received","operator":"equals"},{"field":"$item.qty_rejected","operator":"equals","value":0}],"match":"all"},"message":"A line is short or has rejected units.","scope":"per_item"},"description":"Automatic check: every line fully received. If any line is short or rejected, the run branches to manager review instead of continuing to put-away.","id":"discrepancy-check","kind":"check","name":"Discrepancy check"}]},{"id":"hold-review","name":"Hold & review","steps":[{"branches":[{"on":"approved","target":{"stage":"stage-put-away","step":"assign-staging-bin"}},{"on":"rejected","target":{"stage":"hold-review","step":"record-hold"}}],"description":"The Warehouse Manager sees per-line ordered vs received vs rejected, with the receiver's note. Approve: continue to Stage 3 with the adjusted quantities; the PO becomes PARTIALLY_RECEIVED. Reject: the run goes to the hold step; no receipt is posted for the disputed lines.","id":"review-discrepancy","kind":"approval","name":"Review discrepancy","replaces":[{"action_index":0,"workflow_id":"wf-wh-07"}],"required":true,"role":"role_wh_warehouse_manager","writes":[{"action_type":"purchase_order.set_status","inputs":{"status":"PARTIALLY_RECEIVED"}}]},{"description":"Record why the receipt is held. Completing this step ends the run with the named outcome held (ADR-0023 change 6: the spec's hold branch ended in ON_HOLD with no exit). Put-away never happens for the disputed lines. Resuming the receipt is a new run on the same PO.","ends_run":{"outcome":"held"},"fields":[{"binds_to":"run_data.hold_reason","key":"hold_reason","label":"Hold reason","required":true,"type":"string"}],"id":"record-hold","kind":"form","name":"Record hold","required":true,"role":"role_wh_warehouse_manager"}]},{"id":"stage-put-away","name":"Stage & put away","steps":[{"assistance":{"agent":"wh-agt-receiving","autonomy":"propose"},"description":"Assign a receiving bin for the staged goods: RCV-01 or RCV-02. The Receiving Agent proposes the bin; the receiver confirms or overrides.","fields":[{"binds_to":"run_data.staging_bin","key":"staging_bin","label":"Staging bin","required":true,"type":"string"}],"id":"assign-staging-bin","kind":"form","name":"Stage the goods","required":true,"role":"role_wh_receiver"},{"description":"Post a RECEIPT StockMove per order line (MV-2026-016, MV-2026-017 for PO-2026-001). Runs once per order line. The move number is assigned by the Action Type; the ledger is append-only.","id":"post-receipt-moves","kind":"record","name":"Post receipt moves","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver","writes":[{"action_type":"warehouse.post_stock_move","inputs":{"from_location":null,"move_type":"RECEIPT","product_id":"$item.product_id","quantity":"$item.qty_received","reference_id":"$record.id","to_location":"$run_data.staging_bin"}}]},{"assistance":{"agent":"wh-agt-receiving","autonomy":"propose"},"description":"Confirm the put-away bin per line, suggested by the Receiving Agent from the product's preferred bin (HG-1001 and HG-1002 both go to A-01-03). Runs once per order line.","fields":[{"binds_to":"run_data.putaway_bin","key":"putaway_bin","label":"Put-away bin","required":true,"type":"string"}],"id":"confirm-putaway-bins","kind":"form","name":"Confirm put-away","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver"},{"description":"Post a PUTAWAY StockMove per order line (MV-2026-018, MV-2026-019 for PO-2026-001) and update stock on hand (48 to 88 for HG-1001, 22 to 52 for HG-1002). Runs once per order line. Available is recomputed, never written.","id":"post-putaway-moves","kind":"record","name":"Post put-away moves","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver","writes":[{"action_type":"warehouse.post_stock_move","inputs":{"from_location":"$run_data.staging_bin","move_type":"PUTAWAY","product_id":"$item.product_id","quantity":"$item.qty_received","reference_id":"$record.id","to_location":"$run_data.putaway_bin"}}]}]},{"id":"confirm","name":"Confirm","steps":[{"description":"Read-only summary of the run: what was received, staged and put away, and the new on-hand quantities (88 / 52 for PO-2026-001). No fields to fill; completing the step moves on.","id":"review-summary","kind":"form","name":"Review summary","required":true,"role":"role_wh_receiver"},{"description":"Close the receipt. The Action Type closes the PO as RECEIVED when every line is fully received, or PARTIALLY_RECEIVED when the run took the discrepancy branch. The Warehouse Manager is notified automatically. This step replaces the wf-wh-01 put-away task: put-away already happened in Stage 3, so no duplicate task is created. The workflow stays the fallback for a PO that becomes RECEIVED outside a lane.","id":"close-po","kind":"record","name":"Close the PO","notify":[{"message":"PO-2026-001 received: 40 x HG-1001, 30 x HG-1002. Stock on hand 88 / 52.","to_role":"role_wh_warehouse_manager"}],"replaces":[{"action_index":0,"workflow_id":"wf-wh-01"}],"required":true,"role":"role_wh_receiver","writes":[{"action_type":"purchase_order.close_receipt","inputs":{"purchase_order_id":"$record.id"}}]}]}],"start_condition":{"field":"$record.status","operator":"equals","value":"OPEN"},"status":"draft","version":1}};
+const LANE_WH_RECEIVING = {"format_version":"1.0.0","lane":{"description":"Receive a shipment for one purchase order: verify the delivery, record what arrived, stage and put away the stock, and close the order. One run per purchase order. The discrepancy branch sends a short or damaged receipt to the Warehouse Manager for review.","id":"lane-wh-receiving","name":"Receive Shipment","object_key":"purchase_order","run_data":{"fields":[{"description":"Carrier who delivered the shipment, entered at step 1.1.","key":"carrier","required":true,"type":"string"},{"description":"Delivery-note number from the carrier's paperwork, entered at step 1.1.","key":"delivery_note_number","required":true,"type":"string"},{"description":"Date the shipment arrived, entered at step 1.1. Must match the PO's expected date.","key":"received_date","required":true,"type":"date"},{"description":"Quantity on the delivery note, per order line, entered at step 1.2. Keyed by line id.","key":"delivery_note_qty","per_child":true,"required":true,"type":"integer"},{"description":"Rejection reason, per order line, entered at step 2.1 when units are rejected. Keyed by line id.","key":"rejection_reason","per_child":true,"type":"string"},{"description":"Receiving bin the goods are staged in (RCV-01 or RCV-02), entered at step 3.1.","key":"staging_bin","required":true,"type":"string"},{"description":"Put-away bin, per order line, confirmed at step 3.3. Suggested by the Receiving Agent from the product's preferred bin. Keyed by line id.","key":"putaway_bin","per_child":true,"required":true,"type":"string"},{"description":"Why the receipt is held, entered at step 2B.2 when the manager rejects the discrepancy.","key":"hold_reason","type":"string"}]},"stages":[{"id":"verify","name":"Verify","steps":[{"description":"Confirm the truck and delivery: carrier, delivery-note number, received date.","fields":[{"binds_to":"run_data.carrier","key":"carrier","label":"Carrier","required":true,"type":"string"},{"binds_to":"run_data.delivery_note_number","key":"delivery_note_number","label":"Delivery-note number","required":true,"type":"string"},{"binds_to":"run_data.received_date","key":"received_date","label":"Received date","required":true,"type":"date"}],"id":"confirm-arrival","kind":"form","name":"Confirm shipment arrived","required":true,"role":"role_wh_receiver","validation":{"condition":{"compare_field":"$record.expected_date","field":"$run_data.received_date","operator":"equals"},"message":"Received date must match the PO's expected date."}},{"assistance":{"agent":"wh-agt-receiving","autonomy":"propose"},"description":"Match each order line to the delivery note: enter the quantity on the delivery note per line. The Receiving Agent proposes the match; the receiver confirms or overrides. Runs once per order line.","fields":[{"binds_to":"run_data.delivery_note_qty","key":"delivery_note_qty","label":"Delivery-note quantity","required":true,"type":"integer"}],"id":"match-delivery-note","kind":"form","name":"Match lines to the delivery note","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver"}]},{"id":"record-receipt","name":"Record receipt","steps":[{"description":"Per line: quantity received, quantity rejected and the rejection reason. The quantities are written to the PO lines; the reason is stored in run data. Runs once per order line.","fields":[{"binds_to":"record.lines[].qty_received","key":"qty_received","label":"Quantity received","required":true,"type":"integer"},{"binds_to":"record.lines[].qty_rejected","key":"qty_rejected","label":"Quantity rejected","required":true,"type":"integer"},{"binds_to":"run_data.rejection_reason","key":"rejection_reason","label":"Rejection reason","type":"string"}],"id":"enter-quantities","kind":"form","name":"Enter received quantities","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver","validation":{"expression":"$item.qty_received + $item.qty_rejected <= $item.qty_ordered","message":"Received + rejected must not exceed ordered for this line."}},{"branches":[{"on":"pass","target":{"stage":"stage-put-away","step":"assign-staging-bin"}},{"on":"fail","target":{"stage":"hold-review","step":"review-discrepancy"}}],"check":{"aggregate":"all","condition":{"conditions":[{"compare_field":"$item.qty_ordered","field":"$item.qty_received","operator":"equals"},{"field":"$item.qty_rejected","operator":"equals","value":0}],"match":"all"},"message":"A line is short or has rejected units.","scope":"per_item"},"description":"Automatic check: every line fully received. If any line is short or rejected, the run branches to manager review instead of continuing to put-away.","id":"discrepancy-check","kind":"check","name":"Discrepancy check"}]},{"id":"hold-review","name":"Hold & review","steps":[{"branches":[{"on":"approved","target":{"stage":"stage-put-away","step":"assign-staging-bin"}},{"on":"rejected","target":{"stage":"hold-review","step":"record-hold"}}],"description":"The Warehouse Manager sees per-line ordered vs received vs rejected, with the receiver's note. Approve: continue to Stage 3 with the adjusted quantities; the PO becomes PARTIALLY_RECEIVED. Reject: the run goes to the hold step; no receipt is posted for the disputed lines.","id":"review-discrepancy","kind":"approval","name":"Review discrepancy","replaces":[{"action_index":0,"workflow_id":"wf-wh-07"}],"required":true,"role":"role_wh_warehouse_manager","writes":[{"action_type":"purchase_order.set_status","inputs":{"status":"PARTIALLY_RECEIVED"}}]},{"description":"Record why the receipt is held. Completing this step ends the run as held. Put-away never happens for the disputed lines. Resuming the receipt is a new run on the same PO.","ends_run":{"outcome":"held"},"fields":[{"binds_to":"run_data.hold_reason","key":"hold_reason","label":"Hold reason","required":true,"type":"string"}],"id":"record-hold","kind":"form","name":"Record hold","required":true,"role":"role_wh_warehouse_manager"}]},{"id":"stage-put-away","name":"Stage & put away","steps":[{"assistance":{"agent":"wh-agt-receiving","autonomy":"propose"},"description":"Assign a receiving bin for the staged goods: RCV-01 or RCV-02. The Receiving Agent proposes the bin; the receiver confirms or overrides.","fields":[{"binds_to":"run_data.staging_bin","key":"staging_bin","label":"Staging bin","required":true,"type":"string"}],"id":"assign-staging-bin","kind":"form","name":"Stage the goods","required":true,"role":"role_wh_receiver"},{"description":"Post a RECEIPT StockMove per order line (MV-2026-016, MV-2026-017 for PO-2026-001). Runs once per order line. The move number is assigned by the Action Type; the ledger is append-only.","id":"post-receipt-moves","kind":"record","name":"Post receipt moves","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver","writes":[{"action_type":"warehouse.post_stock_move","inputs":{"from_location":null,"move_type":"RECEIPT","product_id":"$item.product_id","quantity":"$item.qty_received","reference_id":"$record.id","to_location":"$run_data.staging_bin"}}]},{"assistance":{"agent":"wh-agt-receiving","autonomy":"propose"},"description":"Confirm the put-away bin per line, suggested by the Receiving Agent from the product's preferred bin (HG-1001 and HG-1002 both go to A-01-03). Runs once per order line.","fields":[{"binds_to":"run_data.putaway_bin","key":"putaway_bin","label":"Put-away bin","required":true,"type":"string"}],"id":"confirm-putaway-bins","kind":"form","name":"Confirm put-away","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver"},{"description":"Post a PUTAWAY StockMove per order line (MV-2026-018, MV-2026-019 for PO-2026-001) and update stock on hand (48 to 88 for HG-1001, 22 to 52 for HG-1002). Runs once per order line. Available is recomputed, never written.","id":"post-putaway-moves","kind":"record","name":"Post put-away moves","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver","writes":[{"action_type":"warehouse.post_stock_move","inputs":{"from_location":"$run_data.staging_bin","move_type":"PUTAWAY","product_id":"$item.product_id","quantity":"$item.qty_received","reference_id":"$record.id","to_location":"$run_data.putaway_bin"}}]}]},{"id":"confirm","name":"Confirm","steps":[{"description":"Read-only summary of the run: what was received, staged and put away, and the new on-hand quantities (88 / 52 for PO-2026-001). No fields to fill; completing the step moves on.","id":"review-summary","kind":"form","name":"Review summary","required":true,"role":"role_wh_receiver"},{"description":"Close the receipt. The Action Type closes the PO as RECEIVED when every line is fully received, or PARTIALLY_RECEIVED when the run took the discrepancy branch. The Warehouse Manager is notified automatically. This step replaces the wf-wh-01 put-away task: put-away already happened in Stage 3, so no duplicate task is created. The workflow stays the fallback for a PO that becomes RECEIVED outside a lane.","id":"close-po","kind":"record","name":"Close the PO","notify":[{"message":"PO-2026-001 received: 40 x HG-1001, 30 x HG-1002. Stock on hand 88 / 52.","to_role":"role_wh_warehouse_manager"}],"replaces":[{"action_index":0,"workflow_id":"wf-wh-01"}],"required":true,"role":"role_wh_receiver","writes":[{"action_type":"purchase_order.close_receipt","inputs":{"purchase_order_id":"$record.id"}}]}]}],"start_condition":{"field":"$record.status","operator":"equals","value":"OPEN"},"status":"draft","version":1}};
+// Embedded copy of program/spec/schemas/examples/lane-wh-pickpack.json. Do not edit by hand:
+const LANE_WH_PICKPACK = {"format_version":"1.0.0","lane":{"id":"lane-wh-pickpack","name":"Pick & Pack","description":"Pick, pack and ship one sales order: confirm the order and wave, pick the remaining lines, pack at PACK-01 and ship with tracking. One run per sales order. A short or damaged pick goes to the Warehouse Manager for review.","object_key":"sales_order","version":1,"status":"draft","start_condition":{"conditions":[{"field":"$record.status","operator":"equals","value":"ALLOCATED"},{"field":"$record.status","operator":"equals","value":"PICKING"}],"match":"any"},"run_data":{"fields":[{"key":"damage_reason","type":"string","per_child":true,"description":"Reason a unit was damaged, per order line, entered at step 1.2. Keyed by line id."},{"key":"parcel_count","type":"integer","required":true,"description":"Number of parcels, entered at step 3.1."},{"key":"parcel_weight","type":"string","required":true,"description":"Weighed weight of the parcels in kg, entered at step 3.1, e.g. 1.2."},{"key":"tracking_number","type":"string","required":true,"description":"Tracking number, entered at step 4.1. Suggested as the next number in the carrier's sequence."},{"key":"hold_reason","type":"string","description":"Why the pick is held, entered at step 1B.2 when the manager rejects the discrepancy."},{"key":"damage_approved","type":"boolean","description":"Set by the Warehouse Manager approving a short or damaged pick at 1B.1. The pick check passes a line whose damage was approved — the damaged unit stays on the line and is dispositioned by the Count Lane, not erased."}]},"stages":[{"id":"pick","name":"Pick","steps":[{"id":"confirm-order-wave","kind":"form","name":"Confirm order & wave","description":"Confirm the order, customer, wave and route before picking. The Picking Agent has planned the wave; the picker confirms.","role":"role_wh_picker","required":true,"assistance":{"agent":"wh-agt-picking","autonomy":"propose"}},{"id":"pick-remaining-lines","kind":"form","name":"Pick the remaining lines","description":"Pick the remaining lines from their bins. Enter the total picked per line and any damaged units with the reason. Lines already fully picked are shown, not re-picked.","role":"role_wh_picker","required":true,"repeat_over":{"field":"lines","item_id_field":"id"},"fields":[{"key":"qty_picked","label":"Quantity picked","type":"integer","required":true,"binds_to":"record.lines[].qty_picked"},{"key":"qty_damaged","label":"Quantity damaged","type":"integer","required":true,"binds_to":"record.lines[].qty_damaged"},{"key":"damage_reason","label":"Damage reason","type":"string","binds_to":"run_data.damage_reason"}],"validation":{"expression":"$item.qty_picked <= $item.qty_reserved","message":"Picked must not exceed reserved for this line."}},{"id":"pick-check","kind":"check","name":"Pick check","description":"Automatic check: every line fully picked, and nothing damaged — unless the manager already approved the damage at 1B.1. If any line is short or damaged-and-unapproved, the run branches to manager review instead of continuing to pack.","check":{"scope":"per_item","aggregate":"all","condition":{"match":"any","conditions":[{"match":"all","conditions":[{"field":"$item.qty_picked","compare_field":"$item.qty_reserved","operator":"equals"},{"field":"$item.qty_damaged","operator":"equals","value":0}]},{"match":"all","conditions":[{"field":"$item.qty_picked","compare_field":"$item.qty_reserved","operator":"equals"},{"field":"$run_data.damage_approved","operator":"equals","value":true}]}]},"message":"A line is short or has damaged units the manager has not approved."},"branches":[{"on":"pass","target":{"stage":"close-pick","step":"post-pick-moves"}},{"on":"fail","target":{"stage":"hold-review","step":"review-short-pick"}}]}]},{"id":"hold-review","name":"Hold & review","steps":[{"id":"review-short-pick","kind":"approval","name":"Review short pick / damage","description":"The Warehouse Manager sees per-line ordered vs reserved vs picked vs damaged, with the picker's note. Approve: the damage is marked approved, the picking re-opens as In progress and the run returns to the pick step to pick a replacement from the same bin. Reject: the run goes to the hold step; nothing is packed or shipped.","role":"role_wh_warehouse_manager","required":true,"branches":[{"on":"approved","target":{"stage":"pick","step":"pick-remaining-lines"}},{"on":"rejected","target":{"stage":"hold-review","step":"record-hold"}}],"writes":[{"action_type":"picking.set_status","inputs":{"status":"IN_PROGRESS"}},{"action_type":"run_data.set","inputs":{"key":"damage_approved","value":true}}]},{"id":"record-hold","kind":"form","name":"Record hold","description":"Record why the pick is held. Completing this step ends the run as held. Nothing is packed or shipped for this order. Resuming the pick is a new run on the same SO.","role":"role_wh_warehouse_manager","required":true,"ends_run":{"outcome":"held"},"fields":[{"key":"hold_reason","label":"Hold reason","type":"string","required":true,"binds_to":"run_data.hold_reason"}]}]},{"id":"close-pick","name":"Close pick","steps":[{"id":"post-pick-moves","kind":"record","name":"Post pick moves","description":"Post a PICK StockMove per order line for what this run picked (MV-2026-020 for SO-2026-002). Runs once per order line. Only the quantity picked in this run is posted — lines already picked before the run are not re-posted. The ledger is append-only.","role":"role_wh_picker","required":true,"repeat_over":{"field":"lines","item_id_field":"id"},"writes":[{"action_type":"warehouse.post_stock_move","inputs":{"move_type":"PICK","product_id":"$item.product_id","quantity":"$item.qty_picked","reference_id":"$record.id","to_location":"loc-pk-01"}}]},{"id":"close-pick","kind":"record","name":"Close the pick","description":"Close the pick: the picking is done and the order is picked. This step replaces the wf-wh-04 pack task — the lane packs in Stage 3, so no duplicate task is created. The workflow stays the fallback for a picking that becomes DONE outside a lane.","role":"role_wh_picker","required":true,"replaces":[{"action_index":0,"workflow_id":"wf-wh-04"}],"writes":[{"action_type":"picking.set_status","inputs":{"status":"DONE"}},{"action_type":"sales_order.set_status","inputs":{"status":"PICKED"}}]}]},{"id":"pack","name":"Pack","steps":[{"id":"pack-order","kind":"form","name":"Pack the order","description":"At PACK-01: parcels and weighed weight, entered by the packer. The Packing & Shipping Agent proposes the parcel split; the packer confirms or changes it.","role":"role_wh_packer","required":true,"assistance":{"agent":"wh-agt-packing","autonomy":"propose"},"fields":[{"key":"parcel_count","label":"Parcels","type":"integer","required":true,"binds_to":"run_data.parcel_count"},{"key":"parcel_weight","label":"Weighed weight (kg)","type":"string","required":true,"binds_to":"run_data.parcel_weight"}]},{"id":"post-pack-moves","kind":"record","name":"Post pack moves","description":"Post a PACK StockMove per order line (MV-2026-021, MV-2026-022 for SO-2026-002). Runs once per order line. The packed quantity follows the picked quantity.","role":"role_wh_packer","required":true,"repeat_over":{"field":"lines","item_id_field":"id"},"writes":[{"action_type":"warehouse.post_stock_move","inputs":{"move_type":"PACK","product_id":"$item.product_id","quantity":"$item.qty_picked","reference_id":"$record.id","from_location":"loc-pk-01","to_location":"loc-sh-01"}}]},{"id":"create-shipment-and-pack","kind":"record","name":"Create shipment & pack","description":"Create the shipment (SHIP-2026-013 for SO-2026-002) and mark the order PACKED. This step replaces the wf-wh-05 shipment task — the lane created the shipment here, so no duplicate task is created. The workflow stays the fallback for an order that becomes PACKED outside a lane.","role":"role_wh_packer","required":true,"replaces":[{"action_index":0,"workflow_id":"wf-wh-05"}],"writes":[{"action_type":"shipment.create","inputs":{"carrier":"$record.carrier","service":"$record.ship_method","weight":"$run_data.parcel_weight","status":"PACKED"}},{"action_type":"sales_order.set_status","inputs":{"status":"PACKED"}}]}]},{"id":"ship","name":"Ship & close","steps":[{"id":"confirm-carrier-tracking","kind":"form","name":"Confirm carrier & tracking","description":"Carrier and service from the order; the tracking number is carrier-assigned. The demo suggests the next number in the carrier's sequence.","role":"role_wh_packer","required":true,"assistance":{"agent":"wh-agt-packing","autonomy":"propose"},"fields":[{"key":"tracking_number","label":"Tracking number","type":"string","required":true,"binds_to":"run_data.tracking_number"}]},{"id":"post-ship-moves","kind":"record","name":"Post ship moves","description":"Post a SHIP StockMove per order line (MV-2026-023, MV-2026-024 for SO-2026-002). Shipping removes the goods from the warehouse: on hand falls and the reservation is released. Runs once per order line.","role":"role_wh_packer","required":true,"repeat_over":{"field":"lines","item_id_field":"id"},"writes":[{"action_type":"warehouse.post_stock_move","inputs":{"move_type":"SHIP","product_id":"$item.product_id","quantity":"$item.qty_packed","reference_id":"$record.id","from_location":"loc-sh-01","to_location":null}}]},{"id":"ship-and-close","kind":"record","name":"Ship & close","description":"Ship the order: the shipment is marked shipped with its tracking, the order closes as SHIPPED, and the customer and the Warehouse Manager are notified automatically.","role":"role_wh_packer","required":true,"writes":[{"action_type":"sales_order.ship","inputs":{"tracking":"$run_data.tracking_number"}}]}]}]}};
 // __LANE_WH_RECEIVING_END__
 
 if(IS_WAREHOUSE)ensureWarehouseData();else ensureAdminData();
@@ -9944,7 +9973,30 @@ function cmdPaletteResults(q){
   return {item,score:s};
  }).filter(x=>x.score>=0);
  scored.sort((a,b)=>b.score-a.score);
- return scored.map(x=>x.item);
+ const out=scored.map(x=>x.item);
+ if(q)out.push(...cmdRecordResults(q).slice(0,8));
+ return out;
+}
+// Record search for the palette: the static index covers pages and actions
+// only, so a record number (PO-2026-005) or SKU found nothing. Records are
+// matched on their number/name and open the record on Enter.
+function cmdRecordResults(q){
+ const found=[];
+ const push=(key,id,label,hint)=>{
+  if(!id||!label)return;
+  const s=Math.max(cmdFuzzyScore(q,label),hint?cmdFuzzyScore(q,label+' '+hint):-1);
+  if(s>=0)found.push({item:{group:'Records',label,hint:hint||'',run:()=>{closeCmdPalette();openRecordDetail(key,id);}},score:s});
+ };
+ const byId=(key,id)=>(data[key]||[]).find(r=>r.id===id)||{};
+ (data.purchase_order||[]).forEach(r=>push('purchase_order',r.id,r.po_number,((byId('supplier',r.supplier_id).name)||'')+' · '+(r.status||'')));
+ (data.sales_order||[]).forEach(r=>push('sales_order',r.id,r.so_number,((byId('customer',r.customer_id).name)||'')+' · '+(r.status||'')));
+ (data.product||[]).forEach(r=>push('product',r.id,r.sku,r.name));
+ (data.supplier||[]).forEach(r=>push('supplier',r.id,r.name,'Supplier'));
+ (data.customer||[]).forEach(r=>push('customer',r.id,r.name,'Customer'));
+ (data.companies||[]).forEach(r=>push('companies',r.id,r.name,'Company'));
+ (data.contacts||[]).forEach(r=>push('contacts',r.id,r.name||((r.first_name||'')+' '+(r.last_name||'')).trim(),'Contact'));
+ found.sort((a,b)=>b.score-a.score);
+ return found.map(x=>x.item);
 }
 function openCmdPalette(){
  const overlay=document.getElementById('cmdPalette');
@@ -10303,7 +10355,22 @@ function warehouseDashboard(){
  const card=(nav,label,value,meta)=>`<button type="button" class="card kpi-card" data-wh-nav="${nav}"><span class="kpi-label"><span>${label}</span></span><span class="kpi-number">${value}</span><span class="kpi-meta">${meta}</span></button>`;
  const stockRow=r=>{const p=prodById[r.product_id];return `<tr><td><a class="cell-link" data-open-record="stock:${r.id}">${p?.sku||''}</a></td><td>${p?.name||''}</td><td>${r.on_hand}</td><td>${r.reserved}</td><td>${r.on_hand-r.reserved}</td><td>${badgeMaybe(r.status)}</td></tr>`};
  const attention=[...k.outOfStock,...k.lowStock];
- $('#view').innerHTML=`<div class="page-heading"><div><h2>Toronto Distribution Centre</h2><p>Friday, November 13, 2026 · Warehouse Manager: Sarah Chen · ${k.onHand} units on hand, ${k.reserved} reserved, ${k.available} available.</p></div></div><div class="kpi-grid">${card('sales_order','Fill rate',(k.fillRate*100).toFixed(1)+'%',k.shippedUnits+' of '+k.ordered+' units shipped →')}${card('shipment','Orders shipped today',k.shippedToday,k.shippedTodayParcels+' parcels · '+k.shippedUnits+' units →')}${card('purchase_order','Receiving backlog',k.openPOs.length,k.dueToday.length+' due today →')}${card('stock','Stockouts',k.outOfStock.length,k.lowStock.length+' low-stock SKUs →')}${card('stock','Inventory value (cost)',moneyCAD(k.valueCost),'At sale '+moneyCAD(k.valueSale)+' →')}${card('reorder_rule','Reorder rules triggered',k.triggered.length,k.triggered.length+' SKUs at or below level →')}</div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Needs attention — low & out of stock</h3><p class="card-desc">${k.outOfStock.length} out of stock · ${k.lowStock.length} low stock</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Product</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th></tr></thead><tbody>${attention.map(stockRow).join('')}</tbody></table></div></div></section><section class="card"><div class="card-head panel-title"><div><h3>Orders by status</h3><p class="card-desc">${(data.sales_order||[]).length} open sales orders</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Orders</th></tr></thead><tbody>${['WAITING_STOCK','ALLOCATED','PICKING','PICKED','PACKED','SHIPPED'].map(s=>`<tr><td><a class="cell-link" data-wh-nav="sales_order">${s}</a></td><td>${k.soByStatus[s]||0}</td></tr>`).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Receiving — due today</h3><p class="card-desc">${k.dueToday.length} purchase order${k.dueToday.length===1?'':'s'} expected ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.dueToday.length?k.dueToday.map(p=>{const sup=byId('supplier',p.supplier_id);const lines=(p.lines||[]).map(l=>`${prodById[l.product_id]?.sku||''} × ${l.qty_ordered}`).join(', ');return `<div class="prb-row"><strong><a class="cell-link" data-open-record="purchase_order:${p.id}">${p.po_number}</a></strong><small class="muted"> · ${sup?.name||''} · ${lines}</small><button class="btn btn-primary" data-lane-start="lane-wh-receiving:${p.id}">Start receiving lane</button></div>`}).join(''):'<div class="empty">Nothing due today.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Cycle count in progress</h3><p class="card-desc">${k.counting?'<a class="cell-link" data-open-record="cycle_count:'+k.counting.id+'">'+k.counting.count_number+'</a> · '+k.counting.scope+' · '+k.variances.length+' variances':'No count in progress'}</p></div></div><div class="card-body">${k.counting?`<div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>${k.variances.map(l=>{const p=prodById[l.product_id];return `<tr><td><a class="cell-link" data-open-record="product:${l.product_id}">${p?.sku||''}</a></td><td>${l.expected_qty}</td><td>${l.counted_qty}</td><td>${l.variance>0?'+':''}${l.variance}</td></tr>`}).join('')}</tbody></table></div><p class="muted" style="font-size:12px">No adjustment posted yet — decide each variance in Approvals below; approving posts the adjustment, rejecting posts nothing.</p>`:'<div class="empty">No count in progress.</div>'}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Waves</h3><p class="card-desc">Batch picks in progress</p></div></div><div class="card-body">${Object.entries(k.waves).map(([w,v])=>`<div class="prb-row"><strong><a class="cell-link" data-wh-nav="pick_task">${w}</a></strong><small class="muted"> · ${v.orders.length} orders${v.held?` · ${v.held} task${v.held===1?'':'s'} held (waiting on stock)`:''} · ${v.tasks.map(t=>`<a class="cell-link" data-open-record="pick_task:${t.id}">${t.number||'Task'}</a>`).join(', ')}</small></div>`).join('')}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Reorder alerts</h3><p class="card-desc">${k.triggered.length} rules triggered ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.triggered.map(r=>{const p=prodById[r.product_id];const s=(data.stock||[]).find(x=>x.product_id===r.product_id);return `<div class="prb-row"><strong><a class="cell-link" data-open-record="product:${r.product_id}">${p?.sku||''}</a></strong><small class="muted"> · ${p?.name||''} · available ${s?s.on_hand-s.reserved:0} ≤ level ${r.reorder_level} · reorder ${r.reorder_qty} · <a class="cell-link" data-open-record="reorder_rule:${r.id}">rule ${r.number||''}</a></small></div>`}).join('')}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Approvals — needs your decision</h3><p class="card-desc">${pendingApprovals.length} pending</p></div></div><div class="card-body">${pendingApprovals.length?pendingApprovals.map(a=>`<div class="prb-row"><div><strong>${agentEsc(a.subjectType.replace('warehouse_','').replace(/_/g,' '))}</strong><small class="muted"> · ${demoDescribeApproval(a)}</small></div><div class="actions"><button class="btn btn-primary" data-wh-approve="${a.id}">Approve</button><button class="btn" data-wh-reject="${a.id}">Reject</button></div></div>`).join(''):'<p class="muted">Nothing pending — the Manager is all caught up.</p>'}<p class="muted" style="font-size:12px;margin-top:8px">Approving a count line posts a COUNT_ADJUSTMENT and updates Stock; rejecting posts nothing. Full inbox: AI Agents → Approvals.</p></div></section><section class="card"><div class="card-head panel-title"><div><h3>Open tasks</h3><p class="card-desc">${openTasks.length} open</p></div></div><div class="card-body">${openTasks.length?openTasks.map(t=>`<div class="prb-row"><a class="cell-link" data-open-record="tasks:${t.id}">${agentEsc(t.title||'Task')}</a><small class="muted"> · due ${t.due||'—'}</small></div>`).join(''):'<p class="muted">No open tasks.</p>'}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Process Lanes</h3><p class="card-desc">Guided, step-by-step work for one record — read the blueprint before anyone runs it</p></div></div><div class="card-body"><div class="prb-row"><div><strong>Receive Shipment</strong><small class="muted"> · Purchase Order · 5 stages, 12 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-receiving">View blueprint</button></div></div><p class="muted" style="font-size:12px;margin-top:8px">The blueprint shows the lane definition only — stages, steps, run-data fields and mapped record fields. No run, no record data.</p></div></section></div>`;
+ // Pick & Pack lane: the orders due today that can start (or resume) a run.
+ const pickpackDue=(data.sales_order||[]).filter(s=>(s.status==='PICKING'||s.status==='ALLOCATED')&&s.required_ship_date===WAREHOUSE_TODAY);
+ const pickpackDueRows=pickpackDue.map(so=>{
+  const run=laneActiveRun('lane-wh-pickpack',so.id);
+  const cust=(data.customer||[]).find(c=>c.id===so.customer_id)||{};
+  return `<div class="prb-row"><div><strong>${agentEsc(so.so_number)}</strong><small class="muted"> · ${agentEsc(cust.name||'')} · ${agentEsc(so.status)} · due ${agentEsc(so.required_ship_date||'')}</small></div><div class="actions">${run?`<button class="btn btn-primary" data-lane-open-run="${run.id}">Resume lane</button>`:`<button class="btn btn-primary" data-lane-start="lane-wh-pickpack:${so.id}">Start pick & pack lane</button>`}</div></div>`;
+ }).join('');
+ const waveLaneButtons=v=>(v.orders||[]).map(oid=>{
+  const so=byId('sales_order',oid);
+  if(!so)return '';
+  const run=laneActiveRun('lane-wh-pickpack',oid);
+  if(run)return ` <button class="btn" data-lane-open-run="${run.id}">Resume ${agentEsc(so.so_number)} lane</button>`;
+  if(so.status==='PICKING'||so.status==='ALLOCATED')return ` <button class="btn" data-lane-start="lane-wh-pickpack:${oid}">Pick & pack ${agentEsc(so.so_number)}</button>`;
+  return '';
+ }).join('');
+ $('#view').innerHTML=`<div class="page-heading"><div><h2>Toronto Distribution Centre</h2><p>Friday, November 13, 2026 · Warehouse Manager: Sarah Chen · ${k.onHand} units on hand, ${k.reserved} reserved, ${k.available} available.</p></div></div><div class="kpi-grid">${card('sales_order','Fill rate',(k.fillRate*100).toFixed(1)+'%',k.shippedUnits+' of '+k.ordered+' units shipped →')}${card('shipment','Orders shipped today',k.shippedToday,k.shippedTodayParcels+' parcels · '+k.shippedUnits+' units →')}${card('purchase_order','Receiving backlog',k.openPOs.length,k.dueToday.length+' due today →')}${card('stock','Stockouts',k.outOfStock.length,k.lowStock.length+' low-stock SKUs →')}${card('stock','Inventory value (cost)',moneyCAD(k.valueCost),'At sale '+moneyCAD(k.valueSale)+' →')}${card('reorder_rule','Reorder rules triggered',k.triggered.length,k.triggered.length+' SKUs at or below level →')}</div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Needs attention — low & out of stock</h3><p class="card-desc">${k.outOfStock.length} out of stock · ${k.lowStock.length} low stock</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Product</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th></tr></thead><tbody>${attention.map(stockRow).join('')}</tbody></table></div></div></section><section class="card"><div class="card-head panel-title"><div><h3>Orders by status</h3><p class="card-desc">${(data.sales_order||[]).length} open sales orders</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Orders</th></tr></thead><tbody>${['WAITING_STOCK','ALLOCATED','PICKING','PICKED','PACKED','SHIPPED'].map(s=>`<tr><td><a class="cell-link" data-wh-nav="sales_order">${s}</a></td><td>${k.soByStatus[s]||0}</td></tr>`).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Receiving — due today</h3><p class="card-desc">${k.dueToday.length} purchase order${k.dueToday.length===1?'':'s'} expected ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.dueToday.length?k.dueToday.map(p=>{const sup=byId('supplier',p.supplier_id);const lines=(p.lines||[]).map(l=>`${prodById[l.product_id]?.sku||''} × ${l.qty_ordered}`).join(', ');return `<div class="prb-row"><strong><a class="cell-link" data-open-record="purchase_order:${p.id}">${p.po_number}</a></strong><small class="muted"> · ${sup?.name||''} · ${lines}</small><button class="btn btn-primary" data-lane-start="lane-wh-receiving:${p.id}">Start receiving lane</button></div>`}).join(''):'<div class="empty">Nothing due today.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Cycle count in progress</h3><p class="card-desc">${k.counting?'<a class="cell-link" data-open-record="cycle_count:'+k.counting.id+'">'+k.counting.count_number+'</a> · '+k.counting.scope+' · '+k.variances.length+' variances':'No count in progress'}</p></div></div><div class="card-body">${k.counting?`<div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>${k.variances.map(l=>{const p=prodById[l.product_id];return `<tr><td><a class="cell-link" data-open-record="product:${l.product_id}">${p?.sku||''}</a></td><td>${l.expected_qty}</td><td>${l.counted_qty}</td><td>${l.variance>0?'+':''}${l.variance}</td></tr>`}).join('')}</tbody></table></div><p class="muted" style="font-size:12px">No adjustment posted yet — decide each variance in Approvals below; approving posts the adjustment, rejecting posts nothing.</p>`:'<div class="empty">No count in progress.</div>'}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Waves</h3><p class="card-desc">Batch picks in progress</p></div></div><div class="card-body">${Object.entries(k.waves).map(([w,v])=>`<div class="prb-row"><strong><a class="cell-link" data-wh-nav="pick_task">${w}</a></strong><small class="muted"> · ${v.orders.length} orders${v.held?` · ${v.held} task${v.held===1?'':'s'} held (waiting on stock)`:''} · ${v.tasks.map(t=>`<a class="cell-link" data-open-record="pick_task:${t.id}">${t.number||'Task'}</a>`).join(', ')}</small><div class="actions">${waveLaneButtons(v)}</div></div>`).join('')}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Reorder alerts</h3><p class="card-desc">${k.triggered.length} rules triggered ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.triggered.map(r=>{const p=prodById[r.product_id];const s=(data.stock||[]).find(x=>x.product_id===r.product_id);return `<div class="prb-row"><strong><a class="cell-link" data-open-record="product:${r.product_id}">${p?.sku||''}</a></strong><small class="muted"> · ${p?.name||''} · available ${s?s.on_hand-s.reserved:0} ≤ level ${r.reorder_level} · reorder ${r.reorder_qty} · <a class="cell-link" data-open-record="reorder_rule:${r.id}">rule ${r.number||''}</a></small></div>`}).join('')}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Approvals — needs your decision</h3><p class="card-desc">${pendingApprovals.length} pending</p></div></div><div class="card-body">${pendingApprovals.length?pendingApprovals.map(a=>`<div class="prb-row"><div><strong>${agentEsc(a.subjectType.replace('warehouse_','').replace(/_/g,' '))}</strong><small class="muted"> · ${demoDescribeApproval(a)}</small></div><div class="actions"><button class="btn btn-primary" data-wh-approve="${a.id}">Approve</button><button class="btn" data-wh-reject="${a.id}">Reject</button></div></div>`).join(''):'<p class="muted">Nothing pending — the Manager is all caught up.</p>'}<p class="muted" style="font-size:12px;margin-top:8px">Approving a count line posts a COUNT_ADJUSTMENT and updates Stock; rejecting posts nothing. Full inbox: AI Agents → Approvals.</p></div></section><section class="card"><div class="card-head panel-title"><div><h3>Open tasks</h3><p class="card-desc">${openTasks.length} open</p></div></div><div class="card-body">${openTasks.length?openTasks.map(t=>`<div class="prb-row"><a class="cell-link" data-open-record="tasks:${t.id}">${agentEsc(t.title||'Task')}</a><small class="muted"> · due ${t.due||'—'}</small></div>`).join(''):'<p class="muted">No open tasks.</p>'}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Process Lanes</h3><p class="card-desc">Guided, step-by-step work for one record — read the blueprint before anyone runs it</p></div></div><div class="card-body"><div class="prb-row"><div><strong>Receive Shipment</strong><small class="muted"> · Purchase Order · 5 stages, 12 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-receiving">View blueprint</button></div></div><div class="prb-row"><div><strong>Pick & Pack</strong><small class="muted"> · Sales Order · 5 stages, 13 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-pickpack">View blueprint</button></div></div>${pickpackDueRows}<p class="muted" style="font-size:12px;margin-top:8px">The blueprint shows the lane definition only — stages, steps, run-data fields and mapped record fields. No run, no record data.</p></div></section></div>`;
  document.querySelectorAll('[data-wh-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.whNav;viewFilter=null;detailRecord=null;renderView()});
  wireCellLinks($('#view'));
  laneWireStartButtons($('#view'));
@@ -10327,8 +10394,11 @@ async function laneBlueprintDef(id){
  const seeded=(data.laneDefinitions||[]).find(d=>d&&d.lane&&d.lane.id===id);
  if(seeded)return seeded.lane;
  if(laneBlueprintCache[id])return laneBlueprintCache[id];
- if(id!=='lane-wh-receiving')return null;
- const res=await fetch('/program/spec/schemas/examples/lane-wh-receiving.json');
+ if(!/^lane-wh-[a-z0-9-]+$/.test(id))return null;
+ // The receiving lane fetches the shared example by its literal path
+ // (WP-0712 AC-5: the demo reads the shared example, the same definition
+ // the core imports). Other lanes resolve the same way by id.
+ const res=await (id==='lane-wh-receiving'?fetch('/program/spec/schemas/examples/lane-wh-receiving.json'):fetch('/program/spec/schemas/examples/'+id+'.json'));
  if(!res.ok)return null;
  const file=await res.json();
  if(!file||!file.lane||file.lane.id!==id)return null;
@@ -22787,6 +22857,7 @@ function demoDescribeApproval(a){
  if(a.subjectType==='warehouse_recount')return `Recount ${agentEsc(p.countNumber||'')} — ${agentEsc(p.sku||'')} counted ${p.countedQty} vs expected ${p.expectedQty} (variance ${p.variance}) was rejected; queue a recount?`;
  if(a.subjectType==='warehouse_pick_shortfall')return `Shortfall on ${agentEsc(p.soNumber||'')} — ${agentEsc(p.sku||'')} × ${p.qtyOrdered} has ${p.qtyAvailable} available; confirm backorder?`;
  if(a.subjectType==='warehouse_receipt_discrepancy')return `Receipt discrepancy on ${agentEsc(p.poNumber||'')} — ${agentEsc(p.sku||'')} ordered ${p.qtyOrdered}, received ${p.qtyReceived}, rejected ${p.qtyRejected}; release put-away for the ${p.qtyReceived} good units?`;
+ if(a.subjectType==='warehouse_pick_discrepancy')return `Pick discrepancy on ${agentEsc(p.soNumber||'')} — ${agentEsc(p.sku||'')} ordered ${p.qtyOrdered}, reserved ${p.qtyReserved}, picked ${p.qtyPicked}, damaged ${p.qtyDamaged}; approve a replacement pick?`;
  if(a.subjectType==='warehouse_draft_po')return `Draft PO for ${agentEsc(p.sku||'')} — order ${p.reorderQty} from ${agentEsc(p.supplierName||'')} (~$${Number(p.estCost||0).toFixed(2)} CAD)?`;
  return agentEsc(a.subjectType);
 }
@@ -22799,6 +22870,7 @@ function warehouseApprovalToast(id,approve){
  if(t==='warehouse_recount')return approve?'Approved — recount queued':'Rejected — count stays rejected';
  if(t==='warehouse_pick_shortfall')return approve?'Approved — backorder confirmed, customer notified':'Rejected — no backorder created';
  if(t==='warehouse_receipt_discrepancy'&&a.proposal&&a.proposal.laneRunId)return approve?'Approved — the lane run advanced to put-away':'Rejected — the lane run moved to the hold step, nothing posted';
+ if(t==='warehouse_pick_discrepancy'&&a.proposal&&a.proposal.laneRunId)return approve?'Approved — the lane run returned to the pick step for a replacement':'Rejected — the lane run moved to the hold step, nothing posted';
  if(t==='warehouse_receipt_discrepancy')return approve?'Approved — put-away released for the good units':'Rejected — put-away stays on hold';
  if(t==='warehouse_draft_po')return approve?'Approved — draft purchase order created':'Rejected — no purchase order created';
  if(t==='pipeline_run'||t==='execution_graph_node')return approve?'Approved - the run resumed':'Rejected - the run ended';
@@ -22816,7 +22888,7 @@ function demoDecideApproval(id,approve){
   }
  }else if(a.subjectType==='execution_graph_node'){
   agentTeamResolveApproval(a.subjectId,approve,true);
- }else if(a.subjectType==='warehouse_receipt_discrepancy'&&a.proposal&&a.proposal.laneRunId){
+ }else if((a.subjectType==='warehouse_receipt_discrepancy'||a.subjectType==='warehouse_pick_discrepancy')&&a.proposal&&a.proposal.laneRunId){
   laneDecideApproval(a.proposal.laneRunId,approve);
  }else if(a.subjectType&&a.subjectType.startsWith('warehouse_')){
   warehouseApprovalEffect(a,approve);
@@ -23943,6 +24015,27 @@ function laneSeedRunPo005(){
  return {run, steps};
 }
 
+// The seeded run for SO-2026-001, waiting mid-pick at step 1.2 (spec C5).
+// Its state mirrors the seed exactly: 2 × HG-1001 and 3 × HG-1013 picked
+// (bins A-01-03 and A-03-01, lot-001 FEFO on HG-1013), pick-01 and pt-01
+// IN_PROGRESS. The run has picked nothing itself yet: the quantities it
+// started from are the run's start snapshot.
+function laneSeedRunSo001(){
+ const run={
+  id:'run-wh-so001', laneId:'lane-wh-pickpack', laneVersion:1,
+  anchorObjectKey:'sales_order', anchorRecordId:'so-2026-001',
+  status:'waiting_person', currentStageId:'pick', currentStepId:'pick-remaining-lines',
+  runData:{_start_picked:{'sol-001-1':2,'sol-001-2':3}},
+  startedBy:'user-04', startedAt:'2026-11-13T08:20:00.000Z', finishedAt:null, outcome:null,
+  approvalId:null
+ };
+ const steps=[
+  {id:'lstep-so001-1', runId:'run-wh-so001', stageId:'pick', stepId:'confirm-order-wave', status:'completed', attempt:1, enteredAt:'2026-11-13T08:20:00.000Z', completedAt:'2026-11-13T08:22:00.000Z', completedBy:'user-04', note:'Order, wave and route confirmed.', writes:[]},
+  {id:'lstep-so001-2', runId:'run-wh-so001', stageId:'pick', stepId:'pick-remaining-lines', status:'waiting_person', attempt:1, enteredAt:'2026-11-13T08:22:00.000Z', completedAt:null, completedBy:null, note:null, writes:[]}
+ ];
+ return {run, steps};
+}
+
 // Heal stored workspaces the way ensureWarehouseDay2 does: id-guarded,
 // one-time-flagged so a finished run is never resurrected, and re-seeded
 // from scratch after Reset (which rebuilds data from the literal, so the
@@ -23951,6 +24044,7 @@ function laneSeedRunPo005(){
 function ensureWarehouseLaneData(){
  if(!data.laneDefinitions)data.laneDefinitions=[];
  if(!laneDef('lane-wh-receiving'))data.laneDefinitions.push(JSON.parse(JSON.stringify(LANE_WH_RECEIVING)));
+ if(!laneDef('lane-wh-pickpack'))data.laneDefinitions.push(JSON.parse(JSON.stringify(LANE_WH_PICKPACK)));
  if(!data.laneRuns)data.laneRuns=[];
  if(!data.laneRunSteps)data.laneRunSteps=[];
  if(!data.workspace.warehouseLaneSeeded){
@@ -23964,6 +24058,14 @@ function ensureWarehouseLaneData(){
    if(apr){ apr.proposal=apr.proposal||{}; apr.proposal.laneRunId='run-wh-po005'; apr.proposal.laneStepId='review-discrepancy'; }
   }
   data.workspace.warehouseLaneSeeded=true;
+ }
+ if(!data.workspace.warehouseLanePickpackSeeded){
+  const seeded=laneSeedRunSo001();
+  if(!laneRunById(seeded.run.id)&&!laneRunsForRecord('sales_order','so-2026-001').length){
+   data.laneRuns.push(seeded.run);
+   seeded.steps.forEach(s=>data.laneRunSteps.push(s));
+  }
+  data.workspace.warehouseLanePickpackSeeded=true;
  }
 }
 
@@ -24020,7 +24122,11 @@ function laneEvalCondition(cond, ctx){
  return laneCompare(cond.operator, left, right);
 }
 function laneEvalConditionGroup(group, ctx){
- const results=(group.conditions||[]).map(c=>laneEvalCondition(c, ctx));
+ // A bare condition (no conditions array) is itself the group: without
+ // this, a single-condition start condition evaluated vacuously true and
+ // never blocked anything.
+ if(!group.conditions)return laneEvalCondition(group, ctx);
+ const results=group.conditions.map(c=>laneEvalCondition(c, ctx));
  return group.match==='any'?results.some(Boolean):results.every(Boolean);
 }
 // The narrow sum grammar (ADR-0024 section 5): a sum of field references
@@ -24085,6 +24191,22 @@ function laneCurrentStep(run){
  if(!def)return null;
  return laneFindStep(def, run.currentStageId, run.currentStepId);
 }
+// The last completed step before the current one, for the Back button.
+// Walks the lane in definition order; null when the run is on its first step.
+function lanePrevCompletedStep(run){
+ const def=laneDef(run.laneId);
+ const cur=laneCurrentStep(run);
+ if(!def||!cur)return null;
+ let prev=null;
+ for(const stage of (def.lane.stages||[])){
+  for(const step of (stage.steps||[])){
+   if(stage.id===cur.stage.id&&step.id===cur.step.id)return prev;
+   const row=laneStepRow(run.id, stage.id, step.id);
+   if(row&&row.status==='completed')prev={stage, step};
+  }
+ }
+ return prev;
+}
 function laneRunLabel(run){
  const def=laneDef(run.laneId);
  const po=byId(run.anchorObjectKey, run.anchorRecordId);
@@ -24122,7 +24244,7 @@ function laneStartRun(laneId, recordId){
  const perChild=lanePerChildMap(def);
  const ctx={record:po, runData:{}, item:null, perChild};
  if(def.lane.start_condition&&!laneEvalConditionGroup(def.lane.start_condition, ctx)){
-  toast(`The ${def.lane.name} lane starts only when the order is OPEN — ${po.po_number||recordId} is ${po.status}.`);
+  toast(`The ${def.lane.name} lane cannot start on ${po.po_number||po.so_number||recordId} — it is ${po.status}.`);
   return null;
  }
  const first=laneOrderedSteps(def)[0];
@@ -24133,6 +24255,12 @@ function laneStartRun(laneId, recordId){
   runData:{}, startedBy:'user-01', startedAt:new Date().toISOString(), finishedAt:null, outcome:null,
   approvalId:null
  };
+ // Snapshot the per-line picked quantities at run start: the pick lane's
+ // PICK moves post only what this run picked, not what was already picked
+ // before it (the seed's SO lines carry picks with no move behind them).
+ const startPicked={};
+ (po.lines||[]).forEach(l=>{ startPicked[l.id]=Number(l.qty_picked||0); });
+ run.runData._start_picked=startPicked;
  laneRuns().push(run);
  laneEnterStep(run, first.stage, first.step);
  save();
@@ -24157,6 +24285,27 @@ function laneEnterStep(run, stage, step){
 function laneCreateApproval(run, step){
  const def=laneDef(run.laneId);
  const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ // Pick & Pack: the discrepancy is a short pick or a damaged unit, not a
+ // short receipt — same shape, different subject and quantities.
+ if(run.anchorObjectKey==='sales_order'){
+  const badLines=(po.lines||[]).filter(l=>Number(l.qty_picked||0)<Number(l.qty_reserved||0)||Number(l.qty_damaged||0)>0);
+  const firstBad=badLines[0];
+  const prod=firstBad?(data.product||[]).find(p=>p.id===firstBad.product_id)||{}:{};
+  ensureDemoApprovals();
+  const approval={
+   id:'apr-'+uid(), subjectType:'warehouse_pick_discrepancy', subjectId:po.id,
+   proposal:{
+    soId:po.id, soNumber:po.so_number, productId:firstBad?firstBad.product_id:null, sku:prod.sku||'',
+    qtyOrdered:firstBad?firstBad.qty_ordered:0, qtyReserved:firstBad?firstBad.qty_reserved:0, qtyPicked:firstBad?firstBad.qty_picked:0, qtyDamaged:firstBad?firstBad.qty_damaged:0,
+    lines:badLines.map(l=>{ const p=(data.product||[]).find(x=>x.id===l.product_id)||{}; return {lineId:l.id, productId:l.product_id, sku:p.sku||'', qtyOrdered:l.qty_ordered, qtyReserved:l.qty_reserved, qtyPicked:l.qty_picked, qtyDamaged:l.qty_damaged, reason:(run.runData.damage_reason||{})[l.id]||''}; }),
+    laneRunId:run.id, laneStepId:step.id
+   },
+   status:'pending', requestedBy:'Pick & Pack lane', createdAt:new Date().toISOString(), resolvedAt:null
+  };
+  data.aiApprovals.unshift(approval);
+  run.approvalId=approval.id;
+  return approval;
+ }
  const badLines=(po.lines||[]).filter(l=>Number(l.qty_received||0)<Number(l.qty_ordered||0)||Number(l.qty_rejected||0)>0);
  const firstBad=badLines[0];
  const prod=firstBad?(data.product||[]).find(p=>p.id===firstBad.product_id)||{}:{};
@@ -24195,7 +24344,7 @@ function laneEvaluateCheckStep(run, step, row){
  }
  row.status='completed'; row.completedAt=new Date().toISOString(); row.completedBy='user-01';
  row.outcome=pass?'pass':'fail';
- row.note=pass?'Passed — every line fully received.':('Failed — '+(rule.message||'a line is short or has rejected units.'));
+ row.note=pass?'Passed.':('Failed — '+(rule.message||'the check failed.'));
  const branch=(step.branches||[]).find(b=>b.on===row.outcome);
  if(!branch){ toast('The lane has no branch for this check outcome.'); return null; }
  return laneFollowBranch(run, branch);
@@ -24306,7 +24455,8 @@ function laneSubmitFormStep(run, step, values){
   }
   if(line){
    const l=(po.lines||[]).find(x=>x.id===line.id)||line;
-   notes.push(`${laneLineLabel(po,l)}: received ${l.qty_received}, rejected ${l.qty_rejected}`);
+   const written=(step.fields||[]).filter(f=>vals[f.key]!==undefined&&vals[f.key]!==null&&vals[f.key]!=='').map(f=>`${f.label} ${vals[f.key]}`);
+   notes.push(`${laneLineLabel(po,l)}: ${written.length?written.join(', '):'no values entered'}`);
   }
  }
  const row=laneStepRow(run.id, run.currentStageId, step.id);
@@ -24344,7 +24494,9 @@ function laneApplyBinding(runData, line, po, bindsTo, value, perChildMap){
 }
 function laneLineLabel(po, line){
  const prod=(data.product||[]).find(p=>p.id===line.product_id)||{};
- return `${prod.sku||line.product_id} (ordered ${line.qty_ordered})`;
+ // Sales-order lines carry pick state; purchase-order lines do not.
+ const picked=line.qty_picked!==undefined?`, picked ${line.qty_picked}`:'';
+ return `${prod.sku||line.product_id} (ordered ${line.qty_ordered}${picked})`;
 }
 // A record step: execute its writes, all-or-nothing per line, then advance.
 // A write that already posted (same move, same quantity) is not posted
@@ -24393,33 +24545,66 @@ function laneResolveInputs(inputs, run, itemCtx){
 // catalog is WP-0705's; it must adopt these ids or update the example in
 // the same pull request.
 const laneActionTypes={
- 'warehouse.post_stock_move': (inputs, run, step)=>lanePostStockMove(inputs),
+ 'warehouse.post_stock_move': (inputs, run, step)=>lanePostStockMove(inputs, run),
  'purchase_order.set_status': (inputs, run, step)=>laneSetPoStatus(inputs, run, step),
- 'purchase_order.close_receipt': (inputs, run, step)=>laneCloseReceipt(inputs, run, step)
+ 'purchase_order.close_receipt': (inputs, run, step)=>laneCloseReceipt(inputs, run, step),
+ 'sales_order.set_status': (inputs, run, step)=>laneSetSoStatus(inputs, run, step),
+ 'picking.set_status': (inputs, run, step)=>laneSetPickingStatus(inputs, run, step),
+ 'shipment.create': (inputs, run, step)=>laneCreateShipment(inputs, run, step),
+ 'sales_order.ship': (inputs, run, step)=>laneShipSalesOrder(inputs, run, step),
+ 'run_data.set': (inputs, run, step)=>laneSetRunData(inputs, run, step)
 };
+function laneSetRunData(inputs, run){
+ if(!run||!inputs||!inputs.key)return null;
+ (run.runData=run.runData||{})[inputs.key]=inputs.value;
+ return 'Run data '+inputs.key+' set.';
+}
 function laneLocationCode(id){
  const loc=(data.location||[]).find(l=>l.id===id);
  return loc?loc.code:id;
 }
-function lanePostStockMove(inputs){
- const qty=Number(inputs.quantity||0);
+function lanePostStockMove(inputs, run){
  const prod=(data.product||[]).find(p=>p.id===inputs.product_id)||{};
  const sku=prod.sku||inputs.product_id;
+ const toLabel=inputs.to_location?laneLocationCode(inputs.to_location):'out';
+ // The sales-order line this move is for (Pick & Pack only): the PICK
+ // delta, and the PACK/SHIP line updates, are read off it.
+ const so=run&&run.anchorObjectKey==='sales_order'?byId('sales_order', inputs.reference_id):null;
+ const line=so?(so.lines||[]).find(l=>l.product_id===inputs.product_id):null;
+ let qty=Number(inputs.quantity||0);
+ if(inputs.move_type==='PICK'&&line){
+  // Only what this run picked: the line's total minus what was already
+  // picked when the run started, minus PICK moves already posted for it.
+  const startPicked=Number((((run.runData||{})._start_picked)||{})[line.id]||0);
+  const alreadyPosted=(data.stock_move||[]).filter(m=>m.move_type==='PICK'&&m.product_id===inputs.product_id&&m.reference_id===inputs.reference_id).reduce((t,m)=>t+Number(m.qty||0),0);
+  qty=qty-startPicked-alreadyPosted;
+  if(!(qty>0))return `No PICK move for ${sku} — already picked before this run.`;
+ }
  if(!(qty>0))return `No ${inputs.move_type} move for ${sku} — received 0.`;
  // Repeat-safe: the same move for the same reference never posts twice.
  // The key is the business fact (type + product + reference + quantity):
  // the bin is where the goods sit, not whether they moved.
  const existing=(data.stock_move||[]).find(m=>m.move_type===inputs.move_type&&m.product_id===inputs.product_id&&m.reference_id===inputs.reference_id&&Number(m.qty)===qty);
- if(existing)return `${existing.move_number} ${inputs.move_type} ${sku} × ${qty} → ${laneLocationCode(inputs.to_location)} (already posted)`;
+ if(existing)return `${existing.move_number} ${inputs.move_type} ${sku} × ${qty} → ${toLabel} (already posted)`;
  const n=nextWarehouseMoveNumber();
  const stockForLot=(data.stock||[]).find(s=>s.product_id===inputs.product_id);
+ // A PICK's from-bin is the product's bin (the definition does not pass
+ // one); every other move type passes its locations explicitly.
+ const fromLoc=inputs.move_type==='PICK'&&inputs.from_location===undefined?(stockForLot?stockForLot.location_id:null):(inputs.from_location||null);
  data.stock_move.unshift({
   id:'mv-'+uid(), number:n, name:n+' · '+inputs.move_type, status:'DONE', owner:'Sarah Chen', notes:'',
   move_number:n, move_type:inputs.move_type, product_id:inputs.product_id,
   lot_id:stockForLot?stockForLot.lot_id||null:null, qty,
-  from_location_id:inputs.from_location||null, to_location_id:inputs.to_location||null,
+  from_location_id:fromLoc, to_location_id:inputs.to_location||null,
   reference_id:inputs.reference_id, performed_by:'user-01', move_date:WAREHOUSE_TODAY
  });
+ // The SO line follows its moves: PACK sets packed, SHIP sets shipped and
+ // releases the reservation on the line. (The pick totals were written by
+ // the 1.2 form step, not here.)
+ if(line){
+  if(inputs.move_type==='PACK')line.qty_packed=Number(line.qty_packed||0)+qty;
+  if(inputs.move_type==='SHIP'){ line.qty_shipped=Number(line.qty_shipped||0)+qty; line.qty_reserved=Math.max(0,Number(line.qty_reserved||0)-qty); }
+ }
  // Stock on hand moves only on PUTAWAY (goods arriving in the bin). A
  // RECEIPT move parks the goods in the receiving bin; no stock row lives
  // there, so on hand does not change.
@@ -24434,11 +24619,27 @@ function lanePostStockMove(inputs){
   else if(Number(stock.on_hand||0)-Number(stock.reserved||0)<=Number(prod.reorder_level||0))stock.status='LOW_STOCK';
   else stock.status='IN_STOCK';
  }
- return `${n} ${inputs.move_type} ${sku} × ${qty} → ${laneLocationCode(inputs.to_location)}`;
+ // SHIP removes goods from the warehouse: on hand falls and the
+ // reservation is released. Available is recomputed, never written — for
+ // a fully-reserved order it does not change.
+ if(inputs.move_type==='SHIP'){
+  const stock=(data.stock||[]).find(s=>s.product_id===inputs.product_id);
+  if(stock){
+   stock.on_hand=Math.max(0,Number(stock.on_hand||0)-qty);
+   stock.reserved=Math.max(0,Number(stock.reserved||0)-qty);
+   if(Number(stock.on_hand||0)===0)stock.status='OUT_OF_STOCK';
+   else if(Number(stock.on_hand||0)-Number(stock.reserved||0)<=Number(prod.reorder_level||0))stock.status='LOW_STOCK';
+   else stock.status='IN_STOCK';
+  }
+ }
+ return `${n} ${inputs.move_type} ${sku} × ${qty} → ${toLabel}`;
+}
+function laneFireWorkflows(objectKey, record, before, replaces){
+ const skip=new Set((replaces||[]).map(r=>r.workflow_id+':'+r.action_index));
+ evaluateWorkflowRulesFor(objectKey, record, before, record, skip.size?skip:null);
 }
 function laneFirePoWorkflows(po, before, replaces){
- const skip=new Set((replaces||[]).map(r=>r.workflow_id+':'+r.action_index));
- evaluateWorkflowRulesFor('purchase_order', po, before, po, skip.size?skip:null);
+ laneFireWorkflows('purchase_order', po, before, replaces);
 }
 function laneSetPoStatus(inputs, run, step){
  const po=byId(run.anchorObjectKey, run.anchorRecordId);
@@ -24466,6 +24667,58 @@ function laneCloseReceipt(inputs, run, step){
  });
  data.notifications.unshift({id:uid(), message:`${po.po_number} ${fully?'received':'partially received'}: ${parts.join(', ')}. Stock on hand ${onHand.join(' / ')}.`, createdAt:new Date().toISOString(), read:false});
  return `PO status → ${po.status}`;
+}
+
+// ---- Pick & Pack Action Types (provisional ids, ADR-0024 section 14) ----
+// The sales-order, picking and shipment writes the Pick & Pack lane needs.
+// Each fires the record's workflows with the step's `replaces` (the lane
+// owns the transition; the workflow is the fallback outside a lane).
+function laneSetSoStatus(inputs, run, step){
+ const so=byId(run.anchorObjectKey, run.anchorRecordId);
+ const before={...so};
+ so.status=inputs.status;
+ laneFireWorkflows('sales_order', so, before, step.replaces);
+ return `SO status → ${inputs.status}`;
+}
+function laneSetPickingStatus(inputs, run, step){
+ const picking=(data.picking||[]).find(pk=>pk.source_order_id===run.anchorRecordId);
+ if(!picking)return 'No picking row for this order.';
+ const before={...picking};
+ picking.status=inputs.status;
+ laneFireWorkflows('picking', picking, before, step.replaces);
+ return `Picking status → ${inputs.status}`;
+}
+function nextWarehouseShipmentNumber(){
+ const nums=(data.shipment||[]).map(sh=>{const mt=/^SHIP-2026-(\d+)$/.exec(sh.shipment_number||sh.number||'');return mt?Number(mt[1]):0});
+ return 'SHIP-2026-'+String(Math.max(0,...nums)+1).padStart(3,'0');
+}
+function laneCreateShipment(inputs, run, step){
+ const so=byId(run.anchorObjectKey, run.anchorRecordId);
+ const n=nextWarehouseShipmentNumber();
+ const weight=Number(inputs.weight);
+ data.shipment.unshift({
+  id:'ship-'+uid(), number:n, name:n+' · '+(so?so.so_number:''), status:inputs.status||'PACKED', owner:'Sarah Chen', notes:'',
+  shipment_number:n, sales_order_id:so?so.id:null, carrier:inputs.carrier||(so?so.carrier:''), service:inputs.service||(so?so.ship_method:''),
+  tracking_number:null, weight_kg:Number.isFinite(weight)?weight:null, shipped_at:null
+ });
+ return `Shipment ${n} created — ${inputs.status||'PACKED'}`;
+}
+function laneShipSalesOrder(inputs, run, step){
+ const so=byId(run.anchorObjectKey, run.anchorRecordId);
+ const before={...so};
+ so.status='SHIPPED';
+ so.tracking_number=inputs.tracking||null;
+ laneFireWorkflows('sales_order', so, before, step.replaces);
+ const ship=(data.shipment||[]).find(sh=>sh.sales_order_id===so.id);
+ if(ship){ ship.status='SHIPPED'; ship.tracking_number=inputs.tracking||null; ship.shipped_at=WAREHOUSE_TODAY; }
+ // Automatic notification to the Warehouse Manager and the customer,
+ // composed from the run's actual values.
+ const parts=(so.lines||[]).map(l=>{
+  const prod=(data.product||[]).find(x=>x.id===l.product_id)||{};
+  return `${l.qty_shipped} × ${prod.sku||l.product_id}`;
+ });
+ data.notifications.unshift({id:uid(), message:`${so.so_number} shipped: ${parts.join(', ')}. Tracking ${inputs.tracking||'—'}.`, createdAt:new Date().toISOString(), read:false});
+ return `SO status → SHIPPED${ship?` · ${ship.shipment_number} shipped`:''}`;
 }
 
 // ---- Runner screen --------------------------------------------------------
@@ -24510,10 +24763,16 @@ function renderLaneRunner(){
  const steps=laneStepsForRun(run.id);
  const finished=['completed','completed_partial','cancelled'].includes(run.status);
  const supplier=(data.supplier||[]).find(s=>s.id===po.supplier_id)||{};
+ const isSO=run.anchorObjectKey==='sales_order';
+ const recNumber=po.po_number||po.so_number||'';
+ const recName=isSO?((data.customer||[]).find(c=>c.id===po.customer_id)||{}).name||'':supplier.name||'';
+ const picking=isSO?(data.picking||[]).find(pk=>pk.source_order_id===po.id):null;
+ const pickTask=isSO&&picking?(data.pick_task||[]).find(t=>(t.picking_ids||[]).includes(picking.id)):null;
  const viewStep=laneViewStep&&laneFindStep(def, laneViewStep.stageId, laneViewStep.stepId);
  const showStep=viewStep||cur;
  const showRow=showStep?laneStepRow(run.id, showStep.stage.id, showStep.step.id):null;
  const isViewingBack=!!viewStep;
+ const prevStep=!finished?lanePrevCompletedStep(run):null;
  // Stage bar: every stage, current highlighted, done checked.
  const stageBar=stages.map((s,i)=>{
   const cls=i<curStageIdx||finished?'done':i===curStageIdx?'current':'';
@@ -24533,8 +24792,23 @@ function renderLaneRunner(){
  const poLines=(po.lines||[]).map(l=>{
   const prod=(data.product||[]).find(p=>p.id===l.product_id)||{};
   const stock=(data.stock||[]).find(s=>s.product_id===l.product_id);
+  if(isSO)return `<tr><td>${agentEsc(prod.sku||l.product_id)}</td><td>${agentEsc(prod.name||'')}</td><td class="num">${l.qty_ordered}</td><td class="num">${l.qty_reserved}</td><td class="num">${l.qty_picked}</td><td class="num">${l.qty_packed}</td><td class="num">${l.qty_shipped}</td><td class="num">${stock?stock.on_hand:'—'}</td></tr>`;
   return `<tr><td>${agentEsc(prod.sku||l.product_id)}</td><td>${agentEsc(prod.name||'')}</td><td class="num">${l.qty_ordered}</td><td class="num">${l.qty_received}</td><td class="num">${l.qty_rejected}</td><td class="num">${stock?stock.on_hand:'—'}</td></tr>`;
  }).join('');
+ const sideKv=isSO
+  ?`<div class="kv"><span>Status</span><b>${agentEsc(po.status)}</b></div>
+     <div class="kv"><span>Ordered</span><b>${agentEsc(po.order_date||'')}</b></div>
+     <div class="kv"><span>Ship by</span><b>${agentEsc(po.required_ship_date||'')}</b></div>
+     <div class="kv"><span>Ship via</span><b>${agentEsc((po.ship_method||'')+(po.carrier?' · '+po.carrier:''))}</b></div>
+     ${picking?`<div class="kv"><span>Pick task</span><b>${agentEsc(picking.wave_id||'')}${pickTask?` · route ${agentEsc(pickTask.route_sequence||'')}`:''}</b></div>`:''}
+     <div class="kv"><span>Total</span><b>${moneyCAD(po.total||0)}</b></div>`
+  :`<div class="kv"><span>Status</span><b>${agentEsc(po.status)}</b></div>
+     <div class="kv"><span>Ordered</span><b>${agentEsc(po.order_date||'')}</b></div>
+     <div class="kv"><span>Expected</span><b>${agentEsc(po.expected_date||'')}</b></div>
+     <div class="kv"><span>Total</span><b>${moneyCAD(po.total||0)}</b></div>`;
+ const sideHead=isSO
+  ?'<tr><th>SKU</th><th>Item</th><th class="num">Ordered</th><th class="num">Reserved</th><th class="num">Picked</th><th class="num">Packed</th><th class="num">Shipped</th><th class="num">On hand</th></tr>'
+  :'<tr><th>SKU</th><th>Item</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Rejected</th><th class="num">On hand</th></tr>';
  // Audit trail: every step attempt + the run's own events.
  const audit=steps.slice().sort((a,b)=>String(a.enteredAt).localeCompare(String(b.enteredAt))).map(r=>{
   const stepName=(laneFindStep(def, r.stageId, r.stepId)||{step:{name:r.stepId}}).step.name;
@@ -24543,16 +24817,18 @@ function renderLaneRunner(){
  }).join('');
  const writes=laneRunWrittenSummary(run);
  const writesHtml=writes.length?`<div class="card"><h4>What this run has written</h4><ul class="lane-writes">${writes.map(w=>`<li>${agentEsc(w)}</li>`).join('')}</ul></div>`:'';
- const outcomeBanner=finished?`<div class="card lane-outcome"><h4>Run ${agentEsc(run.status)}${run.outcome?` — ${agentEsc(run.outcome)}`:''}</h4><p>${run.outcome==='held'?'This run ended on the hold branch. Nothing further posts to the order; the way out is to start a new run when the supplier or the manager resolves the discrepancy.':run.outcome==='done'?'Every step completed and the order is closed.':''}</p></div>`:'';
+ const outcomeBanner=finished?`<div class="card lane-outcome"><h4>Run ${agentEsc(run.status)}${run.outcome?` — ${agentEsc(run.outcome)}`:''}</h4><p>${run.outcome==='held'?(isSO?'This run ended on the hold branch. Nothing further posts to the order; the way out is to start a new run when the manager resolves the discrepancy.':'This run ended on the hold branch. Nothing further posts to the order; the way out is to start a new run when the supplier or the manager resolves the discrepancy.'):run.outcome==='done'?'Every step completed and the order is closed.':''}</p></div>`:'';
  return `<div class="view">
   <div class="view-head">
    <div>
     <div class="crumbs">Warehouse · Process Lane</div>
     <h2>${agentEsc(laneRunLabel(run))}</h2>
-    <div class="muted">Lane ${agentEsc(def.lane.name)} · version ${def.lane.version} · ${agentEsc(po.po_number)} · status <b>${agentEsc(run.status)}</b></div>
+    <div class="muted">Lane ${agentEsc(def.lane.name)} · version ${def.lane.version} · ${agentEsc(recNumber)} · status <b>${agentEsc(run.status)}</b></div>
    </div>
    <div class="head-actions">
-    <button class="btn btn-secondary" data-lane-back-record="${po.id}">Back to ${agentEsc(po.po_number)}</button>
+    <button class="btn btn-secondary" data-lane-back-record="${run.anchorObjectKey}:${po.id}">Back to ${agentEsc(recNumber)}</button>
+    ${prevStep&&!isViewingBack?'<button class="btn btn-secondary" id="laneBackBtn">Back</button>':''}
+    ${isViewingBack&&cur?'<button class="btn btn-secondary" id="laneBackCurrentBtn">Back to current step</button>':''}
     ${!finished&&run.status!=='paused'?'<button class="btn btn-secondary" id="lanePauseBtn">Pause run</button>':''}
     ${run.status==='paused'?'<button class="btn btn-primary" id="laneResumeBtn">Resume run</button>':''}
    </div>
@@ -24570,12 +24846,9 @@ function renderLaneRunner(){
    </div>
    <div class="lane-side">
     <div class="card">
-     <h4>${agentEsc(po.po_number)} — ${agentEsc(supplier.name||'')}</h4>
-     <div class="kv"><span>Status</span><b>${agentEsc(po.status)}</b></div>
-     <div class="kv"><span>Ordered</span><b>${agentEsc(po.order_date||'')}</b></div>
-     <div class="kv"><span>Expected</span><b>${agentEsc(po.expected_date||'')}</b></div>
-     <div class="kv"><span>Total</span><b>${moneyCAD(po.total||0)}</b></div>
-     <table class="tbl lane-po-lines"><thead><tr><th>SKU</th><th>Item</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Rejected</th><th class="num">On hand</th></tr></thead><tbody>${poLines}</tbody></table>
+     <h4>${agentEsc(recNumber)} — ${agentEsc(recName)}</h4>
+     ${sideKv}
+     <table class="tbl lane-po-lines"><thead>${sideHead}</thead><tbody>${poLines}</tbody></table>
     </div>
     ${writesHtml}
     <div class="card"><h4>Audit trail</h4><div class="lane-audit">${audit||'<p class="muted">Nothing yet.</p>'}</div></div>
@@ -24615,11 +24888,21 @@ function laneRunnerStepHtml(run, stage, step, row, isViewingBack){
  }else if(step.kind==='approval'){
   const apr=(data.aiApprovals||[]).find(a=>a.id===run.approvalId)||null;
   const proposalLines=(apr&&apr.proposal&&apr.proposal.lines)||[];
-  const rows=proposalLines.map(l=>`<tr><td>${agentEsc(l.sku)}</td><td class="num">${l.qtyOrdered}</td><td class="num">${l.qtyReceived}</td><td class="num">${l.qtyRejected}</td><td>${agentEsc(l.reason||'')}</td></tr>`).join('');
+  const isPick=apr&&apr.proposal&&apr.proposal.qtyPicked!==undefined;
+  const rows=isPick
+   ?proposalLines.map(l=>`<tr><td>${agentEsc(l.sku)}</td><td class="num">${l.qtyOrdered}</td><td class="num">${l.qtyReserved}</td><td class="num">${l.qtyPicked}</td><td class="num">${l.qtyDamaged}</td><td>${agentEsc(l.reason||'')}</td></tr>`).join('')
+   :proposalLines.map(l=>`<tr><td>${agentEsc(l.sku)}</td><td class="num">${l.qtyOrdered}</td><td class="num">${l.qtyReceived}</td><td class="num">${l.qtyRejected}</td><td>${agentEsc(l.reason||'')}</td></tr>`).join('');
+  const head=isPick
+   ?'<tr><th>SKU</th><th class="num">Ordered</th><th class="num">Reserved</th><th class="num">Picked</th><th class="num">Damaged</th><th>Reason</th></tr>'
+   :'<tr><th>SKU</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Rejected</th><th>Reason</th></tr>';
+  const note=isPick
+   ?'Approving re-opens the picking as In progress and returns the run to the pick step for a replacement. Rejecting posts nothing and goes to the hold step.'
+   :'Approving posts the guarded write (PO status → PARTIALLY_RECEIVED) and continues to put-away. Rejecting posts nothing and goes to the hold step.';
+  const approveLabel=isPick?'Approve — pick a replacement':'Approve — put away '+(apr?agentEsc(String(apr.proposal.qtyReceived||'')):'')+' × '+(apr?agentEsc(apr.proposal.sku||''):'');
   body=`<p>${agentEsc(step.description||'')}</p>
-   <table class="tbl"><thead><tr><th>SKU</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Rejected</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table>
-   <p class="muted">Approving posts the guarded write (PO status → PARTIALLY_RECEIVED) and continues to put-away. Rejecting posts nothing and goes to the hold step.</p>
-   <div class="lane-actions"><button class="btn btn-primary" id="laneApproveBtn" ${isViewingBack?'disabled':''}>Approve — put away ${apr?agentEsc(String(apr.proposal.qtyReceived||'')):''} × ${apr?agentEsc(apr.proposal.sku||''):''}</button><button class="btn btn-danger" id="laneRejectBtn" ${isViewingBack?'disabled':''}>Reject — hold the order</button></div>`;
+   <table class="tbl"><thead>${head}</thead><tbody>${rows}</tbody></table>
+   <p class="muted">${note}</p>
+   <div class="lane-actions"><button class="btn btn-primary" id="laneApproveBtn" ${isViewingBack?'disabled':''}>${approveLabel}</button><button class="btn btn-danger" id="laneRejectBtn" ${isViewingBack?'disabled':''}>Reject — hold the order</button></div>`;
  }else if(step.kind==='check'){
   body=`<p>${agentEsc(step.description||'')}</p><p class="muted">This step runs on its own when the lane reaches it — ${done?'it '+(row.outcome==='pass'?'passed':'failed')+'.':''}</p>${done&&row.note?`<p>${agentEsc(row.note)}</p>`:''}`;
  }else{
@@ -24639,12 +24922,36 @@ function laneRunnerStepHtml(run, stage, step, row, isViewingBack){
 // One form field, prefilled with the agent's suggestion when the step
 // carries assistance (propose). The suggestion is a starting value, never
 // a decision.
+// A value this run already holds for a field: run data (per-child maps
+// are keyed by line id), or nothing yet.
+function laneStoredFieldValue(run, field, lineId){
+ const runData=run.runData||{};
+ if(field.binds_to&&field.binds_to.startsWith('run_data.')){
+  const key=field.binds_to.slice('run_data.'.length);
+  const v=runData[key];
+  if(v&&typeof v==='object'&&!Array.isArray(v))return lineId?v[lineId]:undefined;
+  return v;
+ }
+ return undefined;
+}
 function laneFieldInputHtml(run, field, lineId, step){
  const po=byId(run.anchorObjectKey, run.anchorRecordId);
  const line=lineId?(po.lines||[]).find(l=>l.id===lineId):null;
  const key=lineId?`${lineId}:${field.key}`:field.key;
- let value='';
- if(step.assistance&&step.assistance.autonomy==='propose')value=laneSuggestedValue(run, field, line);
+ // Prefill: a value this run already holds (seeded partial progress, or a
+ // re-entered step), else the record's current value for record-bound
+ // fields (a line already picked shows its pick, not an empty box), else
+ // the agent's suggestion.
+ let value=laneStoredFieldValue(run, field, lineId);
+ if(value===undefined||value===null||value===''){
+  if(field.binds_to&&field.binds_to.startsWith('record.lines[].')){
+   const rk=field.binds_to.slice('record.lines[].'.length);
+   value=line?line[rk]:undefined;
+  }else if(field.binds_to&&field.binds_to.startsWith('record.')){
+   value=po?po[field.binds_to.slice('record.'.length)]:undefined;
+  }
+ }
+ if((value===undefined||value===null||value==='')&&step.assistance&&step.assistance.autonomy==='propose')value=laneSuggestedValue(run, field, line);
  if(value===undefined||value===null)value='';
  const input=field.type==='integer'?`<input type="number" min="0" step="1" class="input" data-lane-field="${agentEsc(key)}" value="${agentEsc(String(value))}">`
   :field.type==='date'?`<input type="date" class="input" data-lane-field="${agentEsc(key)}" value="${agentEsc(String(value))}">`
@@ -24662,6 +24969,15 @@ function laneSuggestedValue(run, field, line){
  if(field.key==='putaway_bin'&&line){
   const prod=(data.product||[]).find(p=>p.id===line.product_id)||{};
   return prod.preferred_bin_id||'loc-a-01-03';
+ }
+ if(field.key==='tracking_number'){
+  // Next number in the carrier's sequence: the highest used on a
+  // shipment, plus one (CP-1010 → CP-1011 for SO-2026-002).
+  const carrier=(po&&po.carrier)||'';
+  const prefix=carrier==='Canada Post'?'CP-':carrier==='Purolator'?'PURO-':'';
+  if(!prefix)return '';
+  const nums=(data.shipment||[]).map(sh=>{const mt=new RegExp('^'+prefix+'(\\d+)$').exec(sh.tracking_number||'');return mt?Number(mt[1]):0});
+  return prefix+String(Math.max(0,...nums)+1).padStart(4,'0');
  }
  return '';
 }
@@ -24720,6 +25036,10 @@ function laneWireRunner(run){
  if(pauseBtn)pauseBtn.onclick=()=>{ lanePauseRun(run); renderView(); };
  const resumeBtn=byIdDom('laneResumeBtn');
  if(resumeBtn)resumeBtn.onclick=()=>{ laneResumeRun(run); renderView(); };
+ const backBtn=byIdDom('laneBackBtn');
+ if(backBtn)backBtn.onclick=()=>{ const prev=lanePrevCompletedStep(run); if(prev){ laneViewStep={stageId:prev.stage.id, stepId:prev.step.id}; renderView(); } };
+ const backCurBtn=byIdDom('laneBackCurrentBtn');
+ if(backCurBtn)backCurBtn.onclick=()=>{ laneViewStep=null; renderView(); };
  document.querySelectorAll('[data-lane-view-step]').forEach(btn=>{
   btn.onclick=()=>{
    const [stageId, stepId]=btn.dataset.laneViewStep.split(':');
@@ -24728,7 +25048,7 @@ function laneWireRunner(run){
   };
  });
  document.querySelectorAll('[data-lane-back-record]').forEach(btn=>{
-  btn.onclick=()=>{ openRecordDetail('purchase_order', btn.dataset.laneBackRecord); };
+  btn.onclick=()=>{ const parts=btn.dataset.laneBackRecord.split(':'); openRecordDetail(parts[0], parts[1]); };
  });
 }
 function byIdDom(id){ return document.getElementById(id); }
@@ -24746,20 +25066,21 @@ function laneWireStartButtons(scope){
  (scope||document).querySelectorAll('[data-lane-open-run]').forEach(b=>b.onclick=()=>laneOpenRunner(b.dataset.laneOpenRun));
  (scope||document).querySelectorAll('[data-lane-agent]').forEach(b=>b.onclick=()=>laneOpenForAgent(b.dataset.laneAgent));
 }
-// The lane card on a purchase order's record page: open the active run, or
-// start one when the order is OPEN. Other records get no card.
+// The lane card on a record page: open the active run, or start one when
+// the lane's start condition passes. Records with no lane get no card.
 function laneRecordSectionHtml(key,id){
- if(key!=='purchase_order')return '';
  const r=byId(key,id);
  if(!r)return '';
- const def=laneDef('lane-wh-receiving');
+ const def=(data.laneDefinitions||[]).find(d=>d.lane&&d.lane.object_key===key);
  if(!def)return '';
- const run=laneActiveRun('lane-wh-receiving', id);
+ const run=laneActiveRun(def.lane.id, id);
  if(run){
   return `<section class="card" style="margin-bottom:18px"><div class="card-head"><h3>Process Lane — ${agentEsc(def.lane.name)}</h3><p class="card-desc">${agentEsc(laneRunLabel(run))}</p></div><div class="card-body"><button class="btn btn-primary" data-lane-open-run="${run.id}">Open lane run</button></div></section>`;
  }
- if(r.status==='OPEN'){
-  return `<section class="card" style="margin-bottom:18px"><div class="card-head"><h3>Process Lane — ${agentEsc(def.lane.name)}</h3><p class="card-desc">No run yet for this order.</p></div><div class="card-body"><button class="btn btn-primary" data-lane-start="lane-wh-receiving:${id}">Start receiving lane</button></div></section>`;
+ const ctx={record:r, runData:{}, item:null, perChild:lanePerChildMap(def)};
+ if(!def.lane.start_condition||laneEvalConditionGroup(def.lane.start_condition, ctx)){
+  const startLabel=def.lane.id==='lane-wh-receiving'?'Start receiving lane':'Start '+def.lane.name+' lane';
+  return `<section class="card" style="margin-bottom:18px"><div class="card-head"><h3>Process Lane — ${agentEsc(def.lane.name)}</h3><p class="card-desc">No run yet for this order.</p></div><div class="card-body"><button class="btn btn-primary" data-lane-start="${def.lane.id}:${id}">${agentEsc(startLabel)}</button></div></section>`;
  }
  return '';
 }
@@ -24784,11 +25105,18 @@ function laneRunsSectionHtml(objectKey, recordId){
 function laneOpenForAgent(agentId){
  const def=(data.laneDefinitions||[]).find(d=>(d.lane.stages||[]).some(s=>(s.steps||[]).some(st=>st.assistance&&st.assistance.agent===agentId)));
  if(!def){toast('No lane uses this agent.');return;}
- const due=(data.purchase_order||[]).filter(p=>p.status==='OPEN'&&p.expected_date===WAREHOUSE_TODAY)[0]||(data.purchase_order||[]).find(p=>p.status==='OPEN');
+ const records=data[def.lane.object_key]||[];
+ const startOk=r=>{
+  if(!def.lane.start_condition)return true;
+  const ctx={record:r, runData:{}, item:null, perChild:lanePerChildMap(def)};
+  return laneEvalConditionGroup(def.lane.start_condition, ctx);
+ };
+ const dueDateKey=def.lane.object_key==='sales_order'?'required_ship_date':'expected_date';
+ const due=records.filter(r=>startOk(r)&&r[dueDateKey]===WAREHOUSE_TODAY)[0]||records.find(r=>startOk(r));
  if(due){laneStartOrOpen(def.lane.id, due.id);return;}
  const active=(data.laneRuns||[]).find(r=>r.laneId===def.lane.id&&laneRunIsActive(r));
  if(active){laneOpenRunner(active.id);return;}
- toast('No open purchase order to receive.');
+ toast('No order is ready for the '+def.lane.name+' lane.');
 }
 
 
