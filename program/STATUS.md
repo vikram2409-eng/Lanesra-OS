@@ -13,7 +13,7 @@
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
 | 5 · Platform and ecosystem | 42 | 0 | 0 | 0 | 0 | 42 | 0 / 140 | `░░░░░░░░░░` 0% |
 | 6 · Admin console and Experience Studio | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 96 | `░░░░░░░░░░` 0% |
-| 7 · Process Lanes | 21 | 4 | 4 | 0 | 0 | 13 | 12 / 61 | `██░░░░░░░░` 20% |
+| 7 · Process Lanes | 21 | 4 | 5 | 0 | 0 | 12 | 12 / 61 | `██░░░░░░░░` 20% |
 | v2 · Open interop | 1 | 0 | 0 | 0 | 0 | 1 | 0 / 4 | `░░░░░░░░░░` 0% |
 
 ## Edition coverage
@@ -34,6 +34,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 |---|---|---|---|---|---|
 | [WP-0141](work/P1/WP-0141-idempotency-keys-and-side-effect-safe-resume.md) | Idempotency keys and side-effect-safe resume | in_review | claude | `wp/WP-0141-idempotency-keys-and-side-effect-safe-resume` | https://github.com/vikram2409-eng/Lanesra-OS/pull/771 |
 | [WP-0704](work/P7/WP-0704-human-steps-and-run-data.md) | Human steps and run data | in_review | claude | `wp/WP-0704-human-steps-and-run-data` | https://github.com/vikram2409-eng/Lanesra-OS/pull/770 |
+| [WP-0705](work/P7/WP-0705-record-and-check-steps-real-atomic-repeat-safe-writes.md) | Record and check steps: real, atomic, repeat-safe writes | in_review | claude | `wp/WP-0705-record-and-check-step-writes` | https://github.com/vikram2409-eng/Lanesra-OS/pull/775 |
 | [WP-0706](work/P7/WP-0706-approvals-branches-with-exits-pause-handoff-and-cancel.md) | Approvals, branches with exits, pause, handoff and cancel | in_review | claude | `wp/WP-0706-approvals-branches-pause-handoff-cancel` | https://github.com/vikram2409-eng/Lanesra-OS/pull/777 |
 | [WP-0715](work/P7/WP-0715-describe-a-process-the-admin-assistant-drafts-a-lane.md) | Describe a process: the Admin Assistant drafts a lane | in_review | muse | `wp/WP-0715-describe-a-process-drafts-a-lane-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/772 |
 | [WP-0719](work/P7/WP-0719-count-and-replenish-lanes-as-definitions-with-an-authoring-log.md) | Count and Replenish lanes as definitions, with an authoring log | in_review | muse | `wp/WP-0719-count-and-replenish-lanes` | https://github.com/vikram2409-eng/Lanesra-OS/pull/767 |
@@ -338,7 +339,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0702](work/P7/WP-0702-online-demo-the-receive-shipment-lane-on-the-warehouse-demo.md) | Online demo: the Receive Shipment lane on the warehouse demo | E7.6 Shipped lanes | ✅ done | L | ✓Online demo | WP-0701 |
 | [WP-0703](work/P7/WP-0703-lane-definitions-in-the-core-store-lifecycle-and-compile-to.md) | Lane definitions in the core: store, lifecycle and compile to a graph | E7.1 Lane foundation | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0701 |
 | [WP-0704](work/P7/WP-0704-human-steps-and-run-data.md) | Human steps and run data | E7.1 Lane foundation | 👀 in review | L | ○Desktop ○Team Workspace | WP-0703 |
-| [WP-0705](work/P7/WP-0705-record-and-check-steps-real-atomic-repeat-safe-writes.md) | Record and check steps: real, atomic, repeat-safe writes | E7.2 Steps and rules | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0703, WP-0141 |
+| [WP-0705](work/P7/WP-0705-record-and-check-steps-real-atomic-repeat-safe-writes.md) | Record and check steps: real, atomic, repeat-safe writes | E7.2 Steps and rules | 👀 in review | L | ○Desktop ○Team Workspace | WP-0703, WP-0141 |
 | [WP-0706](work/P7/WP-0706-approvals-branches-with-exits-pause-handoff-and-cancel.md) | Approvals, branches with exits, pause, handoff and cancel | E7.2 Steps and rules | 👀 in review | L | ○Desktop ○Team Workspace | WP-0704 |
 | [WP-0707](work/P7/WP-0707-lane-runner-screen-entry-points-and-object-360.md) | Lane runner, first cut: the straight path on desktop and Team Workspace | E7.3 Runner and visibility | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0704, WP-0705 |
 | [WP-0708](work/P7/WP-0708-agent-steps-assistance-and-autonomy-level-per-step.md) | Agent steps, assistance and autonomy level per step | E7.4 Agents in lanes | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0707 |

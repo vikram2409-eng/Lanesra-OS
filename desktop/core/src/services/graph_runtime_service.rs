@@ -394,10 +394,25 @@ async fn execute_node(
         }
         "condition" => {
             let result = evaluate_conditions_config(&config, &run.trigger_input, context);
+            // WP-0705 (REQ-LANE-007): a lane check carries a human-readable
+            // reason. When the check does not pass, surface it on the run node
+            // so the runner screen and the trace show why the run took the
+            // fail branch, instead of a bare `false`.
+            let mut output = json!({ "result": result });
+            if !result {
+                if let Some(message) = config
+                    .get("lane_check")
+                    .and_then(|c| c.get("message"))
+                    .and_then(|v| v.as_str())
+                    .filter(|m| !m.trim().is_empty())
+                {
+                    output["reason"] = json!(message);
+                }
+            }
             record!(
                 "completed",
                 Some(&node.config_json),
-                Some(&json!({"result": result}).to_string()),
+                Some(&output.to_string()),
                 None
             );
             let label = if result { "true" } else { "false" };
@@ -453,6 +468,117 @@ async fn execute_node(
             ))
         }
         "action" => {
+            // WP-0705: a lane record step carries a `writes` array. Resolve
+            // each write's inputs against the run (record + run data) and post
+            // them all-or-nothing inside one idempotency key, so a failure
+            // part-way applies none of them (AC-1) and a retry or a resume
+            // after a crash never repeats a write (AC-2). Each write goes
+            // through the same governed path a direct edit uses, so Business
+            // Rules and access still apply and a blocked write blocks the step
+            // with its message (AC-3).
+            if let Some(writes) = config
+                .get("writes")
+                .and_then(|v| v.as_array())
+                .filter(|w| !w.is_empty())
+                .cloned()
+            {
+                let (Some(object_key), Some(record_id)) = (
+                    run.anchor_object_key
+                        .as_deref()
+                        .or(run.source_entity_type.as_deref()),
+                    run.anchor_record_id
+                        .as_deref()
+                        .or(run.source_entity_id.as_deref()),
+                ) else {
+                    let msg = "a lane record step requires the run to carry an anchor record";
+                    record!("failed", Some(&node.config_json), None, Some(msg));
+                    return Err(AppError::Validation(msg.into()));
+                };
+                let object_key = object_key.to_string();
+                let record_id = record_id.to_string();
+                let run_data: serde_json::Map<String, Value> = run
+                    .run_data_json
+                    .as_deref()
+                    .and_then(|s| serde_json::from_str::<Value>(s).ok())
+                    .and_then(|v| v.as_object().cloned())
+                    .unwrap_or_default();
+                let result = super::idempotency_service::run_once(
+                    conn,
+                    workspace_id,
+                    &run.id,
+                    &node.id,
+                    attempt,
+                    "",
+                    || {
+                        let mut applied = Vec::new();
+                        for write in &writes {
+                            let action_type_name = write
+                                .get("action_type")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default();
+                            let inputs = write
+                                .get("inputs")
+                                .and_then(|v| v.as_object())
+                                .cloned()
+                                .unwrap_or_default();
+                            // Resolve each write just before applying it, so a
+                            // later write can read a field an earlier write set.
+                            let params = super::process_lane_service::resolve_write_params(
+                                conn,
+                                &object_key,
+                                &record_id,
+                                &run_data,
+                                &inputs,
+                            )?;
+                            // Record steps call Action Types: the write goes
+                            // through `action_type_service::invoke`, the same
+                            // governed path (`update_record` /
+                            // `set_entity_values`) a direct edit uses, so
+                            // Business Rules and access still apply (REQ-LANE-006).
+                            let definition = super::action_type_service::get_by_name(
+                                conn,
+                                workspace_id,
+                                &object_key,
+                                action_type_name,
+                            )?
+                            .ok_or_else(|| {
+                                AppError::Validation(format!(
+                                    "record step references Action Type '{action_type_name}', which does not exist"
+                                ))
+                            })?;
+                            super::action_type_service::invoke(
+                                conn,
+                                workspace_id,
+                                &definition.id,
+                                &record_id,
+                                &params,
+                                actor,
+                            )?;
+                            applied.push(action_type_name.to_string());
+                        }
+                        Ok(json!({ "applied": applied }))
+                    },
+                );
+                return match result {
+                    Ok(result) => {
+                        context.insert(node.node_key.clone(), result.clone());
+                        record!(
+                            "completed",
+                            Some(&node.config_json),
+                            Some(&result.to_string()),
+                            None
+                        );
+                        Ok(NodeOutcome::Continue(
+                            single_outgoing(graph, &node.id)?.to_string(),
+                        ))
+                    }
+                    Err(e) => {
+                        let msg = e.to_string();
+                        record!("failed", Some(&node.config_json), None, Some(&msg));
+                        Err(e)
+                    }
+                };
+            }
             let (Some(entity_type), Some(entity_id)) = (
                 run.source_entity_type.as_deref(),
                 run.source_entity_id.as_deref(),

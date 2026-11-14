@@ -211,6 +211,35 @@ pub async fn submit_process_lane_step(
     .await
 }
 
+/// WP-0705: skips the current optional step of a lane run, recording the
+/// reason. A required step is refused by the service. Async because resuming
+/// the run may reach an Agent node.
+#[tauri::command]
+pub async fn skip_process_lane_step(
+    state: State<'_, AppState>,
+    run_id: String,
+    reason: String,
+) -> AppResult<GraphRun> {
+    let master_key = crate::commands::resolve_master_key(&state)?;
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::skip_step(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &run_id,
+            &reason,
+            actor.as_deref(),
+        )
+        .await
+    })
+    .await
+}
+
 /// WP-0706: resolves the approval a lane run waits on, routing it down the
 /// step's approved/rejected branch.
 #[tauri::command]

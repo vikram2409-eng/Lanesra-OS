@@ -422,6 +422,7 @@ pub fn run() {
             commands::process_lane_commands::resolve_process_lane_approval,
             commands::process_lane_commands::cancel_process_lane_run,
             commands::process_lane_commands::handoff_process_lane_step,
+            commands::process_lane_commands::skip_process_lane_step,
             commands::system_graph_commands::list_system_nodes,
             commands::system_graph_commands::get_system_node,
             commands::system_graph_commands::get_system_node_dependencies,
