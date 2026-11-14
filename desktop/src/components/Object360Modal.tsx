@@ -20,6 +20,10 @@ import {
   type Object360InspectTarget,
   type Object360RecordRef,
 } from "./graph/Object360Graph";
+// Pill/canvas styles: previously imported only by DependencyExplorerAdmin,
+// so opening Object 360 from a record screen (Companies, Contacts, …)
+// rendered unstyled pills until the admin page had loaded once.
+import "./graph/graph.css";
 import { GraphInspector, type InspectorGroup } from "./graph/GraphInspector";
 
 const MAX_BULLETS_PER_GROUP = 20;
@@ -245,7 +249,11 @@ export function Object360Modal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ width: "min(1100px, 95vw)", maxHeight: "92vh" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        style={{ width: "min(1100px, 95vw)", maxHeight: "92vh", height: "min(800px, 88vh)", display: "flex", flexDirection: "column" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <h3 style={{ margin: 0 }}>Object 360 · {root.label}</h3>
           <button className="btn btn-secondary" onClick={onClose}>
@@ -260,7 +268,13 @@ export function Object360Modal({
           it, and which AI Agents are scoped to act on it.
         </p>
 
-        <div className="graph-canvas-wrap ontology-canvas-wrap" style={{ position: "relative", height: 560 }}>
+        {/* Graph area fills the modal (flex: 1) instead of the old fixed
+            560px wrap, which left dead space below it on tall viewports
+            and squeezed the graph on short ones. */}
+        <div
+          className="graph-canvas-wrap ontology-canvas-wrap"
+          style={{ position: "relative", flex: 1, minHeight: 320, maxHeight: "none" }}
+        >
           <Object360Graph
             root={root}
             data={graphData}

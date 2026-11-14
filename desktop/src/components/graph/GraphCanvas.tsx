@@ -8,7 +8,15 @@
  * - Edge labels as pills (for edges touching the inspected node, or all)
  *
  * Zoom/pan: wheel to zoom (at cursor), drag to pan, pinch on touch.
- * `Fit` computes the bounding box and fits; `Reset` restores 1:1.
+ * `Fit` frames the content bounds (pill extents included, see
+ * `graphView.ts`) and re-runs on mount, model change, and resize;
+ * pan is clamped on every pan/zoom/fit so the graph can never be
+ * panned completely off-screen. `Reset` restores 1:1 (clamped).
+ *
+ * The canvas is height:100% with no min-height: the parent (the
+ * Ontology Graph's fixed-height div, Object 360's flex:1 wrap) owns
+ * the height. A min-height here would overflow short parents and the
+ * wrap would clip the canvas's bottom rows.
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -18,6 +26,17 @@ import { layoutGraphPositions, type GraphPosition } from "./useGraphLayout";
 import { useHoverDimming, type HoverDimming } from "./useHoverDimming";
 import { PillNode } from "./PillNode";
 import { ClusterBoundary } from "./ClusterBoundary";
+import {
+  clampPan,
+  contentBounds,
+  estimateEdgeLabelSize,
+  estimatePillSize,
+  expandBounds,
+  fitView,
+  separateOverlappingPills,
+  type ContentBounds,
+  type FitInsets,
+} from "./graphView";
 import type { SystemNodeType } from "../../lib/types";
 
 export interface GraphCanvasProps {
@@ -37,6 +56,13 @@ export interface GraphCanvasProps {
   hover?: HoverDimming;
   /** Fires when zoom changes (for toolbar readout). */
   onZoomChange?: (zoom: number) => void;
+  /** Full labels (wrap instead of truncating at 18 chars). Object 360
+   *  enables this; the dense Ontology Graph keeps the default so its
+   *  pills stay compact. */
+  fullLabels?: boolean;
+  /** Viewport edges to reserve when fitting (e.g. the Object 360
+   *  inspector card over the canvas's right edge). */
+  fitInset?: FitInsets;
   className?: string;
 }
 
@@ -56,24 +82,41 @@ export const GraphCanvas = memo(function GraphCanvas(props: GraphCanvasProps) {
     zoomApiRef,
     hover: hoverProp,
     onZoomChange,
+    fullLabels,
+    fitInset,
     className,
   } = props;
 
   const containerRef = useRef<HTMLDivElement>(null);
+  // Pre-measure fallback only: the effect below reads the real size
+  // synchronously on mount, and ResizeObserver corrects it on resize —
+  // the layout never visibly rests on this default.
   const [containerSize, setContainerSize] = useState({ w: 1200, h: 800 });
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
   const pinchRef = useRef<{ dist: number; zoom: number } | null>(null);
 
-  // Measure container for layout dimensions.
+  // Measure container for layout dimensions — synchronously on mount
+  // (so the first layout already uses the real size), then on resize.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    const read = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        // Floor is only a degenerate-size guard (100px): the old 400px
+        // floor made the layout believe the canvas was taller/wider
+        // than it is on short viewports, so the fit could clip the
+        // bottom rows the canvas doesn't actually have.
+        setContainerSize({ w: Math.max(100, rect.width), h: Math.max(100, rect.height) });
+      }
+    };
+    read();
     const ro = new ResizeObserver((entries) => {
       const rect = entries[0].contentRect;
       if (rect.width > 0 && rect.height > 0) {
-        setContainerSize({ w: Math.max(400, rect.width), h: Math.max(400, rect.height) });
+        setContainerSize({ w: Math.max(100, rect.width), h: Math.max(100, rect.height) });
       }
     });
     ro.observe(el);
@@ -88,6 +131,28 @@ export const GraphCanvas = memo(function GraphCanvas(props: GraphCanvasProps) {
     () => layoutGraphPositions(model, { rootKey: rootKey ?? "", clusterOrder: GRAPH_CLUSTER_ORDER, W, H }),
     [model, rootKey, W, H],
   );
+
+  // Display positions: with full labels, pills are up to 260px wide and
+  // the force layout (which parks centers without knowing pill widths)
+  // stacks several of them on the same spot — e.g. on the W-34 clamp
+  // wall — covering each other's labels. Relax those apart; edges and
+  // cluster ellipses follow the moved centers. The dense Ontology
+  // Graph keeps the raw layout (its truncated pills are narrow).
+  const displayPositions = useMemo(() => {
+    if (!fullLabels) return positions;
+    const items: { key: string; x: number; y: number; width: number; height: number }[] = [];
+    model.nodes.forEach((n) => {
+      if (hiddenTypes.has(n.type)) return;
+      const p = positions.get(n.key);
+      if (!p) return;
+      const size = estimatePillSize(n.label, { isRoot: n.isRoot, fullLabels: true, count: n.count });
+      items.push({ key: n.key, x: p.x, y: p.y, width: size.width, height: size.height });
+    });
+    const separated = separateOverlappingPills(items, { w: W, h: H });
+    const next = new Map(positions);
+    separated.forEach((pos, key) => next.set(key, pos));
+    return next;
+  }, [positions, model.nodes, hiddenTypes, fullLabels, W, H]);
 
   // Hover spotlight — owned here unless the parent passes one in
   // (parents pass it in when the legend needs the same state).
@@ -121,38 +186,78 @@ export const GraphCanvas = memo(function GraphCanvas(props: GraphCanvasProps) {
     [model.edges, nodeByKey, hiddenTypes],
   );
 
+  // Edge label positions (midpoint).
+  const edgeLabelPos = useCallback(
+    (fromKey: string, toKey: string): GraphPosition | null => {
+      const a = displayPositions.get(fromKey);
+      const b = displayPositions.get(toKey);
+      if (!a || !b) return null;
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    },
+    [displayPositions],
+  );
+
   // --- Zoom / pan ---
 
   const clampZoom = useCallback((z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z)), []);
 
-  const zoomIn = useCallback(() => setZoom((z) => clampZoom(z * 1.25)), [clampZoom]);
-  const zoomOut = useCallback(() => setZoom((z) => clampZoom(z / 1.25)), [clampZoom]);
+  // Content bounds INCLUDING pill extents (and edge labels), so fitting
+  // never half-clips the pills at the extremes. Cluster ellipses extend
+  // PAD_X/PAD_Y (58/44 in ClusterBoundary) past their members, so the
+  // bounds grow by that overhang whenever clusters render.
+  const bounds = useMemo<ContentBounds | null>(() => {
+    const items: { x: number; y: number; width: number; height: number }[] = [];
+    model.nodes.forEach((n) => {
+      if (hiddenTypes.has(n.type)) return;
+      const p = displayPositions.get(n.key);
+      if (!p) return;
+      const size = estimatePillSize(n.label, { isRoot: n.isRoot, fullLabels, count: n.count });
+      items.push({ x: p.x, y: p.y, width: size.width, height: size.height });
+    });
+    visibleEdges.forEach((e) => {
+      const pos = edgeLabelPos(e.fromKey, e.toKey);
+      if (!pos) return;
+      const size = estimateEdgeLabelSize(e.label, e.access);
+      items.push({ x: pos.x, y: pos.y, width: size.width, height: size.height });
+    });
+    const b = contentBounds(items);
+    if (!b) return null;
+    return clusters.size > 0 ? expandBounds(b, 58, 58) : b;
+  }, [model.nodes, displayPositions, hiddenTypes, fullLabels, visibleEdges, clusters]);
+
+  const viewport = useMemo(() => ({ w: W, h: H }), [W, H]);
+
+  /** Apply a view, clamping the pan so content stays reachable. */
+  const applyView = useCallback(
+    (view: { zoom: number; pan: { x: number; y: number } }) => {
+      setZoom(view.zoom);
+      setPan(bounds ? clampPan(view.pan, view.zoom, bounds, viewport) : view.pan);
+    },
+    [bounds, viewport],
+  );
+
+  const zoomIn = useCallback(() => {
+    const nz = clampZoom(zoom * 1.25);
+    setZoom(nz);
+    setPan((p) => (bounds ? clampPan(p, nz, bounds, viewport) : p));
+  }, [clampZoom, zoom, bounds, viewport]);
+
+  const zoomOut = useCallback(() => {
+    const nz = clampZoom(zoom / 1.25);
+    setZoom(nz);
+    setPan((p) => (bounds ? clampPan(p, nz, bounds, viewport) : p));
+  }, [clampZoom, zoom, bounds, viewport]);
 
   const fit = useCallback(() => {
-    if (!positions.size) return;
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    positions.forEach((p) => {
-      minX = Math.min(minX, p.x);
-      maxX = Math.max(maxX, p.x);
-      minY = Math.min(minY, p.y);
-      maxY = Math.max(maxY, p.y);
-    });
-    const pad = 80;
-    const bw = maxX - minX + pad * 2;
-    const bh = maxY - minY + pad * 2;
-    const z = clampZoom(Math.min(W / bw, H / bh, 1.5));
-    setZoom(z);
-    setPan({
-      x: W / 2 - ((minX + maxX) / 2) * z,
-      y: H / 2 - ((minY + maxY) / 2) * z,
-    });
-  }, [positions, W, H, clampZoom]);
+    if (!bounds) return;
+    applyView(fitView(bounds, viewport, { padding: 40, maxZoom: 1.5, minZoom: MIN_ZOOM, insets: fitInset }));
+  }, [bounds, viewport, fitInset, applyView]);
 
   const reset = useCallback(() => {
     setZoom(1);
-    setPan({ x: 0, y: 0 });
+    setPan(bounds ? clampPan({ x: 0, y: 0 }, 1, bounds, viewport) : { x: 0, y: 0 });
     hover.onLeave();
-  }, [hover]);
+  }, [hover, bounds, viewport]);
 
   // Expose zoom API to parent (toolbar).
   useEffect(() => {
@@ -162,14 +267,15 @@ export const GraphCanvas = memo(function GraphCanvas(props: GraphCanvasProps) {
     onZoomChange?.(zoom);
   }, [zoomApiRef, zoomIn, zoomOut, fit, reset, zoom, onZoomChange]);
 
-  // Auto-fit on first layout.
-  const fittedRef = useRef(false);
+  // Auto-fit on mount and whenever the layout changes — model change
+  // (legend toggle, pivot/recenter, data load), container resize, or
+  // depth change all recompute `displayPositions`, so the graph
+  // re-frames itself instead of resting on the one first fit. Pan/zoom
+  // state alone never retriggers this: `displayPositions` is memoized
+  // on [model, rootKey, W, H] only.
   useEffect(() => {
-    if (!fittedRef.current && positions.size > 0) {
-      fittedRef.current = true;
-      fit();
-    }
-  }, [positions, fit]);
+    if (displayPositions.size > 0) fit();
+  }, [displayPositions, fit]);
 
   // Wheel zoom (at cursor).
   const onWheel = useCallback(
@@ -179,20 +285,20 @@ export const GraphCanvas = memo(function GraphCanvas(props: GraphCanvasProps) {
       if (!rect) return;
       const cx = e.clientX - rect.left;
       const cy = e.clientY - rect.top;
-      setZoom((z) => {
-        const nz = clampZoom(z * (e.deltaY < 0 ? 1.12 : 1 / 1.12));
-        // Keep the cursor point stable.
-        setPan((p) => ({
-          x: cx - ((cx - p.x) / z) * nz,
-          y: cy - ((cy - p.y) / z) * nz,
-        }));
-        return nz;
-      });
+      const nz = clampZoom(zoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12));
+      // Keep the cursor point stable, then clamp so the zoom can't push
+      // the content off-screen.
+      const raw = {
+        x: cx - ((cx - pan.x) / zoom) * nz,
+        y: cy - ((cy - pan.y) / zoom) * nz,
+      };
+      setZoom(nz);
+      setPan(bounds ? clampPan(raw, nz, bounds, viewport) : raw);
     },
-    [clampZoom],
+    [clampZoom, zoom, pan, bounds, viewport],
   );
 
-  // Drag pan.
+  // Drag pan (clamped — the graph can never be panned off-screen).
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     // Don't start pan on pill / button / label.
     if ((e.target as HTMLElement).closest(".og-pill,.og-cluster-label,button")) return;
@@ -203,8 +309,9 @@ export const GraphCanvas = memo(function GraphCanvas(props: GraphCanvasProps) {
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     const d = dragRef.current;
     if (!d) return;
-    setPan({ x: d.origX + (e.clientX - d.startX), y: d.origY + (e.clientY - d.startY) });
-  }, []);
+    const raw = { x: d.origX + (e.clientX - d.startX), y: d.origY + (e.clientY - d.startY) };
+    setPan(bounds ? clampPan(raw, zoom, bounds, viewport) : raw);
+  }, [bounds, zoom, viewport]);
 
   const onPointerUp = useCallback(() => {
     dragRef.current = null;
@@ -230,25 +337,16 @@ export const GraphCanvas = memo(function GraphCanvas(props: GraphCanvasProps) {
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY,
       );
-      setZoom(clampZoom(p.zoom * (d / p.dist)));
+      const nz = clampZoom(p.zoom * (d / p.dist));
+      setZoom(nz);
+      setPan((prev) => (bounds ? clampPan(prev, nz, bounds, viewport) : prev));
     },
-    [clampZoom],
+    [clampZoom, bounds, viewport],
   );
 
   const onTouchEnd = useCallback(() => {
     pinchRef.current = null;
   }, []);
-
-  // Edge label positions (midpoint).
-  const edgeLabelPos = useCallback(
-    (fromKey: string, toKey: string): GraphPosition | null => {
-      const a = positions.get(fromKey);
-      const b = positions.get(toKey);
-      if (!a || !b) return null;
-      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    },
-    [positions],
-  );
 
   const transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`;
 
@@ -256,7 +354,7 @@ export const GraphCanvas = memo(function GraphCanvas(props: GraphCanvasProps) {
     <div
       ref={containerRef}
       className={cn("ontology-graph-canvas", hover.dimming && "graph-hover-dim", className)}
-      style={{ width: "100%", height: "100%", minHeight: 480, position: "relative", overflow: "hidden", touchAction: "pan-x pan-y" }}
+      style={{ width: "100%", height: "100%", minHeight: 0, position: "relative", overflow: "hidden", touchAction: "pan-x pan-y", userSelect: "none" }}
       onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -275,7 +373,7 @@ export const GraphCanvas = memo(function GraphCanvas(props: GraphCanvasProps) {
               key={`cluster-${type}`}
               type={type}
               members={members}
-              positions={positions}
+              positions={displayPositions}
               hoverOn={hover.hoveredClusterType === type}
               spotlightActive={hover.dimming}
               onCollapse={onClusterToggle}
@@ -285,8 +383,8 @@ export const GraphCanvas = memo(function GraphCanvas(props: GraphCanvasProps) {
           ))}
           {/* Edges */}
           {visibleEdges.map((e, i) => {
-            const a = positions.get(e.fromKey);
-            const b = positions.get(e.toKey);
+            const a = displayPositions.get(e.fromKey);
+            const b = displayPositions.get(e.toKey);
             if (!a || !b) return null;
             const edgeOn = hover.dimming && (hover.connectedSet.has(e.fromKey) && hover.connectedSet.has(e.toKey));
             // When spotlight is active, only edges touching the hovered node stay bright.
@@ -341,7 +439,7 @@ export const GraphCanvas = memo(function GraphCanvas(props: GraphCanvasProps) {
 
         {/* Pill nodes */}
         {model.nodes.map((n) => {
-          const p = positions.get(n.key);
+          const p = displayPositions.get(n.key);
           if (!p) return null;
           if (hiddenTypes.has(n.type)) return null;
           const isDimmed = hiddenTypes.has(n.type);
@@ -356,6 +454,7 @@ export const GraphCanvas = memo(function GraphCanvas(props: GraphCanvasProps) {
               dimmed={isDimmed}
               hoverOn={hoverOn}
               spotlightActive={hover.dimming}
+              fullLabels={fullLabels}
               onClick={onNodeClick}
               onDoubleClick={onNodeDoubleClick}
               onMouseEnter={hover.onPillEnter}
