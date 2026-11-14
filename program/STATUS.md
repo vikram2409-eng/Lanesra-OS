@@ -7,7 +7,7 @@
 | Phase | Work packages | Done | In progress / review | Ready | Blocked | Proposed | Points done / total | Progress |
 |---|---|---|---|---|---|---|---|---|
 | 0 · Precursors | 20 | 19 | 0 | 0 | 0 | 1 | 34 / 36 | `█████████░` 94% |
-| 1 · Foundations | 62 | 35 | 0 | 4 | 0 | 23 | 82 / 162 | `█████░░░░░` 51% |
+| 1 · Foundations | 62 | 35 | 1 | 3 | 0 | 23 | 82 / 162 | `█████░░░░░` 51% |
 | 2 · Playground | 24 | 0 | 0 | 0 | 0 | 24 | 0 / 90 | `░░░░░░░░░░` 0% |
 | 3 · Teams and modes | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 120 | `░░░░░░░░░░` 0% |
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
@@ -32,6 +32,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
+| [WP-0114](work/P1/WP-0114-adr-external-agent-identity-a2a-trust-and-trace-ingest.md) | ADR: external agent identity, A2A trust and trace ingest | in_progress | muse | `wp/WP-0114-adr-external-agent-identity` | - |
 | [WP-0702](work/P7/WP-0702-online-demo-the-receive-shipment-lane-on-the-warehouse-demo.md) | Online demo: the Receive Shipment lane on the warehouse demo | in_review | muse | `wp/WP-0702-receive-shipment-lane-demo-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/758 |
 | [WP-0712](work/P7/WP-0712-blueprint-view-and-export-of-a-lane.md) | Blueprint view and export of a lane | in_review | muse | `wp/WP-0712-blueprint-view-and-export-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/761 |
 
@@ -41,7 +42,6 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 
 | WP | Title | Phase | Estimate |
 |---|---|---|---|
-| [WP-0114](work/P1/WP-0114-adr-external-agent-identity-a2a-trust-and-trace-ingest.md) | ADR: external agent identity, A2A trust and trace ingest | 1 | M |
 | [WP-0141](work/P1/WP-0141-idempotency-keys-and-side-effect-safe-resume.md) | Idempotency keys and side-effect-safe resume | 1 | L |
 | [WP-0147](work/P1/WP-0147-adr-delegated-credentials-token-vault-and-mcp-gateway.md) | ADR: delegated credentials, token vault and MCP gateway | 1 | M |
 | [WP-0160](work/P1/WP-0160-agent-editor-in-eight-settings-groups.md) | Agent editor in eight settings groups | 1 | L |
@@ -107,7 +107,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0111](work/P1/WP-0111-trace-span-model-and-persistence.md) | Trace span model and persistence | E1.2 Run model and trace | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0110 |
 | [WP-0112](work/P1/WP-0112-run-events-over-sse-with-stable-schemas.md) | Run events over SSE with stable schemas | E1.2 Run model and trace | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0111 |
 | [WP-0113](work/P1/WP-0113-full-trace-conformance-suite-phase-1-gate-test.md) | Full-trace conformance suite (Phase 1 gate test) | E1.2 Run model and trace | ✅ done | M | — | WP-0112, WP-0122, WP-0150, WP-0107, WP-0108, WP-0109 |
-| [WP-0114](work/P1/WP-0114-adr-external-agent-identity-a2a-trust-and-trace-ingest.md) | ADR: external agent identity, A2A trust and trace ingest | E1.0 Identity foundation | 🟢 ready | M | — | WP-0108, WP-0111 |
+| [WP-0114](work/P1/WP-0114-adr-external-agent-identity-a2a-trust-and-trace-ingest.md) | ADR: external agent identity, A2A trust and trace ingest | E1.0 Identity foundation | 🔨 in progress | M | — | WP-0108, WP-0111 |
 | [WP-0120](work/P1/WP-0120-agent-persona-limits-and-reasoning-modes.md) | Agent persona, limits and reasoning modes | E1.3 Agent loop | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0110, WP-0130 |
 | [WP-0121](work/P1/WP-0121-step-limits-and-partial-results.md) | Step limits and partial results | E1.3 Agent loop | ✅ done | L | ✓Desktop ✓Team Workspace ✓Online demo | WP-0110, WP-0005 |
 | [WP-0122](work/P1/WP-0122-native-function-calling-and-strict-json-tool-format.md) | Native function calling and strict JSON tool format | E1.3 Agent loop | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0005 |
