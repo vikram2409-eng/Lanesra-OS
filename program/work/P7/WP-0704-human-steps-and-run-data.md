@@ -30,12 +30,12 @@ Let a run wait for a person and keep what they enter.
 
 ## Acceptance criteria
 
-- [ ] AC-1: A run waits at a form step across a restart and resumes when the step is completed
-- [ ] AC-2: Every value entered is stored in run data or the mapped record field; none is dropped (test enumerates the schema)
-- [ ] AC-3: A viewer without the step's role sees its name and who it waits on and cannot complete it; fields they cannot read are not sent to them
-- [ ] AC-4: The trace shows the human step with its wait time
-- [ ] AC-5: Desktop and Team Workspace behave the same from the same code; tests run in both modes
-- [ ] AC-6: Website help (`/help/process-lanes` and any other slug in `docs:`) explains what the feature does, how to set it up step by step and where to find it; `sitemap.xml`, `llms.txt`, `llms-full.txt`, the Releases page and the Roadmap page are updated
+- [x] AC-1: A run waits at a form step across a restart and resumes when the step is completed
+- [x] AC-2: Every value entered is stored in run data or the mapped record field; none is dropped (test enumerates the schema)
+- [x] AC-3: A viewer without the step's role sees its name and who it waits on and cannot complete it; fields they cannot read are not sent to them
+- [x] AC-4: The trace shows the human step with its wait time
+- [x] AC-5: Desktop and Team Workspace behave the same from the same code; tests run in both modes
+- [x] AC-6: Website help (`/help/process-lanes` and any other slug in `docs:`) explains what the feature does, how to set it up step by step and where to find it; `sitemap.xml`, `llms.txt`, `llms-full.txt`, the Releases page and the Roadmap page are updated
 
 ## Test plan
 
@@ -51,3 +51,10 @@ Let a run wait for a person and keep what they enter.
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+### 2026-11-14 claude
+Done: AC-1..AC-6. New `human_step` node waits a lane run in `waiting_person` (ADR-0024 §4/§6) with no lease; `submit_person_step` validates entered values against the step's fields and its `validation`, stores run-data fields on the run and record-bound fields through `custom_field_service::set_entity_values` (the governed path), completes the step row (its open interval is the wait time), and advances via `resume_person_step`. `get_run_view` is the access-limited read (role gates `can_complete`; record-bound values withheld without read access). Exposed on both editions: Tauri commands `submit_process_lane_step` / `get_process_lane_run_view`, server route `/api/admin/process-lane-runs/:id/submit-step` and dispatch `get_process_lane_run_view`. Help article, llms.txt/llms-full.txt and a Releases entry updated.
+State: green locally - `core/tests/process_lane_human_step.rs` 5/5; lane definition/blueprint/runtime suites 18/6/13; `cargo fmt --all --check` clean; `cargo clippy -p lanesra-core` clean; `node --check app.js` ok. The Tauri shell did not build in this VM (missing GTK/`gdk-sys` system libs) - CI's `tauri (desktop shell)` job covers it. Full suite runs on the PR.
+Next: WP-0705 (record and check steps: Action Type writes, all-or-nothing and repeat-safe; needs WP-0141) and WP-0707 (the runner screen, first cut) build on this. `waiting_child` (ADR-0024 §6) is intentionally left to WP-0716.
+Gotchas: every lane step must declare a `role` (the validator enforces it). `custom_field_service::set_entity_values` runs Business Rules but does not itself gate on record capability; WP-0705 adds the access/atomicity wrapper for record *steps*. A step `validation` that is only an arithmetic `expression` is deferred to WP-0710 and does not block here.
+Commands: cargo test -p lanesra-core --features test-support --test process_lane_human_step

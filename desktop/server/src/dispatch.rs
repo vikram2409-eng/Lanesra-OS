@@ -3254,6 +3254,18 @@ pub fn dispatch(
                 actor,
             )?)
         }
+        // WP-0704: the viewer-facing state of a lane run (status, run data,
+        // the current human step). Submitting a step is async and lives in
+        // `admin_actions.rs`, like starting a run.
+        "get_process_lane_run_view" => {
+            let run_id: String = arg(args, "runId")?;
+            to_value(process_lane_service::get_run_view(
+                conn,
+                &require_workspace_id(conn)?,
+                &run_id,
+                actor,
+            )?)
+        }
         "get_graph_run" => {
             let id: String = arg(args, "id")?;
             to_value(graph_runtime_service::get_run(

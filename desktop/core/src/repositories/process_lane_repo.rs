@@ -150,6 +150,22 @@ pub fn get_version_by_id(
     .optional()
 }
 
+/// WP-0704: the published lane version whose compiled graph a run points at
+/// (`ai_runs.graph_id` -> `process_lane_versions.graph_id`). Used to read
+/// the lane definition behind a live run - its stages' names, its run-data
+/// schema - without threading the lane key through the run.
+pub fn get_version_by_graph_id(
+    conn: &Connection,
+    graph_id: &str,
+) -> rusqlite::Result<Option<ProcessLaneVersion>> {
+    conn.query_row(
+        "SELECT * FROM process_lane_versions WHERE graph_id = ?1",
+        [graph_id],
+        map_version_row,
+    )
+    .optional()
+}
+
 pub fn get_version(
     conn: &Connection,
     lane_id: &str,
