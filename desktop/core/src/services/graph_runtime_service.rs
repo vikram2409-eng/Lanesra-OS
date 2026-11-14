@@ -460,22 +460,37 @@ async fn execute_node(
                 .get("params_json")
                 .and_then(|v| v.as_str())
                 .unwrap_or("{}");
-            match workflow_service::apply_action(
+            // WP-0141: apply the action exactly once per step attempt. On a
+            // retry or a resume after a crash the ledger already holds this
+            // key, so `apply_action` is not called again and the first
+            // result is replayed - no duplicate record.
+            match super::idempotency_service::run_once(
                 conn,
                 workspace_id,
-                action_type,
-                params_json,
-                entity_type,
-                entity_id,
-                None,
-                actor,
+                &run.id,
+                &node.id,
+                attempt,
+                "",
+                || {
+                    workflow_service::apply_action(
+                        conn,
+                        workspace_id,
+                        action_type,
+                        params_json,
+                        entity_type,
+                        entity_id,
+                        None,
+                        actor,
+                    )
+                    .map(|summary| json!({"summary": summary}))
+                },
             ) {
-                Ok(summary) => {
-                    context.insert(node.node_key.clone(), json!({"summary": summary}));
+                Ok(result) => {
+                    context.insert(node.node_key.clone(), result.clone());
                     record!(
                         "completed",
                         Some(&node.config_json),
-                        Some(&json!({"summary": summary}).to_string()),
+                        Some(&result.to_string()),
                         None
                     );
                     Ok(NodeOutcome::Continue(
@@ -1614,6 +1629,60 @@ pub async fn resume_due_delays(
         }
     }
     Ok(resumed)
+}
+
+/// WP-0141 (ADR-0007 §5): recovers runs left `running` with an expired
+/// worker lease - the process that held them stopped mid-step. Each is moved
+/// out of `running`; then, under the `resume_if_safe` policy (the default),
+/// it is re-taken and continued, safe because every write is idempotent
+/// (`idempotency_service`); under `always_pause` it is left paused for a
+/// person. A run whose lease is still valid is held by a live worker and is
+/// left alone. Returns how many runs were handled.
+pub async fn recover_interrupted_runs(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+) -> AppResult<usize> {
+    let policy = super::run_policy_service::get(conn, workspace_id)?;
+    let now = chrono::Utc::now();
+    let mut handled = 0;
+    for run in graph_run_repo::list_resumable_runs(conn, workspace_id)? {
+        let expired = run
+            .lease_expires_at
+            .as_deref()
+            .and_then(|e| chrono::DateTime::parse_from_rfc3339(e).ok())
+            .map(|e| e <= now)
+            .unwrap_or(true);
+        if !expired {
+            continue;
+        }
+        // Both policies first move the run out of `running`. A failure here
+        // means another sweep took it already - skip it.
+        if run_state::transition(conn, &run.id, "running", "paused", Some("interrupted")).is_err() {
+            continue;
+        }
+        handled += 1;
+        if policy == super::run_policy_service::RESUME_IF_SAFE {
+            // Resume from the run's current node; re-running it is safe
+            // because its write is in the ledger and will not repeat.
+            let _ = resume_run(conn, workspace_id, master_key, &run.id, None).await;
+        }
+    }
+    Ok(handled)
+}
+
+/// WP-0141: one pass of the background work that keeps runs moving without a
+/// UI - resumes runs whose `delay` is due and recovers runs interrupted by a
+/// crash. The server scheduler and the desktop poll both call this. Returns
+/// the number of runs advanced or recovered.
+pub async fn tick(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+) -> AppResult<usize> {
+    let resumed = resume_due_delays(conn, workspace_id, master_key).await?;
+    let recovered = recover_interrupted_runs(conn, workspace_id, master_key).await?;
+    Ok(resumed + recovered)
 }
 
 pub fn get_run(

@@ -39,11 +39,11 @@ Write tools receive an idempotency key per step attempt; on resume after a pause
 
 ## Acceptance criteria
 
-- [ ] AC-1: Kill mid-step then resume → no duplicate record (test with process restart simulation)
-- [ ] AC-2: Retry after a transient failure never double-writes
-- [ ] AC-3: Two requests to complete the same step attempt (a double click) produce one write; the second returns the first result
-- [ ] AC-4: With `interrupted_run_policy: always_pause` a run interrupted mid-step is paused, not resumed; the change of setting is audited and refused for anyone but an AI Admin
-- [ ] AC-5: The startup sweep and the delay tick resume a due run on the server and on desktop without the UI open
+- [x] AC-1: Kill mid-step then resume → no duplicate record (test with process restart simulation)
+- [x] AC-2: Retry after a transient failure never double-writes
+- [x] AC-3: Two requests to complete the same step attempt (a double click) produce one write; the second returns the first result
+- [x] AC-4: With `interrupted_run_policy: always_pause` a run interrupted mid-step is paused, not resumed; the change of setting is audited and refused for anyone but an AI Admin
+- [x] AC-5: The startup sweep and the delay tick resume a due run on the server and on desktop without the UI open
 
 ## Test plan
 
@@ -59,3 +59,10 @@ Write tools receive an idempotency key per step attempt; on resume after a pause
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+
+### 2026-11-14 claude
+Done: AC-1..AC-5. New migration 0096 `ai_run_write_ledger`; `idempotency_service::run_once` applies a write once per key (run, node, attempt, write_key) and records it in the same transaction as the write, so a retry, a resume after a crash or a double submit never double-writes (`run_write_ledger_repo`). The graph `action` node now writes through `run_once`. `run_policy_service` stores `interrupted_run_policy` (resume_if_safe | always_pause) in the settings table, admin-only and audited. `graph_runtime_service::recover_interrupted_runs` moves a `running` run with an expired lease out of running and, under resume_if_safe, resumes it from its current node; `tick` = resume_due_delays + recover, wired into the server scheduler (`job_scheduler`) and the desktop poll (`ai_agent_pipeline_commands`). Policy get/set exposed as Tauri commands and server dispatch arms.
+State: green locally - `core/tests/idempotent_resume.rs` 5/5; execution-graph runtime 18/18; migration-upgrade 3/3; `check_migrations.py` 96 migrations 0 problems; `cargo fmt --all --check` clean. Tauri shell not built here (missing GTK libs) - CI covers it. Full suite runs on the PR.
+Next: WP-0705 (lane record/check steps) uses `step_idempotency_key` + `run_once` with a per-write `write_key` for all-or-nothing posting. WP-0707 (runner) depends on WP-0705.
+Gotchas: the write ledger's `run_id` is a foreign key to `ai_runs`, so `run_once` needs a real run. A FK violation surfaces as a ConstraintViolation like a UNIQUE race; the race branch re-reads the key and only returns a stored result when one exists, otherwise it errors. Per-Team policy override is deferred until Teams exist (Phase 3). Connector/MCP writes get the derived idempotency key but the strong exactly-once guarantee is for native writes on the run's connection.
+Commands: cargo test -p lanesra-core --features test-support --test idempotent_resume

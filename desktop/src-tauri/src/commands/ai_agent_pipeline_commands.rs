@@ -334,6 +334,12 @@ pub async fn drain_pending_async_work(state: State<'_, AppState>) -> AppResult<(
             50,
         )
         .await;
+        // WP-0141: on desktop this client poll is where runs advance without
+        // the UI driving them - resume due delays and recover runs left
+        // `running` by a crash or a closed app (ADR-0007 §5).
+        let _ =
+            lanesra_core::services::graph_runtime_service::tick(&conn, &workspace_id, &master_key)
+                .await;
         Ok(())
     })
     .await
