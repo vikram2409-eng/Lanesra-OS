@@ -3,7 +3,7 @@ id: WP-0706
 title: Approvals, branches with exits, pause, handoff and cancel
 phase: 7
 epic: E7.2 Steps and rules
-status: in_progress
+status: in_review
 owner: claude
 planned_for: claude
 depends_on: [WP-0704]
@@ -14,7 +14,7 @@ delivered: []
 editions_reason: core runtime; shown to users by WP-0707
 docs: [process-lanes]
 branch: wp/WP-0706-approvals-branches-pause-handoff-cancel
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/777
 updated: 2026-11-14
 ---
 
