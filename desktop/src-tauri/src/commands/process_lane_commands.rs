@@ -141,6 +141,36 @@ pub async fn start_process_lane_run(
     .await
 }
 
+/// WP-0715: describe a process - the Admin Assistant drafts a lane from a
+/// plain-language description. The result is always a draft (see
+/// `assistant_draft_lane_service`); publishing stays a separate admin
+/// action, so this command has no publish path.
+#[tauri::command]
+pub async fn draft_lane_from_description(
+    state: State<'_, AppState>,
+    description: String,
+    object_key: String,
+) -> AppResult<ProcessLane> {
+    let master_key = crate::commands::resolve_master_key(&state)?;
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    run_with_own_connection(db_path, move |conn| async move {
+        lanesra_core::services::assistant_draft_lane_service::draft_lane(
+            &conn,
+            &workspace_id,
+            &master_key,
+            actor.as_deref(),
+            &description,
+            &object_key,
+        )
+        .await
+    })
+    .await
+}
+
 /// WP-0704: the current state of a lane run for a viewer - status, run data,
 /// and the current human step with its fields (record-bound values withheld
 /// when the viewer cannot read the anchor record).

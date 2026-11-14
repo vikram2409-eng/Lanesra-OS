@@ -3,19 +3,19 @@ id: WP-0702
 title: Online demo: the Receive Shipment lane on the warehouse demo
 phase: 7
 epic: E7.6 Shipped lanes
-status: in_review
+status: done
 owner: muse
 planned_for: muse
 depends_on: [WP-0701]
 requirements: [REQ-LANE-025, REQ-LANE-014, REQ-NFR-008]
 estimate: L
 editions: [demo]
-delivered: []
+delivered: [demo]
 editions_reason: owner decision (ADR-0023): the online demo previews Process Lanes first; desktop and Team Workspace follow in WP-0703 to WP-0707 from the same definition format
 docs: [process-lanes]
 branch: wp/WP-0702-receive-shipment-lane-demo-r2
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/758
-updated: 2026-11-12
+updated: 2026-11-14
 ---
 
 # WP-0702 — Online demo: the Receive Shipment lane on the warehouse demo
@@ -59,3 +59,4 @@ Prove the feature where a visitor can try it: one screen that receives PO-2026-0
 - 2026-11-12 muse: Built — lane definition as data (LANE_WH_RECEIVING, verbatim from the example file), runner screen, real writes, discrepancy branch, seeded PO-2026-005 run, Reset clears runs and keeps definitions, entry points from the dashboard card, the purchase order and the Receiving Agent row, Object 360 Process Lanes section, and the /help/process-lanes article with sitemap/llms/Releases/Roadmap updates. AC-1..AC-4 proven by a Node harness that runs the real lane code from app.js against a stubbed warehouse store (50 checks: exact end states, the over-order block, approve + hold, reopen + Reset) — the harness also caught and fixed 4 real bugs (validation dispatch on single conditions, ends_run on step completion, the stock-move repeat key, the staging-bin suggestion). AC-5 proven by 3 new Python tests (pass locally); AC-6 by programctl validate (0 errors) and the docs/sitemap check. The 5 Playwright E2E tests are committed but UNTESTED LOCALLY — see CI (the e2e workflow runs them on app.js changes). Full suite "untested locally — see CI" for the browser and CI-only parts. Branch stacks on WP-0701 (PR #755) — rebase onto main after #755 merges; the parent opens the PR. NOTE: status stays in_progress (not in_review) because programctl requires a pr link for in_review and the PR does not exist yet — set in_review + the pr link once the PR is open, as WP-0701 did.
 
 - 2026-11-12 muse: Claimed — the owner reassigned this WP from claude to muse ("build WP-0702 and WP-0703, assign it yourself"). Status proposed → in_progress on branch wp/WP-0702-receive-shipment-lane-demo. ACs reviewed and stand as written. Next: read ADR-0023, ADR-0024, the spec Part B and SOLUTION-DESIGN.md §17, then build the demo lane. Note: this branch stacks on the WP-0701 branch (PR #755, program check green, CI/security running) — rebase onto main after #755 merges.
+- 2026-11-14 muse: Closed out — editions confirmed delivered: demo. The Receive Shipment lane runs end to end in the online demo: the acceptance proof on the #762 preview completed PO-2026-001 (Total $2,105.00, Stock 88/52, MV-2026-016..019, PO RECEIVED, no duplicate wf-wh-01 task), and the live main check (2026-11-13) showed the runner opening on PO-2026-001 with the seeded PO-2026-005 run waiting at manager review. /help/process-lanes names WP-0702 (wps field). Status in_review → done, delivered: [demo].
