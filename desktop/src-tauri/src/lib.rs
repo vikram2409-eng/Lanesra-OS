@@ -414,6 +414,8 @@ pub fn run() {
             commands::process_lane_commands::create_process_lane_version,
             commands::process_lane_commands::publish_process_lane,
             commands::process_lane_commands::start_process_lane_run,
+            commands::process_lane_commands::get_process_lane_run_view,
+            commands::process_lane_commands::submit_process_lane_step,
             commands::system_graph_commands::list_system_nodes,
             commands::system_graph_commands::get_system_node,
             commands::system_graph_commands::get_system_node_dependencies,
