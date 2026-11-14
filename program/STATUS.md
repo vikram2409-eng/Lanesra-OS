@@ -13,7 +13,7 @@
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
 | 5 · Platform and ecosystem | 42 | 0 | 0 | 0 | 0 | 42 | 0 / 140 | `░░░░░░░░░░` 0% |
 | 6 · Admin console and Experience Studio | 31 | 0 | 0 | 0 | 0 | 31 | 0 / 96 | `░░░░░░░░░░` 0% |
-| 7 · Process Lanes | 21 | 2 | 2 | 3 | 0 | 14 | 6 / 61 | `█░░░░░░░░░` 10% |
+| 7 · Process Lanes | 21 | 2 | 3 | 2 | 0 | 14 | 6 / 61 | `█░░░░░░░░░` 10% |
 | v2 · Open interop | 1 | 0 | 0 | 0 | 0 | 1 | 0 / 4 | `░░░░░░░░░░` 0% |
 
 ## Edition coverage
@@ -33,6 +33,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
 | [WP-0702](work/P7/WP-0702-online-demo-the-receive-shipment-lane-on-the-warehouse-demo.md) | Online demo: the Receive Shipment lane on the warehouse demo | in_review | muse | `wp/WP-0702-receive-shipment-lane-demo-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/758 |
+| [WP-0704](work/P7/WP-0704-human-steps-and-run-data.md) | Human steps and run data | in_progress | claude | `wp/WP-0704-human-steps-and-run-data` | - |
 | [WP-0712](work/P7/WP-0712-blueprint-view-and-export-of-a-lane.md) | Blueprint view and export of a lane | in_review | muse | `wp/WP-0712-blueprint-view-and-export-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/761 |
 
 ## Ready to start (all dependencies done)
@@ -45,7 +46,6 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | [WP-0141](work/P1/WP-0141-idempotency-keys-and-side-effect-safe-resume.md) | Idempotency keys and side-effect-safe resume | 1 | L |
 | [WP-0147](work/P1/WP-0147-adr-delegated-credentials-token-vault-and-mcp-gateway.md) | ADR: delegated credentials, token vault and MCP gateway | 1 | M |
 | [WP-0160](work/P1/WP-0160-agent-editor-in-eight-settings-groups.md) | Agent editor in eight settings groups | 1 | L |
-| [WP-0704](work/P7/WP-0704-human-steps-and-run-data.md) | Human steps and run data | 7 | L |
 | [WP-0719](work/P7/WP-0719-count-and-replenish-lanes-as-definitions-with-an-authoring-log.md) | Count and Replenish lanes as definitions, with an authoring log | 7 | S |
 
 ## Planned workload (ADR-0021)
@@ -339,7 +339,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0701](work/P7/WP-0701-adr-process-lanes-on-the-run-engine-and-the-lane-definition.md) | ADR: Process Lanes on the run engine, and the lane definition schema | E7.1 Lane foundation | ✅ done | M | — | - |
 | [WP-0702](work/P7/WP-0702-online-demo-the-receive-shipment-lane-on-the-warehouse-demo.md) | Online demo: the Receive Shipment lane on the warehouse demo | E7.6 Shipped lanes | 👀 in review | L | ○Online demo | WP-0701 |
 | [WP-0703](work/P7/WP-0703-lane-definitions-in-the-core-store-lifecycle-and-compile-to.md) | Lane definitions in the core: store, lifecycle and compile to a graph | E7.1 Lane foundation | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0701 |
-| [WP-0704](work/P7/WP-0704-human-steps-and-run-data.md) | Human steps and run data | E7.1 Lane foundation | 🟢 ready | L | ○Desktop ○Team Workspace | WP-0703 |
+| [WP-0704](work/P7/WP-0704-human-steps-and-run-data.md) | Human steps and run data | E7.1 Lane foundation | 🔨 in progress | L | ○Desktop ○Team Workspace | WP-0703 |
 | [WP-0705](work/P7/WP-0705-record-and-check-steps-real-atomic-repeat-safe-writes.md) | Record and check steps: real, atomic, repeat-safe writes | E7.2 Steps and rules | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0703, WP-0141 |
 | [WP-0706](work/P7/WP-0706-approvals-branches-with-exits-pause-handoff-and-cancel.md) | Approvals, branches with exits, pause, handoff and cancel | E7.2 Steps and rules | ⚪ proposed | L | ○Desktop ○Team Workspace | WP-0704 |
 | [WP-0707](work/P7/WP-0707-lane-runner-screen-entry-points-and-object-360.md) | Lane runner, first cut: the straight path on desktop and Team Workspace | E7.3 Runner and visibility | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0704, WP-0705 |
