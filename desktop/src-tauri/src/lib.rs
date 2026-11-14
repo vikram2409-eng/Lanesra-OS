@@ -406,6 +406,8 @@ pub fn run() {
             commands::execution_graph_commands::resume_graph_run,
             commands::execution_graph_commands::resolve_graph_run_approval,
             commands::execution_graph_commands::cancel_graph_run,
+            commands::execution_graph_commands::get_interrupted_run_policy,
+            commands::execution_graph_commands::set_interrupted_run_policy,
             commands::process_lane_commands::import_process_lane,
             commands::process_lane_commands::list_process_lanes,
             commands::process_lane_commands::get_process_lane,

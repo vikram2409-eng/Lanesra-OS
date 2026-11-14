@@ -208,3 +208,21 @@ pub async fn cancel_graph_run(state: State<'_, AppState>, id: String) -> AppResu
     })
     .await
 }
+
+/// WP-0141: the workspace's interrupted-run policy (`resume_if_safe` or
+/// `always_pause`) - what happens to a run left running by a crashed worker.
+#[tauri::command]
+pub fn get_interrupted_run_policy(state: State<AppState>) -> AppResult<String> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    lanesra_core::services::run_policy_service::get(&conn, &workspace_id)
+}
+
+/// WP-0141: sets the interrupted-run policy. Administrator only; audited.
+#[tauri::command]
+pub fn set_interrupted_run_policy(state: State<AppState>, policy: String) -> AppResult<()> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    let actor = current_actor(&state);
+    lanesra_core::services::run_policy_service::set(&conn, &workspace_id, &policy, actor.as_deref())
+}
