@@ -154,5 +154,12 @@ async fn tick(conn: &rusqlite::Connection, key_file_path: &std::path::Path) -> R
     {
         tracing::error!(error = %e, "drain_pending_graph_runs (Workflow Studio 2.0) failed");
     }
+    // WP-0141: resume runs whose `delay` is due and recover runs left
+    // `running` by a crashed worker (ADR-0007 §5). On the server this is the
+    // one place runs advance without a client poll - a run that paused on a
+    // delay, or that was interrupted by a restart, moves again here.
+    if let Err(e) = graph_runtime_service::tick(conn, &workspace.id, &master_key).await {
+        tracing::error!(error = %e, "graph run tick (resume/recover) failed");
+    }
     Ok(())
 }

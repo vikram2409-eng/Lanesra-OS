@@ -33,7 +33,8 @@ pub fn is_legal(from: &str, to: &str) -> bool {
         (
             "running",
             "waiting_approval" | "waiting_budget" | "waiting_model" | "waiting_scheduled"
-            | "paused" | "completed" | "completed_partial" | "failed" | "cancelled",
+            | "waiting_person" | "paused" | "completed" | "completed_partial" | "failed"
+            | "cancelled",
         ) => true,
         ("waiting_approval", "failed") => true,
         (from, "queued" | "cancelled") => is_waiting_status(from),

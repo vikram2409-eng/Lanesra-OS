@@ -43,6 +43,7 @@ Deny external MCP servers' sampling and user-prompt requests by default; when al
 ## Notes
 
 - Must follow (WP-0009): ADR-0009 error taxonomy; ADR-0010 migration conventions; ADR-0012 feature flags. ADR-0010 applies to any migration this work package adds.
+- ADR-0026 (WP-0147): delegated credentials, the token vault and the MCP gateway — the grant model and the registry this gate enforces.
 - Refine at the Gate 0 review: confirm scope against the gap audit (WP-0008) and ADRs (WP-0009), then set status to ready.
 
 ## Progress log

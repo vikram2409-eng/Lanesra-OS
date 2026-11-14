@@ -105,7 +105,7 @@ use lanesra_core::services::{
     opportunity_service, order_service, org_unit_service, organization_service, ownership_service,
     page_layout_service, page_template_service, policy_engine_service, process_lane_blueprint,
     process_lane_service, product_service, publisher_service, quote_service, relationship_service,
-    report_service, saved_view_service, screen_layout_service, search_service,
+    report_service, run_policy_service, saved_view_service, screen_layout_service, search_service,
     security_settings_service, semantic_mapping_service, solution_component_service,
     solution_service, status_transition_service, system_graph_service, task_service,
     test_eval_service, theme_service, tool_registry_service, user_service, vector_search_service,
@@ -3254,12 +3254,37 @@ pub fn dispatch(
                 actor,
             )?)
         }
+        // WP-0704: the viewer-facing state of a lane run (status, run data,
+        // the current human step). Submitting a step is async and lives in
+        // `admin_actions.rs`, like starting a run.
+        "get_process_lane_run_view" => {
+            let run_id: String = arg(args, "runId")?;
+            to_value(process_lane_service::get_run_view(
+                conn,
+                &require_workspace_id(conn)?,
+                &run_id,
+                actor,
+            )?)
+        }
         "get_graph_run" => {
             let id: String = arg(args, "id")?;
             to_value(graph_runtime_service::get_run(
                 conn,
                 &id,
                 &require_workspace_id(conn)?,
+                actor,
+            )?)
+        }
+        // WP-0141: the interrupted-run policy (resume_if_safe | always_pause).
+        "get_interrupted_run_policy" => {
+            to_value(run_policy_service::get(conn, &require_workspace_id(conn)?)?)
+        }
+        "set_interrupted_run_policy" => {
+            let policy: String = arg(args, "policy")?;
+            to_value(run_policy_service::set(
+                conn,
+                &require_workspace_id(conn)?,
+                &policy,
                 actor,
             )?)
         }

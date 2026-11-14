@@ -121,6 +121,15 @@ enum NodeOutcome {
         resume_at: String,
         next_node_id: String,
     },
+    /// ADR-0024 §4 (WP-0704): a `human_step` node pauses the run in
+    /// `waiting_person` until a person submits the step. The step's row is
+    /// already appended (status `waiting_person`, `finished_at` NULL) by the
+    /// node arm; `run_from` stores the node's own id as `current_node_id`, so
+    /// `process_lane_service::submit_person_step` knows which step is current
+    /// and `resume_person_step` advances from the node *after* it. Like a
+    /// Delay the node has one way out, but unlike a Delay the wait ends on a
+    /// person's action, not a clock.
+    WaitingPerson,
 }
 
 thread_local! {
@@ -460,22 +469,37 @@ async fn execute_node(
                 .get("params_json")
                 .and_then(|v| v.as_str())
                 .unwrap_or("{}");
-            match workflow_service::apply_action(
+            // WP-0141: apply the action exactly once per step attempt. On a
+            // retry or a resume after a crash the ledger already holds this
+            // key, so `apply_action` is not called again and the first
+            // result is replayed - no duplicate record.
+            match super::idempotency_service::run_once(
                 conn,
                 workspace_id,
-                action_type,
-                params_json,
-                entity_type,
-                entity_id,
-                None,
-                actor,
+                &run.id,
+                &node.id,
+                attempt,
+                "",
+                || {
+                    workflow_service::apply_action(
+                        conn,
+                        workspace_id,
+                        action_type,
+                        params_json,
+                        entity_type,
+                        entity_id,
+                        None,
+                        actor,
+                    )
+                    .map(|summary| json!({"summary": summary}))
+                },
             ) {
-                Ok(summary) => {
-                    context.insert(node.node_key.clone(), json!({"summary": summary}));
+                Ok(result) => {
+                    context.insert(node.node_key.clone(), result.clone());
                     record!(
                         "completed",
                         Some(&node.config_json),
-                        Some(&json!({"summary": summary}).to_string()),
+                        Some(&result.to_string()),
                         None
                     );
                     Ok(NodeOutcome::Continue(
@@ -627,6 +651,32 @@ async fn execute_node(
                     Err(e)
                 }
             }
+        }
+        "human_step" => {
+            // ADR-0024 §4 (WP-0704): the run waits for a person. Append the
+            // step's row in `waiting_person` with `finished_at` NULL - that
+            // open interval is the wait time the runner and Object 360 read
+            // (AC-4). The row carries its lane stage so the stage bar can
+            // group it. No record or run-data write happens here; that is
+            // `submit_person_step`'s, once the person submits.
+            let run_node_id = graph_run_repo::append_run_node(
+                conn,
+                &run.id,
+                &node.id,
+                &node.node_key,
+                &node.node_type,
+                attempt,
+                "waiting_person",
+                Some(&node.config_json),
+                None,
+                None,
+                &started_at,
+                None,
+            )?;
+            if let Some(stage_id) = config.get("lane_stage_id").and_then(|v| v.as_str()) {
+                graph_run_repo::set_run_node_stage(conn, &run_node_id, stage_id)?;
+            }
+            Ok(NodeOutcome::WaitingPerson)
         }
         "approval" => {
             let subject_type = config
@@ -1316,6 +1366,21 @@ async fn run_from(
                 )?;
                 break;
             }
+            Ok(NodeOutcome::WaitingPerson) => {
+                // ADR-0024 §4 (WP-0704): pause for a person. `current_node_id`
+                // is the human_step node itself, so `submit_person_step` can
+                // find the current step and `resume_person_step` advances from
+                // the node after it. No lease is held in `waiting_person`.
+                run_state::transition(conn, run_id, "running", "waiting_person", None)?;
+                checkpoint(
+                    conn,
+                    run_id,
+                    &dump_context(&context),
+                    Some(&node.id),
+                    run.steps_executed + 1,
+                )?;
+                break;
+            }
             Err(e) => {
                 fail_run(conn, run_id, "error", &e.to_string())?;
                 break;
@@ -1470,6 +1535,44 @@ pub async fn resume_run(
     .await
 }
 
+/// ADR-0024 §4 (WP-0704): advances a `waiting_person` lane run past the
+/// human step it is paused on, down that step's single outgoing edge. The
+/// caller (`process_lane_service::submit_person_step`) has already validated
+/// and written the submission and completed the step's row; this only moves
+/// the run on. A `human_step` is a single-unconditional-outgoing node, so
+/// there is exactly one next node (no branch to pick, unlike an approval).
+pub async fn resume_person_step(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    run_id: &str,
+    actor: Option<&str>,
+) -> AppResult<GraphRun> {
+    let run = get_owned_run(conn, run_id, workspace_id)?;
+    if run.status != "waiting_person" {
+        return Err(AppError::Validation(format!(
+            "run is '{}', not waiting on a person",
+            run.status
+        )));
+    }
+    let graph = execution_graph_repo::get(conn, &run.graph_id)?
+        .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+    let current = run
+        .current_node_id
+        .clone()
+        .ok_or_else(|| AppError::Validation("run has no current_node_id".into()))?;
+    let next = single_outgoing(&graph, &current)?.to_string();
+    requeue_and_take(conn, run_id, "waiting_person")?;
+    checkpoint(
+        conn,
+        run_id,
+        &run.context_json,
+        Some(&next),
+        run.steps_executed + 1,
+    )?;
+    run_from(conn, workspace_id, master_key, actor, &graph, run_id, &next).await
+}
+
 /// Resolves the durable `ai_approvals` row a `waiting_approval` run is
 /// blocked on, then continues down the `approved`/`rejected` edge from
 /// the paused Approval node - the graph engine's one consolidated
@@ -1614,6 +1717,60 @@ pub async fn resume_due_delays(
         }
     }
     Ok(resumed)
+}
+
+/// WP-0141 (ADR-0007 §5): recovers runs left `running` with an expired
+/// worker lease - the process that held them stopped mid-step. Each is moved
+/// out of `running`; then, under the `resume_if_safe` policy (the default),
+/// it is re-taken and continued, safe because every write is idempotent
+/// (`idempotency_service`); under `always_pause` it is left paused for a
+/// person. A run whose lease is still valid is held by a live worker and is
+/// left alone. Returns how many runs were handled.
+pub async fn recover_interrupted_runs(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+) -> AppResult<usize> {
+    let policy = super::run_policy_service::get(conn, workspace_id)?;
+    let now = chrono::Utc::now();
+    let mut handled = 0;
+    for run in graph_run_repo::list_resumable_runs(conn, workspace_id)? {
+        let expired = run
+            .lease_expires_at
+            .as_deref()
+            .and_then(|e| chrono::DateTime::parse_from_rfc3339(e).ok())
+            .map(|e| e <= now)
+            .unwrap_or(true);
+        if !expired {
+            continue;
+        }
+        // Both policies first move the run out of `running`. A failure here
+        // means another sweep took it already - skip it.
+        if run_state::transition(conn, &run.id, "running", "paused", Some("interrupted")).is_err() {
+            continue;
+        }
+        handled += 1;
+        if policy == super::run_policy_service::RESUME_IF_SAFE {
+            // Resume from the run's current node; re-running it is safe
+            // because its write is in the ledger and will not repeat.
+            let _ = resume_run(conn, workspace_id, master_key, &run.id, None).await;
+        }
+    }
+    Ok(handled)
+}
+
+/// WP-0141: one pass of the background work that keeps runs moving without a
+/// UI - resumes runs whose `delay` is due and recovers runs interrupted by a
+/// crash. The server scheduler and the desktop poll both call this. Returns
+/// the number of runs advanced or recovered.
+pub async fn tick(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+) -> AppResult<usize> {
+    let resumed = resume_due_delays(conn, workspace_id, master_key).await?;
+    let recovered = recover_interrupted_runs(conn, workspace_id, master_key).await?;
+    Ok(resumed + recovered)
 }
 
 pub fn get_run(

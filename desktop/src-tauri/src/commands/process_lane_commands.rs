@@ -17,7 +17,9 @@ use lanesra_core::domain::AppResult;
 use lanesra_core::models::graph_run::GraphRun;
 use lanesra_core::models::process_lane::{ProcessLane, ProcessLaneVersion};
 use lanesra_core::services::process_lane_blueprint::{LaneBlueprint, LaneBlueprintSummary};
+use lanesra_core::services::process_lane_service::LaneRunView;
 use lanesra_core::services::{process_lane_blueprint, process_lane_service};
+use serde_json::{Map, Value};
 
 #[tauri::command]
 pub fn import_process_lane(
@@ -163,6 +165,46 @@ pub async fn draft_lane_from_description(
             actor.as_deref(),
             &description,
             &object_key,
+        )
+        .await
+    })
+    .await
+}
+
+/// WP-0704: the current state of a lane run for a viewer - status, run data,
+/// and the current human step with its fields (record-bound values withheld
+/// when the viewer cannot read the anchor record).
+#[tauri::command]
+pub fn get_process_lane_run_view(state: State<AppState>, run_id: String) -> AppResult<LaneRunView> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    let actor = current_actor(&state);
+    process_lane_service::get_run_view(&conn, &workspace_id, &run_id, actor.as_deref())
+}
+
+/// WP-0704: submits the current human step of a `waiting_person` lane run -
+/// validates and stores the entered values and advances the run. Async
+/// because resuming the run may reach an Agent node.
+#[tauri::command]
+pub async fn submit_process_lane_step(
+    state: State<'_, AppState>,
+    run_id: String,
+    values: Map<String, Value>,
+) -> AppResult<GraphRun> {
+    let master_key = crate::commands::resolve_master_key(&state)?;
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::submit_person_step(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &run_id,
+            &values,
+            actor.as_deref(),
         )
         .await
     })
