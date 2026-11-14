@@ -280,10 +280,9 @@ async fn a_missing_required_field_blocks_and_writes_nothing() {
         .unwrap();
     assert_eq!(after.status, "waiting_person");
     assert_eq!(after.run_data_json.as_deref().unwrap_or("{}"), "{}");
-    assert!(custom_field_service::get_entity_values(&conn, &record)
+    assert!(!custom_field_service::get_entity_values(&conn, &record)
         .unwrap()
-        .get("tracking")
-        .is_none());
+        .contains_key("tracking"));
 }
 
 // Covers: REQ-LANE-005 (WP-0704 AC-2)
@@ -349,10 +348,9 @@ async fn a_failed_validation_blocks_with_its_message_and_writes_nothing() {
         .unwrap();
     assert_eq!(after.status, "waiting_person");
     assert_eq!(after.run_data_json.as_deref().unwrap_or("{}"), "{}");
-    assert!(custom_field_service::get_entity_values(&conn, &record)
+    assert!(!custom_field_service::get_entity_values(&conn, &record)
         .unwrap()
-        .get("tracking")
-        .is_none());
+        .contains_key("tracking"));
 
     // The correct value passes and advances the run.
     let done = process_lane_service::submit_person_step(
