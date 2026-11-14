@@ -116,6 +116,36 @@ pub fn list_runs_for_graph(
     rows.into_iter().map(|r| hydrate(conn, r)).collect()
 }
 
+/// Every lane run anchored to one record (WP-0707, REQ-LANE-015): all runs
+/// across lanes, newest first. A run is a lane run when its graph's
+/// `source_kind` is `lane`; the anchor is the run's own
+/// `anchor_object_key` / `anchor_record_id`, the same pair
+/// `find_active_run_for_lane_record` matches on. Rows are not hydrated -
+/// callers that need node rows read them per run.
+pub fn list_lane_runs_for_record(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    record_id: &str,
+) -> rusqlite::Result<Vec<GraphRun>> {
+    let mut stmt = conn.prepare(
+        "SELECT r.* FROM ai_runs r
+          JOIN ai_execution_graphs g ON g.id = r.graph_id
+         WHERE r.workspace_id = ?1
+           AND g.source_kind = 'lane'
+           AND r.anchor_object_key = ?2
+           AND r.anchor_record_id = ?3
+         ORDER BY r.started_at DESC",
+    )?;
+    let rows: Vec<GraphRun> = stmt
+        .query_map(
+            rusqlite::params![workspace_id, object_key, record_id],
+            map_run_row,
+        )?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(rows)
+}
+
 /// Runs (in any workspace) sitting in `waiting_scheduled` whose `resume_at`
 /// has passed - what `graph_runtime_service::resume_due_delays`'s sweep
 /// (mirroring `workflow_service::run_scheduled`'s own pattern for the

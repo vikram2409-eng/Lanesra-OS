@@ -1130,6 +1130,12 @@ pub async fn start_lane_run(
 /// data, and the current step if the run is waiting on a person. The
 /// runner screen (WP-0707) renders this; here it is the access-limited read
 /// behind that screen.
+///
+/// WP-0707 (REQ-LANE-014, REQ-LANE-015) adds, additively: `steps` - every
+/// step in definition order with its progress; `writes` - human-readable
+/// summaries of the writes the run has posted; `waiting` - the approval the
+/// run waits on, when it waits on one (the runner shows its "continue in
+/// the approvals inbox" state instead of the step's work area).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LaneRunView {
     pub run_id: String,
@@ -1138,6 +1144,55 @@ pub struct LaneRunView {
     pub anchor_record_id: Option<String>,
     pub run_data: Value,
     pub current: Option<LaneStepView>,
+    pub steps: Vec<LaneStepProgress>,
+    pub writes: Vec<String>,
+    pub waiting: Option<LaneWaiting>,
+}
+
+/// One step's progress in the runner's step list (WP-0707, REQ-LANE-014):
+/// the step's place in the definition and where the run has reached. A
+/// step the run has not reached is `locked`; the step it is on is `current`
+/// (a form step it waits on) or `waiting` (an approval step it waits on).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaneStepProgress {
+    pub step_id: String,
+    pub stage_id: String,
+    pub status: String,
+    pub started_at: Option<String>,
+    pub finished_at: Option<String>,
+}
+
+/// The approval a run waits on (WP-0707, REQ-LANE-014 AC-2): the step, and
+/// the kind of wait. Only `approval` exists in the first cut; a branch is
+/// not a wait - the run routes through it without stopping.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaneWaiting {
+    pub step_id: String,
+    pub step_name: String,
+    pub kind: String,
+}
+
+/// One row of a record's lane runs (WP-0707, REQ-LANE-015): the run, its
+/// lane, and where it has reached. `current_*` is None when the run has no
+/// current step (finished, failed or cancelled).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaneRunListItem {
+    pub run_id: String,
+    pub lane_id: String,
+    pub lane_name: String,
+    pub status: String,
+    pub current_stage_id: Option<String>,
+    pub current_stage_name: Option<String>,
+    pub current_step_id: Option<String>,
+    pub current_step_name: Option<String>,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+}
+
+/// Every lane run on one record (WP-0707, REQ-LANE-015), newest first.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaneRunList {
+    pub runs: Vec<LaneRunListItem>,
 }
 
 /// The current human step as a viewer sees it (WP-0704, REQ-LANE-011). A
@@ -1421,14 +1476,113 @@ pub fn get_run_view(
         None
     };
 
+    // WP-0707: the definition behind this run, for the step list, write
+    // summaries and inbox state below. None when it cannot be read.
+    let definition = lane_definition_for_run(conn, &run)?;
+
     Ok(LaneRunView {
-        run_id: run.id,
-        status: run.status,
-        anchor_object_key: run.anchor_object_key,
-        anchor_record_id: run.anchor_record_id,
+        run_id: run.id.clone(),
+        status: run.status.clone(),
+        anchor_object_key: run.anchor_object_key.clone(),
+        anchor_record_id: run.anchor_record_id.clone(),
         run_data,
         current,
+        // WP-0707 (REQ-LANE-014, REQ-LANE-015): the step list, the writes
+        // posted so far, and the inbox state when the run waits on an
+        // approval. Best-effort on a run whose definition cannot be read:
+        // an empty step list, writes named by node key, no inbox state.
+        steps: match &definition {
+            Some(definition) => step_progress_for_run(conn, &run, definition)?,
+            None => Vec::new(),
+        },
+        writes: write_summaries_for_run(conn, &run, definition.as_ref())?,
+        waiting: waiting_for_run(conn, &run, definition.as_ref())?,
     })
+}
+
+/// Every lane run anchored to one record (WP-0707, REQ-LANE-015): all runs
+/// across lanes, newest first, with the lane and where each run has
+/// reached. The record is identified by the same `{object_key, record_id}`
+/// pair the demo's `laneRunsForRecord` matches on and the repo's
+/// one-active-run guard uses (`anchor_object_key` / `anchor_record_id`).
+pub fn list_lane_runs_for_record(
+    conn: &Connection,
+    workspace_id: &str,
+    object_key: &str,
+    record_id: &str,
+) -> AppResult<LaneRunList> {
+    let mut runs = Vec::new();
+    for run in graph_run_repo::list_lane_runs_for_record(conn, workspace_id, object_key, record_id)?
+    {
+        let definition = lane_definition_for_run(conn, &run)?;
+        let (current_stage_id, current_stage_name, current_step_id, current_step_name) =
+            match (&run.current_node_id, &definition) {
+                (Some(node_id), Some(definition)) => {
+                    let graph = execution_graph_repo::get(conn, &run.graph_id)?
+                        .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+                    match graph.nodes.iter().find(|n| &n.id == node_id) {
+                        Some(node) => {
+                            let config: Value =
+                                serde_json::from_str(&node.config_json).unwrap_or(Value::Null);
+                            let stage_id = config
+                                .get("lane_stage_id")
+                                .and_then(|v| v.as_str())
+                                .map(String::from);
+                            let step_id = config
+                                .get("lane_step_id")
+                                .and_then(|v| v.as_str())
+                                .map(String::from);
+                            let stage_name = stage_id.as_deref().and_then(|sid| {
+                                definition
+                                    .stages
+                                    .iter()
+                                    .find(|s| s.id == sid)
+                                    .map(|s| s.name.clone())
+                            });
+                            let step_name = step_id
+                                .as_deref()
+                                .and_then(|sid| definition_step(definition, sid))
+                                .map(|s| s.name.clone());
+                            (stage_id, stage_name, step_id, step_name)
+                        }
+                        None => (None, None, None, None),
+                    }
+                }
+                _ => (None, None, None, None),
+            };
+        let (lane_id, lane_name) = match &definition {
+            Some(definition) => (definition.id.clone(), definition.name.clone()),
+            None => {
+                // No definition behind the graph (a run whose version row
+                // is gone): fall back to the graph's source id,
+                // `{lane_key}@v{n}`.
+                let graph = execution_graph_repo::get(conn, &run.graph_id)?
+                    .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+                let lane_id = graph
+                    .source_id
+                    .as_deref()
+                    .unwrap_or("")
+                    .split('@')
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
+                (lane_id.clone(), lane_id)
+            }
+        };
+        runs.push(LaneRunListItem {
+            run_id: run.id,
+            lane_id,
+            lane_name,
+            status: run.status,
+            current_stage_id,
+            current_stage_name,
+            current_step_id,
+            current_step_name,
+            started_at: run.started_at,
+            finished_at: run.finished_at,
+        });
+    }
+    Ok(LaneRunList { runs })
 }
 
 fn field_view(
@@ -1474,6 +1628,201 @@ fn stage_name_for(conn: &Connection, run: &GraphRun, stage_id: &str) -> Option<S
         .iter()
         .find(|s| s.id == stage_id)
         .map(|s| s.name.clone())
+}
+
+// --- WP-0707: the runner's step list, write summaries and inbox state. ---
+
+/// The definition behind a run's graph, if the run is a lane run (its
+/// graph's version row carries the definition JSON). None for runs that are
+/// not lane runs.
+fn lane_definition_for_run(conn: &Connection, run: &GraphRun) -> AppResult<Option<LaneDefinition>> {
+    let Some(version) = process_lane_repo::get_version_by_graph_id(conn, &run.graph_id)? else {
+        return Ok(None);
+    };
+    Ok(Some(parse_definition(&version.definition_json)?.lane))
+}
+
+/// The lane step behind a graph node, read from the node's config
+/// (`lane_step_id`, ADR-0024 §3) and the run's definition.
+fn definition_step_for_node<'a>(
+    definition: &'a LaneDefinition,
+    config_json: &str,
+) -> Option<&'a LaneStep> {
+    let step_id = serde_json::from_str::<Value>(config_json)
+        .ok()?
+        .get("lane_step_id")?
+        .as_str()?
+        .to_string();
+    definition
+        .stages
+        .iter()
+        .flat_map(|s| &s.steps)
+        .find(|s| s.id == step_id)
+}
+
+/// The lane step with this id, from the definition.
+fn definition_step<'a>(definition: &'a LaneDefinition, step_id: &str) -> Option<&'a LaneStep> {
+    definition
+        .stages
+        .iter()
+        .flat_map(|s| &s.steps)
+        .find(|s| s.id == step_id)
+}
+
+/// Every step in definition order with its progress (WP-0707, REQ-LANE-014).
+/// A step's row is its compiled node's latest run-node row (a `loop` node
+/// carries the same `lane_step_id` as the step it repeats, so it is skipped
+/// here in favour of the step's own node). A row's status maps onto the
+/// runner's vocabulary: completed / skipped / waiting (approval) / current
+/// (waiting on a person, running, or where a failed run stopped); a step
+/// with no row has not been reached and is locked.
+fn step_progress_for_run(
+    conn: &Connection,
+    run: &GraphRun,
+    definition: &LaneDefinition,
+) -> AppResult<Vec<LaneStepProgress>> {
+    let graph = execution_graph_repo::get(conn, &run.graph_id)?
+        .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+    let mut step_node_id: HashMap<String, String> = HashMap::new();
+    for node in &graph.nodes {
+        if node.node_type == "loop" {
+            continue;
+        }
+        if let Ok(Value::Object(config)) = serde_json::from_str::<Value>(&node.config_json) {
+            if let Some(Value::String(step_id)) = config.get("lane_step_id") {
+                step_node_id.insert(step_id.clone(), node.id.clone());
+            }
+        }
+    }
+    let mut latest_row: HashMap<String, &crate::models::graph_run::RunNode> = HashMap::new();
+    for row in &run.nodes {
+        let entry = latest_row.entry(row.node_id.clone()).or_insert(row);
+        if row.attempt > entry.attempt {
+            *entry = row;
+        }
+    }
+    let mut progress = Vec::new();
+    for stage in &definition.stages {
+        for step in &stage.steps {
+            let (status, started_at, finished_at) = match step_node_id
+                .get(&step.id)
+                .and_then(|node_id| latest_row.get(node_id))
+            {
+                Some(row) => (
+                    match row.status.as_str() {
+                        "completed" | "completed_partial" => "completed",
+                        "skipped" => "skipped",
+                        "waiting_approval" => "waiting",
+                        _ => "current",
+                    }
+                    .to_string(),
+                    Some(row.started_at.clone()),
+                    row.finished_at.clone(),
+                ),
+                None => ("locked".to_string(), None, None),
+            };
+            progress.push(LaneStepProgress {
+                step_id: step.id.clone(),
+                stage_id: stage.id.clone(),
+                status,
+                started_at,
+                finished_at,
+            });
+        }
+    }
+    Ok(progress)
+}
+
+/// Human-readable summaries of the writes the run has posted so far
+/// (WP-0707, REQ-LANE-014): one per applied Action Type, named by its step
+/// (`"<step name>: <action type>"`). Reuses the derivation
+/// `cancel_lane_run` already does - a completed `action` node's output
+/// carries the applied action types under `applied`.
+fn write_summaries_for_run(
+    conn: &Connection,
+    run: &GraphRun,
+    definition: Option<&LaneDefinition>,
+) -> AppResult<Vec<String>> {
+    let graph = execution_graph_repo::get(conn, &run.graph_id)?
+        .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+    let step_name_for_node = |node_id: &str| -> String {
+        graph
+            .nodes
+            .iter()
+            .find(|n| n.id == node_id)
+            .and_then(|n| definition.and_then(|d| definition_step_for_node(d, &n.config_json)))
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| {
+                graph
+                    .nodes
+                    .iter()
+                    .find(|n| n.id == node_id)
+                    .map(|n| n.node_key.clone())
+                    .unwrap_or_else(|| node_id.to_string())
+            })
+    };
+    let mut summaries = Vec::new();
+    for row in run
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == "action" && n.status == "completed")
+    {
+        let applied: Vec<String> = row
+            .output_json
+            .as_deref()
+            .and_then(|s| serde_json::from_str::<Value>(s).ok())
+            .and_then(|o| o.get("applied").cloned())
+            .map(|a| match a {
+                Value::Array(items) => items
+                    .into_iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect(),
+                Value::String(s) => vec![s],
+                _ => Vec::new(),
+            })
+            .unwrap_or_default();
+        let step_name = step_name_for_node(&row.node_id);
+        for action_type in applied {
+            summaries.push(format!("{step_name}: {action_type}"));
+        }
+    }
+    Ok(summaries)
+}
+
+/// The approval a run waits on, if it waits on one (WP-0707, REQ-LANE-014
+/// AC-2): the run is `waiting_approval` and its current node is an
+/// `approval` node. Any other wait (a form step, a finished run) reports
+/// no inbox state.
+fn waiting_for_run(
+    conn: &Connection,
+    run: &GraphRun,
+    definition: Option<&LaneDefinition>,
+) -> AppResult<Option<LaneWaiting>> {
+    if run.status != "waiting_approval" {
+        return Ok(None);
+    }
+    let Some(current_id) = &run.current_node_id else {
+        return Ok(None);
+    };
+    let graph = execution_graph_repo::get(conn, &run.graph_id)?
+        .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+    let Some(node) = graph.nodes.iter().find(|n| &n.id == current_id) else {
+        return Ok(None);
+    };
+    if node.node_type != "approval" {
+        return Ok(None);
+    }
+    let Some(definition) = definition else {
+        return Ok(None);
+    };
+    let Some(step) = definition_step_for_node(definition, &node.config_json) else {
+        return Ok(None);
+    };
+    Ok(Some(LaneWaiting {
+        step_id: step.id.clone(),
+        step_name: step.name.clone(),
+        kind: "approval".to_string(),
+    }))
 }
 
 /// Submits the current human step of a `waiting_person` lane run
@@ -1625,6 +1974,30 @@ pub async fn submit_person_step(
             &now_iso(),
         )?;
     }
+
+    // WP-0707 (REQ-LANE-015 AC-3): the submit is recorded in the audit
+    // trail - who, when (the row's occurred_at) and which step - matching
+    // the cancel/handoff pattern. The submission itself has happened at
+    // this point (values stored, step row completed); the resume below is
+    // the advance.
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "lane_step_submitted",
+        Some(&object_key),
+        Some(&record_id),
+        &format!("Submitted step '{}' of lane run {run_id}", step.name),
+        Some(
+            &json!({
+                "run_id": run_id,
+                "step_id": step.id,
+                "step_name": step.name,
+                "outcome": "submitted",
+            })
+            .to_string(),
+        ),
+    )?;
 
     graph_runtime_service::resume_person_step(conn, workspace_id, master_key, run_id, actor_user_id)
         .await
@@ -1885,6 +2258,32 @@ pub async fn skip_step(
             &now_iso(),
         )?;
     }
+
+    // WP-0707 (REQ-LANE-015 AC-3): the skip is recorded in the audit trail
+    // - who, when and why - matching the cancel/handoff pattern, so a
+    // run's advances show with actor and time in Object 360.
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "lane_step_skipped",
+        run.anchor_object_key.as_deref(),
+        run.anchor_record_id.as_deref(),
+        &format!(
+            "Skipped step '{}' of lane run {run_id}: {reason}",
+            step.name
+        ),
+        Some(
+            &json!({
+                "run_id": run_id,
+                "step_id": step.id,
+                "step_name": step.name,
+                "reason": reason,
+                "outcome": "skipped",
+            })
+            .to_string(),
+        ),
+    )?;
 
     graph_runtime_service::resume_person_step(conn, workspace_id, master_key, run_id, actor_user_id)
         .await
