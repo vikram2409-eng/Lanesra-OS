@@ -12,6 +12,7 @@ import { useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } fro
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../lib/api";
+import { cn } from "./ui/cn";
 import type { RelatedRecord } from "../lib/types";
 import {
   Object360Graph,
@@ -20,6 +21,10 @@ import {
   type Object360InspectTarget,
   type Object360RecordRef,
 } from "./graph/Object360Graph";
+// Pill/canvas styles: previously imported only by DependencyExplorerAdmin,
+// so opening Object 360 from a record screen (Companies, Contacts, …)
+// rendered unstyled pills until the admin page had loaded once.
+import "./graph/graph.css";
 import { GraphInspector, type InspectorGroup } from "./graph/GraphInspector";
 
 const MAX_BULLETS_PER_GROUP = 20;
@@ -44,6 +49,10 @@ export function Object360Modal({
   const [inspecting, setInspecting] = useState<InspectTarget>({ entityType, entityId, label });
   const [hiddenLegendKeys, setHiddenLegendKeys] = useState<Set<string>>(() => new Set());
   const [cardOffset, setCardOffset] = useState<{ left: number; top: number } | null>(null);
+  // Inspector pane: docked right (full height) by default; dragging its
+  // header undocks it into the floating card, and the Dock button puts
+  // it back. The pane is the same element in both states.
+  const [docked, setDocked] = useState(true);
   const dragStateRef = useRef<{ pointerId: number; startX: number; startY: number; origLeft: number; origTop: number } | null>(null);
 
   function toggleLegendKey(key: string) {
@@ -58,18 +67,46 @@ export function Object360Modal({
   function startCardDrag(e: ReactPointerEvent<HTMLElement>) {
     const card = (e.currentTarget as HTMLElement).closest(".ontology-inspector-card") as HTMLElement | null;
     if (!card) return;
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    // setPointerCapture is a no-op guard for jsdom (no PointerEvent impl);
+    // in a real browser it exists and keeps the drag on the header.
+    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     dragStateRef.current = { pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, origLeft: card.offsetLeft, origTop: card.offsetTop };
     e.preventDefault();
   }
   function onCardDragMove(e: ReactPointerEvent<HTMLElement>) {
     const d = dragStateRef.current;
     if (!d || d.pointerId !== e.pointerId) return;
-    setCardOffset({ left: d.origLeft + (e.clientX - d.startX), top: d.origTop + (e.clientY - d.startY) });
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    // A docked pane only undocks once the pointer actually moves, so a
+    // plain click on its header leaves it docked.
+    if (docked) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) <= 4) return;
+      setDocked(false);
+    }
+    setCardOffset({ left: d.origLeft + dx, top: d.origTop + dy });
   }
   function endCardDrag(e: ReactPointerEvent<HTMLElement>) {
     if (dragStateRef.current?.pointerId === e.pointerId) dragStateRef.current = null;
   }
+
+  // "Dock pane" button in the inspector header, shown only while the
+  // pane is undocked. It must not start a drag (it sits inside the
+  // draggable header), so its pointerdown never reaches the header.
+  const dockButton = docked ? undefined : (
+    <button
+      type="button"
+      className="o360-dock-btn"
+      title="Dock the inspector pane to the right"
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={() => {
+        setDocked(true);
+        setCardOffset(null);
+      }}
+    >
+      Dock pane
+    </button>
+  );
 
   const objectTypes = useQuery({ queryKey: ["ontologyObjectTypes"], queryFn: () => api.listObjectTypes() });
   // Unions the generic, admin-defined relationship system with the
@@ -148,6 +185,7 @@ export function Object360Modal({
           badgeColor={entityTypeColor("BusinessUnit")}
           groups={[]}
           headerProps={dragHeadProps}
+          headerExtra={dockButton}
           footer={
             <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
               Business Units aren't individually re-centerable here — see Admin → Organization Units for its own detail.
@@ -254,6 +292,7 @@ export function Object360Modal({
         subtitle={entityTypeLabel(inspecting.entityType)}
         badgeColor={entityTypeColor(inspecting.entityType)}
         headerProps={dragHeadProps}
+        headerExtra={dockButton}
         actions={[
           ...(onOpenRecord
             ? [
@@ -279,7 +318,11 @@ export function Object360Modal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ width: "min(1100px, 95vw)", maxHeight: "92vh" }} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        style={{ width: "min(1100px, 95vw)", maxHeight: "92vh", height: "min(800px, 88vh)", display: "flex", flexDirection: "column" }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
           <h3 style={{ margin: 0 }}>Object 360 · {root.label}</h3>
           <button className="btn btn-secondary" onClick={onClose}>
@@ -294,7 +337,13 @@ export function Object360Modal({
           it, and which AI Agents are scoped to act on it.
         </p>
 
-        <div className="graph-canvas-wrap ontology-canvas-wrap" style={{ position: "relative", height: 560 }}>
+        {/* Graph area fills the modal (flex: 1) instead of the old fixed
+            560px wrap, which left dead space below it on tall viewports
+            and squeezed the graph on short ones. */}
+        <div
+          className="graph-canvas-wrap ontology-canvas-wrap"
+          style={{ position: "relative", flex: 1, minHeight: 320, maxHeight: "none" }}
+        >
           <Object360Graph
             root={root}
             data={graphData}
@@ -306,7 +355,10 @@ export function Object360Modal({
             onRecenter={recenterOn}
           />
 
-          <div className="ontology-inspector-card" style={cardOffset ? { left: cardOffset.left, top: cardOffset.top, right: "auto" } : undefined}>
+          <div
+            className={cn("ontology-inspector-card", "o360-inspector", docked && "o360-docked")}
+            style={cardOffset ? { left: cardOffset.left, top: cardOffset.top, right: "auto" } : undefined}
+          >
             {inspector}
           </div>
         </div>

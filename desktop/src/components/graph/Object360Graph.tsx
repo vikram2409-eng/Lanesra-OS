@@ -231,6 +231,12 @@ export function buildRecordGraphModel(
   return { model: { nodes, edges }, targetByKey, legendKeyByNode, legend };
 }
 
+/** Inspector pane overlays the canvas's right edge (340px wide; docked
+ * flush right, floating at right:16): fit into the remaining width so
+ * pills never hide under it. Module-level so the inset identity stays
+ * stable and never retriggers a fit by itself. */
+const OBJECT360_FIT_INSET = { right: 372 } as const;
+
 export interface Object360GraphProps {
   root: Object360RecordRef;
   data: Object360GraphData;
@@ -291,9 +297,12 @@ export const Object360Graph = memo(function Object360Graph(props: Object360Graph
 
   return (
     <div className={cn("object360-graph", className)} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      {/* Graph layers: legend chips double as toggle-filters (demo parity). */}
+      {/* Graph layers: legend chips double as toggle-filters (demo parity).
+          Right padding reserves the inspector pane's strip (340px wide)
+          so no chip ever slides under the pane and becomes
+          unclickable — the pane overlays this column's top-right. */}
       {built.legend.length > 0 && (
-        <div className="ontology-legend" role="group" aria-label="Graph layers">
+        <div className="ontology-legend" role="group" aria-label="Graph layers" style={{ paddingRight: 372 }}>
           {built.legend.map((l) => {
             const hidden = hiddenLegendKeys.has(l.key);
             const highlighted = hover.dimming && connectedLegendKeys.has(l.key);
@@ -332,6 +341,8 @@ export const Object360Graph = memo(function Object360Graph(props: Object360Graph
           onNodeClick={handleNodeClick}
           onNodeDoubleClick={handleNodeDoubleClick}
           hover={hover}
+          fullLabels
+          fitInset={OBJECT360_FIT_INSET}
         />
       </div>
     </div>

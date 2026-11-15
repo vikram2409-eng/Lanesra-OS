@@ -48,6 +48,8 @@ export interface GraphInspectorProps {
   className?: string;
   /** Extra props spread onto the header (e.g. drag handlers). */
   headerProps?: React.HTMLAttributes<HTMLDivElement>;
+  /** Extra content at the header's right end (e.g. a Dock button). */
+  headerExtra?: ReactNode;
 }
 
 function Dot({ color }: { color: string }) {
@@ -60,7 +62,7 @@ function Dot({ color }: { color: string }) {
 }
 
 export const GraphInspector = memo(function GraphInspector(props: GraphInspectorProps) {
-  const { title, subtitle, badgeColor, actions, groups, emptyMessage, footer, className, headerProps } = props;
+  const { title, subtitle, badgeColor, actions, groups, emptyMessage, footer, className, headerProps, headerExtra } = props;
 
   return (
     <div className={cn("graph-inspector", className)}>
@@ -70,6 +72,7 @@ export const GraphInspector = memo(function GraphInspector(props: GraphInspector
           <strong>{title}</strong>
           {subtitle && <div className="ontology-inspector-subtitle">{subtitle}</div>}
         </div>
+        {headerExtra}
       </div>
 
       {actions && actions.length > 0 && (

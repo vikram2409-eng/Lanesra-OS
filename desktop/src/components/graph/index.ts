@@ -16,6 +16,21 @@ export {
 } from "./graphTypes";
 export { useGraphModel, type GraphDepth, type UseGraphModelOptions, type UseGraphModelResult } from "./useGraphModel";
 export { layoutGraphPositions, type GraphLayoutOptions, type GraphPosition } from "./useGraphLayout";
+export {
+  fitView,
+  clampPan,
+  contentBounds,
+  expandBounds,
+  estimatePillSize,
+  estimateEdgeLabelSize,
+  separateOverlappingPills,
+  PILL_FULL_MAX_WIDTH,
+  type ContentBounds,
+  type ViewportSize,
+  type Pan,
+  type ViewTransform,
+  type FitInsets,
+} from "./graphView";
 export { useHoverDimming, type HoverDimming } from "./useHoverDimming";
 export { GraphCanvas, type GraphCanvasProps } from "./GraphCanvas";
 export { PillNode, type PillNodeProps } from "./PillNode";

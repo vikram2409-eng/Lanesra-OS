@@ -174,6 +174,26 @@
 .og-pill-label {
   line-height: 1.2;
 }
+/* Full labels (Object 360): pills size to content and wrap instead of
+   truncating mid-word. Max-width matches PILL_FULL_MAX_WIDTH in
+   graphView.ts — keep the two in sync.
+   `width: max-content` is load-bearing, not cosmetic: an
+   absolutely-positioned shrink-to-fit pill only gets the space left
+   between its `left` and the pan-inner's right edge, so pills the
+   layout parks near the right edge (clamped to W-34) were squeezed to
+   ~35px and their text wrapped one character per line. max-content
+   sizes the pill to its text (capped by max-width) wherever it sits;
+   the fit math in graphView.ts already accounts for the full extents,
+   so the wider pill still lands inside the viewport. */
+.og-pill-full {
+  width: max-content;
+  max-width: 260px;
+  white-space: normal;
+  text-align: center;
+}
+.og-pill-full .og-pill-label {
+  overflow-wrap: anywhere;
+}
 .og-pill-cluster {
   border-style: dashed;
 }
@@ -358,5 +378,11 @@
   }
   .og-pill-root {
     max-width: 54vw;
+  }
+  /* Full labels still wrap on small screens — never ellipsis-truncate. */
+  .og-pill-full {
+    max-width: min(260px, 70vw);
+    overflow: visible;
+    text-overflow: clip;
   }
 }

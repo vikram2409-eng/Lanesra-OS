@@ -1775,6 +1775,44 @@ tr:hover td {
   animation: ontology-card-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
+/* Object 360: the inspector is 340px wide (not the Ontology Graph's
+   290px) and docked as a full-height right pane by default — flush to
+   the graph area's top, right, and bottom edges, with a divider to the
+   graph. Dragging its header undocks it back into the floating card
+   above; the "Dock pane" button re-docks it. */
+.o360-inspector {
+  width: 340px;
+}
+
+.o360-inspector.o360-docked {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  border: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  box-shadow: none;
+  overflow-y: auto;
+  animation: none;
+}
+
+.o360-dock-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.o360-dock-btn:hover {
+  border-color: var(--text-muted);
+}
+
 .ontology-inspector-head {
   display: flex;
   align-items: flex-start;

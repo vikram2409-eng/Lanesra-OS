@@ -12270,6 +12270,178 @@ function openObject360ForEntity(entityTypeKey){
  if(!rec){toast('No records yet');return}
  object360Modal(entityTypeKey,rec.id,recordDisplayName(entityTypeKey,rec));
 }
+// Object 360 fit + drag-pan (mirrors the Ontology Graph's depClampPan /
+// depFitToContent, scoped to the modal). The layout canvas is sized to the
+// real .mini-graph host, then the rendered content's measured bounding box
+// is fit + centered inside it, so no pill, halo or label is ever clipped
+// and no dead canvas remains. View state lives in the module-level
+// o360View object, so it survives renderObject360Body() re-renders; every
+// re-render re-fits (open, depth/layer toggle, pivot, inspect), and a
+// ResizeObserver on the host re-renders on modal resize/maximize.
+// Pan is clamped with the same slack formula as depClampPan, so the graph
+// can never be dragged completely off-screen.
+let o360View={zoom:1,panX:0,panY:0,bbox:null,canvasW:0,canvasH:0};
+let o360DragState=null,o360SuppressClick=false,o360DocWired=false,o360ResizeObs=null,o360RefitPending=false;
+function o360PillSize(label,isRoot){
+ // Matches the O360 pill CSS: labels wrap at 220px (280px for the root),
+ // so width is capped and height grows by line instead of truncating.
+ const chars=String(label||'').length;
+ const maxW=isRoot?280:220;
+ const w=isRoot?Math.min(maxW,32+Math.ceil(chars*7.5)):Math.min(maxW,38+Math.ceil(chars*7));
+ const perLine=isRoot?30:26;
+ const lines=Math.max(1,Math.ceil(chars/perLine));
+ const h=isRoot?Math.max(33,lines*16+16):Math.max(28,lines*15+12);
+ return {w,h,hw:w/2,hh:h/2};
+}
+function o360ApplyView(){
+ const canvas=document.querySelector('#o360GraphPan');
+ if(!canvas)return;
+ canvas.style.transform='translate('+o360View.panX+'px,'+o360View.panY+'px) scale('+o360View.zoom+')';
+ const readout=document.querySelector('#o360ZoomReadout');
+ if(readout)readout.textContent=Math.round(o360View.zoom*100)+'%';
+}
+function o360ContentBBox(){
+ const host=document.querySelector('#o360MiniGraph');
+ const canvas=document.querySelector('#o360GraphPan');
+ if(!host||!canvas)return null;
+ const z=o360View.zoom||1,cr=canvas.getBoundingClientRect();
+ let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+ canvas.querySelectorAll('.og-pill, .ontology-halo-label, .ontology-edge-label, ellipse, circle').forEach(el=>{
+  const r=el.getBoundingClientRect();
+  if(!r.width&&!r.height)return;
+  minX=Math.min(minX,(r.left-cr.left)/z);maxX=Math.max(maxX,(r.right-cr.left)/z);
+  minY=Math.min(minY,(r.top-cr.top)/z);maxY=Math.max(maxY,(r.bottom-cr.top)/z);
+ });
+ if(!isFinite(minX))return null;
+ return {minX,minY,maxX,maxY};
+}
+function o360ClampPan(panX,panY,zoom){
+ const b=o360View.bbox,host=document.querySelector('#o360MiniGraph');
+ if(!b||!host||!host.clientWidth||!host.clientHeight)return {panX:Math.round(panX),panY:Math.round(panY)};
+ const z=zoom||o360View.zoom||1,vw=host.clientWidth,vh=host.clientHeight,SLACK=24;
+ const clampAxis=(pan,min,max,v)=>{
+  const lo=Math.min(SLACK-min*z,v-SLACK-max*z);
+  const hi=Math.max(SLACK-min*z,v-SLACK-max*z);
+  return Math.max(lo,Math.min(hi,pan));
+ };
+ return {panX:Math.round(clampAxis(panX,b.minX,b.maxX,vw)),panY:Math.round(clampAxis(panY,b.minY,b.maxY,vh))};
+}
+function o360FitToHost(){
+ const host=document.querySelector('#o360MiniGraph');
+ const canvas=document.querySelector('#o360GraphPan');
+ if(!host||!canvas||!host.clientWidth||!host.clientHeight)return;
+ // Measure at identity: the inline transform is a fresh scale(1) on
+ // every re-render, but o360View.zoom may still hold a user's old zoom.
+ canvas.style.transform='translate(0px,0px) scale(1)';
+ o360View={...o360View,zoom:1,panX:0,panY:0};
+ const vw=host.clientWidth,vh=host.clientHeight;
+ const bbox=o360ContentBBox();
+ if(!bbox){o360View={zoom:1,panX:0,panY:0,bbox:null,canvasW:vw,canvasH:vh};o360ApplyView();return}
+ const bw=Math.max(1,bbox.maxX-bbox.minX),bh=Math.max(1,bbox.maxY-bbox.minY);
+ // Fit fills the host: small graphs (7 nodes) magnify up to 1.4x so the
+ // graph area fills the column instead of sitting small in a corner;
+ // large graphs shrink to fit, never below 0.25x. The top 52px is the
+ // toolbar's strip — fit into the area below it, so no halo label ever
+ // lands hidden behind the toolbar buttons.
+ const TOOLBAR_TOP=52,fitH=Math.max(100,vh-TOOLBAR_TOP);
+ const scale=Math.min(1.4,Math.max(0.25,Math.min(vw/bw,fitH/bh)*0.94));
+ const panX=Math.round((vw-bw*scale)/2-bbox.minX*scale);
+ const panY=Math.round(TOOLBAR_TOP+(fitH-bh*scale)/2-bbox.minY*scale);
+ o360View={zoom:scale,panX,panY,bbox,canvasW:vw,canvasH:vh};
+ o360ApplyView();
+}
+function o360ZoomStep(dir,focusX,focusY){
+ const host=document.querySelector('#o360MiniGraph');
+ if(!host||!o360View.bbox)return;
+ let z=Math.min(2,Math.max(0.4,(o360View.zoom||1)*(dir>0?1.15:1/1.15)));
+ if(focusX===undefined){focusX=host.clientWidth/2;focusY=host.clientHeight/2}
+ const oz=o360View.zoom||1;
+ const cx=(focusX-o360View.panX)/oz,cy=(focusY-o360View.panY)/oz;
+ const panX=focusX-z*cx,panY=focusY-z*cy;
+ o360View={...o360View,zoom:z,panX:Math.round(panX),panY:Math.round(panY)};
+ o360ApplyView();
+}
+function o360WirePan(){
+ const host=document.querySelector('#o360MiniGraph');
+ if(!host||host.dataset.o360PanWired)return;
+ host.dataset.o360PanWired='1';
+ // Toolbar buttons are re-created on every render, so delegate clicks
+ // from the host (which survives re-renders).
+ host.addEventListener('click',e=>{
+  const fitBtn=e.target.closest?e.target.closest('[data-o360-fit]'):null;
+  if(fitBtn){o360FitToHost();return}
+  const zin=e.target.closest?e.target.closest('[data-o360-zoom-in]'):null;
+  if(zin){o360ZoomStep(1);return}
+  const zout=e.target.closest?e.target.closest('[data-o360-zoom-out]'):null;
+  if(zout){o360ZoomStep(-1);return}
+ });
+ host.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const r=host.getBoundingClientRect();
+  o360ZoomStep(e.deltaY<0?1:-1,e.clientX-r.left,e.clientY-r.top);
+ },{passive:false});
+ host.addEventListener('mousedown',e=>{
+  if(e.button!==0)return;
+  // Real buttons (halo labels, toolbar) keep their click behavior.
+  if(e.target.closest&&e.target.closest('button'))return;
+  const canvas=document.querySelector('#o360GraphPan');
+  if(!canvas)return;
+  o360DragState={x:e.clientX,y:e.clientY,panX:o360View.panX||0,panY:o360View.panY||0,moved:false};
+  host.classList.add('o360-dragging');
+  e.preventDefault();
+ });
+ if(!o360DocWired){
+  o360DocWired=true;
+  document.addEventListener('mousemove',e=>{
+   if(!o360DragState)return;
+   const dx=e.clientX-o360DragState.x,dy=e.clientY-o360DragState.y;
+   if(!o360DragState.moved&&Math.hypot(dx,dy)<4)return;
+   if(!o360DragState.moved)o360DragState.moved=true;
+   const canvas=document.querySelector('#o360GraphPan');
+   if(!canvas)return;
+   const c=o360ClampPan(o360DragState.panX+dx,o360DragState.panY+dy,o360View.zoom||1);
+   canvas.style.transform='translate('+c.panX+'px,'+c.panY+'px) scale('+(o360View.zoom||1)+')';
+   o360DragState.curPan=c;
+  });
+  document.addEventListener('mouseup',e=>{
+   if(!o360DragState)return;
+   const hostEl=document.querySelector('#o360MiniGraph');
+   if(hostEl)hostEl.classList.remove('o360-dragging');
+   const moved=!!o360DragState.moved;
+   if(moved){
+    const dx=e.clientX-o360DragState.x,dy=e.clientY-o360DragState.y;
+    const c=o360ClampPan(o360DragState.panX+dx,o360DragState.panY+dy,o360View.zoom||1);
+    o360View={...o360View,panX:c.panX,panY:c.panY};
+    o360ApplyView();
+    // A real drag must not also fire the pill's click/inspect handler.
+    o360SuppressClick=true;
+   }
+   o360DragState=null;
+  });
+  // Capture-phase: a drag that moved eats the trailing click before it
+  // reaches any pill/collapse handler (same job as depSuppressClick).
+  document.addEventListener('click',e=>{
+   if(!o360SuppressClick)return;
+   o360SuppressClick=false;
+   if(e.target.closest&&e.target.closest('#o360MiniGraph')){
+    e.preventDefault();e.stopPropagation();
+   }
+  },true);
+ }
+ // Modal resize/maximize/drag-resize changes the host: re-layout + refit.
+ // The re-render never changes the host size itself, so this cannot loop.
+ if(typeof ResizeObserver!=='undefined'){
+  if(o360ResizeObs)o360ResizeObs.disconnect();
+  o360ResizeObs=new ResizeObserver(()=>{
+   const h=document.querySelector('#o360MiniGraph');
+   if(!h||!object360State||o360RefitPending)return;
+   if(Math.abs((o360View.canvasW||0)-h.clientWidth)<=2&&Math.abs((o360View.canvasH||0)-h.clientHeight)<=2)return;
+   o360RefitPending=true;
+   requestAnimationFrame(()=>{o360RefitPending=false;if(object360State&&document.querySelector('#o360MiniGraph'))renderObject360Body()});
+  });
+  o360ResizeObs.observe(host);
+ }
+}
 let object360State=null;
 function object360Modal(entityType,entityId,label){
  object360State={root:{entityType,entityId,label},inspect:{entityType,entityId,label},trail:[]};
@@ -12289,9 +12461,13 @@ function renderObject360Body(){
  const body=$('#object360Body'); if(!body)return;
  const driver=o360RecordDriver(s.root.entityType,s.root.entityId);
  const model=graphModel(driver);
- // Canvas scales with the model, like the Ontology Graph's.
- const W=Math.max(880,Math.min(1500,Math.round(560+model.nodes.length*5)));
- const H=Math.max(600,Math.min(940,Math.round(440+model.nodes.length*3.2)));
+ // Canvas is sized to the real .mini-graph host, not by node count: the
+ // old 880x600-by-count canvas overflowed the ~643px host and clipped
+ // the right-hand pills. Fall back to the old size only before layout.
+ const hostEl=document.querySelector('#o360MiniGraph');
+ const hostW=hostEl?hostEl.clientWidth:0,hostH=hostEl?hostEl.clientHeight:0;
+ const W=hostW>200?hostW:880;
+ const H=hostH>200?hostH:600;
  const colors={},typeLabels={};
  model.nodes.forEach(n=>{
   if(!colors[n.type])colors[n.type]='var(--chart-'+ontologyColorIndex(n.type)+')';
@@ -12310,7 +12486,12 @@ function renderObject360Body(){
   nodeSize:15,rootSize:26,
   rootClass:'ontology-node-root',
   clusterOrder:o360ClusterOrder(driver,model),
-  labelMode:'all'
+  labelMode:'all',
+  // Full labels, wrapping pills: the 28-char cut hid meaning mid-word
+  // ("PO received — put away to s…"). pillSizeFn matches the wrapping
+  // pill size so the layout/de-overlap keep the wider pills on-canvas.
+  labelMax:999,
+  pillSizeFn:o360PillSize
  },W,H);
 
  const rootRecord=byId(s.root.entityType,s.root.entityId);
@@ -12413,7 +12594,7 @@ function renderObject360Body(){
  const trailEl=document.querySelector('#o360PivotTrail');
  if(trailEl)trailEl.innerHTML=trail.length?trail.map((t,i)=>`<button type="button" class="o360-crumb" data-o360-crumb="${i}" title="Pivot back to ${t.label}">${t.label}</button><span class="o360-crumb-sep">›</span>`).join('')+`<span class="o360-crumb-current">${s.root.label}</span>`:'';
  const graphHost=document.querySelector('#o360MiniGraph');
- if(graphHost)graphHost.innerHTML=`<div class="ontology-graph-canvas" style="width:${W}px;height:${H}px">${graphHtml}</div>`;
+ if(graphHost)graphHost.innerHTML=`<div class="o360-graph-viewport" id="o360GraphViewport"><div id="o360GraphPan" class="ontology-graph-canvas" style="width:${W}px;height:${H}px;transform:translate(0px,0px) scale(1);transform-origin:0 0">${graphHtml}</div></div><div class="o360-graph-tools" role="group" aria-label="Graph view"><button type="button" class="btn btn-secondary btn-sm" data-o360-zoom-out title="Zoom out" aria-label="Zoom out">−</button><span class="o360-zoom-readout" id="o360ZoomReadout">100%</span><button type="button" class="btn btn-secondary btn-sm" data-o360-zoom-in title="Zoom in" aria-label="Zoom in">+</button><button type="button" class="btn btn-secondary btn-sm" data-o360-fit title="Fit graph to view">Fit</button><span class="o360-pan-hint">Drag to pan</span></div>`;
 
  body.innerHTML=`${inspectorHtml}`;
 
@@ -12451,6 +12632,10 @@ function renderObject360Body(){
  const o360FieldsT=$('#o360FieldsToggle'); if(o360FieldsT)o360FieldsT.onchange=(e)=>{if(e.target.checked)object360HiddenTypes.delete('custom_field');else object360HiddenTypes.add('custom_field');renderObject360Body()};
  makeInspectorCardDraggable($('#o360InspectorCard'),$('#o360InspectorHead'),(left,top)=>{object360CardPos={left,top}});
  o360WireCardDock();
+ // Fit + center the freshly rendered graph in the host, and (first
+ // render) wire drag-pan / wheel-zoom / the resize observer.
+ o360WirePan();
+ o360FitToHost();
 }
 function companyDetail(id){
  const c=byId('companies',id);
@@ -14153,17 +14338,19 @@ function depApplyCollapse(model,collapsed,typeLabel){
 }
 // depPillSize lives once, below with the pan clamp (cap 28, matching the
 // label truncation in graphRender — the estimator must cover the widest
-// pill the renderer can draw).
+// pill the renderer can draw). Callers with wider/wrapping pills (Object
+// 360) pass their own estimator as pillSizeFn instead.
 // De-overlap pass: push overlapping pills apart along the axis of least
 // penetration, a few deterministic passes. Force-directed layout alone
 // cannot do this — LINK_LEN (220) is barely wider than a pill, and
 // same-cluster nodes share one anchor, so pills stacked on each other
 // (the Suppliers D1 "Contact name pill overlapped" case). Runs after the
 // force loop, before the canvas clamp, so the result stays on-canvas.
-function depDeoverlapPositions(model,pos,W,H,rootKey){
+function depDeoverlapPositions(model,pos,W,H,rootKey,pillSizeFn){
  const GAP=6;
  const size=new Map();
- model.nodes.forEach(n=>size.set(n.key,depPillSize(n.label,n.key===rootKey)));
+ const pillSize=pillSizeFn||depPillSize;
+ model.nodes.forEach(n=>size.set(n.key,pillSize(n.label,n.key===rootKey)));
  for(let pass=0;pass<60;pass++){
   let moved=false;
   for(let i=0;i<model.nodes.length;i++)for(let j=i+1;j<model.nodes.length;j++){
@@ -14305,7 +14492,7 @@ function graphLayoutPositions(model,layout){
  // De-overlap: the force loop alone stacks same-cluster pills (shared
  // anchor + LINK_LEN barely wider than a pill). Runs before offsets so a
  // dragged node keeps exactly where the user put it.
- depDeoverlapPositions(model,pos,W,H,rootKey);
+ depDeoverlapPositions(model,pos,W,H,rootKey,layout.pillSizeFn||null);
  // Node-drag offsets (Ontology Graph only — Object 360 passes none): a
  // dragged node keeps its offset across re-renders, clamped inside the
  // canvas by its own half-pill size.
@@ -14315,7 +14502,7 @@ function graphLayoutPositions(model,layout){
    const off=offsets instanceof Map?offsets.get(n.key):offsets[n.key];
    if(!off)return;
    const p=pos.get(n.key);if(!p)return;
-   const s=depPillSize(n.label,n.key===rootKey);
+   const s=(layout.pillSizeFn||depPillSize)(n.label,n.key===rootKey);
    p.x=Math.max(s.hw,Math.min(W-s.hw,p.x+(off.x||0)));
    p.y=Math.max(s.hh,Math.min(H-s.hh,p.y+(off.y||0)));
   });
@@ -14350,7 +14537,7 @@ function depConvexHull(pts){
 // set) and dims the rest; labelMode 'neighborhood' renders edge-label pills
 // only for edges touching the inspected node (spec section 7.6 declutter).
 function graphRender(model,ui,W,H){
- const pos=graphLayoutPositions(model,{rootKey:ui.rootKey,clusterOrder:ui.clusterOrder||[],W:W,H:H,nodeOffsets:ui.nodeOffsets||null});
+ const pos=graphLayoutPositions(model,{rootKey:ui.rootKey,clusterOrder:ui.clusterOrder||[],W:W,H:H,nodeOffsets:ui.nodeOffsets||null,pillSizeFn:ui.pillSizeFn||null});
  const byKey=new Map(model.nodes.map(n=>[n.key,n]));
  const inspectKey=ui.inspectKey;
  const hl=ui.highlight||{};
@@ -14395,15 +14582,27 @@ function graphRender(model,ui,W,H){
  // can share a top edge (their top nodes pin to the same layout clamp),
  // so their labels land on the same spot. Push colliding labels apart —
  // down when near the top of the canvas, up otherwise — until clear.
+ // Labels must not cover pills either (Object 360 showed a "Business
+ // Rule · 1" label sitting on top of a neighbouring workflow pill and
+ // hiding its tail): pill rects are obstacles too, with the same walk.
  haloDescs.sort((a,b)=>a.y-b.y||a.x-b.x);
  const placedLabels=[];
+ const pillSizeForLabel=ui.pillSizeFn||depPillSize;
+ const pillRects=[];
+ model.nodes.forEach(n=>{
+  const p=pos.get(n.key);if(!p)return;
+  const s=pillSizeForLabel(n.label,n.key===ui.rootKey);
+  pillRects.push({x0:p.x-s.hw-2,x1:p.x+s.hw+2,y0:p.y-s.hh-2,y1:p.y+s.hh+2});
+ });
  haloDescs.forEach(d=>{
   const w=d.text.length*7+28,h=24;
   // Keep the whole label inside the canvas horizontally: a cluster near
   // an edge would otherwise have its label hang off the side.
   const cx=Math.max(w/2+2,Math.min(W-w/2-2,d.x));
   const lo=h/2+2,hi=H-h/2-2;
-  const clashAt=(y)=>placedLabels.some(q=>Math.min(cx+w/2,q.x1)-Math.max(cx-w/2,q.x0)>4&&Math.min(y+h/2,q.y1)-Math.max(y-h/2,q.y0)>4);
+  const overlaps=(ax0,ax1,ay0,ay1,bx0,bx1,by0,by1)=>Math.min(ax1,bx1)-Math.max(ax0,bx0)>4&&Math.min(ay1,by1)-Math.max(ay0,by0)>4;
+  const clashAt=(y)=>placedLabels.some(q=>overlaps(cx-w/2,cx+w/2,y-h/2,y+h/2,q.x0,q.x1,q.y0,q.y1))
+   ||pillRects.some(q=>overlaps(cx-w/2,cx+w/2,y-h/2,y+h/2,q.x0,q.x1,q.y0,q.y1));
   let y=Math.max(lo,Math.min(hi,d.y));
   if(clashAt(y)){
    // Walk outward from the home position, alternating directions (down
@@ -14451,7 +14650,11 @@ function graphRender(model,ui,W,H){
   const isDimmed=ui.hiddenTypes.has(n.type)||(hlActive&&!onPath&&!inSim);
   const isInspecting=!isRoot&&n.type===ui.inspectType&&n.id===ui.inspectId;
   const color=ui.colors[n.type]||'#888';
-  const short=n.label.length>28?n.label.slice(0,27)+'…':n.label;
+  // labelMax: Object 360 passes a large value so full labels show (pills
+  // wrap there); the Ontology Graph leaves it unset and keeps the 28-char
+  // truncation, so its layout/estimator stay exactly as before.
+  const labelMax=ui.labelMax||28;
+  const short=n.label.length>labelMax?n.label.slice(0,labelMax-1)+'…':n.label;
   if(n.id==='__cluster__'){
    nodeDivs.push('<div class="og-pill og-pill-cluster" '+ui.collapseAttr+'="'+n.type+'" data-node-key="'+n.key+'" style="left:'+p.x.toFixed(1)+'px;top:'+p.y.toFixed(1)+'px" title="'+n.label+' — click to expand" role="button" tabindex="0"><span class="og-pill-dot" style="background:'+color+'"></span><span class="og-pill-label">'+short+' · '+n.count+'</span></div>');
    return;
@@ -25853,7 +26056,7 @@ function renderLaneRunner(){
     <div class="card">
      <h4>${agentEsc(recNumber)} — ${agentEsc(recName)}</h4>
      ${sideKv}
-     <table class="tbl lane-po-lines"><thead>${sideHead}</thead><tbody>${poLines}</tbody></table>
+     <div class="lane-po-lines-wrap"><table class="tbl lane-po-lines"><thead>${sideHead}</thead><tbody>${poLines}</tbody></table></div>
     </div>
     ${writesHtml}
     <div class="card"><h4>Audit trail</h4><div class="lane-audit">${audit||'<p class="muted">Nothing yet.</p>'}</div></div>
@@ -25912,7 +26115,7 @@ function laneRunnerStepHtml(run, stage, step, row, isViewingBack){
    :'Approving posts the guarded write (PO status → PARTIALLY_RECEIVED) and continues to put-away. Rejecting posts nothing and goes to the hold step.';
   const approveLabel=isPick?'Approve — pick a replacement':'Approve — put away '+(apr?agentEsc(String(apr.proposal.qtyReceived||'')):'')+' × '+(apr?agentEsc(apr.proposal.sku||''):'');
   body=`<p>${agentEsc(step.description||'')}</p>
-   <table class="tbl"><thead>${head}</thead><tbody>${rows}</tbody></table>
+   <div class="lane-po-lines-wrap"><table class="tbl"><thead>${head}</thead><tbody>${rows}</tbody></table></div>
    <p class="muted">${note}</p>
    <div class="lane-actions"><button class="btn btn-primary" id="laneApproveBtn" ${isViewingBack?'disabled':''}>${approveLabel}</button><button class="btn btn-danger" id="laneRejectBtn" ${isViewingBack?'disabled':''}>Reject — hold the order</button></div>`;
  }else if(step.kind==='check'){

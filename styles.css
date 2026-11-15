@@ -1505,9 +1505,11 @@ button.badge:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
 #depSimPicker .select{width:auto}
 
 /* Detail panel and the Object 360 inspector card ride on .card; keep
-   their panel metrics on top of the component chrome. */
+   their panel metrics on top of the component chrome. The O360 card is
+   340px so it fills its 372px grid column (16px right offset + 16px
+   breathing room to the map border) with no white strip. */
 .ontology-detail-panel.card{width:300px}
-#o360InspectorCard.card{width:290px}
+#o360InspectorCard.card{width:340px}
 
 
 /* ===== Modern UI PR-C/WorkerB TS-3 component overrides + TS-6 brand assets ===== */
@@ -1864,11 +1866,36 @@ html.app-mode{scroll-behavior:auto}
 .object-modal .modal-title h3{margin:0;font-size:18px;font-weight:700;letter-spacing:-.01em}
 .pivot-trail{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:7px;color:var(--muted-foreground);font-size:12px}
 .pivot-trail strong{color:var(--foreground)}
-.modal-grid{display:grid;grid-template-columns:minmax(390px,1.15fr) minmax(320px,.85fr);min-height:calc(100% - 66px)}
-.mini-graph{min-width:0;border-right:1px solid var(--border);background-color:color-mix(in srgb,var(--muted) 28%,transparent);background-image:radial-gradient(color-mix(in srgb,var(--muted-foreground) 18%,transparent) 1px,transparent 1px);background-size:18px 18px;overflow:auto}
+.modal-grid{display:grid;grid-template-columns:minmax(0,1fr) 372px;min-height:calc(100% - 66px)}
+.mini-graph{min-width:0;min-height:0;position:relative;border-right:1px solid var(--border);background-color:color-mix(in srgb,var(--muted) 28%,transparent);background-image:radial-gradient(color-mix(in srgb,var(--muted-foreground) 18%,transparent) 1px,transparent 1px);background-size:18px 18px;overflow:hidden}
 .mini-graph .ontology-graph-canvas{position:relative}
+/* Object 360 fit + drag-pan: the canvas is a pan/zoom layer inside the
+   .o360-graph-viewport clip window (same shape as the Ontology Graph's
+   #depGraphViewport > #depGraphPan). The canvas is sized to the host and
+   fit/centered by JS, so it always fills the column with no dead space
+   and no clipped pills. Pills wrap instead of truncating. */
+.o360-graph-viewport{position:absolute;inset:0;overflow:hidden;cursor:grab;background-color:var(--canvas,#fbfcfe);background-image:radial-gradient(#e5e7eb 1px,transparent 1px);background-size:20px 20px}
+.o360-graph-viewport.o360-dragging{cursor:grabbing}
+.o360-graph-viewport.o360-dragging *{user-select:none!important}
+#o360GraphPan{position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform;border-radius:0}
+#o360MiniGraph .og-pill{white-space:normal;width:max-content;max-width:220px;text-align:left;line-height:1.25}
+#o360MiniGraph .og-pill-root{max-width:280px}
+#o360MiniGraph .og-pill-label{overflow-wrap:break-word}
+#o360MiniGraph .og-pill-dot{margin-top:1px}
+.o360-graph-tools{position:absolute;top:10px;right:10px;z-index:6;display:flex;align-items:center;gap:6px;padding:5px 6px;background:color-mix(in srgb,var(--background) 92%,transparent);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow-sm)}
+.o360-graph-tools .btn-sm{min-height:28px;padding:0 9px;font-size:12px;font-weight:650}
+.o360-zoom-readout{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;font-weight:700;color:var(--muted-foreground);min-width:38px;text-align:center}
+.o360-pan-hint{font-size:11px;color:var(--muted-foreground);white-space:nowrap;padding:0 2px}
 .object-inspector{padding:18px;position:relative;min-width:0}
-.object-inspector .ontology-inspector-card{max-width:calc(100% - 32px)}
+.object-inspector .ontology-inspector-card{width:min(340px,calc(100% - 32px));max-width:calc(100% - 32px)}
+/* Inspector actions: a long label ("View Purchase Orders in Ontology
+   Graph") used to force its grid item to min-content width, pushing the
+   buttons past the card — and the modal — edge. Let them wrap and keep
+   every grid item inside the card. */
+.object-inspector .ontology-inspector-actions{min-width:0}
+.object-inspector .ontology-inspector-actions .btn{min-width:0;white-space:normal;height:auto;min-height:38px;padding:8px 10px;line-height:1.3;text-align:center}
+.object-inspector .ontology-inspector-head{min-width:0}
+.object-inspector .ontology-inspector-head>div{min-width:0;overflow-wrap:break-word}
 .inspector-section+.inspector-section{margin-top:20px;padding-top:18px;border-top:1px solid var(--border)}
 .inspector-section h3{margin:0 0 2px;font-size:15px;font-weight:700}
 .panel-title{display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -2458,47 +2485,77 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
 body.has-demo-banner{padding-top:36px}
 @media(max-width:900px){.sidebar.open{top:0;height:100vh}}
 
-/* Process Lanes (WP-0702): the runner screen on the warehouse demo. */
-.lane-stages{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:14px 0}
-.lane-stage{display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--muted)}
-.lane-stage.current{border-color:var(--brand);color:var(--text);font-weight:600}
+/* Process Lanes (WP-0702): the runner screen on the warehouse demo.
+   Visual polish only — spacing, typography, card styling, stage/step
+   hierarchy, form fields, record panel and audit trail. No logic, flow,
+   statuses, gating or buttons change here. */
+.lane-stages{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0 20px}
+.lane-stage{display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--muted);font-size:13px;line-height:1.3}
+.lane-stage-name{white-space:nowrap}
+.lane-stage.current{border-color:var(--brand);color:var(--text);font-weight:600;background:color-mix(in srgb,var(--brand) 7%,var(--panel));box-shadow:0 0 0 1px var(--brand),0 2px 8px rgba(79,70,229,.12)}
 .lane-stage.done{color:var(--success)}
 .lane-stage-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);font-size:12px;flex-shrink:0}
 .lane-stage.current .lane-stage-num{background:var(--brand);border-color:var(--brand);color:#fff}
+.lane-stage.done .lane-stage-num{border-color:var(--success);color:var(--success)}
 .lane-stage-sep{color:var(--muted)}
-.lane-layout{display:grid;grid-template-columns:220px 1fr 340px;gap:16px;align-items:start}
-.lane-steps h4{margin-top:0}
-.lane-step{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:8px 10px;border:1px solid transparent;border-radius:8px;background:none;cursor:pointer;color:var(--text)}
-.lane-step.current{background:var(--panel);border-color:var(--brand);font-weight:600}
+.lane-layout{display:grid;grid-template-columns:220px minmax(0,1fr) 400px;gap:20px;align-items:start}
+.lane-steps{padding:18px}
+.lane-steps h4{margin:0 0 12px;font-size:14px;font-weight:700;letter-spacing:-.01em}
+.lane-step{display:flex;align-items:flex-start;flex-wrap:wrap;gap:4px 10px;width:100%;text-align:left;padding:10px 12px;border:1px solid transparent;border-radius:10px;background:none;cursor:pointer;color:var(--text)}
+.lane-step:hover{background:color-mix(in srgb,var(--muted) 10%,transparent)}
+.lane-step.current{background:color-mix(in srgb,var(--brand) 8%,var(--panel));border-color:var(--brand);font-weight:600;box-shadow:0 1px 4px rgba(79,70,229,.10)}
 .lane-step.done{color:var(--muted)}
 .lane-step.locked{color:var(--muted);cursor:default}
-.lane-step-mark{width:18px;flex-shrink:0;text-align:center}
-.lane-step-kind{margin-left:auto;font-size:11px;color:var(--muted)}
-.lane-note{font-size:12px}
-.lane-step-card h3{margin:6px 0}
-.lane-line-group{border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
-.lane-line-head{font-weight:600;margin-bottom:8px}
-.lane-form .field{display:block;margin-bottom:10px}
-.lane-assist{font-size:13px;color:var(--muted)}
-.lane-error{color:var(--danger);min-height:18px;margin:6px 0}
-.lane-actions{display:flex;gap:8px;margin-top:12px}
-.lane-viewing{font-size:13px;color:var(--warn)}
-.lane-step-note{font-size:13px;color:var(--muted)}
+.lane-step-mark{width:18px;flex-shrink:0;text-align:center;line-height:1.4}
+.lane-step-name{flex:1 1 110px;min-width:0;line-height:1.35;overflow-wrap:break-word}
+.lane-step-kind{margin-left:auto;font-size:11px;color:var(--muted);line-height:1.4}
+.lane-note{font-size:12px;line-height:1.55;margin:14px 2px 0}
+.lane-step-card{padding:20px 22px}
+.lane-step-card .crumbs{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.lane-step-card h3{margin:8px 0 6px;font-size:20px;font-weight:700;letter-spacing:-.01em;line-height:1.3}
+.lane-step-card>p{line-height:1.6;margin:10px 0}
+.lane-step-card .muted{line-height:1.55}
+.lane-line-group{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;background:color-mix(in srgb,var(--muted) 8%,transparent)}
+.lane-line-head{font-weight:600;font-size:14px;margin-bottom:10px}
+.lane-form .field{display:block;margin-bottom:14px}
+.lane-form .field-label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text)}
+.lane-form .input{min-height:40px;padding:9px 12px;font-size:14px;border-radius:8px;width:100%}
+.lane-assist{font-size:13px;line-height:1.55;color:var(--muted);background:color-mix(in srgb,var(--brand) 6%,transparent);border:1px solid var(--line);border-left:3px solid var(--brand);border-radius:8px;padding:10px 12px;margin:12px 0}
+.lane-error{color:var(--danger);min-height:18px;margin:6px 0;font-size:13px}
+.lane-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+.lane-actions .btn{min-height:42px;padding:0 18px}
+.lane-viewing{font-size:13px;color:var(--warn);background:color-mix(in srgb,var(--warn) 8%,transparent);border:1px solid color-mix(in srgb,var(--warn) 35%,transparent);border-radius:8px;padding:9px 12px;line-height:1.5}
+.lane-step-note{font-size:13px;color:var(--muted);line-height:1.55}
 .lane-writes{margin:8px 0;padding-left:18px}
-.lane-writes li{margin-bottom:4px}
+.lane-writes li{margin-bottom:6px;line-height:1.55}
 .lane-step-writes{margin:8px 0;padding-left:18px}
-.lane-step-writes li{margin-bottom:4px}
-.lane-audit-row{display:flex;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px}
-.lane-audit-time{color:var(--muted);white-space:nowrap}
+.lane-step-writes li{margin-bottom:6px;line-height:1.55}
+.lane-side>.card{padding:18px;margin-bottom:16px;min-width:0}
+.lane-side>.card h4{margin:0 0 10px;font-size:15px;font-weight:700;letter-spacing:-.01em;line-height:1.35;overflow-wrap:break-word}
+.lane-side .lane-audit{margin-top:4px}
+.lane-audit-row{display:grid;grid-template-columns:118px minmax(0,1fr);gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.lane-audit-row:last-child{border-bottom:0}
+.lane-audit-time{color:var(--muted);white-space:nowrap;font-size:12px;line-height:1.5}
+.lane-audit-text{line-height:1.5;overflow-wrap:break-word}
 .tbl{width:100%;border-collapse:collapse;font-size:13px}
 .tbl th,.tbl td{padding:6px;border-bottom:1px solid var(--line);text-align:left}
 .tbl .num{text-align:right}
-.lane-po-lines{width:100%;border-collapse:collapse;font-size:13px}
-.lane-po-lines th,.lane-po-lines td{padding:4px 6px;text-align:left;border-bottom:1px solid var(--line)}
-.lane-po-lines .num{text-align:right}
-.lane-outcome{border-color:var(--success)}
-.kv{display:flex;justify-content:space-between;padding:3px 0;font-size:13px}
-.kv span{color:var(--muted)}
+/* The PO-lines / approval table must fit inside its card: it scrolls
+   inside the card rather than overflowing the viewport. Cells are tight
+   enough that the PO table usually fits without scrolling. */
+.lane-po-lines-wrap{overflow-x:auto;margin:12px -4px 0;padding:0 4px}
+.lane-po-lines{width:100%;border-collapse:collapse;font-size:12px;table-layout:auto}
+.lane-po-lines th,.lane-po-lines td{padding:4px 4px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.35}
+.lane-po-lines th{font-size:11px;overflow-wrap:break-word}
+.lane-po-lines .num{text-align:right;white-space:nowrap}
+.lane-po-lines td:first-child{white-space:nowrap}
+.lane-po-lines td:nth-child(2){min-width:72px;overflow-wrap:break-word}
+.lane-outcome{border-color:var(--success);padding:16px 18px;background:color-mix(in srgb,var(--success) 7%,transparent)}
+.lane-outcome h4{margin:0 0 6px;font-size:15px}
+.lane-outcome p{margin:0;line-height:1.55;font-size:13px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0;font-size:13px}
+.kv span{color:var(--muted);flex-shrink:0}
+.kv b{text-align:right;font-weight:600;overflow-wrap:break-word;min-width:0}
 .lane-o360-run{margin-bottom:12px}
 .lane-o360-run-head{margin-bottom:6px}
 @media(max-width:1100px){.lane-layout{grid-template-columns:1fr}}

@@ -23,6 +23,10 @@ export interface PillNodeProps {
   hoverOn?: boolean;
   /** Spotlight active on the canvas. */
   spotlightActive?: boolean;
+  /** Full labels: show the whole label, wrapping at the pill max-width,
+   *  instead of truncating at 18 chars. Object 360 enables this; the
+   *  dense Ontology Graph keeps the truncated default. */
+  fullLabels?: boolean;
   onClick?: (node: GraphNode) => void;
   onDoubleClick?: (node: GraphNode) => void;
   onMouseEnter?: (key: string) => void;
@@ -34,7 +38,7 @@ function truncate(label: string, max = 18): string {
 }
 
 export const PillNode = memo(function PillNode(props: PillNodeProps) {
-  const { node, x, y, inspecting, dimmed, hoverOn, spotlightActive, onClick, onDoubleClick, onMouseEnter, onMouseLeave } = props;
+  const { node, x, y, inspecting, dimmed, hoverOn, spotlightActive, fullLabels, onClick, onDoubleClick, onMouseEnter, onMouseLeave } = props;
   const color = SYSTEM_NODE_TYPE_COLORS[node.type] ?? "#888";
   const typeLabel = SYSTEM_NODE_TYPE_LABELS[node.type] ?? node.type;
 
@@ -45,6 +49,7 @@ export const PillNode = memo(function PillNode(props: PillNodeProps) {
     dimmed && "og-pill-dimmed",
     hoverOn && "graph-hover-on",
     node.id === "__cluster__" && "og-pill-cluster",
+    fullLabels && "og-pill-full",
   );
 
   const style: React.CSSProperties = {
@@ -83,7 +88,7 @@ export const PillNode = memo(function PillNode(props: PillNodeProps) {
     >
       {!node.isRoot && <span className="og-pill-dot" style={{ background: color }} />}
       <span className="og-pill-label">
-        {truncate(node.label)}
+        {fullLabels ? node.label : truncate(node.label)}
         {node.id === "__cluster__" && node.count != null ? ` · ${node.count}` : ""}
       </span>
     </div>
