@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
 branch: wp/WP-0718-visual-lane-builder
-pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/774
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/784
 updated: 2026-11-15
 ---
 
