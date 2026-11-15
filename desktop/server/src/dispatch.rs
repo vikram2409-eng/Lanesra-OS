@@ -104,14 +104,14 @@ use lanesra_core::services::{
     mapping_service, mcp_client_service, metric_service, numbering_service, ontology_service,
     opportunity_service, order_service, org_unit_service, organization_service, ownership_service,
     page_layout_service, page_template_service, policy_engine_service, process_lane_blueprint,
-    process_lane_publish, process_lane_service, product_service, publisher_service, quote_service,
-    relationship_service, report_service, run_policy_service, saved_view_service,
-    screen_layout_service, search_service, security_settings_service, semantic_mapping_service,
-    solution_component_service, solution_service, status_transition_service, system_graph_service,
-    task_service, test_eval_service, theme_service, tool_registry_service, user_service,
-    vector_search_service, voice_audit_service, voice_execution_service, voice_llm_service,
-    voice_policy_service, voice_provider_service, voice_session_service, webhook_service,
-    work_team_service, workflow_service, workspace_service,
+    process_lane_builder, process_lane_publish, process_lane_service, product_service,
+    publisher_service, quote_service, relationship_service, report_service, run_policy_service,
+    saved_view_service, screen_layout_service, search_service, security_settings_service,
+    semantic_mapping_service, solution_component_service, solution_service,
+    status_transition_service, system_graph_service, task_service, test_eval_service,
+    theme_service, tool_registry_service, user_service, vector_search_service, voice_audit_service,
+    voice_execution_service, voice_llm_service, voice_policy_service, voice_provider_service,
+    voice_session_service, webhook_service, work_team_service, workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -3306,6 +3306,67 @@ pub fn dispatch(
                 &lane_key,
                 version,
                 &case_json,
+                actor,
+            )?)
+        }
+        // WP-0718 (REQ-LANE-024): the visual lane builder - same service
+        // as the desktop commands, so both editions behave the same.
+        "save_builder_lane" => {
+            let lane_key: Option<String> = args
+                .get("laneKey")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let definition_json: String = arg(args, "definitionJson")?;
+            to_value(process_lane_builder::save_builder_lane(
+                conn,
+                &require_workspace_id(conn)?,
+                lane_key.as_deref(),
+                &definition_json,
+                actor,
+            )?)
+        }
+        "builder_check_lane" => {
+            let definition_json: String = arg(args, "definitionJson")?;
+            to_value(process_lane_builder::builder_check(
+                conn,
+                &require_workspace_id(conn)?,
+                &definition_json,
+                actor,
+            )?)
+        }
+        "builder_dry_run_lane" => {
+            let definition_json: String = arg(args, "definitionJson")?;
+            let anchor_record_id: String = arg(args, "anchorRecordId")?;
+            let fixtures: process_lane_publish::DryRunFixtures = arg(args, "fixtures")?;
+            let expected_outcome: Option<String> = args
+                .get("expectedOutcome")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            to_value(process_lane_builder::builder_dry_run(
+                conn,
+                &require_workspace_id(conn)?,
+                &definition_json,
+                &anchor_record_id,
+                &fixtures,
+                expected_outcome.as_deref(),
+                actor,
+            )?)
+        }
+        "builder_reads_writes" => {
+            let definition_json: String = arg(args, "definitionJson")?;
+            to_value(process_lane_builder::builder_reads_writes(
+                &definition_json,
+            )?)
+        }
+        "builder_action_types" => {
+            let object_key: Option<String> = args
+                .get("objectKey")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            to_value(process_lane_builder::builder_action_types(
+                conn,
+                &require_workspace_id(conn)?,
+                object_key.as_deref(),
                 actor,
             )?)
         }

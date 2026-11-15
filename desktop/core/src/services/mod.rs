@@ -79,6 +79,7 @@ pub mod page_template_service;
 pub mod policy_engine_service;
 pub mod postgres_service;
 pub mod process_lane_blueprint;
+pub mod process_lane_builder;
 pub mod process_lane_publish;
 pub mod process_lane_service;
 pub mod product_service;
