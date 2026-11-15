@@ -3,8 +3,8 @@ id: WP-0718
 title: Visual lane builder
 phase: 7
 epic: E7.5 Authoring
-status: proposed
-owner: unassigned
+status: in_progress
+owner: muse
 planned_for: muse
 depends_on: [WP-0712, WP-0714]
 requirements: [REQ-LANE-024]
@@ -12,9 +12,9 @@ estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
-branch: wp/WP-0718-ux-spec
+branch: wp/WP-0718-visual-lane-builder
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/774
-updated: 2026-11-14
+updated: 2026-11-15
 ---
 
 # WP-0718 — Visual lane builder
@@ -258,6 +258,8 @@ provides all four.
   skip filter live in the Count lane's surfaces (§8) once Q-33/Q-34
   are accepted.
 
+## Acceptance criteria
+
 - [ ] AC-1: A lane built in the builder equals the same lane written as data
 - [ ] AC-2: Every publish check is shown while editing
 - [ ] AC-3: The builder is keyboard operable and passes axe checks
@@ -279,3 +281,4 @@ provides all four.
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 - 2026-11-14 muse: UX spec written as a Design section (ADR-0025 prep track, Claude's instruction via the owner). Canvas (stages as chevrons, steps as cards, branches as drawn arrows, reusing the WP-0712 graph canvas), nested any/all condition builder with references linked to the step that sets them, branch-target arrow editor with the check-last warning and one-click fix, per-step reads/writes map and lane-level plumbing view, approval-writes view, Action-Type picker (pending the WP-0705 catalog), live WP-0714 publish checks, per-lane surfaces for all four warehouse lanes, keyboard + axe. Docs only — no core, no app.js, no schema change. WP stays proposed and unassigned: the build is blocked on WP-0714 (whose build is blocked on WP-0705 + WP-0706) and the ADR-0025 demo freeze. ACs untouched.
+- 2026-11-15 muse: Claimed (branch wp/WP-0718-visual-lane-builder, from main cdfcc07 — the WP-0716 merge). Deps WP-0712 (done) + WP-0714 (done) met; ADR-0025 decision 8 bar met (four warehouse lanes as definitions, one drafted through the assistant, publish checks shipped, authoring log written). WP-0716 done-flip folded into this claim commit. Build: canvas + condition builder + branch editor + reads/writes map + approval-writes view + Action-Type picker + live publish checks + per-lane surfaces, per the Design section; AC-1..AC-6. Next: build via coordinator subagent.
