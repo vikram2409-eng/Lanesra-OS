@@ -32,7 +32,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0718](work/P7/WP-0718-visual-lane-builder.md) | Visual lane builder | in_progress | muse | `wp/WP-0718-visual-lane-builder` | https://github.com/vikram2409-eng/Lanesra-OS/pull/774 |
+| [WP-0718](work/P7/WP-0718-visual-lane-builder.md) | Visual lane builder | in_progress | muse | `wp/WP-0718-visual-lane-builder` | https://github.com/vikram2409-eng/Lanesra-OS/pull/784 |
 
 ## Ready to start (all dependencies done)
 
