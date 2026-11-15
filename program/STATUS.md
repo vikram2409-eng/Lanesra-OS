@@ -32,7 +32,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0716](work/P7/WP-0716-child-lanes.md) | Child lanes | in_progress | muse | `wp/WP-0716-child-lanes` | - |
+| [WP-0716](work/P7/WP-0716-child-lanes.md) | Child lanes | in_progress | muse | `wp/WP-0716-child-lanes` | https://github.com/vikram2409-eng/Lanesra-OS/pull/783 |
 
 ## Ready to start (all dependencies done)
 
