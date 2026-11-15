@@ -3,7 +3,7 @@ id: WP-0714
 title: Dry run, publish checks, test framework and Solution export
 phase: 7
 epic: E7.5 Authoring
-status: in_review
+status: done
 owner: muse
 planned_for: muse
 depends_on: [WP-0705, WP-0706]
