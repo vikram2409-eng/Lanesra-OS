@@ -97,9 +97,10 @@ fn published_lane_compiles_to_a_graph_that_passes_validate_for_publish() {
     // on the stored graph directly.
     execution_graph_service::validate_for_publish(&graph).unwrap();
 
-    // 12 steps + 5 repeating steps wrapped in a loop node + trigger + end.
-    assert_eq!(graph.nodes.len(), 19);
-    assert_eq!(graph.edges.len(), 25);
+    // 13 steps + 5 repeating steps wrapped in a loop node + trigger + end
+    // (12 steps before the WP-0716 child step 1.3 verify-supplier).
+    assert_eq!(graph.nodes.len(), 20);
+    assert_eq!(graph.edges.len(), 26);
 
     let node_by_key = |key: &str| {
         graph
@@ -115,6 +116,13 @@ fn published_lane_compiles_to_a_graph_that_passes_validate_for_publish() {
     );
     assert_eq!(
         node_by_key("step:verify:match-delivery-note").node_type,
+        "human_step"
+    );
+    // The WP-0716 child step compiles to a human_step node like any other
+    // form step; the child-lane drive happens in the lane service, not the
+    // graph runtime.
+    assert_eq!(
+        node_by_key("step:verify:verify-supplier").node_type,
         "human_step"
     );
     assert_eq!(
@@ -177,7 +185,7 @@ fn published_lane_compiles_to_a_graph_that_passes_validate_for_publish() {
             })
             .count()
     };
-    assert_eq!(stage_nodes("verify"), 3); // 2 steps + 1 loop
+    assert_eq!(stage_nodes("verify"), 4); // 3 steps + 1 loop
     assert_eq!(stage_nodes("record-receipt"), 3);
     assert_eq!(stage_nodes("hold-review"), 2);
     assert_eq!(stage_nodes("stage-put-away"), 7); // 4 steps + 3 loops

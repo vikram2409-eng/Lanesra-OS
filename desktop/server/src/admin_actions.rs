@@ -651,6 +651,8 @@ async fn resolve_process_lane_approval_admin(
 struct CancelProcessLaneRunBody {
     #[serde(default)]
     reason: String,
+    #[serde(default)]
+    cancel_child: bool,
 }
 
 async fn cancel_process_lane_run_admin(
@@ -659,11 +661,19 @@ async fn cancel_process_lane_run_admin(
     Path(id): Path<String>,
     Json(body): Json<CancelProcessLaneRunBody>,
 ) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    let (workspace_id, actor, _master_key) = authorize(&state, &jar)?;
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
     let db_path = state.db_path.clone();
     let data = run_with_own_connection(db_path, move |conn| async move {
-        process_lane_service::cancel_lane_run(&conn, &workspace_id, &id, &body.reason, Some(&actor))
-            .await
+        process_lane_service::cancel_lane_run(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &id,
+            &body.reason,
+            body.cancel_child,
+            Some(&actor),
+        )
+        .await
     })
     .await?;
     Ok(Json(

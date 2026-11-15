@@ -6,7 +6,8 @@ import path from 'node:path';
 /**
  * The Receive Shipment lane on the warehouse demo (WP-0702).
  * Covers: REQ-NFR-008 (WP-0702 AC-1), REQ-LANE-014 (WP-0702 AC-1, AC-4),
- * REQ-LANE-025 (WP-0702 AC-1, AC-2, AC-3, AC-4).
+ * REQ-LANE-025 (WP-0702 AC-1, AC-2, AC-3, AC-4),
+ * REQ-LANE-023 (WP-0716 AC-5 — the child step in AC-1/AC-2).
  *
  * The warehouse demo is a static Netlify site, not the Team Workspace
  * server the Playwright config serves — so this spec starts its own
@@ -59,6 +60,23 @@ async function expectStep(page, name: string) {
   await expect(page.locator('.lane-step-card h3')).toHaveText(name);
 }
 
+// WP-0716: the Receiving lane now hands the supplier check to the Supplier
+// Check lane (step 1.3, Verify the supplier). The parent waits until the
+// child finishes, then carries on past the step.
+async function completeChildRun(page) {
+  await expectStep(page, 'Verify the supplier');
+  await expect(page.locator('.lane-waiting')).toContainText('waiting on Supplier Check — Verify');
+  await page.click('.lane-waiting [data-lane-open-run]');
+  await expectStep(page, 'Confirm the supplier contact');
+  await page.fill('[data-lane-field="contact_name"]', 'Priya Nair');
+  await completeStep(page);
+  // The check passes on its own; the record step marks the check complete.
+  await expectStep(page, 'Mark the supplier check complete');
+  await completeStep(page);
+  // The child finishing resumes the parent past the child step.
+  await expectStep(page, 'Enter received quantities');
+}
+
 test('AC-1: a first-time user completes PO-2026-001 on the lane screen alone', async ({ page }) => {
   await startLane(page, 'po-2026-001');
   await expect(page.locator('.view-head h2')).toContainText('PO-2026-001 · Receive Shipment · stage 1 of 5');
@@ -75,7 +93,7 @@ test('AC-1: a first-time user completes PO-2026-001 on the lane screen alone', a
   await expect(page.locator('[data-lane-field="pol-001-1:delivery_note_qty"]')).toHaveValue('40');
   await expect(page.locator('[data-lane-field="pol-001-2:delivery_note_qty"]')).toHaveValue('30');
   await completeStep(page);
-  await expectStep(page, 'Enter received quantities');
+  await completeChildRun(page);
 
   // 2.1 Enter received quantities — the check then passes on its own.
   await page.fill('[data-lane-field="pol-001-1:qty_received"]', '40');
@@ -130,7 +148,7 @@ test('AC-2: entering more than ordered blocks the step and writes nothing', asyn
   await page.fill('[data-lane-field="received_date"]', '2026-11-13');
   await completeStep(page);
   await completeStep(page); // 1.2, suggested quantities
-  await expectStep(page, 'Enter received quantities');
+  await completeChildRun(page); // 1.3, the supplier check must pass first
 
   await page.fill('[data-lane-field="pol-001-1:qty_received"]', '41');
   await page.fill('[data-lane-field="pol-001-1:qty_rejected"]', '0');

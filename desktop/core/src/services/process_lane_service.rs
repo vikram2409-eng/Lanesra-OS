@@ -1031,6 +1031,34 @@ pub async fn start_lane_run(
     anchor_record_id: &str,
     actor_user_id: Option<&str>,
 ) -> AppResult<GraphRun> {
+    let run = start_lane_run_inner(
+        conn,
+        workspace_id,
+        master_key,
+        lane_key,
+        anchor_record_id,
+        actor_user_id,
+        None,
+    )
+    .await?;
+    // WP-0716: if the run lands on a child-lane step (or has already finished
+    // a child it started), drive the child lanes from here.
+    drive_child_lanes(conn, workspace_id, master_key, &run.id, actor_user_id).await
+}
+
+/// `start_lane_run` without the child-lane post-hook (WP-0716). A child lane
+/// is started through this with `initial_run_data` seeding its `__parent` and
+/// `__depth` keys, so the post-hook that resumes the parent can find them.
+#[allow(clippy::too_many_arguments)]
+async fn start_lane_run_inner(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    lane_key: &str,
+    anchor_record_id: &str,
+    actor_user_id: Option<&str>,
+    initial_run_data: Option<&Map<String, Value>>,
+) -> AppResult<GraphRun> {
     let lane = process_lane_repo::get_lane_by_key(conn, workspace_id, lane_key)?
         .ok_or_else(|| AppError::NotFound("Process lane".into()))?;
     let version =
@@ -1125,8 +1153,361 @@ pub async fn start_lane_run(
         Some(anchor_record_id),
     )
     .await?;
-    graph_run_repo::set_lane_anchor(conn, &run.id, &lane.object_key, anchor_record_id, "{}")?;
+    let run_data_json = match initial_run_data {
+        Some(map) => {
+            serde_json::to_string(&Value::Object(map.clone())).unwrap_or_else(|_| "{}".into())
+        }
+        None => "{}".to_string(),
+    };
+    graph_run_repo::set_lane_anchor(
+        conn,
+        &run.id,
+        &lane.object_key,
+        anchor_record_id,
+        &run_data_json,
+    )?;
     Ok(graph_run_repo::get_run(conn, &run.id)?.expect("just started"))
+}
+
+// ===========================================================================
+// WP-0716: child lanes (ADR-0024 §6, §9, REQ-LANE-023).
+//
+// A `child_lane` field on a form step makes the step start a lane on a
+// related record and wait for it. The runtime is never touched: a parent run
+// that lands `waiting_person` on a child step is driven from the lane
+// service's own advance hooks - it starts the child, parks in `waiting_child`
+// while the child runs, and is resumed through the same hook when the child
+// ends. Reserved run-data keys carry the links: `__depth` (0 at the top),
+// `__parent` ({run_id, step_id}) on a child, `__child` (the child's run id) on
+// a waiting parent, and `__child_outcome` (the child's terminal status) once
+// it finishes.
+// ===========================================================================
+
+/// A run may nest children at most this deep (a top-level run is depth 0). The
+/// limit also bounds cycles - a lane that starts itself cannot recurse past it.
+const MAX_CHILD_DEPTH: i64 = 3;
+
+fn run_data_of(run: &GraphRun) -> Map<String, Value> {
+    run.run_data_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str::<Value>(s).ok())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default()
+}
+
+fn run_depth(run: &GraphRun) -> i64 {
+    run_data_of(run)
+        .get("__depth")
+        .and_then(Value::as_i64)
+        .unwrap_or(0)
+}
+
+fn parent_ref(run: &GraphRun) -> Option<(String, String)> {
+    let rd = run_data_of(run);
+    let parent = rd.get("__parent")?;
+    Some((
+        parent.get("run_id")?.as_str()?.to_string(),
+        parent.get("step_id")?.as_str()?.to_string(),
+    ))
+}
+
+fn waiting_child_id(run: &GraphRun) -> Option<String> {
+    run_data_of(run)
+        .get("__child")
+        .and_then(Value::as_str)
+        .map(String::from)
+}
+
+/// Writes a run-data patch on a lane run, keeping its other keys. A `Null`
+/// value removes the key.
+fn patch_run_data(conn: &Connection, run: &GraphRun, patch: &[(&str, Value)]) -> AppResult<()> {
+    let (Some(object_key), Some(record_id)) = (
+        run.anchor_object_key.as_deref(),
+        run.anchor_record_id.as_deref(),
+    ) else {
+        return Ok(());
+    };
+    let mut rd = run_data_of(run);
+    for (key, value) in patch {
+        if value.is_null() {
+            rd.remove(*key);
+        } else {
+            rd.insert((*key).to_string(), value.clone());
+        }
+    }
+    let json = serde_json::to_string(&Value::Object(rd)).unwrap_or_else(|_| "{}".into());
+    graph_run_repo::set_lane_anchor(conn, &run.id, object_key, record_id, &json)?;
+    Ok(())
+}
+
+/// The current human step a run waits on, when it carries a child lane.
+fn current_child_step(
+    conn: &Connection,
+    run: &GraphRun,
+) -> Option<(crate::models::process_lane::ChildLane, LaneStep)> {
+    let (_node, step) = current_human_step(conn, run).ok()?;
+    step.child_lane.clone().map(|cl| (cl, step))
+}
+
+/// The lane key a run belongs to (via its compiled graph), for messages.
+fn lane_key_of(conn: &Connection, run: &GraphRun) -> Option<String> {
+    let version = process_lane_repo::get_version_by_graph_id(conn, &run.graph_id).ok()??;
+    process_lane_repo::get_lane(conn, &version.lane_id)
+        .ok()?
+        .map(|l| l.lane_key)
+}
+
+/// The chain of lane keys from the top-level run down to `run`, for the
+/// depth-limit refusal (AC-2). Best-effort: walks `__parent`, bounded by the
+/// depth limit, and falls back to run ids where a lane key cannot be resolved.
+fn lane_chain(conn: &Connection, run: &GraphRun) -> String {
+    let mut chain: Vec<String> = Vec::new();
+    let mut current = Some(run.clone());
+    for _ in 0..(MAX_CHILD_DEPTH + 2) {
+        let Some(r) = current else { break };
+        chain.push(lane_key_of(conn, &r).unwrap_or_else(|| r.id.clone()));
+        current =
+            parent_ref(&r).and_then(|(pid, _)| graph_run_repo::get_run(conn, &pid).ok().flatten());
+    }
+    chain.reverse();
+    chain.join(" -> ")
+}
+
+/// Resolves a `child_lane.anchor_record` reference (`$record.<field>` or
+/// `$run_data.<key>`) to the record id the child lane runs on.
+fn resolve_child_anchor(
+    conn: &Connection,
+    object_key: &str,
+    record_id: &str,
+    run_data: &Map<String, Value>,
+    anchor_ref: &str,
+) -> AppResult<String> {
+    let ctx = run_condition_ctx(conn, object_key, record_id, run_data)?;
+    let value = if let Some(field) = anchor_ref.strip_prefix("$record.") {
+        ctx.get(field).cloned()
+    } else if let Some(key) = anchor_ref.strip_prefix("$run_data.") {
+        ctx.get(&format!("run_data.{key}")).cloned()
+    } else {
+        None
+    };
+    match value {
+        Some(v) if !v.trim().is_empty() => Ok(v),
+        _ => Err(classified_validation(
+            "validation.arguments",
+            format!("a child lane cannot start: '{anchor_ref}' names no record to anchor on"),
+        )),
+    }
+}
+
+/// The lane service's child-lane post-hook (WP-0716). Called at the end of
+/// every advance path. Drives `run_id` and the runs it is linked to: a run
+/// that waits at a child step starts the child; a run that has finished and
+/// has a parent resumes that parent. Recurses down (starting a child) and up
+/// (resuming a parent), bounded by the depth limit.
+fn drive_child_lanes<'a>(
+    conn: &'a Connection,
+    workspace_id: &'a str,
+    master_key: &'a [u8; 32],
+    run_id: &'a str,
+    actor: Option<&'a str>,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = AppResult<GraphRun>> + 'a>> {
+    Box::pin(async move {
+        for _ in 0..(2 * MAX_CHILD_DEPTH + 4) {
+            let run = graph_run_repo::get_run(conn, run_id)?
+                .ok_or_else(|| AppError::NotFound("Run".into()))?;
+            // A finished child resumes its parent.
+            if crate::models::graph_run::is_terminal_status(&run.status) {
+                if let Some((parent_id, step_id)) = parent_ref(&run) {
+                    resume_parent_after_child(
+                        conn,
+                        workspace_id,
+                        master_key,
+                        &parent_id,
+                        &step_id,
+                        &run,
+                        actor,
+                    )
+                    .await?;
+                }
+                return Ok(run);
+            }
+            // A run waiting at a child step starts (or has started) the child.
+            if run.status == "waiting_person" {
+                if let Some((child_lane, step)) = current_child_step(conn, &run) {
+                    start_child_for(
+                        conn,
+                        workspace_id,
+                        master_key,
+                        &run,
+                        &step,
+                        &child_lane,
+                        actor,
+                    )
+                    .await?;
+                    continue;
+                }
+            }
+            return Ok(run);
+        }
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn start_child_for(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    parent: &GraphRun,
+    step: &LaneStep,
+    child_lane: &crate::models::process_lane::ChildLane,
+    actor: Option<&str>,
+) -> AppResult<()> {
+    let (Some(object_key), Some(record_id)) = (
+        parent.anchor_object_key.clone(),
+        parent.anchor_record_id.clone(),
+    ) else {
+        return Ok(());
+    };
+    let depth = run_depth(parent);
+    // AC-2: the depth limit is refused with a readable reason recorded on the
+    // step, leaving the parent waiting on it (retryable, cancellable).
+    if depth >= MAX_CHILD_DEPTH {
+        let chain = lane_chain(conn, parent);
+        let message = format!(
+            "cannot start child lane '{}': the child-lane depth limit ({MAX_CHILD_DEPTH}) is reached at this run (lane chain: {chain})",
+            child_lane.lane_id
+        );
+        patch_run_data(conn, parent, &[("__child_error", json!(message))])?;
+        audit_repo::record(
+            conn,
+            workspace_id,
+            actor,
+            "lane_child_refused",
+            Some(&object_key),
+            Some(&record_id),
+            &message,
+            Some(&json!({"step_id": step.id, "child_lane": child_lane.lane_id, "limit": MAX_CHILD_DEPTH}).to_string()),
+        )?;
+        return Ok(());
+    }
+    let parent_rd = run_data_of(parent);
+    let child_anchor = resolve_child_anchor(
+        conn,
+        &object_key,
+        &record_id,
+        &parent_rd,
+        &child_lane.anchor_record,
+    )?;
+    let mut seed = Map::new();
+    seed.insert("__depth".into(), json!(depth + 1));
+    seed.insert(
+        "__parent".into(),
+        json!({"run_id": parent.id, "step_id": step.id}),
+    );
+    let child = start_lane_run_inner(
+        conn,
+        workspace_id,
+        master_key,
+        &child_lane.lane_id,
+        &child_anchor,
+        actor,
+        Some(&seed),
+    )
+    .await?;
+    // Record the child on the parent step; clear any earlier refusal.
+    patch_run_data(
+        conn,
+        parent,
+        &[("__child", json!(child.id)), ("__child_error", Value::Null)],
+    )?;
+    // Park the parent only while the child is still running - a child that
+    // finishes at once never parks the parent (AC-1).
+    if !crate::models::graph_run::is_terminal_status(&child.status) {
+        crate::services::run_state::transition(
+            conn,
+            &parent.id,
+            "waiting_person",
+            "waiting_child",
+            None,
+        )?;
+    }
+    // Drive the child's own children; if it is (or becomes) terminal it
+    // resumes this parent through the same hook.
+    drive_child_lanes(conn, workspace_id, master_key, &child.id, actor).await?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn resume_parent_after_child(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    parent_id: &str,
+    step_id: &str,
+    child: &GraphRun,
+    actor: Option<&str>,
+) -> AppResult<()> {
+    let Some(parent) = graph_run_repo::get_run(conn, parent_id)? else {
+        return Ok(());
+    };
+    // A parent that was cancelled while keeping the child (AC-3) is terminal;
+    // the child's finish is a no-op for it.
+    if crate::models::graph_run::is_terminal_status(&parent.status) {
+        return Ok(());
+    }
+    // Only the parent still waiting on exactly this child is resumed (a stale
+    // link - a retried step, a different child - is ignored).
+    if waiting_child_id(&parent).as_deref() != Some(child.id.as_str()) {
+        return Ok(());
+    }
+    // Record the child's outcome on the parent run data (AC-1).
+    patch_run_data(
+        conn,
+        &parent,
+        &[
+            ("__child_outcome", json!(child.status)),
+            ("__child", Value::Null),
+        ],
+    )?;
+    // Complete the child step's waiting row with the outcome, for the trace.
+    if let Some(node) = current_human_step(conn, &parent).ok().map(|(n, _)| n) {
+        if node
+            .config_json
+            .contains(&format!("\"lane_step_id\":\"{step_id}\""))
+        {
+            if let Some(row) = graph_run_repo::list_run_nodes(conn, parent_id)?
+                .into_iter()
+                .filter(|n| n.node_id == node.id && n.status == "waiting_person")
+                .max_by(|a, b| a.attempt.cmp(&b.attempt))
+            {
+                graph_run_repo::complete_run_node(
+                    conn,
+                    &row.id,
+                    "completed",
+                    Some(
+                        &json!({"child_run": child.id, "child_outcome": child.status}).to_string(),
+                    ),
+                    &now_iso(),
+                )?;
+            }
+        }
+    }
+    // Un-park, then advance the parent past the child step and keep driving
+    // (its next child step, or resuming its own parent).
+    if parent.status == "waiting_child" {
+        crate::services::run_state::transition(
+            conn,
+            parent_id,
+            "waiting_child",
+            "waiting_person",
+            None,
+        )?;
+    }
+    graph_runtime_service::resume_person_step(conn, workspace_id, master_key, parent_id, actor)
+        .await?;
+    drive_child_lanes(conn, workspace_id, master_key, parent_id, actor).await?;
+    Ok(())
 }
 
 // ===========================================================================
@@ -1173,6 +1554,20 @@ pub struct LaneRunView {
     pub steps: Vec<LaneStepProgress>,
     pub writes: Vec<String>,
     pub waiting: Option<LaneWaiting>,
+    /// WP-0716: when this run waits on a child lane (`waiting_child`), the
+    /// child it is waiting on and where that child has reached.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub child: Option<LaneChildView>,
+}
+
+/// WP-0716 (REQ-LANE-023): the child lane a parent run waits on, for the
+/// runner to show "waiting on <lane> — <stage>".
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaneChildView {
+    pub child_run_id: String,
+    pub lane_id: Option<String>,
+    pub stage: Option<String>,
+    pub status: String,
 }
 
 /// One step's progress in the runner's step list (WP-0707, REQ-LANE-014):
@@ -1523,7 +1918,47 @@ pub fn get_run_view(
         },
         writes: write_summaries_for_run(conn, &run, definition.as_ref())?,
         waiting: waiting_for_run(conn, &run, definition.as_ref())?,
+        child: child_view_for(conn, &run)?,
     })
+}
+
+/// WP-0716: the child a `waiting_child` parent waits on, and the stage that
+/// child has reached, for the runner to surface (AC-1).
+fn child_view_for(conn: &Connection, parent: &GraphRun) -> AppResult<Option<LaneChildView>> {
+    if parent.status != "waiting_child" {
+        return Ok(None);
+    }
+    let Some(child_id) = waiting_child_id(parent) else {
+        return Ok(None);
+    };
+    let Some(child) = graph_run_repo::get_run(conn, &child_id)? else {
+        return Ok(None);
+    };
+    let stage = child
+        .current_node_id
+        .as_deref()
+        .and_then(|cur| {
+            execution_graph_repo::get(conn, &child.graph_id)
+                .ok()
+                .flatten()
+                .and_then(|g| g.nodes.into_iter().find(|n| n.id == cur))
+        })
+        .and_then(|node| {
+            serde_json::from_str::<Value>(&node.config_json)
+                .ok()
+                .and_then(|c| {
+                    c.get("lane_stage_id")
+                        .and_then(|v| v.as_str())
+                        .map(String::from)
+                })
+        })
+        .and_then(|sid| stage_name_for(conn, &child, &sid));
+    Ok(Some(LaneChildView {
+        child_run_id: child.id.clone(),
+        lane_id: lane_key_of(conn, &child),
+        stage,
+        status: child.status.clone(),
+    }))
 }
 
 /// Every lane run anchored to one record (WP-0707, REQ-LANE-015): all runs
@@ -2025,8 +2460,17 @@ pub async fn submit_person_step(
         ),
     )?;
 
-    graph_runtime_service::resume_person_step(conn, workspace_id, master_key, run_id, actor_user_id)
-        .await
+    let advanced = graph_runtime_service::resume_person_step(
+        conn,
+        workspace_id,
+        master_key,
+        run_id,
+        actor_user_id,
+    )
+    .await?;
+    // WP-0716: the advance may land on a child step (start the child) or, for
+    // a child run, finish it (resume its parent).
+    drive_child_lanes(conn, workspace_id, master_key, &advanced.id, actor_user_id).await
 }
 
 // ===========================================================================
@@ -2073,7 +2517,7 @@ pub async fn resolve_lane_approval(
             "this run is not a lane run (no anchor record)",
         ));
     }
-    graph_runtime_service::resolve_approval(
+    let advanced = graph_runtime_service::resolve_approval(
         conn,
         workspace_id,
         master_key,
@@ -2082,7 +2526,10 @@ pub async fn resolve_lane_approval(
         notes,
         actor_user_id,
     )
-    .await
+    .await?;
+    // WP-0716: an approval that advances onto a child step starts the child;
+    // for a child run it may finish and resume the parent.
+    drive_child_lanes(conn, workspace_id, master_key, &advanced.id, actor_user_id).await
 }
 
 /// WP-0706 (REQ-LANE-010, AC-4): cancels a lane run. The writes it already
@@ -2093,8 +2540,32 @@ pub async fn resolve_lane_approval(
 pub async fn cancel_lane_run(
     conn: &Connection,
     workspace_id: &str,
+    master_key: &[u8; 32],
     run_id: &str,
     reason: &str,
+    cancel_child: bool,
+    actor_user_id: Option<&str>,
+) -> AppResult<GraphRun> {
+    Box::pin(cancel_lane_run_inner(
+        conn,
+        workspace_id,
+        master_key,
+        run_id,
+        reason,
+        cancel_child,
+        actor_user_id,
+    ))
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn cancel_lane_run_inner(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    run_id: &str,
+    reason: &str,
+    cancel_child: bool,
     actor_user_id: Option<&str>,
 ) -> AppResult<GraphRun> {
     let run =
@@ -2114,6 +2585,14 @@ pub async fn cancel_lane_run(
         })
         .filter_map(|o| o.get("applied").cloned())
         .collect();
+    // WP-0716 (AC-3): a parent waiting on a child offers cancel-or-keep. We
+    // read the child here; we cancel the parent first, then the child, so the
+    // child's finish is a no-op for the already-cancelled parent.
+    let child_to_cancel = if cancel_child {
+        waiting_child_id(&run)
+    } else {
+        None
+    };
     audit_repo::record(
         conn,
         workspace_id,
@@ -2122,9 +2601,31 @@ pub async fn cancel_lane_run(
         run.anchor_object_key.as_deref(),
         run.anchor_record_id.as_deref(),
         &format!("Cancelled lane run {run_id}: {reason}"),
-        Some(&json!({"reason": reason, "posted_writes": posted}).to_string()),
+        Some(
+            &json!({"reason": reason, "posted_writes": posted, "cancel_child": cancel_child})
+                .to_string(),
+        ),
     )?;
-    graph_runtime_service::cancel_run(conn, workspace_id, run_id, actor_user_id).await
+    let cancelled =
+        graph_runtime_service::cancel_run(conn, workspace_id, run_id, actor_user_id).await?;
+    if let Some(child_id) = child_to_cancel {
+        // Cancel the child subtree; its finish resumes nothing (this parent is
+        // now cancelled).
+        Box::pin(cancel_lane_run_inner(
+            conn,
+            workspace_id,
+            master_key,
+            &child_id,
+            "parent run cancelled",
+            true,
+            actor_user_id,
+        ))
+        .await?;
+    }
+    // If this run is itself a child, its parent resumes with outcome
+    // `cancelled` (AC-3).
+    drive_child_lanes(conn, workspace_id, master_key, run_id, actor_user_id).await?;
+    Ok(cancelled)
 }
 
 /// WP-0706 (REQ-LANE-009, AC-5): hands the current form step of a lane run to
@@ -2311,8 +2812,17 @@ pub async fn skip_step(
         ),
     )?;
 
-    graph_runtime_service::resume_person_step(conn, workspace_id, master_key, run_id, actor_user_id)
-        .await
+    let advanced = graph_runtime_service::resume_person_step(
+        conn,
+        workspace_id,
+        master_key,
+        run_id,
+        actor_user_id,
+    )
+    .await?;
+    // WP-0716: the advance may land on a child step (start the child) or, for
+    // a child run, finish it (resume its parent).
+    drive_child_lanes(conn, workspace_id, master_key, &advanced.id, actor_user_id).await
 }
 
 fn is_blank(value: &Value) -> bool {

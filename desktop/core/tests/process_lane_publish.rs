@@ -206,6 +206,10 @@ fn seed_warehouse(conn: &rusqlite::Connection, ws: &str, admin: &str) -> Warehou
     // overwrite) - the value the dry run and the start condition see.
     create_field(conn, ws, admin, "purchase_order", "status");
     create_field(conn, ws, admin, "purchase_order", "expected_date");
+    // The WP-0716 child step anchors the Supplier Check lane on the PO's
+    // supplier, so P-11 needs the field to exist in the seeded workspace —
+    // the real warehouse purchase_order object has it (demo seed: sup-01).
+    create_field(conn, ws, admin, "purchase_order", "supplier_id");
     create_field(conn, ws, admin, "purchase_order_line", "qty_ordered");
     create_field(conn, ws, admin, "purchase_order_line", "qty_received");
     create_field(conn, ws, admin, "purchase_order_line", "qty_rejected");

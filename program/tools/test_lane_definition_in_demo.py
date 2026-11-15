@@ -51,8 +51,9 @@ class LaneDefinitionInDemoTests(unittest.TestCase):
         )
 
     # Covers: REQ-LANE-025 (WP-0702 AC-5) — the worked example's shape the
-    # runner and the seeded run rely on: 5 stages, 12 steps, the
-    # discrepancy branch and the hold step.
+    # runner and the seeded run rely on: 5 stages, 13 steps (12 + the
+    # WP-0716 child step 1.3 verify-supplier), the discrepancy branch and
+    # the hold step.
     def test_demo_definition_has_the_worked_example_shape(self):
         lane = demo_definition()["lane"]
         self.assertEqual(lane["id"], "lane-wh-receiving")
@@ -60,10 +61,11 @@ class LaneDefinitionInDemoTests(unittest.TestCase):
                          ["verify", "record-receipt", "hold-review",
                           "stage-put-away", "confirm"])
         steps = [st["id"] for s in lane["stages"] for st in s["steps"]]
-        self.assertEqual(len(steps), 12)
-        for step_id in ("discrepancy-check", "review-discrepancy",
-                        "record-hold", "post-receipt-moves",
-                        "post-putaway-moves", "close-po"):
+        self.assertEqual(len(steps), 13)
+        for step_id in ("verify-supplier", "discrepancy-check",
+                        "review-discrepancy", "record-hold",
+                        "post-receipt-moves", "post-putaway-moves",
+                        "close-po"):
             self.assertIn(step_id, steps)
 
 

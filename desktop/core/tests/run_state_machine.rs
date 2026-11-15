@@ -19,6 +19,10 @@ fn adr_allows(from: &str, to: &str) -> bool {
     // ADR-0024 §6 (WP-0704) amends ADR-0007 by adding `waiting_person`: a
     // run waits here for a person to do a human step. It is a waiting status
     // (resumes to `queued`, cancels) reached from `running`.
+    // ADR-0024 §6 (WP-0716) adds `waiting_child`: a run at a child step parks
+    // here while its child runs, and returns to `waiting_person` at the same
+    // step when the child ends. It is a waiting status (resumes to `queued`,
+    // cancels) but is reached from `waiting_person`, not from `running`.
     const WAITING_OR_PAUSED: &[&str] = &[
         "planning",
         "paused",
@@ -27,6 +31,7 @@ fn adr_allows(from: &str, to: &str) -> bool {
         "waiting_model",
         "waiting_scheduled",
         "waiting_person",
+        "waiting_child",
     ];
     let from_waiting = WAITING_OR_PAUSED.contains(&from);
     matches!(
@@ -44,6 +49,8 @@ fn adr_allows(from: &str, to: &str) -> bool {
             | ("running", "failed")
             | ("running", "cancelled")
             | ("waiting_approval", "failed")
+            | ("waiting_person", "waiting_child")
+            | ("waiting_child", "waiting_person")
     ) || (from_waiting && (to == "queued" || to == "cancelled"))
 }
 
@@ -126,10 +133,11 @@ fn ac2_the_guard_allows_exactly_the_adr_transitions_for_every_pair() {
             }
         }
     }
-    // 2 from queued, 10 from running (ADR-0024 §6 adds running -> waiting_person),
-    // 1 approval rejection, 2 from each of the seven waiting-or-paused statuses.
-    assert_eq!(allowed, 2 + 10 + 1 + 7 * 2);
-    assert_eq!(RUN_STATUSES.len() * RUN_STATUSES.len(), 169);
+    // 2 from queued, 10 from running, 1 approval rejection, the two
+    // waiting_person <-> waiting_child moves (WP-0716), and 2 (queued,
+    // cancelled) from each of the eight waiting-or-paused statuses.
+    assert_eq!(allowed, 2 + 10 + 1 + 2 + 8 * 2);
+    assert_eq!(RUN_STATUSES.len() * RUN_STATUSES.len(), 196);
 }
 
 #[test]

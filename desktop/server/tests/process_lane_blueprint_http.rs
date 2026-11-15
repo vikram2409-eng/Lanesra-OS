@@ -134,7 +134,20 @@ async fn lane_blueprint_reads_work_over_http_the_same_as_on_desktop() {
         .iter()
         .flat_map(|s| s["steps"].as_array().unwrap().iter())
         .collect();
-    assert_eq!(shown_steps.len(), 12);
+    assert_eq!(shown_steps.len(), 13);
+    // The WP-0716 child step is part of the served definition.
+    let child_step = shown_steps
+        .iter()
+        .find(|s| s["id"] == "verify-supplier")
+        .expect("verify-supplier step exists");
+    assert_eq!(
+        child_step["child_lane"]["lane_id"],
+        "lane-wh-supplier-check"
+    );
+    assert_eq!(
+        child_step["child_lane"]["anchor_record"],
+        "$record.supplier_id"
+    );
     let check = shown_steps
         .iter()
         .find(|s| s["id"] == "discrepancy-check")
