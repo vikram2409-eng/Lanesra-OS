@@ -71,7 +71,8 @@ fn blueprint_renders_the_demo_lane_definition_including_branches() {
     assert_eq!(blueprint.status, "draft");
     assert_eq!(blueprint.definition.id, "lane-wh-receiving");
 
-    // Five stages, twelve steps (ADR-0024 section 3 / the schema example).
+    // Five stages, thirteen steps (ADR-0024 section 3 / the schema example):
+    // twelve plus the WP-0716 child step 1.3 verify-supplier.
     assert_eq!(blueprint.definition.stages.len(), 5);
     let steps: Vec<_> = blueprint
         .definition
@@ -79,7 +80,20 @@ fn blueprint_renders_the_demo_lane_definition_including_branches() {
         .iter()
         .flat_map(|s| s.steps.iter())
         .collect();
-    assert_eq!(steps.len(), 12);
+    assert_eq!(steps.len(), 13);
+
+    // The child step starts the Supplier Check lane on the PO's supplier
+    // and waits for it (WP-0716 AC-1).
+    let child_step = steps
+        .iter()
+        .find(|s| s.id == "verify-supplier")
+        .expect("verify-supplier step exists");
+    let child_lane = child_step
+        .child_lane
+        .as_ref()
+        .expect("verify-supplier declares a child lane");
+    assert_eq!(child_lane.lane_id, "lane-wh-supplier-check");
+    assert_eq!(child_lane.anchor_record, "$record.supplier_id");
 
     // The discrepancy check branches both ways, and the approval does too.
     let check = steps
