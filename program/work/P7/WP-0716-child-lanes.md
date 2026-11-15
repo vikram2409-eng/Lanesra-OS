@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
 branch: wp/WP-0716-child-lanes
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/783
 updated: 2026-11-15
 ---
 
