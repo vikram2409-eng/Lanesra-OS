@@ -10517,7 +10517,7 @@ function warehouseDashboard(){
   if(so.status==='PICKING'||so.status==='ALLOCATED')return ` <button class="btn" data-lane-start="lane-wh-pickpack:${oid}">Pick & pack ${agentEsc(so.so_number)}</button>`;
   return '';
  }).join('');
- $('#view').innerHTML=`<div class="page-heading"><div><h2>Toronto Distribution Centre</h2><p>Friday, November 13, 2026 · Warehouse Manager: Sarah Chen · ${k.onHand} units on hand, ${k.reserved} reserved, ${k.available} available.</p></div></div><div class="kpi-grid">${card('sales_order','Fill rate',(k.fillRate*100).toFixed(1)+'%',k.shippedUnits+' of '+k.ordered+' units shipped →')}${card('shipment','Orders shipped today',k.shippedToday,k.shippedTodayParcels+' parcels · '+k.shippedUnits+' units →')}${card('purchase_order','Receiving backlog',k.openPOs.length,k.dueToday.length+' due today →')}${card('stock','Stockouts',k.outOfStock.length,k.lowStock.length+' low-stock SKUs →')}${card('stock','Inventory value (cost)',moneyCAD(k.valueCost),'At sale '+moneyCAD(k.valueSale)+' →')}${card('reorder_rule','Reorder rules triggered',k.triggered.length,k.triggered.length+' SKUs at or below level →')}</div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Needs attention — low & out of stock</h3><p class="card-desc">${k.outOfStock.length} out of stock · ${k.lowStock.length} low stock</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Product</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th></tr></thead><tbody>${attention.map(stockRow).join('')}</tbody></table></div></div></section><section class="card"><div class="card-head panel-title"><div><h3>Orders by status</h3><p class="card-desc">${(data.sales_order||[]).length} open sales orders</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Orders</th></tr></thead><tbody>${['WAITING_STOCK','ALLOCATED','PICKING','PICKED','PACKED','SHIPPED'].map(s=>`<tr><td><a class="cell-link" data-wh-nav="sales_order">${s}</a></td><td>${k.soByStatus[s]||0}</td></tr>`).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Receiving — due today</h3><p class="card-desc">${k.dueToday.length} purchase order${k.dueToday.length===1?'':'s'} expected ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.dueToday.length?k.dueToday.map(p=>{const sup=byId('supplier',p.supplier_id);const lines=(p.lines||[]).map(l=>`${prodById[l.product_id]?.sku||''} × ${l.qty_ordered}`).join(', ');return `<div class="prb-row"><strong><a class="cell-link" data-open-record="purchase_order:${p.id}">${p.po_number}</a></strong><small class="muted"> · ${sup?.name||''} · ${lines}</small><button class="btn btn-primary" data-lane-start="lane-wh-receiving:${p.id}">Start receiving lane</button></div>`}).join(''):'<div class="empty">Nothing due today.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Cycle count in progress</h3><p class="card-desc">${k.counting?'<a class="cell-link" data-open-record="cycle_count:'+k.counting.id+'">'+k.counting.count_number+'</a> · '+k.counting.scope+' · '+k.variances.length+' variances':'No count in progress'}</p></div></div><div class="card-body">${k.counting?`<div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>${k.variances.map(l=>{const p=prodById[l.product_id];return `<tr><td><a class="cell-link" data-open-record="product:${l.product_id}">${p?.sku||''}</a></td><td>${l.expected_qty}</td><td>${l.counted_qty}</td><td>${l.variance>0?'+':''}${l.variance}</td></tr>`}).join('')}</tbody></table></div><p class="muted" style="font-size:12px">No adjustment posted yet — decide each variance in Approvals below; approving posts the adjustment, rejecting posts nothing.</p>`:'<div class="empty">No count in progress.</div>'}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Waves</h3><p class="card-desc">Batch picks in progress</p></div></div><div class="card-body">${Object.entries(k.waves).map(([w,v])=>`<div class="prb-row"><strong><a class="cell-link" data-wh-nav="pick_task">${w}</a></strong><small class="muted"> · ${v.orders.length} orders${v.held?` · ${v.held} task${v.held===1?'':'s'} held (waiting on stock)`:''} · ${v.tasks.map(t=>`<a class="cell-link" data-open-record="pick_task:${t.id}">${t.number||'Task'}</a>`).join(', ')}</small><div class="actions">${waveLaneButtons(v)}</div></div>`).join('')}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Reorder alerts</h3><p class="card-desc">${k.triggered.length} rules triggered ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.triggered.map(r=>{const p=prodById[r.product_id];const s=(data.stock||[]).find(x=>x.product_id===r.product_id);return `<div class="prb-row"><strong><a class="cell-link" data-open-record="product:${r.product_id}">${p?.sku||''}</a></strong><small class="muted"> · ${p?.name||''} · available ${s?s.on_hand-s.reserved:0} ≤ level ${r.reorder_level} · reorder ${r.reorder_qty} · <a class="cell-link" data-open-record="reorder_rule:${r.id}">rule ${r.number||''}</a></small></div>`}).join('')}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Approvals — needs your decision</h3><p class="card-desc">${pendingApprovals.length} pending</p></div></div><div class="card-body">${pendingApprovals.length?pendingApprovals.map(a=>`<div class="prb-row"><div><strong>${agentEsc(a.subjectType.replace('warehouse_','').replace(/_/g,' '))}</strong><small class="muted"> · ${demoDescribeApproval(a)}</small></div><div class="actions"><button class="btn btn-primary" data-wh-approve="${a.id}">Approve</button><button class="btn" data-wh-reject="${a.id}">Reject</button></div></div>`).join(''):'<p class="muted">Nothing pending — the Manager is all caught up.</p>'}<p class="muted" style="font-size:12px;margin-top:8px">Approving a count line posts a COUNT_ADJUSTMENT and updates Stock; rejecting posts nothing. Full inbox: AI Agents → Approvals.</p></div></section><section class="card"><div class="card-head panel-title"><div><h3>Open tasks</h3><p class="card-desc">${openTasks.length} open</p></div></div><div class="card-body">${openTasks.length?openTasks.map(t=>`<div class="prb-row"><a class="cell-link" data-open-record="tasks:${t.id}">${agentEsc(t.title||'Task')}</a><small class="muted"> · due ${t.due||'—'}</small></div>`).join(''):'<p class="muted">No open tasks.</p>'}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Process Lanes</h3><p class="card-desc">Guided, step-by-step work for one record — read the blueprint before anyone runs it</p></div></div><div class="card-body"><div class="prb-row"><div><strong>Receive Shipment</strong><small class="muted"> · Purchase Order · 5 stages, 12 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-receiving">View blueprint</button></div></div><div class="prb-row"><div><strong>Pick & Pack</strong><small class="muted"> · Sales Order · 5 stages, 13 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-pickpack">View blueprint</button></div></div>${pickpackDueRows}<p class="muted" style="font-size:12px;margin-top:8px">The blueprint shows the lane definition only — stages, steps, run-data fields and mapped record fields. No run, no record data.</p></div></section></div>${laneDraftSectionHtml()}`;
+ $('#view').innerHTML=`<div class="page-heading"><div><h2>Toronto Distribution Centre</h2><p>Friday, November 13, 2026 · Warehouse Manager: Sarah Chen · ${k.onHand} units on hand, ${k.reserved} reserved, ${k.available} available.</p></div></div><div class="kpi-grid">${card('sales_order','Fill rate',(k.fillRate*100).toFixed(1)+'%',k.shippedUnits+' of '+k.ordered+' units shipped →')}${card('shipment','Orders shipped today',k.shippedToday,k.shippedTodayParcels+' parcels · '+k.shippedUnits+' units →')}${card('purchase_order','Receiving backlog',k.openPOs.length,k.dueToday.length+' due today →')}${card('stock','Stockouts',k.outOfStock.length,k.lowStock.length+' low-stock SKUs →')}${card('stock','Inventory value (cost)',moneyCAD(k.valueCost),'At sale '+moneyCAD(k.valueSale)+' →')}${card('reorder_rule','Reorder rules triggered',k.triggered.length,k.triggered.length+' SKUs at or below level →')}</div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Needs attention — low & out of stock</h3><p class="card-desc">${k.outOfStock.length} out of stock · ${k.lowStock.length} low stock</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Product</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th></tr></thead><tbody>${attention.map(stockRow).join('')}</tbody></table></div></div></section><section class="card"><div class="card-head panel-title"><div><h3>Orders by status</h3><p class="card-desc">${(data.sales_order||[]).length} open sales orders</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Orders</th></tr></thead><tbody>${['WAITING_STOCK','ALLOCATED','PICKING','PICKED','PACKED','SHIPPED'].map(s=>`<tr><td><a class="cell-link" data-wh-nav="sales_order">${s}</a></td><td>${k.soByStatus[s]||0}</td></tr>`).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Receiving — due today</h3><p class="card-desc">${k.dueToday.length} purchase order${k.dueToday.length===1?'':'s'} expected ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.dueToday.length?k.dueToday.map(p=>{const sup=byId('supplier',p.supplier_id);const lines=(p.lines||[]).map(l=>`${prodById[l.product_id]?.sku||''} × ${l.qty_ordered}`).join(', ');return `<div class="prb-row"><strong><a class="cell-link" data-open-record="purchase_order:${p.id}">${p.po_number}</a></strong><small class="muted"> · ${sup?.name||''} · ${lines}</small><button class="btn btn-primary" data-lane-start="lane-wh-receiving:${p.id}">Start receiving lane</button></div>`}).join(''):'<div class="empty">Nothing due today.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Cycle count in progress</h3><p class="card-desc">${k.counting?'<a class="cell-link" data-open-record="cycle_count:'+k.counting.id+'">'+k.counting.count_number+'</a> · '+k.counting.scope+' · '+k.variances.length+' variances':'No count in progress'}</p></div></div><div class="card-body">${k.counting?`<div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>${k.variances.map(l=>{const p=prodById[l.product_id];return `<tr><td><a class="cell-link" data-open-record="product:${l.product_id}">${p?.sku||''}</a></td><td>${l.expected_qty}</td><td>${l.counted_qty}</td><td>${l.variance>0?'+':''}${l.variance}</td></tr>`}).join('')}</tbody></table></div><p class="muted" style="font-size:12px">No adjustment posted yet — decide each variance in Approvals below; approving posts the adjustment, rejecting posts nothing.</p>`:'<div class="empty">No count in progress.</div>'}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Waves</h3><p class="card-desc">Batch picks in progress</p></div></div><div class="card-body">${Object.entries(k.waves).map(([w,v])=>`<div class="prb-row"><strong><a class="cell-link" data-wh-nav="pick_task">${w}</a></strong><small class="muted"> · ${v.orders.length} orders${v.held?` · ${v.held} task${v.held===1?'':'s'} held (waiting on stock)`:''} · ${v.tasks.map(t=>`<a class="cell-link" data-open-record="pick_task:${t.id}">${t.number||'Task'}</a>`).join(', ')}</small><div class="actions">${waveLaneButtons(v)}</div></div>`).join('')}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Reorder alerts</h3><p class="card-desc">${k.triggered.length} rules triggered ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.triggered.map(r=>{const p=prodById[r.product_id];const s=(data.stock||[]).find(x=>x.product_id===r.product_id);return `<div class="prb-row"><strong><a class="cell-link" data-open-record="product:${r.product_id}">${p?.sku||''}</a></strong><small class="muted"> · ${p?.name||''} · available ${s?s.on_hand-s.reserved:0} ≤ level ${r.reorder_level} · reorder ${r.reorder_qty} · <a class="cell-link" data-open-record="reorder_rule:${r.id}">rule ${r.number||''}</a></small></div>`}).join('')}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Approvals — needs your decision</h3><p class="card-desc">${pendingApprovals.length} pending</p></div></div><div class="card-body">${pendingApprovals.length?pendingApprovals.map(a=>`<div class="prb-row"><div><strong>${agentEsc(a.subjectType.replace('warehouse_','').replace(/_/g,' '))}</strong><small class="muted"> · ${demoDescribeApproval(a)}</small></div><div class="actions"><button class="btn btn-primary" data-wh-approve="${a.id}">Approve</button><button class="btn" data-wh-reject="${a.id}">Reject</button></div></div>`).join(''):'<p class="muted">Nothing pending — the Manager is all caught up.</p>'}<p class="muted" style="font-size:12px;margin-top:8px">Approving a count line posts a COUNT_ADJUSTMENT and updates Stock; rejecting posts nothing. Full inbox: AI Agents → Approvals.</p></div></section><section class="card"><div class="card-head panel-title"><div><h3>Open tasks</h3><p class="card-desc">${openTasks.length} open</p></div></div><div class="card-body">${openTasks.length?openTasks.map(t=>`<div class="prb-row"><a class="cell-link" data-open-record="tasks:${t.id}">${agentEsc(t.title||'Task')}</a><small class="muted"> · due ${t.due||'—'}</small></div>`).join(''):'<p class="muted">No open tasks.</p>'}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Process Lanes</h3><p class="card-desc">Guided, step-by-step work for one record — read the blueprint before anyone runs it</p></div></div><div class="card-body"><div class="prb-row"><div><strong>Receive Shipment</strong><small class="muted"> · Purchase Order · 5 stages, 12 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-receiving">View blueprint</button></div></div><div class="prb-row"><div><strong>Pick & Pack</strong><small class="muted"> · Sales Order · 5 stages, 13 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-pickpack">View blueprint</button></div></div><div class="prb-row"><div><strong>Count</strong><small class="muted"> · Cycle Count · 5 stages, 7 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-count">View blueprint</button></div></div><div class="prb-row"><div><strong>Replenish</strong><small class="muted"> · Reorder Rule · 4 stages, 7 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-replenish">View blueprint</button></div></div>${pickpackDueRows}<p class="muted" style="font-size:12px;margin-top:8px">The blueprint shows the lane definition only — stages, steps, run-data fields and mapped record fields. No run, no record data. Publish checks and a dry run live on the blueprint page too — the dry run simulates against a seed record and writes nothing.</p></div></section></div>${laneDraftSectionHtml()}`;
  document.querySelectorAll('[data-wh-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.whNav;viewFilter=null;detailRecord=null;renderView()});
  wireCellLinks($('#view'));
  bindLaneDraftForm();
@@ -10622,6 +10622,8 @@ function renderLaneBlueprint(def){
  if(mapped.length){
   h+=`<section style="margin-bottom:20px"><h3>Mapped record fields</h3><p class="muted">Fields a step writes straight onto the anchor record. The blueprint names the mapping, never a record's values.</p><div class="table-wrap"><table class="table"><thead><tr><th>Field</th><th>Step</th><th>Maps to</th></tr></thead><tbody>${mapped.map(m=>`<tr><td>${agentEsc(m.field.label)}</td><td>${agentEsc(m.step)}</td><td><code>${agentEsc(m.field.binds_to)}</code></td></tr>`).join('')}</tbody></table></div></section>`;
  }
+ h+=lanePublishChecksHtml(def);
+ h+=`<div id="laneDryRun">${laneDryRunSectionHtml(def)}</div>`;
  h+=`<p class="muted">This blueprint shows the lane definition only - no run, no record data.</p>`;
  return h;
 }
@@ -10635,6 +10637,679 @@ function laneBlueprintPage(){
  $('#view').innerHTML=renderLaneBlueprint(def);
  const printBtn=document.querySelector('[data-lane-blueprint-print]');
  if(printBtn)printBtn.onclick=()=>window.print();
+ laneBindDryRun(def);
+}
+// ---- Lane publish checks + dry run (WP-0714, REQ-LANE-021) ----------------
+// The publish report (design §2, P-01..P-16) and the dry run (design §3),
+// in the demo's terms, on the lane blueprint page — never in the draft
+// panel, which asserts it has no publish control. The dry run is pure: it
+// reads a copy of the seed record plus the author's fixture values,
+// simulates the walk, and never calls save() — no StockMove, no status
+// change, no run is started. Checks evaluate against live values at
+// evaluation time (seed + fixtures + values earlier simulated steps
+// wrote), per the RAID I-34 dry-run decision; per-item checks evaluate
+// per child.
+// Demo resolutions, stated honestly where the demo has no counterpart:
+// P-12 — the demo has no adopted Action Type catalog, so every warehouse
+// Action Type is provisional and the report says so; the four warehouse
+// lanes cannot publish. P-13 — replaces[] is checked against the demo's
+// workflow list (data.workflowRules). P-11 — $record fields are checked
+// against the seed record's own fields, $item fields against its lines.
+const LANE_CONDITION_OPERATORS=['equals','not_equals','contains','not_contains','starts_with','ends_with','in_list','not_in_list','is_empty','is_not_empty','greater_than','less_than','on_or_after','on_or_before'];
+const LANE_EXPRESSION_RE=/^(.+?)\s*(<=|<|>=|>|==|!=)\s*(.+)$/;
+// laneOrderedSteps / lanePerChildMap take the definition wrapper
+// ({lane: ...}); the blueprint page works with the lane itself, so these
+// adapters wrap it.
+function laneOrderedLaneSteps(lane){return laneOrderedSteps({lane});}
+function lanePerChildLaneMap(lane){return lanePerChildMap({lane});}
+function laneCollectConditionRefs(cond,out){
+ if(!cond||typeof cond!=='object')return;
+ if(Array.isArray(cond.conditions)){cond.conditions.forEach(c=>laneCollectConditionRefs(c,out));return;}
+ if(typeof cond.field==='string')out.push(cond.field);
+ if(typeof cond.compare_field==='string')out.push(cond.compare_field);
+}
+function laneCollectExpressionRefs(expr,out){
+ const m=String(expr||'').match(/\$[A-Za-z_][A-Za-z0-9_.]*/g)||[];
+ m.forEach(r=>out.push(r));
+}
+function laneCollectWriteRefs(step,out){
+ (step.writes||[]).forEach(w=>{
+  Object.values(w.inputs||{}).forEach(v=>{
+   if(typeof v==='string')laneCollectExpressionRefs(v,out);
+  });
+ });
+}
+function laneAnchorSeedRecord(def){
+ return (data[def.object_key]||[])[0]||null;
+}
+function laneAnchorFields(def){
+ const rec=laneAnchorSeedRecord(def);
+ const top=new Set();const child=new Set();
+ if(rec){
+  Object.keys(rec).forEach(k=>top.add(k));
+  (rec.lines||[]).forEach(l=>Object.keys(l).forEach(k=>child.add(k)));
+ }
+ return {top,child};
+}
+// Check one $-reference (or a binds_to target, which has no $) against the
+// declared run-data fields and the seed record's fields. Returns true when
+// it resolves; appends a named P-11 refusal when it does not.
+function laneCheckRef(ref,stepId,def,fields,out){
+ if(typeof ref!=='string')return true;
+ const raw=ref[0]==='$'?ref.slice(1):ref;
+ const parts=raw.split('.');
+ if(parts[0]==='run_data'){
+  const key=parts[1];
+  const declared=((def.run_data||{}).fields||[]).some(f=>f.key===key);
+  if(!declared)out.push({id:'P-11',step:stepId,status:'refuse',reason:`step '${stepId}' references undeclared run-data field '${key}'`});
+  return declared;
+ }
+ if(parts[0]==='record'){
+  const path=parts.slice(1).filter(p=>p!=='[]');
+  if(path[0]==='lines'&&path[1]){
+   if(!fields.child.has(path[1])){out.push({id:'P-11',step:stepId,status:'refuse',reason:`step '${stepId}' references unknown child field '${path[1]}'`});return false;}
+   return true;
+  }
+  if(!fields.top.has(path[0])){out.push({id:'P-11',step:stepId,status:'refuse',reason:`step '${stepId}' references unknown record field '${path[0]}' on '${def.object_key}'`});return false;}
+  return true;
+ }
+ if(parts[0]==='item'){
+  if(!fields.child.has(parts[1])){out.push({id:'P-11',step:stepId,status:'refuse',reason:`step '${stepId}' references unknown child field '${parts[1]}'`});return false;}
+  return true;
+ }
+ return true;
+}
+function laneCheckConditionShape(cond,stepId,out){
+ if(!cond||typeof cond!=='object')return;
+ if(Array.isArray(cond.conditions)){
+  if(!['all','any'].includes(cond.match))out.push({id:'P-07',step:stepId,status:'refuse',reason:`condition on step '${stepId}' must match 'all' or 'any'`});
+  cond.conditions.forEach(c=>laneCheckConditionShape(c,stepId,out));
+  return;
+ }
+ if(cond.field===undefined){out.push({id:'P-07',step:stepId,status:'refuse',reason:`condition on step '${stepId}' names no field`});return;}
+ if(typeof cond.field==='string'&&cond.field[0]!=='$')out.push({id:'P-07',step:stepId,status:'refuse',reason:`condition on step '${stepId}' references '${cond.field}' — a condition field must be a $ reference`});
+ if(typeof cond.compare_field==='string'&&cond.compare_field[0]!=='$')out.push({id:'P-07',step:stepId,status:'refuse',reason:`condition on step '${stepId}' compares against '${cond.compare_field}' — a compare field must be a $ reference`});
+ if(!LANE_CONDITION_OPERATORS.includes(cond.operator))out.push({id:'P-07',step:stepId,status:'refuse',reason:`condition on step '${stepId}' uses unknown operator '${cond.operator}'`});
+}
+function laneCheckExpressionShape(expr,stepId,out){
+ if(!LANE_EXPRESSION_RE.test(String(expr||'').trim()))out.push({id:'P-07',step:stepId,status:'refuse',reason:`expression on step '${stepId}' is not a sum comparison: '${expr}'`});
+}
+// The publish report: one entry per check (P-01..P-16), each with its id,
+// the step it belongs to, a status (pass / refuse / warn) and a named
+// reason. P-01..P-08 mirror validateDraftLaneDefinition's shape rules,
+// collected as named entries instead of first-problem-only.
+function lanePublishChecks(def){
+ const lane=def||{};
+ const checks=[];
+ const add=(id,step,status,reason)=>checks.push({id,step:step||'',status,reason});
+ const pass=(id,reason)=>{if(!checks.some(c=>c.id===id))add(id,'','pass',reason);};
+ const stages=lane.stages||[];
+ const fields=(lane.run_data&&lane.run_data.fields)||[];
+ const anchorFields=laneAnchorFields(def);
+ // P-01 — lane shape.
+ if(!/^lane-[a-z0-9]+(-[a-z0-9]+)*$/.test(lane.id||''))add('P-01','','refuse',"lane id must start with 'lane-' followed by kebab-case");
+ if(!(lane.name||'').trim())add('P-01','','refuse','lane name is required');
+ if(!(lane.version>=1))add('P-01','','refuse','lane version must be at least 1');
+ if(!['draft','published'].includes(lane.status))add('P-01','','refuse',"lane status must be 'draft' or 'published'");
+ pass('P-01','Lane id, name, version and status are well-formed.');
+ // P-02 — stages and steps.
+ if(!stages.length)add('P-02','','refuse','a lane needs at least one stage');
+ const stageIds=new Set();
+ stages.forEach(stage=>{
+  if(stageIds.has(stage.id))add('P-02','','refuse',`stage id '${stage.id}' is used twice`);
+  stageIds.add(stage.id);
+  if(!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(stage.id||''))add('P-02','','refuse',`stage id '${stage.id}' must be kebab-case`);
+  if(!Array.isArray(stage.steps)||!stage.steps.length)add('P-02','','refuse',`stage '${stage.id}' needs at least one step`);
+  const stepIds=new Set();
+  (stage.steps||[]).forEach(step=>{
+   if(stepIds.has(step.id))add('P-02',step.id,'refuse',`step id '${step.id}' is used twice in stage '${stage.id}'`);
+   stepIds.add(step.id);
+   if(!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(step.id||''))add('P-02',step.id,'refuse',`step id '${step.id}' must be kebab-case`);
+   if(!['form','record','check','approval','agent'].includes(step.kind))add('P-02',step.id,'refuse',`step '${step.id}' has unknown kind '${step.kind}'`);
+   if(!(step.name||'').trim())add('P-02',step.id,'refuse',`step '${step.id}' needs a name`);
+  });
+ });
+ pass('P-02','At least one stage, at least one step per stage, stage and step ids unique and kebab-case.');
+ // P-03 — roles.
+ stages.forEach(stage=>(stage.steps||[]).forEach(step=>{
+  if(step.kind==='check'){if(step.role)add('P-03',step.id,'refuse',`check step '${step.id}' must not have a role`);}
+  else if(!(step.role||'').trim())add('P-03',step.id,'refuse',`step '${step.id}' needs a role`);
+ }));
+ pass('P-03','Every step has a role, except check steps, which have none.');
+ // P-04 — branches.
+ stages.forEach(stage=>(stage.steps||[]).forEach(step=>{
+  if(step.kind==='approval'&&!(step.branches&&step.branches.length))add('P-04',step.id,'refuse',`approval step '${step.id}' must declare its branches`);
+  if(!['check','approval'].includes(step.kind)&&step.branches)add('P-04',step.id,'refuse',`only check and approval steps declare branches (step '${step.id}')`);
+ }));
+ pass('P-04','Approval steps declare branches; only check and approval steps do.');
+ // P-05 — writes.
+ stages.forEach(stage=>(stage.steps||[]).forEach(step=>{
+  if(step.kind==='record'&&!(step.writes&&step.writes.length))add('P-05',step.id,'refuse',`record step '${step.id}' must declare at least one write`);
+  if(step.kind==='approval'&&!(step.writes&&step.writes.length))add('P-05',step.id,'refuse',`approval step '${step.id}' must declare at least one write`);
+  if(!['record','approval'].includes(step.kind)&&step.writes)add('P-05',step.id,'refuse',`only record and approval steps declare writes (step '${step.id}')`);
+ }));
+ pass('P-05','Record and approval steps declare at least one write.');
+ // P-06 — branch targets resolve.
+ stages.forEach(stage=>(stage.steps||[]).forEach(step=>{
+  (step.branches||[]).forEach(b=>{
+   if(b.target&&!stages.some(s=>s.id===b.target.stage&&(s.steps||[]).some(st=>st.id===b.target.step)))add('P-06',step.id,'refuse',`step '${step.id}' branches to unknown step '${b.target.stage}/${b.target.step}'`);
+  });
+ }));
+ pass('P-06','Every branch target names a real stage and step.');
+ // P-07 — conditions well-formed.
+ if(lane.start_condition)laneCheckConditionShape(lane.start_condition,'',checks);
+ stages.forEach(stage=>{
+  laneCheckConditionShape(stage.entry_condition,stage.id,checks);
+  laneCheckConditionShape(stage.skip_condition,stage.id,checks);
+  (stage.steps||[]).forEach(step=>{
+   if(step.check){
+    if(!['anchor','per_item'].includes(step.check.scope))add('P-07',step.id,'refuse',`check step '${step.id}' scope must be 'anchor' or 'per_item'`);
+    if(step.check.scope==='per_item'&&!step.check.aggregate)add('P-07',step.id,'refuse',`check step '${step.id}' with per_item scope needs an aggregate`);
+    if(step.check.scope==='anchor'&&step.check.aggregate)add('P-07',step.id,'refuse',`check step '${step.id}' with anchor scope must not declare an aggregate`);
+    if(step.check.aggregate&&!['all','any'].includes(step.check.aggregate))add('P-07',step.id,'refuse',`check step '${step.id}' aggregate must be 'all' or 'any'`);
+    laneCheckConditionShape(step.check.condition,step.id,checks);
+    if(step.check.expression!==undefined)laneCheckExpressionShape(step.check.expression,step.id,checks);
+   }
+   if(step.validation){
+    if(step.validation.condition)laneCheckConditionShape(step.validation.condition,step.id,checks);
+    if(step.validation.expression!==undefined)laneCheckExpressionShape(step.validation.expression,step.id,checks);
+   }
+  });
+ });
+ pass('P-07','Start, stage-entry, stage-skip and check conditions are well-formed.');
+ // P-08 — run-data fields.
+ const seenFields=new Set();
+ fields.forEach(f=>{
+  if(seenFields.has(f.key))add('P-08','','refuse',`run_data declares field '${f.key}' twice`);
+  seenFields.add(f.key);
+  if(!['string','integer','number','boolean','date'].includes(f.type))add('P-08','','refuse',`run_data field '${f.key}' has unknown type '${f.type}'`);
+ });
+ stages.forEach(stage=>(stage.steps||[]).forEach(step=>{
+  (step.fields||[]).forEach(f=>{
+   if(!['string','integer','number','boolean','date'].includes(f.type))add('P-08',step.id,'refuse',`field '${f.key}' on step '${step.id}' has unknown type '${f.type}'`);
+  });
+ }));
+ pass('P-08','Run-data fields have no duplicate keys and known types.');
+ // P-09 — branch exits: outcome coverage, every branch has an exit, and
+ // every step can reach the end of the lane.
+ stages.forEach(stage=>(stage.steps||[]).forEach(step=>{
+  const ons=(step.branches||[]).map(b=>b.on);
+  if(step.kind==='check'){
+   if(!ons.includes('pass'))add('P-09',step.id,'refuse',`check '${step.id}' has no pass branch`);
+   if(!ons.includes('fail'))add('P-09',step.id,'refuse',`check '${step.id}' has no fail branch`);
+  }
+  if(step.kind==='approval'){
+   if(!ons.includes('approved'))add('P-09',step.id,'refuse',`approval '${step.id}' has no approve branch`);
+   if(!ons.includes('rejected'))add('P-09',step.id,'refuse',`approval '${step.id}' has no reject branch`);
+  }
+  (step.branches||[]).forEach(b=>{
+   if(!b.target&&!b.end)add('P-09',step.id,'refuse',`branch '${b.on}' of step '${step.id}' has no exit — declare a target step or an end outcome`);
+  });
+ }));
+ // Reachability: from the first step, a form/record/agent step advances to
+ // the next step in definition order, a check/approval follows its
+ // branches, and an ends_run step ends the run.
+ const ordered=laneOrderedLaneSteps(def);
+ const nextKey={};
+ ordered.forEach((o,i)=>{nextKey[o.stage.id+'/'+o.step.id]=i+1<ordered.length?ordered[i+1].stage.id+'/'+ordered[i+1].step.id:'END';});
+ const edges={};
+ ordered.forEach(o=>{
+  const key=o.stage.id+'/'+o.step.id;
+  if(o.step.ends_run){edges[key]=['END'];return;}
+  if(o.step.branches&&o.step.branches.length){edges[key]=(o.step.branches||[]).map(b=>b.end?'END':(b.target?b.target.stage+'/'+b.target.step:'END'));return;}
+  edges[key]=[nextKey[key]];
+ });
+ const reachable=new Set();
+ if(ordered.length){
+  const queue=[ordered[0].stage.id+'/'+ordered[0].step.id];
+  while(queue.length){
+   const k=queue.shift();
+   if(k==='END'||reachable.has(k))continue;
+   reachable.add(k);
+   (edges[k]||[]).forEach(n=>{if(n!=='END'&&!reachable.has(n))queue.push(n);});
+  }
+  ordered.forEach(o=>{
+   const key=o.stage.id+'/'+o.step.id;
+   if(!reachable.has(key))add('P-09',o.step.id,'refuse',`step '${o.step.id}' cannot reach the end of the lane`);
+  });
+ }
+ pass('P-09','Every check declares pass and fail, every approval declares approve and reject, every branch has an exit, and every step reaches the end.');
+ // P-10 (WARN) — a check that is not the last step of its stage.
+ stages.forEach(stage=>{
+  (stage.steps||[]).forEach((step,i)=>{
+   if(step.kind==='check'&&i<(stage.steps||[]).length-1)add('P-10',step.id,'warn',`check '${step.id}' is not the last step of stage '${stage.id}' — the step after it runs on the pass path; move the check to the end of the stage, or confirm the next step is the pass continuation`);
+  });
+ });
+ pass('P-10','Every check step is the last step of its stage.');
+ // P-11 — no undeclared references (start condition is P-15's).
+ stages.forEach(stage=>(stage.steps||[]).forEach(step=>{
+  (step.fields||[]).forEach(f=>{if(f.binds_to)laneCheckRef(f.binds_to,step.id,def,anchorFields,checks);});
+  if(step.validation){
+   const refs=[];
+   if(step.validation.condition)laneCollectConditionRefs(step.validation.condition,refs);
+   if(step.validation.expression!==undefined)laneCollectExpressionRefs(step.validation.expression,refs);
+   refs.forEach(r=>laneCheckRef(r,step.id,def,anchorFields,checks));
+  }
+  if(step.check){
+   const refs=[];
+   if(step.check.condition)laneCollectConditionRefs(step.check.condition,refs);
+   if(step.check.expression!==undefined)laneCollectExpressionRefs(step.check.expression,refs);
+   refs.forEach(r=>laneCheckRef(r,step.id,def,anchorFields,checks));
+  }
+  const writeRefs=[];
+  laneCollectWriteRefs(step,writeRefs);
+  writeRefs.forEach(r=>laneCheckRef(r,step.id,def,anchorFields,checks));
+ }));
+ pass('P-11','Every $run_data, $record and $item reference names a declared field.');
+ // P-12 — no provisional Action Types. The demo has no adopted catalog,
+ // so every warehouse Action Type is provisional — the report says so
+ // instead of pretending otherwise.
+ stages.forEach(stage=>(stage.steps||[]).forEach(step=>{
+  (step.writes||[]).forEach(w=>add('P-12',step.id,'refuse',`step '${step.id}' uses provisional Action Type '${w.action_type}' — not in the adopted catalog`));
+ }));
+ if(!checks.some(c=>c.id==='P-12'))add('P-12','','pass','No writes, so no provisional Action Type.');
+ // P-13 — replaced workflows exist in the demo's workflow list.
+ stages.forEach(stage=>(stage.steps||[]).forEach(step=>{
+  (step.replaces||[]).forEach(r=>{
+   const wf=(data.workflowRules||[]).find(w=>w.id===r.workflow_id);
+   if(!wf)add('P-13',step.id,'refuse',`step '${step.id}' replaces unknown workflow '${r.workflow_id}'`);
+   else if(r.action_index>=((wf.actions||[]).length))add('P-13',step.id,'refuse',`step '${step.id}' replaces action ${r.action_index} of workflow '${r.workflow_id}', which has no such action`);
+  });
+ }));
+ pass('P-13','Every replaces[] entry names a real workflow id and a real action index on it.');
+ // P-14 (WARN) — run-data types match their uses.
+ const fieldByKey={};
+ fields.forEach(f=>{fieldByKey[f.key]=f;});
+ const numericUse=(ref,stepId)=>{
+  if(typeof ref!=='string'||!ref.startsWith('$run_data.'))return;
+  const key=ref.slice(10).split('.')[0];
+  const f=fieldByKey[key];
+  if(f&&!['integer','number'].includes(f.type))add('P-14',stepId,'warn',`run-data field '${key}' is '${f.type}' but is used as a number by step '${stepId}'`);
+ };
+ stages.forEach(stage=>(stage.steps||[]).forEach(step=>{
+  const walkCond=c=>{
+   if(!c||typeof c!=='object')return;
+   if(Array.isArray(c.conditions)){c.conditions.forEach(walkCond);return;}
+   if(['greater_than','less_than'].includes(c.operator))numericUse(c.field,step.id);
+   if(c.compare_field)numericUse(c.compare_field,step.id);
+  };
+  if(step.check&&step.check.condition)walkCond(step.check.condition);
+  if(step.validation&&step.validation.condition)walkCond(step.validation.condition);
+  if(step.validation&&step.validation.expression!==undefined){
+   (String(step.validation.expression).match(/\$[A-Za-z_][A-Za-z0-9_.]*/g)||[]).forEach(r=>numericUse(r,step.id));
+  }
+  (step.fields||[]).forEach(f=>{
+   if(!(f.binds_to||'').startsWith('record.'))return;
+   const m=/^record\.lines\[\]\.(.+)$/.exec(f.binds_to);
+   const seedVal=m?((laneAnchorSeedRecord(def)||{}).lines||[])[0]?.[m[1]]:laneAnchorSeedRecord(def)?.[f.binds_to.slice(7)];
+   if(typeof seedVal==='number'&&f.type==='string')add('P-14',step.id,'warn',`run-data field '${f.key}' is 'string' but is used as a number by step '${step.id}'`);
+  });
+ }));
+ pass('P-14','Run-data fields are used with compatible types.');
+ // P-15 — start condition references declared fields.
+ if(lane.start_condition){
+  const refs=[];
+  laneCollectConditionRefs(lane.start_condition,refs);
+  refs.forEach(r=>{
+   const before=checks.length;
+   laneCheckRef(r,'',def,anchorFields,checks);
+   const hit=checks.slice(before).find(c=>c.id==='P-11');
+   if(hit){hit.id='P-15';hit.reason=`start_condition references undeclared field '${r}'`;hit.step='';}
+  });
+ }
+ pass('P-15','The start condition references only declared run-data fields and anchor-object fields.');
+ // P-16 — only a draft publishes.
+ if(lane.status==='draft')add('P-16','','pass','A draft version is ready to publish.');
+ else add('P-16','','refuse',`lane '${lane.id}' has no draft version to publish`);
+ const refuses=checks.filter(c=>c.status==='refuse').length;
+ const warns=checks.filter(c=>c.status==='warn').length;
+ return {checks,refuses,warns,canPublish:refuses===0};
+}
+function lanePublishChecksHtml(def){
+ const report=lanePublishChecks(def);
+ const rows=report.checks.map(c=>`<tr><td><code>${c.id}</code></td><td>${agentEsc(c.step||'—')}</td><td>${c.status==='pass'?'Pass':c.status==='warn'?'Warning':'Refused'}</td><td>${agentEsc(c.reason)}</td></tr>`).join('');
+ const verdict=report.canPublish?'Ready to publish':`Cannot publish — ${report.refuses} check${report.refuses===1?'':'s'} refuse${report.refuses===1?'s':''}`;
+ return `<section id="lanePublishChecks" style="margin-bottom:20px"><h3>Publish checks</h3><p class="muted">Publish is refused when any check below refuses, with one named reason per failed check. A warning does not block publish. Publishing happens from here, by a person — never from the draft panel.</p><p><strong>${verdict}</strong>${report.warns?` · ${report.warns} warning${report.warns===1?'':'s'}`:''}</p><p class="muted">The demo has no adopted Action Type catalog, so every warehouse Action Type is provisional (P-12). The four warehouse lanes cannot publish until their Action Types are adopted.</p><div class="table-wrap"><table class="table"><thead><tr><th>Check</th><th>Step</th><th>Status</th><th>Reason</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+}
+// ---- Dry run ---------------------------------------------------------------
+// Fixture values are the values a person would type: run-data fields and
+// per-child values. A check that depends on a fixture the author did not
+// supply reports unevaluated (needs fixture) instead of guessing.
+const LANE_DRYRUN_DEFAULT_ANCHOR={'lane-wh-receiving':'po-2026-001','lane-wh-pickpack':'so-2026-002','lane-wh-count':'cc-2026-001','lane-wh-replenish':'rr-01'};
+function laneDryRunDefaultAnchor(def){return LANE_DRYRUN_DEFAULT_ANCHOR[def.id]||(((data[def.object_key]||[])[0]||{}).id||'');}
+function laneAnchorLabel(r){return r.po_number||r.so_number||r.count_number||r.number||r.name||r.id;}
+// Cycle-count lines carry no id, so a per-line fixture key falls back to
+// the product (and, for a repeated product, the line index).
+function laneDryRunLineKey(line,idx){return (line&&(line.id||line.product_id))||('line-'+idx);}
+function laneDryRunLineLabel(line){
+ const prod=(data.product||[]).find(p=>p.id===line.product_id)||{};
+ const sku=prod.sku||line.product_id;
+ if(line.qty_ordered!==undefined)return `${sku} (ordered ${line.qty_ordered})`;
+ return `${sku} (expected ${line.expected_qty}, counted ${line.counted_qty})`;
+}
+function laneDryRunFixtureDefault(def,record,field,line){
+ const key=field.key;
+ if((field.binds_to||'').startsWith('record.')&&line){
+  if(key==='qty_received')return line.qty_ordered;
+  if(key==='qty_rejected')return 0;
+  if(key==='qty_picked')return line.qty_reserved;
+  if(key==='qty_damaged')return 0;
+  if(key==='counted_qty')return line.counted_qty!==undefined?line.counted_qty:line.expected_qty;
+  if(line[key]!==undefined)return line[key];
+ }
+ if(line){
+  if(key==='delivery_note_qty')return line.qty_ordered;
+  if(key==='putaway_bin')return 'loc-a-01-03';
+ }
+ switch(key){
+  case 'carrier': return 'FastFreight';
+  case 'delivery_note_number': return 'DN-8812';
+  case 'received_date': return (record&&record.expected_date)||'';
+  case 'staging_bin': return 'loc-rec-01';
+  case 'parcel_count': return 1;
+  case 'parcel_weight': return '1.2';
+  case 'tracking_number': return 'TRK-1001';
+  case 'order_qty': return (record&&record.reorder_qty)||1;
+  case 'supplier_id': return 'sup-01';
+  default: break;
+ }
+ if(field.type==='integer'||field.type==='number')return 1;
+ if(field.type==='boolean')return false;
+ return '';
+}
+function laneDryRunSectionHtml(def,anchorId){
+ const anchors=(data[def.object_key]||[]);
+ const anchor=byId(def.object_key,anchorId||laneDryRunDefaultAnchor(def))||anchors[0];
+ if(!anchor)return `<section style="margin-bottom:20px"><h3>Dry run</h3><p class="muted">No seed record of ${agentEsc(def.object_key)} to dry-run against.</p></section>`;
+ let fieldsHtml='';
+ laneOrderedLaneSteps(def).forEach(({step})=>{
+  if(step.kind!=='form'||!(step.fields||[]).length)return;
+  laneRepeatItems(step,anchor).forEach((line,idx)=>{
+   const lineKey=line?laneDryRunLineKey(line,idx):null;
+   (step.fields||[]).forEach(field=>{
+    const key=field.key+(line?':'+lineKey:'');
+    const val=laneDryRunFixtureDefault(def,anchor,field,line);
+    const inputType=field.type==='date'?'date':(field.type==='integer'||field.type==='number')?'number':'text';
+    fieldsHtml+=`<div class="field"><label>${agentEsc(step.name)} — ${agentEsc(field.label)}${line?' ('+agentEsc(laneDryRunLineLabel(line))+')':''}</label><input class="input" data-dryrun-fixture="${agentEsc(key)}" type="${inputType}" value="${agentEsc(String(val===undefined||val===null?'':val))}"></div>`;
+   });
+  });
+ });
+ return `<section style="margin-bottom:20px"><h3>Dry run</h3><p class="muted">Walks the lane against a seed record with the fixture values below — the values a person would type — and shows every step, check, branch and write it would take. It writes nothing: no StockMove, no status change, no run is started, and the seed record is unchanged.</p><div class="field"><label for="dryrunAnchor">Anchor record</label><select id="dryrunAnchor" data-dryrun-anchor class="select">${anchors.map(r=>`<option value="${agentEsc(r.id)}"${r.id===anchor.id?' selected':''}>${agentEsc(laneAnchorLabel(r))}</option>`).join('')}</select></div><div class="field"><label for="dryrunExpected">Expected outcome</label><input id="dryrunExpected" data-dryrun-expected class="input" value="done"></div><div class="field"><label for="dryrunApproval">Manager decision at approval steps</label><select id="dryrunApproval" data-dryrun-approval class="select"><option value="approved" selected>Approve</option><option value="rejected">Reject</option></select></div>${fieldsHtml}<div style="margin-top:12px"><button class="btn btn-primary" type="button" data-dryrun-run>Run dry run</button></div><div id="laneDryRunResult" style="margin-top:12px"></div></section>`;
+}
+function laneBindDryRun(def){
+ const anchorSel=document.querySelector('[data-dryrun-anchor]');
+ if(anchorSel)anchorSel.onchange=()=>{
+  const host=document.querySelector('#laneDryRun');
+  if(host){host.innerHTML=laneDryRunSectionHtml(def,anchorSel.value);laneBindDryRun(def);}
+ };
+ const runBtn=document.querySelector('[data-dryrun-run]');
+ if(runBtn)runBtn.onclick=()=>{
+  const anchorId=(document.querySelector('[data-dryrun-anchor]')||{}).value||laneDryRunDefaultAnchor(def);
+  const record=byId(def.object_key,anchorId);
+  if(!record)return;
+  const fixtures={};
+  document.querySelectorAll('[data-dryrun-fixture]').forEach(inp=>{fixtures[inp.dataset.dryrunFixture]=inp.value;});
+  const expected=(document.querySelector('[data-dryrun-expected]')||{}).value||'done';
+  const approval=(document.querySelector('[data-dryrun-approval]')||{}).value||'approved';
+  const report=laneDryRun(def,record,fixtures,expected,approval);
+  const out=document.querySelector('#laneDryRunResult');
+  if(out)out.innerHTML=laneDryRunResultHtml(report);
+ };
+}
+// The targets a form step would supply: a check that reads one of these
+// and finds it undefined is unevaluated (needs fixture), not a pass/fail.
+function laneDryRunSuppliable(def){
+ const set=new Set();
+ laneOrderedLaneSteps(def).forEach(({step})=>{
+  if(step.kind!=='form')return;
+  (step.fields||[]).forEach(f=>{
+   const b=f.binds_to||'';
+   if(b.startsWith('run_data.'))set.add('$'+b);
+   else{
+    const m=/^record\.lines\[\]\.(.+)$/.exec(b);
+    if(m){set.add('$item.'+m[1]);set.add('$record.lines[].'+m[1]);}
+    else if(b.startsWith('record.'))set.add('$'+b);
+   }
+  });
+ });
+ return set;
+}
+// Blank the suppliable targets in the simulated record so a missing
+// fixture reads as undefined (unevaluated) instead of the seed's value.
+function laneDryRunBlankSuppliable(def,simRecord,simRunData){
+ const perChild=lanePerChildLaneMap(def);
+ laneOrderedLaneSteps(def).forEach(({step})=>{
+  if(step.kind!=='form')return;
+  laneRepeatItems(step,simRecord).forEach(line=>{
+   (step.fields||[]).forEach(field=>{
+    const b=field.binds_to||'';
+    if(b.startsWith('run_data.')){
+     const key=b.split('.')[1];
+     if(perChild[key]&&line){if(simRunData[key]&&typeof simRunData[key]==='object')delete simRunData[key][line.id];}
+     else delete simRunData[key];
+    }else if(b.startsWith('record.')){
+     const m=/^record\.lines\[\]\.(.+)$/.exec(b);
+     if(m&&line)delete line[m[1]];
+     else if(!b.includes('['))delete simRecord[b.slice(7)];
+    }
+   });
+  });
+ });
+}
+// Pure: walks the lane against a copy of the seed record and the fixtures.
+// Never touches data, localStorage or save().
+function laneDryRun(def,record,fixtures,expectedOutcome,approvalDecision){
+ const perChild=lanePerChildLaneMap(def);
+ const simRecord=JSON.parse(JSON.stringify(record));
+ const simRunData={};
+ laneDryRunBlankSuppliable(def,simRecord,simRunData);
+ const fieldType={};
+ laneOrderedLaneSteps(def).forEach(({step})=>{(step.fields||[]).forEach(f=>{fieldType[f.key]=f.type;});});
+ const suppliable=laneDryRunSuppliable(def);
+ const report={anchorLabel:laneAnchorLabel(record),anchorId:record.id,expectedOutcome:expectedOutcome||'done',steps:[],checks:[],branches:[],writes:[],failures:[],missingFixtures:[],zeroSkipped:0,zeroLines:[],outcome:null,refusedToStart:false,startReason:''};
+ const fixtureValue=(key,lineId)=>{
+  if(lineId&&fixtures[key+':'+lineId]!==undefined)return fixtures[key+':'+lineId];
+  return fixtures[key];
+ };
+ const coerce=(key,v)=>{
+  if(v===undefined||v===null||v==='')return undefined;
+  const t=fieldType[key];
+  if(t==='integer'||t==='number'){const n=Number(v);return Number.isNaN(n)?undefined:n;}
+  if(t==='boolean')return v===true||v==='true';
+  return v;
+ };
+ const missingFixtureRefs=(refs,ctx)=>{
+  const missing=[];
+  refs.forEach(r=>{
+   if(suppliable.has(r)&&laneResolveRef(r,ctx)===undefined)missing.push(r);
+  });
+  return [...new Set(missing)];
+ };
+ // Simulate one step's writes against the simulated record. A write whose
+ // $ reference does not resolve is a failure, not a skip. A zero-quantity
+ // stock move posts nothing: the line is flagged and counted, and the
+ // report says `would skip <n> children with nothing to post`.
+ const simulateWrites=step=>{
+  const lines=laneRepeatItems(step,simRecord);
+  for(const line of lines){
+   const ctx={record:simRecord,runData:simRunData,item:line,itemId:line?line.id:null,perChild};
+   for(const w of step.writes||[]){
+    const resolved={};
+    for(const [k,v] of Object.entries(w.inputs||{})){
+     if(typeof v==='string'&&v[0]==='$'){
+      const rv=laneResolveRef(v,ctx);
+      if(rv===undefined){report.failures.push(`write '${w.action_type}' on step '${step.id}' cannot resolve '${v}'`);return {failed:true};}
+      resolved[k]=rv;
+     }else resolved[k]=v;
+    }
+    const qty=resolved.quantity;
+    if(typeof qty==='number'&&qty===0){
+     report.zeroSkipped++;
+     report.zeroLines.push(line?laneDryRunLineLabel(line):step.id);
+     continue;
+    }
+    report.writes.push({step:step.id,stepName:step.name,line:line?laneDryRunLineLabel(line):null,action_type:w.action_type,inputs:resolved});
+    // Mirror the runner's own line updates (lanePostStockMove) in the
+    // simulated record only, so a later step reads what the run would
+    // have produced: PACK fills qty_packed, SHIP fills qty_shipped and
+    // releases the reservation; a status write moves the record status.
+    if(line&&w.action_type==='warehouse.post_stock_move'){
+     if(resolved.move_type==='PACK')line.qty_packed=Number(line.qty_packed||0)+Number(qty||0);
+     if(resolved.move_type==='SHIP'){line.qty_shipped=Number(line.qty_shipped||0)+Number(qty||0);line.qty_reserved=Math.max(0,Number(line.qty_reserved||0)-Number(qty||0));}
+    }
+    if(w.action_type==='run_data.set'&&resolved.key!==undefined)simRunData[resolved.key]=resolved.value;
+    if(/\.set_status$/.test(w.action_type)&&resolved.status!==undefined)simRecord.status=resolved.status;
+   }
+  }
+  return {failed:false};
+ };
+ // Start condition.
+ const startCtx={record:simRecord,runData:simRunData,item:null,perChild};
+ if(def.start_condition){
+  const refs=[];
+  laneCollectConditionRefs(def.start_condition,refs);
+  const missing=missingFixtureRefs(refs,startCtx);
+  if(missing.length){
+   report.outcome='unevaluated';
+   report.failures.push(`start condition is unevaluated (needs fixture) — ${missing.join(', ')}`);
+   return report;
+  }
+  if(!laneEvalConditionGroup(def.start_condition,startCtx)){
+   report.refusedToStart=true;
+   report.startReason=laneDescribeCondition(def.start_condition);
+   report.outcome='refused to start';
+   return report;
+  }
+ }
+ const ordered=laneOrderedLaneSteps(def);
+ const indexByKey={};
+ ordered.forEach((o,i)=>{indexByKey[o.stage.id+'/'+o.step.id]=i;});
+ const seenStages=new Set();
+ let pc=0;
+ let guard=0;
+ const visits={};
+ while(pc<ordered.length&&guard++<100){
+  const {stage,step}=ordered[pc];
+  // Stage entry/skip, once per stage.
+  if(!seenStages.has(stage.id)){
+   seenStages.add(stage.id);
+   const ctx0={record:simRecord,runData:simRunData,item:null,perChild};
+   const skip=stage.skip_condition&&laneEvalConditionGroup(stage.skip_condition,ctx0);
+   const noEntry=stage.entry_condition&&!laneEvalConditionGroup(stage.entry_condition,ctx0);
+   if(skip||noEntry){
+    const why=skip?`stage skipped (${laneDescribeCondition(stage.skip_condition)})`:`stage entry condition not met (${laneDescribeCondition(stage.entry_condition)})`;
+    (stage.steps||[]).forEach(s=>report.steps.push({stage:stage.name,step:s.id,name:s.name,status:'skipped',note:why}));
+    pc+=stage.steps.length;
+    continue;
+   }
+  }
+  const key=stage.id+'/'+step.id;
+  visits[key]=(visits[key]||0)+1;
+  if(visits[key]>3){report.outcome='loop';report.failures.push(`step '${step.id}' was visited more than 3 times — the lane loops`);break;}
+  if(step.kind==='form'){
+   const lines=laneRepeatItems(step,simRecord);
+   let blocked=null;
+   for(let li=0;li<lines.length;li++){
+    const line=lines[li];
+    const lineId=line?laneDryRunLineKey(line,li):null;
+    const ctx={record:simRecord,runData:simRunData,item:line,itemId:line?line.id:null,perChild};
+    for(const field of step.fields||[]){
+     const v=coerce(field.key,fixtureValue(field.key,lineId));
+     if(v===undefined){
+      if(field.required)report.missingFixtures.push(field.key+(line?` (${lineId})`:''));
+      continue;
+     }
+     laneApplyBinding(simRunData,line,simRecord,field.binds_to,v,perChild);
+    }
+    if(step.validation){
+     const check=laneEvalValidation(step.validation,ctx);
+     if(!check.ok){blocked=check.message;break;}
+    }
+   }
+   if(blocked){report.steps.push({stage:stage.name,step:step.id,name:step.name,status:'would block',note:blocked});report.outcome='blocked';report.failures.push(`would block at step '${step.id}' — ${blocked}`);break;}
+   report.steps.push({stage:stage.name,step:step.id,name:step.name,status:'executed',note:'values recorded in the simulated run'});
+   if(step.ends_run){report.outcome=step.ends_run.outcome;break;}
+   pc++;
+   continue;
+  }
+  if(step.kind==='record'){
+   const r=simulateWrites(step);
+   if(r.failed){report.outcome='failed';break;}
+   report.steps.push({stage:stage.name,step:step.id,name:step.name,status:'executed',note:'writes simulated'});
+   pc++;
+   continue;
+  }
+  if(step.kind==='check'){
+   const rule=step.check;
+   const lines=rule.scope==='per_item'?(simRecord.lines||[]):[null];
+   const perResults=[];
+   let unevaluated=[];
+   for(const line of lines){
+    const ctx={record:simRecord,runData:simRunData,item:line,itemId:line?line.id:null,perChild};
+    const refs=[];
+    if(rule.expression!==undefined)laneCollectExpressionRefs(rule.expression,refs);
+    else laneCollectConditionRefs(rule.condition,refs);
+    const missing=missingFixtureRefs(refs,ctx);
+    if(missing.length){unevaluated=unevaluated.concat(missing);continue;}
+    const ok=rule.expression!==undefined?laneEvalExpression(rule.expression,ctx):laneEvalCondition(rule.condition,ctx);
+    perResults.push({line:line?laneDryRunLineLabel(line):null,ok});
+   }
+   if(unevaluated.length){
+    const names=[...new Set(unevaluated)];
+    report.checks.push({step:step.id,name:step.name,result:'unevaluated',reason:`unevaluated (needs fixture) — ${names.join(', ')}`});
+    report.outcome='unevaluated';
+    break;
+   }
+   const pass=rule.aggregate==='any'?perResults.some(r=>r.ok):perResults.every(r=>r.ok);
+   report.checks.push({step:step.id,name:step.name,result:pass?'passed':'failed',reason:pass?'Every line meets the condition.':(rule.message||'the check failed.'),detail:perResults.map(r=>`${r.line||'anchor'}: ${r.ok?'pass':'fail'}`).join('; ')});
+   report.steps.push({stage:stage.name,step:step.id,name:step.name,status:'executed',note:`check ${pass?'passed':'failed'}`});
+   const branch=(step.branches||[]).find(b=>b.on===(pass?'pass':'fail'));
+   if(!branch){report.outcome='failed';report.failures.push(`check '${step.id}' has no '${pass?'pass':'fail'}' branch`);break;}
+   report.branches.push(`${step.name}: ${pass?'pass':'fail'} → ${laneBranchTargetLabel(branch,def)}`);
+   if(branch.end){report.outcome=branch.end.outcome;break;}
+   if(!branch.target||indexByKey[branch.target.stage+'/'+branch.target.step]===undefined){report.outcome='failed';report.failures.push(`check '${step.id}' branches to an unknown step`);break;}
+   pc=indexByKey[branch.target.stage+'/'+branch.target.step];
+   continue;
+  }
+  if(step.kind==='approval'){
+   const decision=approvalDecision||'approved';
+   report.steps.push({stage:stage.name,step:step.id,name:step.name,status:'executed',note:`manager ${decision}`});
+   if(decision==='approved'&&(step.writes||[]).length){
+    const r=simulateWrites(step);
+    if(r.failed){report.outcome='failed';break;}
+   }
+   const branch=(step.branches||[]).find(b=>b.on===decision);
+   if(!branch){report.outcome='failed';report.failures.push(`approval '${step.id}' has no '${decision}' branch`);break;}
+   report.branches.push(`${step.name}: ${decision} → ${laneBranchTargetLabel(branch,def)}`);
+   if(branch.end){report.outcome=branch.end.outcome;break;}
+   if(!branch.target||indexByKey[branch.target.stage+'/'+branch.target.step]===undefined){report.outcome='failed';report.failures.push(`approval '${step.id}' branches to an unknown step`);break;}
+   pc=indexByKey[branch.target.stage+'/'+branch.target.step];
+   continue;
+  }
+  // Agent steps (none in the warehouse lanes): simulated, never executed.
+  report.steps.push({stage:stage.name,step:step.id,name:step.name,status:'executed',note:'agent step — simulated, never executed'});
+  pc++;
+ }
+ if(!report.outcome)report.outcome='done';
+ return report;
+}
+function laneDryRunResultHtml(report){
+ let h=`<h4>Dry-run result</h4><p>Anchor record <strong>${agentEsc(report.anchorLabel)}</strong> · expected outcome '${agentEsc(report.expectedOutcome)}'.</p>`;
+ if(report.refusedToStart){
+  h+=`<p><strong>would refuse to start, ${agentEsc(report.startReason)}</strong> — the lane's start condition is not met on this record, so no step would run.</p>`;
+ }else{
+  h+=`<div style="margin-bottom:12px"><strong>Steps</strong><ul style="margin:4px 0 0;padding-left:20px">${report.steps.map(s=>`<li>${agentEsc(s.name)} — ${agentEsc(s.status)}${s.note?` (${agentEsc(s.note)})`:''}</li>`).join('')||'<li>No steps walked.</li>'}</ul></div>`;
+  if(report.checks.length)h+=`<div style="margin-bottom:12px"><strong>Checks</strong><ul style="margin:4px 0 0;padding-left:20px">${report.checks.map(c=>`<li>${agentEsc(c.name)} — ${agentEsc(c.result)} — ${agentEsc(c.reason)}${c.detail?` (${agentEsc(c.detail)})`:''}</li>`).join('')}</ul></div>`;
+  if(report.branches.length)h+=`<div style="margin-bottom:12px"><strong>Branches taken</strong><ul style="margin:4px 0 0;padding-left:20px">${report.branches.map(b=>`<li>${agentEsc(b)}</li>`).join('')}</ul></div>`;
+  if(report.writes.length)h+=`<div style="margin-bottom:12px"><strong>Writes it would post</strong><ul style="margin:4px 0 0;padding-left:20px">${report.writes.map(w=>`<li><code>${agentEsc(w.action_type)}</code>${w.line?` — ${agentEsc(w.line)}`:''} · ${Object.entries(w.inputs||{}).map(([k,v])=>`${agentEsc(k)}: <code>${agentEsc(v===null?'null':String(v))}</code>`).join(' · ')}</li>`).join('')}</ul></div>`;
+  if(report.zeroSkipped)h+=`<p><strong>would skip ${report.zeroSkipped} children with nothing to post</strong> — ${report.zeroLines.map(agentEsc).join(', ')}.</p>`;
+  if(report.missingFixtures.length)h+=`<p class="muted">Missing fixtures: ${[...new Set(report.missingFixtures)].map(agentEsc).join(', ')}.</p>`;
+  if(report.failures.length)h+=`<p style="color:var(--destructive)">${report.failures.map(agentEsc).join('; ')}</p>`;
+  const match=report.outcome===report.expectedOutcome;
+  h+=`<p><strong>ends with outcome ${agentEsc(report.outcome)}</strong> — ${match?`matches the expected outcome '${agentEsc(report.expectedOutcome)}'`: `does not match the expected outcome '${agentEsc(report.expectedOutcome)}'`}.</p>`;
+ }
+ h+=`<p class="muted">Nothing was written: the seed record, stock and ledger are unchanged — no StockMove, no status change, no run started. Writes above are the definition's resolved writes against the seed record plus the fixtures; the runner may post less for a line already picked before the run (a PICK move posts only the quantity picked in the run).</p>`;
+ return h;
 }
 // Warehouse shell chrome: "Reset warehouse demo" label + a warehouse
 // bottom nav (mobile). Runs inside appShell() before renderSidebarNav()
@@ -25989,7 +26664,8 @@ function bindRoadmapSearch(){
 }
 function releasesPage(){document.title='Releases — Lanesra OS';
  setPageMeta('The full Lanesra OS changelog - every shipped release across the desktop app, the online demo and this website, compiled directly from the working codebase. See also the desktop-only installer tags on GitHub, cut less often than this list.');
- const releases=[['v0.99.6','November 2026','Process Lanes: the runner screen',['A Process Lane now has its one-screen runner (work package WP-0707) in the desktop app and Team Workspace. A run is walked end to end on a single screen: a <b>stage bar</b> showing every stage (done stages ticked, the current one highlighted), the <b>step list</b> for the current stage, the <b>current step\'s work</b>, a summary of the <b>anchor record</b> and of <b>what this run has written</b>, and the <b>audit trail</b> — with <b>Back</b> and <b>Complete step</b> (a record step names its writes and completes with <b>Post and complete step</b>). A run is labelled by its record, lane and stage — "PO-2026-001 · Receive Shipment · stage 2 of 5" — and starts from the record itself (<b>Start lane run</b> in the record header) or from the record\'s row in its list; starting again reopens the active run. On a phone the same parts stack in the same order.','A record\'s <b>Object 360</b> view lists every run on it, with lane, stage, step and status, and each run\'s audit trail lists every advance and every write with actor and time. In this first cut a run that reaches an <b>approval</b> step or a branch shows a plain <b>"continue in the approvals inbox"</b> state until the next work package adds those screens; the online demo\'s runner is aligned to the same parts and wording. See <a href="/help/process-lanes">Process Lanes</a>.']],
+ const releases=[['v0.99.7','November 2026','Process Lanes: dry run and publish checks',['A Process Lane can now be proved safe before it publishes (work package WP-0714) in the desktop app and Team Workspace, and on the online demo. A <b>dry run</b> walks the lane against a seed record with the fixture values a person would type and writes nothing — it reports every step executed or skipped, every check passed, failed or <b>unevaluated (needs fixture)</b>, the branches taken, every write it would post with its resolved inputs, and the outcome it would end with against the expected outcome. A line that would post a zero-quantity write is flagged — <b>would skip &lt;n&gt; children with nothing to post</b> — instead of posting it.','Before a lane publishes it must pass its <b>publish checks</b> (P-01..P-16), listed on the lane\'s blueprint page with a named reason per failure: definition shape and roles, branches that resolve and have a way out, every check declaring both outcomes, references that name declared fields, replaced workflows that exist, and Action Types that are adopted rather than provisional. A refusal blocks publish and the report lists every refusal at once; a warning does not. On the demo the four warehouse lanes cannot publish yet — every warehouse Action Type is provisional, so P-12 refuses each one by name — and the blueprint page says so instead of hiding it. See <a href="/help/process-lanes">Process Lanes</a>.']],
+  ['v0.99.6','November 2026','Process Lanes: the runner screen',['A Process Lane now has its one-screen runner (work package WP-0707) in the desktop app and Team Workspace. A run is walked end to end on a single screen: a <b>stage bar</b> showing every stage (done stages ticked, the current one highlighted), the <b>step list</b> for the current stage, the <b>current step\'s work</b>, a summary of the <b>anchor record</b> and of <b>what this run has written</b>, and the <b>audit trail</b> — with <b>Back</b> and <b>Complete step</b> (a record step names its writes and completes with <b>Post and complete step</b>). A run is labelled by its record, lane and stage — "PO-2026-001 · Receive Shipment · stage 2 of 5" — and starts from the record itself (<b>Start lane run</b> in the record header) or from the record\'s row in its list; starting again reopens the active run. On a phone the same parts stack in the same order.','A record\'s <b>Object 360</b> view lists every run on it, with lane, stage, step and status, and each run\'s audit trail lists every advance and every write with actor and time. In this first cut a run that reaches an <b>approval</b> step or a branch shows a plain <b>"continue in the approvals inbox"</b> state until the next work package adds those screens; the online demo\'s runner is aligned to the same parts and wording. See <a href="/help/process-lanes">Process Lanes</a>.']],
   ['v0.99.5','November 2026','Process Lanes: approvals, branches, handoff and cancel',['A Process Lane can now go beyond the straight path (work package WP-0706) in the desktop app and Team Workspace. An <b>approval step</b> waits in the approvals inbox and routes the run down its declared <b>approved</b> or <b>rejected</b> branch, and a lane whose hold or rejection branch has <b>no way out</b> cannot be published — the error names the step so it is easy to fix.','A waiting step can be <b>handed off</b> to a different role (whoever holds it can then act, the previous role cannot, and the handoff is audited), and a run can be <b>cancelled</b> at any point: anything it already wrote stays in place and the cancellation is recorded in the audit trail with what was posted. Only one run of a lane is active on a record at a time — starting again returns you to the open run — and a lane can declare that it excludes another so the two never run on the same record at once. See <a href="/help/process-lanes">Process Lanes</a>.']],
   ['v0.99.4','November 2026','Process Lanes post real, safe writes',['A Process Lane can now have <b>record steps</b> and <b>check steps</b> that do real work (work package WP-0705) in the desktop app and Team Workspace. A record step posts its writes through <b>Action Types</b> — the same named, governed writes the rest of the product uses — so <b>Business Rules and access apply exactly as they would to a direct edit</b>: a rule that blocks the save blocks the step and shows its message, and nothing is written.','A step\'s writes are <b>all-or-nothing</b> — if one fails part-way, none are kept — and they <b>never repeat</b>: retrying a step, or resuming a run after the app closed mid-step, applies each write exactly once, so a record is never double-posted. A <b>check step</b> takes its pass or fail branch and shows the reason when it fails; a <b>required</b> step must be completed, while an <b>optional</b> step can be skipped with a recorded reason. The guided runner screen that shows all of this on one page follows next. See <a href="/help/process-lanes">Process Lanes</a>.']],
   ['v0.99.3','November 2026','Process Lanes wait for a person',['A Process Lane can now have a <b>form step</b> that waits for someone to do work (work package WP-0704) in the desktop app and Team Workspace. When a run reaches one, it pauses in <b>waiting for a person</b> — it holds nothing open in the background, so it survives closing and reopening the app and returns to the same step. The step is assigned to a <b>role</b>: whoever holds that role fills in its fields and completes it; anyone else sees the step and who it is waiting on but cannot complete it, and a field they may not read is not shown to them.','Everything a person enters is kept — in the run\'s own <b>run data</b> or written onto the record through the same checked path a direct edit uses. A required field must be filled, and a step\'s check (for example "the received date must be the expected date") must pass before the run moves on; until it does the step stays put, explains why, and writes nothing. Each step records how long it waited, so a run\'s history shows the time every step took. The guided runner screen that shows all of this on one page follows in the next work package. See <a href="/help/process-lanes">Process Lanes</a>.']],
@@ -26931,12 +27607,13 @@ docker exec lanesra cat /data/setup-token</code></pre><p>Paste that token into t
    blurb:'A guided, step-by-step process for one record — stages, steps and a runner screen that walks a person through the work, posting real writes at each step. Previewed on the warehouse demo with the Receive Shipment lane.',
    topics:[
     {slug:'process-lanes',title:'Process Lanes: a guided run for one record',
-     summary:'What a lane is, the runner screen that walks it, how to set one up step by step, how to walk the Receive Shipment lane on the warehouse demo, where a lane starts, and what it writes — plus what is still coming.',
-     wps:'WP-0702, WP-0703, WP-0704, WP-0705, WP-0706, WP-0707, WP-0712, WP-0715',
+     summary:'What a lane is, the runner screen that walks it, how to set one up step by step, the dry run and publish checks that prove a lane is safe to publish, how to walk the Receive Shipment lane on the warehouse demo, where a lane starts, and what it writes — plus what is still coming.',
+     wps:'WP-0702, WP-0703, WP-0704, WP-0705, WP-0706, WP-0707, WP-0712, WP-0714, WP-0715',
      sections:[
       {heading:'What a Process Lane is',bodyHtml:`<p>A <b>Process Lane</b> is a definition for one kind of work on one record: a set of <b>stages</b>, each holding <b>steps</b> in order. A <b>run</b> is one live execution of that definition for one record — the <b>anchor record</b> — and the <b>runner</b> is the one screen that walks a person through it: a stage bar across the top, the current stage's steps on the left, the current step's work in the middle, the anchor record and everything the run has written on the right, and an audit trail underneath. One lane has at most one active run per record; starting again on the same record reopens the run where it left off.</p><p>There are five kinds of step. A <b>form</b> step asks a person to enter values (a date, a quantity, a bin). A <b>record</b> step posts a governed write — a stock move, a status change — through the same Action Types a direct edit uses. A <b>check</b> step runs a rule on its own and follows the branch its result names. An <b>approval</b> step waits for a person to approve or reject. An <b>agent</b> step lets a named AI agent propose values or act, within that agent's own scope. A step that is not done yet is locked until the lane reaches it; a finished step can be reviewed with Back without changing the run.</p>`},
       {heading:'The runner screen',bodyHtml:`<p>The <b>runner</b> is the one screen a person works on (desktop app and Team Workspace, WP-0707): a <b>stage bar</b> across the top showing every stage — done stages ticked, the current one highlighted — the <b>step list</b> for the current stage on the left, the <b>current step's work</b> in the middle, and on the right a summary of the <b>anchor record</b> and of <b>what this run has written</b>, with the <b>audit trail</b> underneath. Every step shows its kind (form, record, check, approval, agent) and the role it waits on. A run is labelled by its record, lane and stage — for example "PO-2026-001 · Receive Shipment · stage 2 of 5" — so it is always clear where the run is.</p><p>Work the steps in order: fill in a form step and click <b>Complete step</b>; a record step names the writes it will post and completes with <b>Post and complete step</b>; a check step runs on its own and shows whether it passed or failed and why. <b>Back</b> reviews a finished step without changing the run, and <b>Back to current step</b> returns to the work in hand. An optional step can be skipped with a recorded reason. On a phone the same parts stack in the same order.</p><p>In this first cut a run that reaches an <b>approval</b> step — or a branch the runner does not draw yet — shows a plain <b>"continue in the approvals inbox"</b> state instead of the step's work: approvals are decided in the inbox, and the full approval and branch screens follow in the next work package. A run's history lives on its record too: <b>Object 360</b> lists every run on the record with its lane, stage, step and status, and each run's audit trail lists every advance and every write with who did it and when.</p>`},
-      {heading:'Set up a lane, step by step',bodyHtml:`<p>A lane is a definition, not a screen you fill in — there is no visual lane builder yet. To set one up:</p><ol><li><b>Describe the process or write the definition.</b> An Administrator can ask the <b>Admin Assistant</b> to draft a lane from a plain-language description — the draft is always a draft, never published — or write the lane definition as JSON against the <a href="https://github.com/vikram2409-eng/Lanesra-OS/blob/main/program/spec/schemas/process-lane.schema.json">lane schema</a>: a name, the object it runs on, ordered stages, and the steps in each stage, with each step's kind (form, record, check, approval, agent), the role that does it, and — for a record step — the Action Types it calls and, for a check step, the condition and its pass and fail branches.</li><li><b>Publish it.</b> A lane starts as a <b>Draft</b>; publishing freezes that version (a run keeps the version it started with, so publishing a new version never moves a running run). A lane whose hold or rejection branch has no way out cannot be published — the error names the step.</li><li><b>Start a run from a record.</b> Open any record the lane runs on and click <b>Start lane run</b> — or start from the record's row in its list. Starting again on the same record reopens the active run instead of starting a second one.</li><li><b>Walk the run in the runner.</b> The person holding the current step's role works each step in order; the runner shows what was written and the audit trail as it goes.</li><li><b>Check the record.</b> The record's <b>Object 360</b> view lists the run with its stage, step and status, and every advance and write with actor and time.</li></ol><p>To see it without setting anything up, walk the <b>Receive Shipment</b> lane on the <a href="/demo/warehouse">warehouse demo</a> — it is the same runner, the same wording, on sample data.</p>`},
+      {heading:'Set up a lane, step by step',bodyHtml:`<p>A lane is a definition, not a screen you fill in — there is no visual lane builder yet. To set one up:</p><ol><li><b>Describe the process or write the definition.</b> An Administrator can ask the <b>Admin Assistant</b> to draft a lane from a plain-language description — the draft is always a draft, never published — or write the lane definition as JSON against the <a href="https://github.com/vikram2409-eng/Lanesra-OS/blob/main/program/spec/schemas/process-lane.schema.json">lane schema</a>: a name, the object it runs on, ordered stages, and the steps in each stage, with each step's kind (form, record, check, approval, agent), the role that does it, and — for a record step — the Action Types it calls and, for a check step, the condition and its pass and fail branches.</li><li><b>Check it, then publish it.</b> A lane starts as a <b>Draft</b>; publishing freezes that version (a run keeps the version it started with, so publishing a new version never moves a running run). Before it publishes, the lane must pass its <b>publish checks</b> (P-01..P-16, on the blueprint page): shape and roles, branches that resolve and have a way out, every check declaring both outcomes, references that name declared fields, replaced workflows that exist, and Action Types that are adopted rather than provisional. A refusal names its check, its step and its reason — a lane whose hold or rejection branch has no way out cannot be published, and neither can a lane that names a provisional Action Type. Fix every refusal and publish again; there is no partial publish.</li><li><b>Start a run from a record.</b> Open any record the lane runs on and click <b>Start lane run</b> — or start from the record's row in its list. Starting again on the same record reopens the active run instead of starting a second one.</li><li><b>Walk the run in the runner.</b> The person holding the current step's role works each step in order; the runner shows what was written and the audit trail as it goes.</li><li><b>Check the record.</b> The record's <b>Object 360</b> view lists the run with its stage, step and status, and every advance and write with actor and time.</li></ol><p>To see it without setting anything up, walk the <b>Receive Shipment</b> lane on the <a href="/demo/warehouse">warehouse demo</a> — it is the same runner, the same wording, on sample data.</p>`},
+      {heading:'Dry run and publish checks',bodyHtml:`<p>Before a lane publishes, prove it on sample data. Both live on the lane's <b>blueprint page</b> — open any lane's blueprint from the warehouse demo dashboard or from a draft — never in the draft panel, which drafts and never publishes.</p><p><b>Dry run.</b> A dry run walks the lane against a <b>seed record</b> (PO-2026-001 for Receive Shipment, CC-2026-001 for Count) with the <b>fixture values</b> a person would type — carrier, delivery-note number, quantities per line — and shows the whole path: the start condition, each stage and step executed or skipped (and why), each check passed, failed or <b>unevaluated (needs fixture)</b> when a fixture it depends on was not supplied, the branches taken, every write it would post with its resolved inputs per line, and the outcome it would end with, compared with the <b>expected outcome</b> you name. It <b>writes nothing</b>: no StockMove, no status change, no run is started, and the seed record is unchanged. A line that would post a zero-quantity write is flagged — <b>would skip &lt;n&gt; children with nothing to post</b> — instead of posting it: the Count lane's two zero-variance lines on CC-2026-001 are the example. At an approval step the dry run takes the manager decision you pick (approve or reject) and follows that branch. A lane whose start condition is not met on the record reports <b>would refuse to start</b> instead of walking: every seeded reorder rule has <i>triggered: false</i>, so a Replenish dry run refuses to start.</p><p><b>Publish checks (P-01..P-16).</b> The blueprint page lists every check with its step, its status and its named reason. P-01..P-08 are the definition's shape (id, stages, roles, branches, writes, conditions, run-data fields); P-09 requires every check to declare both a pass and a fail outcome, every approval both approve and reject, every branch a way out, and every step a path to the end; P-10 warns when a check is not the last step of its stage, because the runner takes the next step in definition order on pass; P-11 refuses a reference to a run-data, record or child field that is not declared; P-12 refuses a provisional Action Type; P-13 refuses a <i>replaces</i> entry that names no real workflow action; P-14 warns when a run-data field is used as a type it is not; P-15 applies the reference rule to the start condition; P-16 requires a draft version to publish. A warning never blocks publish; a refusal does, and the report lists every refusal at once so they can all be fixed together.</p><p><b>The four warehouse lanes cannot publish yet.</b> The demo has no adopted Action Type catalog, so every warehouse Action Type is provisional and P-12 refuses each one by name. That is the correct outcome, shown on the blueprint page rather than hidden: the lanes run and dry-run on the demo, and they publish once their Action Types are adopted.</p><p><b>Where it lives.</b> The dry run and publish checks are on the blueprint page in the desktop app, Team Workspace and the online demo. The desktop and Team Workspace check against the workspace's own adopted Action Types and workflows; the demo checks against its own seed data and has no adopted catalog, so P-12 refuses there until the catalog exists.</p>`},
       {heading:'Try it: the Receive Shipment lane',bodyHtml:`<p>The warehouse demo ships one lane, <b>Receive Shipment</b>, for purchase orders. To walk it: open the <a href="/demo/warehouse">warehouse demo</a>, and on the dashboard card <b>Receiving — due today</b> click <b>Start receiving lane</b> on <b>PO-2026-001</b> (Kiln &amp; Clay Co., 40 × HG-1001 and 30 × HG-1002).</p><ol><li><b>Stage 1, Verify:</b> confirm the arrival (the received date must match the order's expected date — the lane blocks the step and says why if it does not), then match the delivery note line by line. The Receiving Agent suggests each line's quantity; confirm or change it.</li><li><b>Stage 2, Record receipt:</b> enter the received and rejected quantity for each line. Entering more received plus rejected than ordered blocks the step with the reason shown and writes nothing. The lane then checks the lines itself: fully received with nothing rejected passes; anything short or rejected fails and sends the run to the manager.</li><li><b>Stage 3, Stage &amp; put away:</b> pick a staging bin, post the receipt moves, confirm each line's put-away bin (the product's preferred bin is suggested), then post the put-away moves.</li><li><b>Stage 4, Confirm:</b> review the summary, then close the order. The lane sets the order to RECEIVED and notifies the Warehouse Manager.</li></ol><p>End state for PO-2026-001: status RECEIVED, stock on hand 88 for HG-1001 and 52 for HG-1002, and four new stock moves (two RECEIPT, two PUTAWAY). Every step's write is listed on the runner under <b>What this run has written</b>.</p>`},
       {heading:'The discrepancy branch — PO-2026-005',bodyHtml:`<p>The demo seeds a second run, already waiting for the manager: <b>PO-2026-005</b> arrived with 18 of 30 units received and 2 rejected as damaged, so the check step failed and the run is parked at the <b>review-discrepancy</b> step. Open it from the purchase order's own record page (<b>Open lane run</b>) or decide it from the dashboard's Approvals card.</p><p><b>Approving</b> posts the guarded write — the order stays PARTIALLY_RECEIVED — and the run continues to put-away. Only the put-away move posts for this order: the receipt move for the 18 good units (MV-2026-015) already posted before the run reached the manager. <b>Rejecting</b> posts nothing and moves the run to the hold step, which ends the run with the outcome <b>held</b>. A held run writes nothing further; the way out is a new run once the supplier or the manager resolves the discrepancy.</p>`},
       {heading:'Where to find a lane',bodyHtml:`<p>In the desktop app and Team Workspace, a lane starts from the record itself: open the record and click <b>Start lane run</b> in its header — or start from the record's row in its list. When a run is already active on that record the button reads <b>Open lane run</b> instead. In the warehouse demo a lane is reachable from four places: the dashboard's <b>Receiving — due today</b> card, the purchase order's record page (<b>Start receiving lane</b> or <b>Open lane run</b>), the Receiving Agent's row under <b>Admin → AI Agent Foundry → AI Agents</b> (<b>Receive Shipment lane</b>), and the record's <b>Object 360</b> view, which lists the run's stage, step, status and audit trail. A run can be <b>paused</b> and resumed at the same step; pausing changes nothing that is already written.</p>`},
