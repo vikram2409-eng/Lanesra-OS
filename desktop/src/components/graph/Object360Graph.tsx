@@ -231,11 +231,11 @@ export function buildRecordGraphModel(
   return { model: { nodes, edges }, targetByKey, legendKeyByNode, legend };
 }
 
-/** Inspector card overlays the canvas's right edge (290px wide at
- *  right:16 in styles.css): fit into the remaining width so pills never
- *  hide under it. Module-level so the inset identity stays stable and
- *  never retriggers a fit by itself. */
-const OBJECT360_FIT_INSET = { right: 322 } as const;
+/** Inspector pane overlays the canvas's right edge (340px wide; docked
+ * flush right, floating at right:16): fit into the remaining width so
+ * pills never hide under it. Module-level so the inset identity stays
+ * stable and never retriggers a fit by itself. */
+const OBJECT360_FIT_INSET = { right: 372 } as const;
 
 export interface Object360GraphProps {
   root: Object360RecordRef;
@@ -298,11 +298,11 @@ export const Object360Graph = memo(function Object360Graph(props: Object360Graph
   return (
     <div className={cn("object360-graph", className)} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       {/* Graph layers: legend chips double as toggle-filters (demo parity).
-          Right padding reserves the inspector card's strip (290px wide at
-          right:16) so no chip ever slides under the card and becomes
-          unclickable — the card overlays this column's top-right. */}
+          Right padding reserves the inspector pane's strip (340px wide)
+          so no chip ever slides under the pane and becomes
+          unclickable — the pane overlays this column's top-right. */}
       {built.legend.length > 0 && (
-        <div className="ontology-legend" role="group" aria-label="Graph layers" style={{ paddingRight: 322 }}>
+        <div className="ontology-legend" role="group" aria-label="Graph layers" style={{ paddingRight: 372 }}>
           {built.legend.map((l) => {
             const hidden = hiddenLegendKeys.has(l.key);
             const highlighted = hover.dimming && connectedLegendKeys.has(l.key);

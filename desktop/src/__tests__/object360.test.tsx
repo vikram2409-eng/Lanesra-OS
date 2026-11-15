@@ -195,6 +195,30 @@ describe("Object360Modal", () => {
     expect(onOpenRecord).toHaveBeenCalledWith("Contact", "c2");
   });
 
+  it("inspector is a docked right pane by default; dragging its header undocks it and Dock re-docks it", async () => {
+    const { container } = open();
+    await screen.findByText("Object 360 · BrightPath Logistics");
+    const card = container.querySelector(".ontology-inspector-card")!;
+    expect(card).toHaveClass("o360-docked");
+    expect(screen.queryByRole("button", { name: "Dock pane" })).toBeNull();
+
+    const head = container.querySelector(".ontology-inspector-head")!;
+    // A click without movement leaves it docked.
+    fireEvent.pointerDown(head, { pointerId: 1, clientX: 500, clientY: 100 });
+    fireEvent.pointerMove(head, { pointerId: 1, clientX: 502, clientY: 100 });
+    fireEvent.pointerUp(head, { pointerId: 1, clientX: 502, clientY: 100 });
+    expect(card).toHaveClass("o360-docked");
+
+    // A real drag undocks it into the floating card and shows Dock.
+    fireEvent.pointerDown(head, { pointerId: 1, clientX: 500, clientY: 100 });
+    fireEvent.pointerMove(head, { pointerId: 1, clientX: 420, clientY: 140 });
+    fireEvent.pointerUp(head, { pointerId: 1, clientX: 420, clientY: 140 });
+    expect(card).not.toHaveClass("o360-docked");
+    fireEvent.click(screen.getByRole("button", { name: "Dock pane" }));
+    expect(card).toHaveClass("o360-docked");
+    expect(screen.queryByRole("button", { name: "Dock pane" })).toBeNull();
+  });
+
   it("closes via the Close button and overlay click", async () => {
     const { container, onClose } = open();
     await screen.findByText("Object 360 · BrightPath Logistics");

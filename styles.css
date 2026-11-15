@@ -1505,9 +1505,11 @@ button.badge:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
 #depSimPicker .select{width:auto}
 
 /* Detail panel and the Object 360 inspector card ride on .card; keep
-   their panel metrics on top of the component chrome. */
+   their panel metrics on top of the component chrome. The O360 card is
+   340px so it fills its 372px grid column (16px right offset + 16px
+   breathing room to the map border) with no white strip. */
 .ontology-detail-panel.card{width:300px}
-#o360InspectorCard.card{width:290px}
+#o360InspectorCard.card{width:340px}
 
 
 /* ===== Modern UI PR-C/WorkerB TS-3 component overrides + TS-6 brand assets ===== */
@@ -1864,7 +1866,7 @@ html.app-mode{scroll-behavior:auto}
 .object-modal .modal-title h3{margin:0;font-size:18px;font-weight:700;letter-spacing:-.01em}
 .pivot-trail{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-top:7px;color:var(--muted-foreground);font-size:12px}
 .pivot-trail strong{color:var(--foreground)}
-.modal-grid{display:grid;grid-template-columns:minmax(390px,1.15fr) minmax(320px,.85fr);min-height:calc(100% - 66px)}
+.modal-grid{display:grid;grid-template-columns:minmax(0,1fr) 372px;min-height:calc(100% - 66px)}
 .mini-graph{min-width:0;min-height:0;position:relative;border-right:1px solid var(--border);background-color:color-mix(in srgb,var(--muted) 28%,transparent);background-image:radial-gradient(color-mix(in srgb,var(--muted-foreground) 18%,transparent) 1px,transparent 1px);background-size:18px 18px;overflow:hidden}
 .mini-graph .ontology-graph-canvas{position:relative}
 /* Object 360 fit + drag-pan: the canvas is a pan/zoom layer inside the
