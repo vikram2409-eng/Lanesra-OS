@@ -154,7 +154,7 @@ pub fn dry_run_process_lane(
         &workspace_id,
         &lane_key,
         &anchor_record_id,
-        fixtures,
+        &fixtures,
         expected_outcome.as_deref(),
         current_actor(&state).as_deref(),
     )
