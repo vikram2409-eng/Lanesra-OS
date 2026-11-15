@@ -3,7 +3,7 @@ id: WP-0707
 title: Lane runner, first cut: the straight path on desktop and Team Workspace
 phase: 7
 epic: E7.3 Runner and visibility
-status: in_review
+status: done
 owner: muse
 planned_for: claude
 depends_on: [WP-0704, WP-0705]

@@ -127,6 +127,10 @@ async fn lane_commands_work_over_http_the_same_as_on_desktop() {
     assert_eq!(imported["data"]["lane_key"], "lane-wh-receiving");
     assert_eq!(imported["data"]["versions"][0]["definition_json"], example);
 
+    // WP-0714 P-12: the demo Receiving lane's Action Types are not
+    // adopted, so publish refuses over HTTP exactly as on desktop - the
+    // error names the check. The check-only lane below still covers the
+    // publish-success path.
     let published = invoke(
         &client,
         addr,
@@ -134,9 +138,12 @@ async fn lane_commands_work_over_http_the_same_as_on_desktop() {
         json!({"laneKey": "lane-wh-receiving"}),
     )
     .await;
-    assert_eq!(published["data"]["status"], "published");
-    let graph_id = published["data"]["graph_id"].as_str().unwrap().to_string();
-    assert!(!graph_id.is_empty());
+    assert_eq!(published["ok"], false);
+    assert!(
+        published["error"].to_string().contains("P-12"),
+        "the publish refusal names P-12: {}",
+        published["error"]
+    );
 
     let listed = invoke(&client, addr, "list_process_lanes", json!({})).await;
     assert_eq!(listed["data"].as_array().unwrap().len(), 1);

@@ -104,14 +104,14 @@ use lanesra_core::services::{
     mapping_service, mcp_client_service, metric_service, numbering_service, ontology_service,
     opportunity_service, order_service, org_unit_service, organization_service, ownership_service,
     page_layout_service, page_template_service, policy_engine_service, process_lane_blueprint,
-    process_lane_service, product_service, publisher_service, quote_service, relationship_service,
-    report_service, run_policy_service, saved_view_service, screen_layout_service, search_service,
-    security_settings_service, semantic_mapping_service, solution_component_service,
-    solution_service, status_transition_service, system_graph_service, task_service,
-    test_eval_service, theme_service, tool_registry_service, user_service, vector_search_service,
-    voice_audit_service, voice_execution_service, voice_llm_service, voice_policy_service,
-    voice_provider_service, voice_session_service, webhook_service, work_team_service,
-    workflow_service, workspace_service,
+    process_lane_publish, process_lane_service, product_service, publisher_service, quote_service,
+    relationship_service, report_service, run_policy_service, saved_view_service,
+    screen_layout_service, search_service, security_settings_service, semantic_mapping_service,
+    solution_component_service, solution_service, status_transition_service, system_graph_service,
+    task_service, test_eval_service, theme_service, tool_registry_service, user_service,
+    vector_search_service, voice_audit_service, voice_execution_service, voice_llm_service,
+    voice_policy_service, voice_provider_service, voice_session_service, webhook_service,
+    work_team_service, workflow_service, workspace_service,
 };
 
 pub(crate) fn arg<T: DeserializeOwned>(args: &Value, key: &str) -> AppResult<T> {
@@ -3251,6 +3251,61 @@ pub fn dispatch(
                 conn,
                 &require_workspace_id(conn)?,
                 &lane_key,
+                actor,
+            )?)
+        }
+        // WP-0714 (REQ-LANE-021): the publish report, the dry run and the
+        // lane-case store - same service as the desktop commands, so both
+        // editions behave the same. Running a case is async and lives in
+        // `admin_actions.rs`, like starting a run.
+        "check_process_lane_publish" => {
+            let lane_key: String = arg(args, "laneKey")?;
+            to_value(process_lane_publish::check_publish(
+                conn,
+                &require_workspace_id(conn)?,
+                &lane_key,
+                actor,
+            )?)
+        }
+        "dry_run_process_lane" => {
+            let lane_key: String = arg(args, "laneKey")?;
+            let anchor_record_id: String = arg(args, "anchorRecordId")?;
+            let fixtures: process_lane_publish::DryRunFixtures = arg(args, "fixtures")?;
+            let expected_outcome: Option<String> = args
+                .get("expectedOutcome")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            to_value(process_lane_publish::dry_run_lane(
+                conn,
+                &require_workspace_id(conn)?,
+                &lane_key,
+                &anchor_record_id,
+                &fixtures,
+                expected_outcome.as_deref(),
+                actor,
+            )?)
+        }
+        "list_lane_cases" => {
+            let lane_key: String = arg(args, "laneKey")?;
+            let version: Option<i64> = args.get("version").and_then(|v| v.as_i64());
+            to_value(process_lane_publish::list_lane_cases(
+                conn,
+                &require_workspace_id(conn)?,
+                &lane_key,
+                version,
+                actor,
+            )?)
+        }
+        "store_lane_case" => {
+            let lane_key: String = arg(args, "laneKey")?;
+            let version: i64 = arg(args, "version")?;
+            let case_json: String = arg(args, "caseJson")?;
+            to_value(process_lane_publish::store_lane_case(
+                conn,
+                &require_workspace_id(conn)?,
+                &lane_key,
+                version,
+                &case_json,
                 actor,
             )?)
         }

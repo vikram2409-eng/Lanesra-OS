@@ -2519,3 +2519,22 @@ tr:hover td {
     grid-template-columns: 1fr;
   }
 }
+
+/* WP-0714: the blueprint page's publish-checks and dry-run sections sit
+   side by side on desktop and stack to one column on a phone, like the
+   lane runner layout above. */
+.lane-publish-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+  margin-top: 20px;
+}
+.lane-publish-layout .card {
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .lane-publish-layout {
+    grid-template-columns: 1fr;
+  }
+}

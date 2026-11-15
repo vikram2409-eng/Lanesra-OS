@@ -240,6 +240,11 @@ pub fn create_version(
 /// and flips the version to published with the graph's id. The graph's
 /// `source_id` is `{lane_id}@v{version}`, so runs started from now on use
 /// this version and runs already started keep theirs (WP-0703 AC-2).
+///
+/// WP-0714 (REQ-LANE-021, AC-2): the publish report runs first. Any REFUSE
+/// check refuses the publish with an error listing *every* failed check
+/// (id, step, reason) - no partial publish, and never just the first
+/// failure.
 pub fn publish_lane(
     conn: &Connection,
     workspace_id: &str,
@@ -247,6 +252,27 @@ pub fn publish_lane(
     actor_user_id: Option<&str>,
 ) -> AppResult<ProcessLaneVersion> {
     require_admin(conn, actor_user_id)?;
+    let report =
+        super::process_lane_publish::check_publish(conn, workspace_id, lane_key, actor_user_id)?;
+    if report.refused {
+        let failures: Vec<String> = report
+            .checks
+            .iter()
+            .filter(|c| c.status == "refuse")
+            .map(|c| {
+                format!(
+                    "{} step '{}': {}",
+                    c.id,
+                    c.step.as_deref().unwrap_or("-"),
+                    c.reason.as_deref().unwrap_or("")
+                )
+            })
+            .collect();
+        return Err(classified_validation(
+            "validation.arguments",
+            format!("lane '{lane_key}' cannot publish:\n{}", failures.join("\n")),
+        ));
+    }
     let lane = process_lane_repo::get_lane_by_key(conn, workspace_id, lane_key)?
         .ok_or_else(|| AppError::NotFound("Process lane".into()))?;
     let draft = process_lane_repo::latest_version(conn, &lane.id)?

@@ -17,14 +17,15 @@
 use serde_json::{json, Map, Value};
 
 use lanesra_core::models::access_role::AccessRoleInput;
+use lanesra_core::models::action_type::{ActionParameterSpec, ActionTypeDefinitionInput};
 use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
 use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
 use lanesra_core::models::custom_record::CustomRecordInput;
 use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::{
-    access_role_service, custom_field_service, custom_object_service, custom_record_service,
-    process_lane_service, user_service, workspace_service,
+    access_role_service, action_type_service, custom_field_service, custom_object_service,
+    custom_record_service, process_lane_service, user_service, workspace_service,
 };
 
 fn setup() -> (rusqlite::Connection, String, String) {
@@ -93,7 +94,7 @@ fn seed(conn: &rusqlite::Connection, ws: &str, admin: &str) -> String {
         Some(admin),
     )
     .unwrap();
-    custom_record_service::create(
+    let record = custom_record_service::create(
         conn,
         ws,
         &CustomRecordInput {
@@ -106,7 +107,29 @@ fn seed(conn: &rusqlite::Connection, ws: &str, admin: &str) -> String {
         Some(admin),
     )
     .unwrap()
-    .id
+    .id;
+    action_type_service::create(
+        conn,
+        ws,
+        &ActionTypeDefinitionInput {
+            name: "noop".into(),
+            description: String::new(),
+            target_object_type: "widget".into(),
+            required_capability: "update".into(),
+            parameters: vec![ActionParameterSpec {
+                key: "val".into(),
+                label: "Value".into(),
+                field_type: "text".into(),
+                required: false,
+                default_value: None,
+            }],
+            effect: "set_status".into(),
+            effect_config_json: serde_json::json!({"target_status": "Active"}).to_string(),
+        },
+        Some(admin),
+    )
+    .unwrap();
+    record
 }
 
 fn publish(conn: &rusqlite::Connection, ws: &str, admin: &str, id: &str, stages: Value) {
@@ -115,7 +138,11 @@ fn publish(conn: &rusqlite::Connection, ws: &str, admin: &str, id: &str, stages:
         "lane": {
             "id": id, "name": "Lane", "object_key": "widget",
             "version": 1, "status": "published",
-            "run_data": {"fields": []}, "stages": stages
+            // WP-0714 P-11: every $run_data reference must name a
+            // declared field. The one-active-run lane's form binds to
+            // run_data.n; the other lanes bind nothing, so the extra
+            // optional declaration is inert for them.
+            "run_data": {"fields": [{"key": "n", "type": "string", "required": false}]}, "stages": stages
         }
     });
     process_lane_service::import_lane_definition(conn, ws, &lane.to_string(), Some(admin)).unwrap();
@@ -134,7 +161,11 @@ fn try_publish(
         "lane": {
             "id": id, "name": "Lane", "object_key": "widget",
             "version": 1, "status": "published",
-            "run_data": {"fields": []}, "stages": stages
+            // WP-0714 P-11: every $run_data reference must name a
+            // declared field. The one-active-run lane's form binds to
+            // run_data.n; the other lanes bind nothing, so the extra
+            // optional declaration is inert for them.
+            "run_data": {"fields": [{"key": "n", "type": "string", "required": false}]}, "stages": stages
         }
     });
     process_lane_service::import_lane_definition(conn, ws, &lane.to_string(), Some(admin))
@@ -157,7 +188,7 @@ async fn an_approval_routes_the_run_along_its_declared_branch() {
             {"id": "decide", "name": "Decide", "steps": [{
                 "id": "decide", "name": "Decide", "kind": "approval", "role": "r",
                 "required": true,
-                "writes": [{"action_type": "noop", "inputs": {}}],
+                    "writes": [{"action_type": "noop", "inputs": {}}],
                 "branches": [
                     {"on": "approved", "target": {"stage": "post", "step": "approved-path"}},
                     {"on": "rejected", "target": {"stage": "post", "step": "rejected-path"}}
@@ -277,7 +308,8 @@ async fn one_active_run_per_lane_per_record_and_exclusions() {
     let b_lane = json!({
         "format_version": "1.0.0",
         "lane": {"id": "lane-b", "name": "B", "object_key": "widget", "version": 1,
-                 "status": "published", "run_data": {"fields": []},
+                 "status": "published",
+                 "run_data": {"fields": [{"key": "n", "type": "string", "required": false}]},
                  "excludes": ["lane-a"], "stages": one_form_stage()}
     });
     process_lane_service::import_lane_definition(&conn, &ws, &b_lane.to_string(), Some(&admin))

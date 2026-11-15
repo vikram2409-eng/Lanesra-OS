@@ -241,3 +241,68 @@ pub fn find_active_run_for_lane_record(
     )
     .optional()
 }
+
+// --- lane cases (WP-0714, migration 0097) ---------------------------------
+
+/// One stored lane case: the case JSON verbatim, with the lane version it
+/// tests. `LaneCaseRecord` lives in `services::process_lane_publish`, next
+/// to the runner that parses it; the repo only moves the row.
+pub fn upsert_case(
+    conn: &Connection,
+    id: &str,
+    lane_id: &str,
+    workspace_id: &str,
+    version: i64,
+    name: &str,
+    case_json: &str,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
+    let now = now_iso();
+    conn.execute(
+        "INSERT INTO process_lane_cases (id, lane_id, workspace_id, version, name, case_json, created_at, created_by, updated_at, updated_by)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?7, ?8)
+         ON CONFLICT(lane_id, version, name) DO UPDATE SET case_json = excluded.case_json, updated_at = excluded.updated_at, updated_by = excluded.updated_by",
+        (id, lane_id, workspace_id, version, name, case_json, now, actor_user_id),
+    )?;
+    Ok(())
+}
+
+pub fn list_cases_for_version(
+    conn: &Connection,
+    lane_id: &str,
+    version: i64,
+) -> rusqlite::Result<Vec<(String, String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, name, case_json FROM process_lane_cases WHERE lane_id = ?1 AND version = ?2 ORDER BY name",
+    )?;
+    let rows = stmt.query_map((lane_id, version), |r| {
+        Ok((r.get(0)?, r.get(1)?, r.get(2)?))
+    })?;
+    rows.collect()
+}
+
+pub fn list_cases_for_lane(
+    conn: &Connection,
+    lane_id: &str,
+) -> rusqlite::Result<Vec<(String, i64, String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, version, name, case_json FROM process_lane_cases WHERE lane_id = ?1 ORDER BY version, name",
+    )?;
+    let rows = stmt.query_map([lane_id], |r| {
+        Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+    })?;
+    rows.collect()
+}
+
+pub fn list_all_cases(
+    conn: &Connection,
+    workspace_id: &str,
+) -> rusqlite::Result<Vec<(String, String, i64, String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, lane_id, version, name, case_json FROM process_lane_cases WHERE workspace_id = ?1 ORDER BY lane_id, version, name",
+    )?;
+    let rows = stmt.query_map([workspace_id], |r| {
+        Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+    })?;
+    rows.collect()
+}

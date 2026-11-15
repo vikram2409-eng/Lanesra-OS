@@ -265,19 +265,67 @@ pub struct IndustryPackageManifest {
     pub ai_skills: Vec<ManifestAiSkill>,
     #[serde(default)]
     pub ai_agents: Vec<ManifestAiAgent>,
-    /// WP-0703 (Process Lanes): a lane's latest *published* definition,
-    /// verbatim. A lane with no published version exports nothing - a
-    /// draft is not portable. Import installs it as a new draft version
-    /// (a follow-up package); export is one-way in WP-0703.
+    /// WP-0703 (Process Lanes) as extended by WP-0714 (§5): every version
+    /// of the lane, each with its cases, plus the dependencies it
+    /// declares. A lane with no versions exports nothing - a lane that
+    /// exists only as a row with no version has nothing portable.
     #[serde(default)]
     pub process_lanes: Vec<ManifestProcessLane>,
 }
 
-/// WP-0703: a Process Lane in a Solution manifest - the lane's published
-/// definition file, parsed, so the manifest stays human-readable.
+/// WP-0714 (Process Lanes, Solution export §5): a lane exports with
+/// *all* its versions (not just the published one), each version carrying
+/// the cases that test it, and the dependencies it touches declared, not
+/// embedded. Import installs each version as a new draft version (never
+/// overwriting a published one) and runs the publish checks in report
+/// mode - see `industry_package_service::install_process_lanes`.
+///
+/// WP-0703 legacy shape: `{definition: <published definition file>}`
+/// only. It still parses (the `definition` field) and still imports (as
+/// one draft version). The manifest's own `format_version` stays 1 on
+/// purpose: `parse_manifest` rejects any other value, and the new shape
+/// is carried by optional fields, not a version bump.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManifestProcessLane {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane: Option<ManifestLaneExport>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dependencies: Option<ManifestLaneDependencies>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub definition: Option<serde_json::Value>,
+}
+
+/// One lane in a Solution manifest (WP-0714 §5).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestLaneExport {
+    pub id: String,
+    pub name: String,
+    pub object_key: String,
+    pub versions: Vec<ManifestLaneVersion>,
+}
+
+/// One version of an exported lane, with the cases that test it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManifestLaneVersion {
+    pub version: i64,
+    pub status: String,
     pub definition: serde_json::Value,
+    #[serde(default)]
+    pub cases: Vec<serde_json::Value>,
+}
+
+/// The objects, workflows and Action Types a lane touches, declared not
+/// embedded (WP-0714 §5). On import each is checked against the target
+/// workspace and reported, not silently skipped; a missing Action Type
+/// is a P-12 provisional.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ManifestLaneDependencies {
+    #[serde(default)]
+    pub objects: Vec<String>,
+    #[serde(default)]
+    pub workflows: Vec<String>,
+    #[serde(default)]
+    pub action_types: Vec<String>,
 }
 
 // --- Registry read models -------------------------------------------------

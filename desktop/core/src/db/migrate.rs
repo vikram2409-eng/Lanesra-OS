@@ -191,6 +191,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (94, include_str!("migrations/0094_ai_provider_is_local.sql")),
     (95, include_str!("migrations/0095_process_lanes.sql")),
     (96, include_str!("migrations/0096_run_write_ledger.sql")),
+    (97, include_str!("migrations/0097_process_lane_cases.sql")),
 ];
 
 /// The newest schema version this build knows about - used to reject
@@ -270,7 +271,7 @@ mod tests {
                 r.get(0)
             })
             .unwrap();
-        assert_eq!(version, 96);
+        assert_eq!(version, 97);
 
         let table_count: i64 = conn
             .query_row(

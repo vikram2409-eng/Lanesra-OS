@@ -174,7 +174,14 @@ fn publish_lane(conn: &rusqlite::Connection, ws: &str, admin: &str, stages: Valu
             "object_key": "widget",
             "version": 1,
             "status": "published",
-            "run_data": {"fields": []},
+            // WP-0714 P-11: every $run_data reference must name a
+            // declared field. `note` is the form lane's field; `carrier`
+            // is the all-or-nothing lane's second write, declared but
+            // never set in that run on purpose.
+            "run_data": {"fields": [
+                {"key": "note", "type": "string", "required": false},
+                {"key": "carrier", "type": "string", "required": false}
+            ]},
             "stages": stages
         }
     });
@@ -205,8 +212,13 @@ async fn several_writes_are_all_or_nothing() {
     let record = seed(&conn, &ws, &admin, "START");
     create_set_tracking_action(&conn, &ws, &admin);
 
-    // A record step with two writes: the first would set tracking, the second
-    // names an action that does not exist and fails. Neither must apply.
+    // A record step with two writes: the first would set tracking, the
+    // second names a declared run-data value the run never sets, so the
+    // runtime refuses to resolve it and the step fails. Neither must
+    // apply. (WP-0714 P-12 refuses an unadopted action at publish, so
+    // the old "not_a_real_action" second write can no longer carry this
+    // test - the failure mode moved from publish to runtime, the
+    // all-or-nothing assertion is unchanged.)
     let stages = json!([{
         "id": "post", "name": "Post",
         "steps": [{
@@ -214,7 +226,7 @@ async fn several_writes_are_all_or_nothing() {
             "required": true,
             "writes": [
                 set_tracking("CHANGED"),
-                {"action_type": "not_a_real_action", "inputs": {}}
+                set_tracking("$run_data.carrier")
             ]
         }]
     }]);
