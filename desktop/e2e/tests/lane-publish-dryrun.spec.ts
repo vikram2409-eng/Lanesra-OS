@@ -91,6 +91,10 @@ test('AC-5: a dry run walks Receiving on PO-2026-001 and writes nothing', async 
   await expect(result).toContainText('matches the expected outcome');
   await expect(result).toContainText('Discrepancy check');
   await expect(result).toContainText('passed');
+  // WP-0716: the dry run reports the child step (step 1.3) without starting
+  // a child — it walks on past it to the receipt.
+  await expect(result).toContainText('Verify the supplier');
+  await expect(result).toContainText('would start lane-wh-supplier-check on sup-01');
   await expect(result).toContainText('warehouse.post_stock_move');
   await expect(result).toContainText('RECEIPT');
   await expect(result).toContainText('PUTAWAY');
@@ -140,6 +144,26 @@ test('AC-5: a check with a missing fixture reports unevaluated', async ({ page }
   const result = page.locator('#laneDryRunResult');
   await expect(result).toContainText('unevaluated (needs fixture)');
   await expect(result).toContainText('qty_received');
+  await expect(result).toContainText('Nothing was written');
+});
+
+test('AC-5: the Supplier Check blueprint refuses P-12 and its dry run ends done', async ({ page }) => {
+  // Supplier Check is the child lane the Receiving lane hands the supplier
+  // check to (WP-0716 AC-5). It is not embedded in app.js: the blueprint
+  // page fetches its definition like Count and Replenish.
+  await openBlueprint(page, 'lane-wh-supplier-check');
+  await expect(page.locator('#view h2')).toHaveText('Supplier Check');
+  await expect(page.locator('#lanePublishChecks')).toContainText('Cannot publish');
+  await expect(page.locator('#lanePublishChecks')).toContainText('run_data.set');
+  await expect(page.locator('[data-dryrun-anchor]')).toHaveValue('sup-01');
+  await runDryRun(page);
+
+  const result = page.locator('#laneDryRunResult');
+  await expect(result).toContainText('Supplier is active');
+  await expect(result).toContainText('passed');
+  await expect(result).toContainText('run_data.set');
+  await expect(result).toContainText('ends with outcome done');
+  await expect(result).toContainText('matches the expected outcome');
   await expect(result).toContainText('Nothing was written');
 });
 
