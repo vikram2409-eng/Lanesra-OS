@@ -60,7 +60,17 @@ class LaneBlueprintInDemoTests(unittest.TestCase):
         self.assertEqual(lane["id"], "lane-wh-receiving")
         self.assertEqual(len(lane["stages"]), 5)
         steps = [step for stage in lane["stages"] for step in stage["steps"]]
-        self.assertEqual(len(steps), 12)
+        # 13 steps since WP-0716: step 1.3 verify-supplier is a child_lane
+        # form step (no fields) that starts the Supplier Check lane on the
+        # PO's supplier and waits for it.
+        self.assertEqual(len(steps), 13)
+        child_steps = [s for s in steps if "child_lane" in s]
+        self.assertEqual(len(child_steps), 1)
+        self.assertEqual(child_steps[0]["id"], "verify-supplier")
+        self.assertEqual(child_steps[0]["child_lane"]["lane_id"],
+                         "lane-wh-supplier-check")
+        self.assertEqual(child_steps[0]["child_lane"]["anchor_record"],
+                         "$record.supplier_id")
 
     # Covers: REQ-LANE-020 (WP-0712 AC-2) - the print button and the print
     # rules that leave only the blueprint on the sheet.
