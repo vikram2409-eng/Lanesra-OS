@@ -36,16 +36,19 @@ use crate::models::dashboard_layout::{
 };
 use crate::models::industry_package::{
     AppInstallRun, AppPackage, ImportPackageInput, IndustryPackageManifest, InstalledApp,
-    InstalledAppDetail, ManifestDashboardWidget, WorkspaceArtifact, WorkspaceDependency,
+    InstalledAppDetail, ManifestDashboardWidget, ManifestLaneDependencies, ManifestLaneExport,
+    ManifestLaneVersion, ManifestProcessLane, WorkspaceArtifact, WorkspaceDependency,
     INDUSTRY_PACKAGE_FORMAT_VERSION,
 };
+use crate::models::process_lane::LaneDefinitionFile;
 use crate::models::relationship::RelationshipDefinition;
 use crate::models::screen_layout::{LayoutTabs, ScreenLayoutInput, ScreenLayoutUpdate};
-use crate::repositories::{audit_repo, industry_package_repo};
+use crate::repositories::{audit_repo, industry_package_repo, process_lane_repo, workspace_repo};
 use crate::services::{
     app_service, business_rule_service, custom_field_service, custom_object_service,
     custom_record_service, custom_report_service, dashboard_layout_service, numbering_service,
-    relationship_service, screen_layout_service, workflow_service,
+    process_lane_publish, process_lane_service, relationship_service, screen_layout_service,
+    workflow_service,
 };
 
 fn require_admin(conn: &Connection, actor_user_id: Option<&str>) -> AppResult<()> {
@@ -700,23 +703,105 @@ fn build_export_manifest(
             // tab (solution_component_service::list_for_workspace), just
             // not part of the exported manifest.
             "process_lane" => {
-                // WP-0703: the lane's latest published definition, verbatim.
-                // A lane with no published version exports nothing.
+                // WP-0714 (§5): every version travels, each with the cases
+                // that test it, plus the dependencies the lane declares.
+                // A lane with no versions exports nothing.
                 if let Some(lane) =
                     crate::repositories::process_lane_repo::get_lane(conn, metadata_id)?
                 {
-                    if let Some(published) =
-                        crate::repositories::process_lane_repo::latest_published_version(
-                            conn, &lane.id,
-                        )?
-                    {
-                        if let Ok(definition) =
-                            serde_json::from_str::<serde_json::Value>(&published.definition_json)
-                        {
-                            process_lanes.push(
-                                crate::models::industry_package::ManifestProcessLane { definition },
-                            );
+                    let versions = process_lane_repo::list_versions(conn, &lane.id)?;
+                    if !versions.is_empty() {
+                        // The workspace being exported - the relationship
+                        // lookup below resolves repeat collections to
+                        // their child objects.
+                        let export_ws_id = workspace_repo::get_current(conn)?
+                            .map(|w| w.id)
+                            .unwrap_or_default();
+                        let mut exported_versions = Vec::new();
+                        let mut objects: Vec<String> = vec![lane.object_key.clone()];
+                        let mut workflows: Vec<String> = Vec::new();
+                        let mut action_types: Vec<String> = Vec::new();
+                        for version in &versions {
+                            let definition: serde_json::Value =
+                                serde_json::from_str(&version.definition_json)
+                                    .unwrap_or(serde_json::Value::Null);
+                            if let Ok(file) =
+                                serde_json::from_str::<LaneDefinitionFile>(&version.definition_json)
+                            {
+                                for stage in &file.lane.stages {
+                                    for step in &stage.steps {
+                                        if let Some(replaces) = &step.replaces {
+                                            for r in replaces {
+                                                if !workflows.contains(&r.workflow_id) {
+                                                    workflows.push(r.workflow_id.clone());
+                                                }
+                                            }
+                                        }
+                                        if let Some(writes) = &step.writes {
+                                            for write in writes {
+                                                if !action_types.contains(&write.action_type) {
+                                                    action_types.push(write.action_type.clone());
+                                                }
+                                            }
+                                        }
+                                        if let Some(repeat) = &step.repeat_over {
+                                            // The relationship that names
+                                            // the repeat collection, so
+                                            // the child object travels as
+                                            // a declared dependency.
+                                            for def in relationship_service::list(
+                                                conn,
+                                                &export_ws_id,
+                                                true,
+                                            )? {
+                                                if def.source_entity_type == lane.object_key
+                                                    && (def.key == repeat.field
+                                                        || def.forward_label == repeat.field)
+                                                    && !objects.contains(&def.target_entity_type)
+                                                {
+                                                    objects.push(def.target_entity_type.clone());
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            let cases: Vec<serde_json::Value> =
+                                process_lane_repo::list_cases_for_version(
+                                    conn,
+                                    &lane.id,
+                                    version.version,
+                                )?
+                                .into_iter()
+                                .map(|(_, _, case_json)| {
+                                    serde_json::from_str(&case_json)
+                                        .unwrap_or(serde_json::Value::Null)
+                                })
+                                .collect();
+                            exported_versions.push(ManifestLaneVersion {
+                                version: version.version,
+                                status: version.status.clone(),
+                                definition,
+                                cases,
+                            });
                         }
+                        objects.sort();
+                        workflows.sort();
+                        action_types.sort();
+                        process_lanes.push(ManifestProcessLane {
+                            lane: Some(ManifestLaneExport {
+                                id: lane.lane_key.clone(),
+                                name: lane.name.clone(),
+                                object_key: lane.object_key.clone(),
+                                versions: exported_versions,
+                            }),
+                            dependencies: Some(ManifestLaneDependencies {
+                                objects,
+                                workflows,
+                                action_types,
+                            }),
+                            definition: None,
+                        });
                     }
                 }
             }
@@ -1015,6 +1100,220 @@ fn resolve_workflow_action_relationship_refs(
 /// `app_definition_id` is known, at the very end - see the inline
 /// comments below for why `package_artifacts` rows are buffered in memory
 /// until then instead of inserted as each item is created.
+/// Installs the manifest's process lanes (WP-0714 §5): each exported
+/// version becomes a new draft version here, never overwriting a version
+/// that already exists (a published version is untouched by a re-import),
+/// with its cases stored against it, and the publish checks run in
+/// report mode over the imported definition. A missing object or
+/// workflow, or a missing Action Type (a P-12 provisional), is listed in
+/// that report, not a reason to refuse the import.
+///
+/// A version exported as `published` is stored as `draft`: it has no
+/// compiled graph in this workspace, and only a publish here compiles
+/// one. That can leave a lane with more than one draft version after an
+/// import (the service's one-draft-at-a-time rule governs authoring, not
+/// bulk import); `publish_lane` publishes the latest draft. The
+/// WP-0703 legacy shape (`{definition}` only) imports as a single draft
+/// version.
+pub fn install_process_lanes(
+    conn: &Connection,
+    workspace_id: &str,
+    manifest: &IndustryPackageManifest,
+    actor_user_id: Option<&str>,
+) -> AppResult<Vec<process_lane_publish::ProcessLaneImportEntry>> {
+    require_admin(conn, actor_user_id)?;
+    let mut entries: Vec<process_lane_publish::ProcessLaneImportEntry> = Vec::new();
+    for entry in &manifest.process_lanes {
+        // Normalise both manifest shapes into one list of versions to
+        // install: (version, exported status, definition JSON, case JSONs).
+        let normalized: Option<(
+            String,
+            String,
+            String,
+            Vec<(i64, String, String, Vec<String>)>,
+        )> = match (&entry.lane, &entry.definition) {
+            (Some(lane), _) => Some((
+                lane.id.clone(),
+                lane.name.clone(),
+                lane.object_key.clone(),
+                lane.versions
+                    .iter()
+                    .map(|v| {
+                        (
+                            v.version,
+                            v.status.clone(),
+                            v.definition.to_string(),
+                            v.cases.iter().map(|c| c.to_string()).collect(),
+                        )
+                    })
+                    .collect(),
+            )),
+            (None, Some(definition)) => {
+                match serde_json::from_value::<LaneDefinitionFile>(definition.clone()) {
+                    Ok(file) => Some((
+                        file.lane.id.clone(),
+                        file.lane.name.clone(),
+                        file.lane.object_key.clone(),
+                        vec![(
+                            file.lane.version,
+                            file.lane.status.clone(),
+                            definition.to_string(),
+                            Vec::new(),
+                        )],
+                    )),
+                    Err(e) => {
+                        let lane_key = definition
+                            .get("lane")
+                            .and_then(|l| l.get("id"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("?")
+                            .to_string();
+                        entries.push(process_lane_publish::ProcessLaneImportEntry {
+                            lane_key,
+                            version: 0,
+                            status: "skipped".to_string(),
+                            reason: format!("definition is not a lane definition file: {e}"),
+                            checks: Vec::new(),
+                        });
+                        None
+                    }
+                }
+            }
+            (None, None) => {
+                entries.push(process_lane_publish::ProcessLaneImportEntry {
+                    lane_key: "?".to_string(),
+                    version: 0,
+                    status: "skipped".to_string(),
+                    reason: "process_lanes entry has neither a lane nor a definition".to_string(),
+                    checks: Vec::new(),
+                });
+                None
+            }
+        };
+        let Some((lane_key, _name, _object_key, versions)) = normalized else {
+            continue;
+        };
+        for (version, exported_status, definition_json, cases) in versions {
+            let existing_lane = process_lane_repo::get_lane_by_key(conn, workspace_id, &lane_key)?;
+            let lane_id = match &existing_lane {
+                Some(lane) => {
+                    if let Some(existing) = process_lane_repo::get_version(conn, &lane.id, version)?
+                    {
+                        entries.push(process_lane_publish::ProcessLaneImportEntry {
+                            lane_key: lane_key.clone(),
+                            version,
+                            status: "skipped".to_string(),
+                            reason: format!(
+                                "version {version} already exists here as '{}' - it is untouched by this import",
+                                existing.status
+                            ),
+                            checks: Vec::new(),
+                        });
+                        continue;
+                    }
+                    lane.id.clone()
+                }
+                None => {
+                    match process_lane_service::import_lane_definition(
+                        conn,
+                        workspace_id,
+                        &definition_json,
+                        actor_user_id,
+                    ) {
+                        Ok(lane) => lane.id.clone(),
+                        Err(e) => {
+                            entries.push(process_lane_publish::ProcessLaneImportEntry {
+                                lane_key: lane_key.clone(),
+                                version,
+                                status: "skipped".to_string(),
+                                reason: format!("could not import the lane: {e}"),
+                                checks: Vec::new(),
+                            });
+                            continue;
+                        }
+                    }
+                }
+            };
+            // The lane exists now (just imported, or already here) and
+            // this version does not: store it as a new draft version,
+            // preserving the exported version number. The one-draft
+            // rule in `create_version` governs authoring, not bulk
+            // import - the repo insert is deliberate here.
+            if existing_lane.is_some() {
+                process_lane_repo::create_version(
+                    conn,
+                    &new_uuid(),
+                    &lane_id,
+                    workspace_id,
+                    version,
+                    "draft",
+                    &definition_json,
+                    actor_user_id,
+                )?;
+            }
+            let mut reason = if exported_status == "published" {
+                "imported as a new draft version (was published in the source workspace; publish it here to compile its graph)".to_string()
+            } else {
+                "imported as a new draft version".to_string()
+            };
+            for case_json in &cases {
+                let name = serde_json::from_str::<serde_json::Value>(case_json)
+                    .ok()
+                    .and_then(|v| v.get("case").and_then(|c| c.as_str()).map(String::from));
+                match name {
+                    Some(name) => {
+                        if let Err(e) = process_lane_repo::upsert_case(
+                            conn,
+                            &new_uuid(),
+                            &lane_id,
+                            workspace_id,
+                            version,
+                            &name,
+                            case_json,
+                            actor_user_id,
+                        ) {
+                            reason.push_str(&format!("; case '{name}' not stored: {e}"));
+                        }
+                    }
+                    None => {
+                        reason.push_str("; a case without a name was not stored");
+                    }
+                }
+            }
+            // Report mode: list every publish-check failure without
+            // refusing the import.
+            let checks = match serde_json::from_str::<LaneDefinitionFile>(&definition_json) {
+                Ok(file) => {
+                    process_lane_publish::check_publish_definition(
+                        conn,
+                        workspace_id,
+                        &file.lane,
+                        true,
+                        Some(version),
+                    )?
+                    .checks
+                }
+                Err(e) => {
+                    vec![process_lane_publish::PublishCheckEntry {
+                        id: "P-01".to_string(),
+                        step: None,
+                        status: "refuse".to_string(),
+                        reason: Some(format!("lane definition is not valid JSON: {e}")),
+                    }]
+                }
+            };
+            entries.push(process_lane_publish::ProcessLaneImportEntry {
+                lane_key: lane_key.clone(),
+                version,
+                status: "imported".to_string(),
+                reason,
+                checks,
+            });
+        }
+    }
+    Ok(entries)
+}
+
 fn run_install(
     conn: &Connection,
     workspace_id: &str,
@@ -1089,6 +1388,19 @@ fn run_install(
         let created =
             workflow_service::create_rule(conn, workspace_id, &resolved_input, actor_user_id)?;
         artifacts.push(("workflow_definition", created.id));
+    }
+
+    // WP-0714 (§5): process lanes - each exported version becomes a new
+    // draft version here, with its cases, and the publish checks run in
+    // report mode (failures listed, import not refused).
+    for lane_entry in install_process_lanes(conn, workspace_id, manifest, actor_user_id)? {
+        if lane_entry.status == "imported" {
+            if let Some(lane) =
+                process_lane_repo::get_lane_by_key(conn, workspace_id, &lane_entry.lane_key)?
+            {
+                artifacts.push(("process_lane", lane.id));
+            }
+        }
     }
 
     for layout in &manifest.screen_layouts {

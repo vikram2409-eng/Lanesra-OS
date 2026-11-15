@@ -115,6 +115,118 @@ pub fn publish_process_lane(
     )
 }
 
+/// WP-0714 (REQ-LANE-021 AC-2): the publish report for a lane - one entry
+/// per P-01..P-16 - with no side effects. The frontend renders the report
+/// before offering publish, and `publish_lane` itself refuses on any REFUSE
+/// entry.
+#[tauri::command]
+pub fn check_process_lane_publish(
+    state: State<AppState>,
+    lane_key: String,
+) -> AppResult<lanesra_core::services::process_lane_publish::PublishReport> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    lanesra_core::services::process_lane_publish::check_publish(
+        &conn,
+        &workspace_id,
+        &lane_key,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0714 (REQ-LANE-021 AC-1): walks the lane in definition order against
+/// the anchor record with the given fixtures and reports what would
+/// happen - stages visited, steps executed/skipped, checks passed/failed,
+/// branches taken, writes simulated, zero-quantity flags, unevaluated
+/// checks, end outcome vs expected. Posts nothing and changes nothing.
+#[tauri::command]
+pub fn dry_run_process_lane(
+    state: State<AppState>,
+    lane_key: String,
+    anchor_record_id: String,
+    fixtures: lanesra_core::services::process_lane_publish::DryRunFixtures,
+    expected_outcome: Option<String>,
+) -> AppResult<lanesra_core::services::process_lane_publish::DryRunReport> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    lanesra_core::services::process_lane_publish::dry_run_lane(
+        &conn,
+        &workspace_id,
+        &lane_key,
+        &anchor_record_id,
+        fixtures,
+        expected_outcome.as_deref(),
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0714 (REQ-LANE-021 §4): the cases stored against a lane (all
+/// versions, or one version).
+#[tauri::command]
+pub fn list_lane_cases(
+    state: State<AppState>,
+    lane_key: String,
+    version: Option<i64>,
+) -> AppResult<Vec<lanesra_core::services::process_lane_publish::LaneCaseRecord>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    lanesra_core::services::process_lane_publish::list_lane_cases(
+        &conn,
+        &workspace_id,
+        &lane_key,
+        version,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0714 (REQ-LANE-021 §4): stores a case (JSON) with the lane version
+/// it tests. The case names its lane and version; both must match.
+#[tauri::command]
+pub fn store_lane_case(
+    state: State<AppState>,
+    lane_key: String,
+    version: i64,
+    case_json: String,
+) -> AppResult<lanesra_core::services::process_lane_publish::LaneCaseRecord> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    lanesra_core::services::process_lane_publish::store_lane_case(
+        &conn,
+        &workspace_id,
+        &lane_key,
+        version,
+        &case_json,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0714 (REQ-LANE-021 §4): runs one lane case for real against the
+/// seeded workspace, in a savepoint that always rolls back - the case
+/// leaves no trace. Genuinely async, like starting a run.
+#[tauri::command]
+pub async fn run_lane_case(
+    state: State<'_, AppState>,
+    case_json: String,
+) -> AppResult<lanesra_core::services::process_lane_publish::LaneCaseResult> {
+    let master_key = crate::commands::resolve_master_key(&state)?;
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    run_with_own_connection(db_path, move |conn| async move {
+        lanesra_core::services::process_lane_publish::run_lane_case(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &case_json,
+            actor.as_deref(),
+        )
+        .await
+    })
+    .await
+}
+
 #[tauri::command]
 pub async fn start_process_lane_run(
     state: State<'_, AppState>,

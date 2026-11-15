@@ -110,6 +110,28 @@ fn seed(conn: &rusqlite::Connection, ws: &str, admin: &str) -> String {
     .id
 }
 
+/// Defines the `noop` Action Type on `widget`: a `set_status` to Active.
+/// Approval steps must declare writes, and WP-0714 P-12 requires every
+/// named write to be adopted - but the write never executes, because the
+/// compiler only compiles writes on record steps.
+fn create_noop_action(conn: &rusqlite::Connection, ws: &str, admin: &str) {
+    action_type_service::create(
+        conn,
+        ws,
+        &ActionTypeDefinitionInput {
+            name: "noop".into(),
+            description: String::new(),
+            target_object_type: "widget".into(),
+            required_capability: "update".into(),
+            parameters: vec![],
+            effect: "set_status".into(),
+            effect_config_json: json!({"target_status": "Active"}).to_string(),
+        },
+        Some(admin),
+    )
+    .unwrap();
+}
+
 /// Defines the `Set Tracking` Action Type on `widget`: a `set_fields` effect
 /// that writes its `val` parameter into the `tracking` field.
 fn create_set_tracking_action(conn: &rusqlite::Connection, ws: &str, admin: &str) {
@@ -367,6 +389,7 @@ async fn skipped_step_and_posted_write_show_in_the_run_view() {
 async fn run_waiting_on_an_approval_reports_its_inbox_state() {
     let (conn, ws, admin) = setup();
     let record = seed(&conn, &ws, &admin);
+    create_noop_action(&conn, &ws, &admin);
     let stages = json!([
         {"id": "decide", "name": "Decide", "steps": [{
             "id": "decide", "name": "Decide", "kind": "approval", "role": "r",

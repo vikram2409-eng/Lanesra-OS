@@ -4,12 +4,13 @@
 //!
 //! Untested locally - see CI (no Rust toolchain in this VM).
 
+use lanesra_core::models::action_type::ActionTypeDefinitionInput;
 use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
 use lanesra_core::models::custom_record::CustomRecordInput;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::{
-    custom_object_service, custom_record_service, execution_graph_service, process_lane_service,
-    workspace_service,
+    action_type_service, custom_object_service, custom_record_service, execution_graph_service,
+    process_lane_service, workspace_service,
 };
 
 fn setup_workspace() -> (rusqlite::Connection, String, String) {
@@ -72,19 +73,28 @@ fn published_lane_compiles_to_a_graph_that_passes_validate_for_publish() {
     assert_eq!(lane.versions[0].status, "draft");
     assert_eq!(lane.versions[0].definition_json, json);
 
-    let published =
-        process_lane_service::publish_lane(&conn, &ws, "lane-wh-receiving", Some(&admin)).unwrap();
-    assert_eq!(published.status, "published");
-    let graph_id = published
-        .graph_id
-        .clone()
-        .expect("publish compiles a graph");
-    let graph = execution_graph_service::get(&conn, &graph_id, &ws, Some(&admin)).unwrap();
+    // WP-0714 P-12 refuses the verbatim warehouse lane at publish (its
+    // Action Types are not adopted - a follow-up, not this WP), so this
+    // test proves the compile step directly: compile the imported
+    // definition and store the graph the way publish would.
+    let file =
+        lanesra_core::models::process_lane::parse_definition(&lane.versions[0].definition_json)
+            .unwrap();
+    let input = process_lane_service::compile_lane(&file.lane).unwrap();
+    let graph = execution_graph_service::create_from_source(
+        &conn,
+        &ws,
+        input,
+        "lane",
+        "lane-wh-receiving@v1",
+        Some(&admin),
+    )
+    .unwrap();
     assert_eq!(graph.source_kind.as_deref(), Some("lane"));
     assert_eq!(graph.source_id.as_deref(), Some("lane-wh-receiving@v1"));
 
-    // The publish itself already ran validate_for_publish (see
-    // `create_from_source`); run it again on the stored graph directly.
+    // `create_from_source` already ran validate_for_publish; run it again
+    // on the stored graph directly.
     execution_graph_service::validate_for_publish(&graph).unwrap();
 
     // 12 steps + 5 repeating steps wrapped in a loop node + trigger + end.
@@ -436,6 +446,24 @@ async fn start_lane_run_refuses_a_second_active_run_on_the_same_record() {
             status: "Active".into(),
             owner_user_id: None,
             notes: None,
+        },
+        Some(&admin),
+    )
+    .unwrap();
+    // WP-0714 P-12: the approval step's write must name an adopted
+    // Action Type. The write never executes (approval writes do not
+    // compile); the adoption is catalog bookkeeping.
+    action_type_service::create(
+        &conn,
+        &ws,
+        &ActionTypeDefinitionInput {
+            name: "purchase_order.set_status".into(),
+            description: String::new(),
+            target_object_type: "purchase_order".into(),
+            required_capability: "update".into(),
+            parameters: vec![],
+            effect: "set_status".into(),
+            effect_config_json: serde_json::json!({"target_status": "Active"}).to_string(),
         },
         Some(&admin),
     )
