@@ -22,9 +22,9 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 195 | 38 | 103 / 638 |
-| Team Workspace | 222 | 44 | 113 / 732 |
-| Online demo | 150 | 21 | 54 / 500 |
+| Desktop | 195 | 39 | 105 / 638 |
+| Team Workspace | 222 | 45 | 115 / 732 |
+| Online demo | 150 | 22 | 56 / 500 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -32,7 +32,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0714](work/P7/WP-0714-dry-run-publish-checks-test-framework-and-solution-export.md) | Dry run, publish checks, test framework and Solution export | in_progress | muse | `wp/WP-0714-dry-run-publish-checks` | https://github.com/vikram2409-eng/Lanesra-OS/pull/781 |
+| [WP-0714](work/P7/WP-0714-dry-run-publish-checks-test-framework-and-solution-export.md) | Dry run, publish checks, test framework and Solution export | in_review | muse | `wp/WP-0714-dry-run-publish-checks` | https://github.com/vikram2409-eng/Lanesra-OS/pull/781 |
 
 ## Ready to start (all dependencies done)
 
@@ -343,7 +343,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0711](work/P7/WP-0711-notes-attachments-and-reassign-at-any-point.md) | Notes, attachments and reassign at any point | E7.3 Runner and visibility | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0707 |
 | [WP-0712](work/P7/WP-0712-blueprint-view-and-export-of-a-lane.md) | Blueprint view and export of a lane | E7.5 Authoring | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0703 |
 | [WP-0713](work/P7/WP-0713-board-by-stage-my-steps-and-lane-timing.md) | Board by stage, "my steps" and lane timing | E7.3 Runner and visibility | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0707 |
-| [WP-0714](work/P7/WP-0714-dry-run-publish-checks-test-framework-and-solution-export.md) | Dry run, publish checks, test framework and Solution export | E7.5 Authoring | 🔨 in progress | M | ○Desktop ○Team Workspace ○Online demo | WP-0705, WP-0706 |
+| [WP-0714](work/P7/WP-0714-dry-run-publish-checks-test-framework-and-solution-export.md) | Dry run, publish checks, test framework and Solution export | E7.5 Authoring | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0705, WP-0706 |
 | [WP-0715](work/P7/WP-0715-describe-a-process-the-admin-assistant-drafts-a-lane.md) | Describe a process: the Admin Assistant drafts a lane | E7.5 Authoring | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0703, WP-0712 |
 | [WP-0716](work/P7/WP-0716-child-lanes.md) | Child lanes | E7.2 Steps and rules | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0706 |
 | [WP-0717](work/P7/WP-0717-three-more-warehouse-lanes-and-lane-templates.md) | Three more warehouse lanes and lane templates | E7.6 Shipped lanes | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0707, WP-0710 |
