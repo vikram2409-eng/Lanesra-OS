@@ -37,6 +37,13 @@ pub fn is_legal(from: &str, to: &str) -> bool {
             | "cancelled",
         ) => true,
         ("waiting_approval", "failed") => true,
+        // WP-0716 (ADR-0024 §6): a run at a child step parks in
+        // `waiting_child` while its child runs, and returns to
+        // `waiting_person` at the same step when the child ends, so the
+        // lane service can advance it past the step. The generic
+        // `(waiting, queued|cancelled)` arm below covers resume and cancel.
+        ("waiting_person", "waiting_child") => true,
+        ("waiting_child", "waiting_person") => true,
         (from, "queued" | "cancelled") => is_waiting_status(from),
         _ => false,
     }

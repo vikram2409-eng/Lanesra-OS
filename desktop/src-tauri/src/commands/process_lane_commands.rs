@@ -404,7 +404,9 @@ pub async fn cancel_process_lane_run(
     state: State<'_, AppState>,
     run_id: String,
     reason: String,
+    #[allow(non_snake_case)] cancelChild: bool,
 ) -> AppResult<GraphRun> {
+    let master_key = crate::commands::resolve_master_key(&state)?;
     let db_path = state.db_path.clone();
     let (workspace_id, actor) = {
         let conn = state.conn.lock().unwrap();
@@ -414,8 +416,10 @@ pub async fn cancel_process_lane_run(
         process_lane_service::cancel_lane_run(
             &conn,
             &workspace_id,
+            &master_key,
             &run_id,
             &reason,
+            cancelChild,
             actor.as_deref(),
         )
         .await

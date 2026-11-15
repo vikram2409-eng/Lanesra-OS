@@ -762,6 +762,22 @@ fn validate_step(
                 step.id
             )));
         }
+        // WP-0716 (ADR-0024 §9): a child-lane step compiles to the one
+        // pausing node the lane service can intercept - a `human_step`. So
+        // it must be a `form` step, and it carries no fields of its own
+        // (the person does not fill a form; the step waits on the child).
+        if step.kind != "form" {
+            return Err(validation_error(format!(
+                "step '{}' carries a child lane, so it must be a form step",
+                step.id
+            )));
+        }
+        if step.fields.as_ref().map(|f| !f.is_empty()).unwrap_or(false) {
+            return Err(validation_error(format!(
+                "child-lane step '{}' must have no fields - it waits on the child, it is not a form to fill",
+                step.id
+            )));
+        }
     }
     Ok(())
 }

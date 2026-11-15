@@ -424,8 +424,10 @@ async fn cancel_leaves_writes_and_records_it_in_the_audit_trail() {
     let cancelled = process_lane_service::cancel_lane_run(
         &conn,
         &ws,
+        &master_key(),
         &run.id,
         "no longer needed",
+        false,
         Some(&admin),
     )
     .await
