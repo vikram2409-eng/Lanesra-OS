@@ -118,13 +118,17 @@ function runnerLaneDefinition(objectKey: string) {
                 message: 'The record is not Active.',
                 condition: { field: '$record.status', operator: 'equals', value: 'Active' },
               },
-              // Only the pass branch is declared: a fail branch back to an
-              // earlier step compiles to an unbounded cycle, and
-              // `publish_lane` rejects it (the graph validator only allows
-              // cycles through a Loop node). An undeclared outcome falls
-              // through to the next step, so a failing check routes forward
-              // in this cut; a retry loop is WP-0720 territory.
-              branches: [{ on: 'pass', target: { stage: 'confirm', step: 'review-summary' } }],
+              // WP-0714 P-09: every check declares both outcomes. A fail
+              // branch back to an earlier step would compile to an
+              // unbounded cycle (the graph validator only allows cycles
+              // through a Loop node), so the fail branch ends the run
+              // instead; a retry loop is WP-0720 territory. An undeclared
+              // outcome falls through to the next step, so a failing check
+              // routes forward in this cut.
+              branches: [
+                { on: 'pass', target: { stage: 'confirm', step: 'review-summary' } },
+                { on: 'fail', end: { outcome: 'failed' } },
+              ],
             },
           ],
         },
@@ -329,9 +333,32 @@ test.beforeAll(async ({ request }) => {
     });
   }
 
+  // The noop Action Type the approval lane's decision step declares.
+  // WP-0714 P-12 requires every named write to be adopted; the write
+  // never executes (the compiler only compiles writes on record steps),
+  // so it is adopted as a set_status to Active, as the core runner test
+  // does (process_lane_runner.rs create_noop_action).
+  if (!(actionTypes as Array<{ name: string }>).some((a) => a.name === 'noop')) {
+    await invoke(request, 'create_action_type', {
+      input: {
+        name: 'noop',
+        description: '',
+        target_object_type: objectKey,
+        required_capability: 'update',
+        parameters: [],
+        effect: 'set_status',
+        effect_config_json: JSON.stringify({ target_status: 'Active' }),
+      },
+    });
+  }
+
   // Both lanes, published. Import/publish are retried idempotently: a lane
   // a previous run already imported just fails the import, and publishing
-  // an already-published lane is a no-op for the verify below.
+  // an already-published lane is a no-op for the verify below. One
+  // exception: a previous run that left an UNPUBLISHED draft (a publish
+  // rule changed since, e.g. WP-0714's P-09/P-12) cannot be repaired
+  // through the API — create_version refuses while a draft exists — so
+  // reset the data dir (rm -rf /tmp/e2e-data) and re-run in that case.
   for (const definition of [runnerLaneDefinition(objectKey), approvalLaneDefinition(objectKey)]) {
     await invokeOptional(request, 'import_process_lane', { definitionJson: JSON.stringify(definition) });
     await invokeOptional(request, 'publish_process_lane', { laneKey: definition.lane.id });

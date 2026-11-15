@@ -5026,3 +5026,123 @@ export interface LaneRunListItem {
   started_at: string;
   finished_at: string | null;
 }
+
+// WP-0714: publish checks and the dry run (REQ-LANE-021). Mirrors the
+// Rust shapes in core::services::process_lane_publish (PublishReport,
+// PublishCheckEntry, DryRunReport et al) - snake_case, as the API returns
+// them, verified against that file 2026-11-14. The `step` of a check is
+// the step id it belongs to, or null for lane-wide checks (P-01, P-08,
+// P-15, P-16); a `reason` is null on a passing check. A dry run writes
+// nothing - its `writes` are simulated only.
+export type PublishCheckStatus = "pass" | "refuse" | "warn";
+
+export interface PublishCheckResult {
+  id: string;
+  step: string | null;
+  status: PublishCheckStatus;
+  reason: string | null;
+}
+
+export interface PublishReport {
+  lane_key: string;
+  version: number | null;
+  refused: boolean;
+  checks: PublishCheckResult[];
+}
+
+/** One published version of a lane, as `publish_lane` returns it. */
+export interface ProcessLaneVersion {
+  id: string;
+  lane_id: string;
+  workspace_id: string;
+  version: number;
+  status: string;
+  definition_json: string;
+  graph_id: string | null;
+  created_at: string;
+  created_by: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+/**
+ * What the author supplies for a dry run: the values a person would
+ * type (run-data fields), per-child values keyed by child record id
+ * then field name (`per_child[child_id][field]`), and the approval
+ * decisions by step id (`"approved"` | `"rejected"`).
+ */
+export interface DryRunFixtures {
+  run_data: Record<string, unknown>;
+  per_child?: Record<string, Record<string, unknown>>;
+  approvals?: Record<string, "approved" | "rejected">;
+  form_values?: Record<string, Record<string, unknown>>;
+}
+
+export interface DryRunStepResult {
+  stage_id: string;
+  step_id: string;
+  kind: string;
+  outcome: "executed" | "skipped";
+  reason: string | null;
+}
+
+export interface DryRunCheckChildResult {
+  child_id: string;
+  outcome: string;
+  reason: string | null;
+}
+
+export interface DryRunCheckResult {
+  step_id: string;
+  outcome: "passed" | "failed" | "unevaluated";
+  reason: string | null;
+  per_child?: DryRunCheckChildResult[];
+}
+
+export interface DryRunBranchTaken {
+  step_id: string;
+  on: string;
+  /** The branch target: `"stage/step"`, or `"end:<outcome>"`. */
+  target: string;
+}
+
+export interface DryRunWrite {
+  step_id: string;
+  child_id: string | null;
+  action_type: string;
+  inputs: Record<string, unknown>;
+  zero_quantity: boolean;
+}
+
+export interface DryRunZeroQuantityFlag {
+  step_id: string;
+  action_type: string;
+  skipped_children: number;
+  message: string;
+}
+
+export interface DryRunUnevaluatedCheck {
+  step_id: string;
+  reason: string;
+}
+
+export interface DryRunReport {
+  lane_key: string;
+  lane_version: number;
+  anchor_object_key: string;
+  anchor_record_id: string;
+  would_start: boolean;
+  refusal_reason: string | null;
+  stages_visited: string[];
+  steps: DryRunStepResult[];
+  checks: DryRunCheckResult[];
+  branches_taken: DryRunBranchTaken[];
+  writes: DryRunWrite[];
+  zero_quantity_flags: DryRunZeroQuantityFlag[];
+  unevaluated: DryRunUnevaluatedCheck[];
+  end_outcome: string | null;
+  expected_outcome: string | null;
+  matches_expected: boolean;
+  completed: boolean;
+  stopped_reason: string | null;
+}

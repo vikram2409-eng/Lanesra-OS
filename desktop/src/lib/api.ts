@@ -50,6 +50,10 @@ import type {
   LaneBlueprintSummary,
   LaneRunListItem,
   LaneRunView,
+  PublishReport,
+  ProcessLaneVersion,
+  DryRunFixtures,
+  DryRunReport,
   SystemNodeType,
   SystemNode,
   SystemGraphHit,
@@ -518,6 +522,25 @@ export const api = {
   // the same blueprint an Administrator does; it carries no record data).
   listLaneBlueprints: () => call<LaneBlueprintSummary[]>("list_lane_blueprints", {}),
   getLaneBlueprint: (laneKey: string) => call<LaneBlueprint>("get_lane_blueprint", { laneKey }),
+
+  // WP-0714: publish checks and the dry run (REQ-LANE-021). All three are
+  // sync `call`s - the publish check and the dry run only read and
+  // simulate, and publishing is the existing sync WP-0703 command - so
+  // they go through the generic `/api/invoke/<command>` dispatcher on
+  // Team Workspace, mirroring the Tauri commands 1:1. The command names
+  // and shapes are the WP-0714 API contract (Progress log, 2026-11-14);
+  // `check_process_lane_publish` and `dry_run_process_lane` are the new
+  // commands the Rust piece builds in parallel, and the coordinator
+  // verifies the live wiring at assembly.
+  checkLanePublish: (laneKey: string) => call<PublishReport>("check_process_lane_publish", { laneKey }),
+  publishLane: (laneKey: string) => call<ProcessLaneVersion>("publish_process_lane", { laneKey }),
+  dryRunLane: (laneKey: string, anchorRecordId: string, fixtures: DryRunFixtures, expectedOutcome?: string) =>
+    call<DryRunReport>("dry_run_process_lane", {
+      laneKey,
+      anchorRecordId,
+      fixtures,
+      expectedOutcome: expectedOutcome ?? null,
+    }),
 
   // WP-0707: the lane runner (REQ-LANE-014, REQ-LANE-015). `getLaneRunView`
   // and `listLaneRunsForRecord` are sync `call`s; starting, submitting and
