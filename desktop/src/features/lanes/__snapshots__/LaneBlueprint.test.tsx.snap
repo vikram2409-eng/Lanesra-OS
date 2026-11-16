@@ -26,7 +26,7 @@ exports[`LaneBlueprintView > matches the Receive Shipment blueprint snapshot 1`]
     </span>
   </div>
   <p>
-    Receive a shipment for one purchase order: verify the delivery, record what arrived, stage and put away the stock, and close the order. One run per purchase order. The discrepancy branch sends a short or damaged receipt to the Warehouse Manager for review. This is the Receive Shipment lane from Part B of the Process Lane spec, with the ADR-0023 changes applied: entered values are stored in run data (steps 1.1 and 1.2), record steps call governed Action Types, the hold branch has a declared exit (record the hold, end with outcome held), the workflow actions it replaces are declared (wf-wh-01 on step 4.2, wf-wh-07 on step 2B.1), and the per-line steps repeat over the order lines. The spec's hybrid 'form + record' steps are split (ADR-0024 section 3): 3.1 assigns the staging bin and 3.2 posts the receipt moves; 3.3 confirms the put-away bins and 3.4 posts the put-away moves. Action Type ids are provisional until WP-0705 adopts them (ADR-0024 section 14).
+    Receive a shipment for one purchase order: verify the delivery, record what arrived, stage and put away the stock, and close the order. One run per purchase order. The discrepancy branch sends a short or damaged receipt to the Warehouse Manager for review.
   </p>
   <p
     style="color: var(--text-muted);"
@@ -156,7 +156,7 @@ exports[`LaneBlueprintView > matches the Receive Shipment blueprint snapshot 1`]
       <p
         style="margin: 8px 0px 0px;"
       >
-        Confirm the truck and delivery: carrier, delivery-note number, received date. The values are stored in run data (ADR-0023 change 1); the spec's step 1.1 wrote them nowhere.
+        Confirm the truck and delivery: carrier, delivery-note number, received date.
       </p>
       <table
         style="margin-top: 8px;"
@@ -294,6 +294,43 @@ exports[`LaneBlueprintView > matches the Receive Shipment blueprint snapshot 1`]
           </tr>
         </tbody>
       </table>
+    </div>
+    <div
+      class="card"
+      style="margin-bottom: 12px;"
+    >
+      <div
+        style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
+      >
+        <span
+          class="badge"
+        >
+          Form
+        </span>
+        <strong>
+          Verify the supplier
+        </strong>
+        <span
+          style="color: var(--text-muted);"
+        >
+          · 
+          role_wh_receiver
+        </span>
+      </div>
+      <p
+        style="margin: 8px 0px 0px;"
+      >
+        Hand the supplier check to the Supplier Check lane: it runs on this PO's supplier (Kiln & Clay Co.) and the run waits until it finishes. The parent records the outcome and carries on.
+      </p>
+      <p
+        style="margin: 8px 0px 0px; color: var(--text-muted);"
+      >
+        Starts lane 
+        lane-wh-supplier-check
+         on 
+        $record.supplier_id
+        .
+      </p>
     </div>
   </section>
   <section
@@ -579,7 +616,7 @@ exports[`LaneBlueprintView > matches the Receive Shipment blueprint snapshot 1`]
       <p
         style="margin: 8px 0px 0px;"
       >
-        Record why the receipt is held. Completing this step ends the run with the named outcome held (ADR-0023 change 6: the spec's hold branch ended in ON_HOLD with no exit). Put-away never happens for the disputed lines. Resuming the receipt is a new run on the same PO.
+        Record why the receipt is held. Completing this step ends the run as held. Put-away never happens for the disputed lines. Resuming the receipt is a new run on the same PO.
       </p>
       <table
         style="margin-top: 8px;"

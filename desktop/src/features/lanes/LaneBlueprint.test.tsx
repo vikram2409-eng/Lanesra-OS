@@ -46,10 +46,11 @@ describe("LaneBlueprintView", () => {
     for (const name of ["Verify", "Record receipt", "Hold & review", "Stage & put away", "Confirm"]) {
       expect(container.textContent).toContain(name);
     }
-    // All twelve steps.
+    // All thirteen steps.
     for (const name of [
       "Confirm shipment arrived",
       "Match lines to the delivery note",
+      "Verify the supplier",
       "Enter received quantities",
       "Discrepancy check",
       "Review discrepancy",
