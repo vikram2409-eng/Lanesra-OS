@@ -1,7 +1,12 @@
 # Schema-extension proposal — RAID Q-33..Q-36
 
-**Status: Proposed, for the owner to accept.** Written 2026-11-14 on the
-ADR-0025 prep track (Claude's instruction, ferried by the owner).
+**Status: Q-33, Q-34 and Q-35 accepted by the owner 2026-11-15 (see below).**
+Written 2026-11-14 on the ADR-0025 prep track (Claude's instruction, ferried
+by the owner). Q-33, Q-34 and Q-35 were accepted 2026-11-15 23:11 EST, via the
+owner's approval of the fix-all-17 plan for the builder-gaps fix batch, and
+their schema shapes plus builder controls land in that batch; runtime
+enforcement is still the named follow-up (WP-0710 for Q-33/Q-34, the resolve
+follow-up for Q-35).
 
 This document proposes the schema shape for each of the four gaps raised
 as RAID questions in WP-0719 (Count and Replenish lanes as definitions).
@@ -104,6 +109,12 @@ to use it. The builder (WP-0718) gains the per-item assignment editor:
 it shows the child field picker and, for the seed record, which item
 goes to whom.
 
+**Accepted 2026-11-15 by the owner** (fix-all-17 plan approval, 23:11 EST),
+for the builder-gaps fix batch. The schema change and the builder control
+(assignment picker) land in that batch; runtime enforcement stays with
+WP-0710, and the builder says so where the field appears — the runner
+honors `assign` only once WP-0710 lands.
+
 ## Q-34 — Skip children with nothing to post
 
 **Question (RAID Q-34).** When a repeating record step posts for every
@@ -165,6 +176,12 @@ the skip recording) and the Count lane is updated to use it. The
 builder (WP-0718) gains the filter editor on a repeating record step
 and warns when a repeating record step has no filter — it will post
 for every child, including the ones with nothing to post.
+
+**Accepted 2026-11-15 by the owner** (fix-all-17 plan approval, 23:11 EST),
+for the builder-gaps fix batch. The schema change and the builder control
+(skip-condition builder) land in that batch; runtime enforcement stays with
+WP-0710, and the builder says so where the field appears — the runner
+honors `skip_when` only once WP-0710 lands.
 
 ## Q-35 — A product → supplier reference / lookup
 
@@ -244,6 +261,11 @@ merged without it (PR #775) — so this is a follow-up, not inside WP-0705.
 The builder (WP-0718) gains the related-record picker: pick a supplier
 from the product, instead of typing an id.
 
+**Accepted 2026-11-15 by the owner** (fix-all-17 plan approval, 23:11 EST),
+for the builder-gaps fix batch. The schema change and the builder control
+("resolve from latest record") land in that batch; runtime support for
+`resolve` is a follow-up — the builder says so where the field appears.
+
 ## Q-36 — Add a Counter role, or keep reusing Picker?
 
 **Question (RAID Q-36).** There is no Counter role (`role_wh_counter`)
@@ -289,9 +311,9 @@ change.
 
 | Item | Accepted by | Implemented by | Lane updated |
 |---|---|---|---|
-| Q-33 `repeat_over.assign` | Owner | WP-0710 (schema + runtime) | Count — count step assigns per item |
-| Q-34 `skip_when` | Owner | WP-0710 (schema + runtime) | Count — post-adjustments skips zero-variance lines |
-| Q-35 `resolve` (lookup) | Owner | Follow-up to WP-0705 (schema + resolution) | Replenish — supplier resolves from the latest PO |
+| Q-33 `repeat_over.assign` | Owner — accepted 2026-11-15 (builder-gaps fix batch) | Schema + builder controls in the builder-gaps fix batch; runtime in WP-0710 | Count — count step assigns per item |
+| Q-34 `skip_when` | Owner — accepted 2026-11-15 (builder-gaps fix batch) | Schema + builder controls in the builder-gaps fix batch; runtime in WP-0710 | Count — post-adjustments skips zero-variance lines |
+| Q-35 `resolve` (lookup) | Owner — accepted 2026-11-15 (builder-gaps fix batch) | Schema + builder control in the builder-gaps fix batch; resolution at step time is a follow-up to WP-0705 | Replenish — supplier resolves from the latest PO |
 | Q-36 `role_wh_counter` | Owner | Role-model / seed change (no WP) | Count — count step role becomes Counter |
 
 Each RAID item closes when its row is accepted **and** implemented
@@ -299,3 +321,8 @@ Each RAID item closes when its row is accepted **and** implemented
 seed change). Acceptance alone does not close the item — it authorises
 the implementation. Until then, the four lanes keep their current
 defaults, and the definitions stay as they are.
+
+Q-33, Q-34 and Q-35 were accepted 2026-11-15 and their schema shapes plus
+builder controls land in the builder-gaps fix batch; the lanes keep their
+current defaults until the runtime work lands (WP-0710 for Q-33/Q-34, the
+resolve follow-up for Q-35).

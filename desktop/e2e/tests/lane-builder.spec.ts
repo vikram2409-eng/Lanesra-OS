@@ -150,6 +150,7 @@ async function invokeOptional(request: APIRequestContext, command: string, args:
 }
 
 let objectKey = 'widget';
+let widgetRecordId = '';
 
 test.beforeAll(async ({ request }) => {
   const workspace = await invoke(request, 'workspace_status');
@@ -246,6 +247,17 @@ test.beforeAll(async ({ request }) => {
   const lanes = await invoke(request, 'list_process_lanes', {});
   const lane = (lanes as Array<{ lane_key: string }>).find((l) => l.lane_key === BUILDER_LANE_KEY);
   if (!lane) throw new Error(`lane ${BUILDER_LANE_KEY} was not imported by seeding`);
+
+  // The anchor record for the from-scratch dry run below.
+  const records = await invoke(request, 'list_custom_records', { objectKey });
+  const existingRecord = (records as Array<{ id: string; primary_name: string }>).find(
+    (r) => r.primary_name === 'Widget builder one',
+  );
+  widgetRecordId = existingRecord
+    ? existingRecord.id
+    : ((await invoke(request, 'create_custom_record', {
+        input: { object_key: objectKey, primary_name: 'Widget builder one', status: 'Active', owner_user_id: null, notes: null },
+      })) as { id: string }).id;
 });
 
 async function loginAsAdmin(page: Page) {
@@ -352,4 +364,135 @@ test('New lane starts from a blank definition', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'New lane' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Canvas' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Stage 1: Stage 1/ })).toBeVisible();
+});
+
+test('gaps batch: from-scratch lane end to end — object, five kinds, nested condition, branch, run-data write, fixtures, save, reload, publish', { timeout: 120_000 }, async ({ page }) => {
+  await loginAsAdmin(page);
+  await page.getByRole('button', { name: 'Process Lanes' }).click();
+  await expect(page.getByRole('heading', { name: 'Process Lanes' })).toBeVisible();
+  await page.getByRole('button', { name: 'New lane', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'New lane' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Canvas' })).toBeVisible();
+
+  const laneName = `Builder From Scratch ${Date.now().toString(36)}`;
+
+  // Gap 6: the blank lane gets its object from the picker.
+  await page.getByLabel('Lane object').selectOption(objectKey);
+  await page.getByLabel('Lane name').fill(laneName);
+
+  // Gap 1: declare the run-data field the write will use.
+  await page.getByLabel('New run-data field key').fill('carrier');
+  await page.getByRole('button', { name: 'Add run-data field' }).click();
+  await expect(page.getByRole('table', { name: 'Run-data plumbing' })).toContainText('carrier');
+
+  async function addStep(name: string, kind: string) {
+    await page.getByRole('button', { name: 'Add step' }).click();
+    await page.getByRole('button', { name: /New step/ }).last().click();
+    await page.getByLabel('Step name').fill(name);
+    await page.getByLabel('Kind').selectOption(kind);
+    // P-03: every non-check step needs a role (the seed lane uses 'r').
+    // The role control is a picker when the workspace has roles, else
+    // the free-text fallback.
+    if (kind !== 'check') {
+      const roleField = page.getByLabel('Role');
+      if (await roleField.evaluate((el) => el.tagName === 'SELECT')) {
+        await roleField.selectOption({ index: 1 });
+      } else {
+        await roleField.fill('r');
+      }
+    }
+  }
+
+  // All five kinds, in one stage: form → record → check → agent → approval.
+  await addStep('Enter details', 'form');
+  await addStep('Post tracking', 'record');
+  await addStep('Tracking check', 'check');
+  await addStep('Agent step', 'agent');
+  await addStep('Approve it', 'approval');
+
+  // The form step: a field bound to the declared run-data field.
+  await page.getByRole('button', { name: /Step 1 of 5.*Enter details/ }).click();
+  await page.getByRole('button', { name: 'Add field' }).click();
+  await page.getByLabel('Field 1 key').fill('carrier');
+  await page.getByLabel('Field 1 label').fill('Carrier');
+
+  async function addSetTrackingWrite(value: string) {
+    await page.getByRole('button', { name: 'Add write' }).click();
+    await page.getByLabel('Write 1 action type').selectOption('Set Tracking');
+    await page.getByRole('button', { name: '+ Input' }).click();
+    await page.getByLabel('Write 1 input name').fill('val');
+    // Role-qualified: getByLabel('Write 1 input val') also matches the
+    // "Remove write 1 input val" button (substring match).
+    await page.getByRole('textbox', { name: 'Write 1 input val' }).fill(value);
+  }
+
+  // The record step: a write that uses the run-data field.
+  await page.getByRole('button', { name: /Step 2 of 5.*Post tracking/ }).click();
+  await addSetTrackingWrite('$run_data.carrier');
+
+  // The check step: a nested any/all condition (root group + nested
+  // group), then both branches.
+  await page.getByRole('button', { name: /Step 3 of 5.*Tracking check/ }).click();
+  await page.getByLabel('Message').fill('The record is not Active.');
+  await page.getByRole('button', { name: 'Remove condition' }).click();
+  await page.getByRole('button', { name: 'Add condition group' }).click();
+  await page.getByRole('button', { name: 'Add condition' }).click();
+  await page.getByLabel('Condition field').first().fill('$record.status');
+  await page.getByLabel('Condition value').first().fill('Active');
+  await page.getByRole('button', { name: 'Add group' }).click();
+  await page.getByRole('button', { name: 'Add condition' }).last().click();
+  await page.getByLabel('Condition field').last().fill('$run_data.carrier');
+  await page.getByLabel('Condition value').last().fill('FastFreight');
+  await page.getByRole('button', { name: 'Add pass branch' }).click();
+  await page.getByRole('button', { name: 'Add fail branch' }).click();
+  await page.getByLabel('Branch fail target').selectOption('end:held');
+
+  // The agent step declares no write: only record and approval steps
+  // may declare writes (P-05 refuses a write on any other kind).
+  // The approval step: a write, and both branches (approved ends done).
+  await page.getByRole('button', { name: /Step 5 of 5.*Approve it/ }).click();
+  await addSetTrackingWrite('ok');
+  await page.getByRole('button', { name: 'Add approved branch' }).click();
+  await page.getByLabel('Branch approved target').selectOption('end:done');
+  await page.getByRole('button', { name: 'Add rejected branch' }).click();
+
+  // Live checks go green (a new lane has no key yet, so Publish stays
+  // disabled with the save-first message until the save below).
+  const checks = page.getByRole('list', { name: 'Builder publish checks' });
+  await expect(checks).not.toContainText('refuse', { timeout: 10000 });
+  const publish = page.getByRole('button', { name: 'Publish', exact: true });
+  await expect(publish).toBeDisabled();
+  await expect(publish).toHaveAttribute('title', /Save the lane first/);
+
+  // Gap 10: dry run with fixtures against the real anchor record.
+  await page.getByLabel('Anchor record').selectOption(widgetRecordId);
+  await page.getByLabel('Fixture Enter details Carrier').fill('FastFreight');
+  await page.getByLabel('Fixture run-data carrier').fill('FastFreight');
+  await page.getByRole('button', { name: 'Run dry run' }).click();
+  await expect(page.getByText(/End outcome: done/)).toBeVisible({ timeout: 10000 });
+
+  // Gap 5: save adopts the lane key — Publish stays enabled at once.
+  await page.getByRole('button', { name: 'Save lane', exact: true }).click();
+  await expect(page.getByText(/Saved as version/)).toBeVisible();
+  await expect(publish).toBeEnabled();
+
+  // Round-trip: leave the builder, reopen the saved lane from the list.
+  // The builder stays mounted until "Close builder" dismisses it — the
+  // nav alone does not.
+  await page.getByRole('button', { name: 'Close builder', exact: true }).click();
+  await page.getByRole('button', { name: 'Process Lanes' }).click();
+  await expect(page.getByRole('heading', { name: 'Process Lanes' })).toBeVisible();
+  await page.locator('tr', { hasText: laneName }).click();
+  await expect(page.getByRole('heading', { name: laneName })).toBeVisible();
+  await page.getByRole('button', { name: 'Open in builder', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Canvas' })).toBeVisible();
+  for (const name of ['Enter details', 'Post tracking', 'Tracking check', 'Agent step', 'Approve it']) {
+    await expect(page.getByRole('button', { name: new RegExp(name) }).first()).toBeVisible();
+  }
+
+  // Publish the reloaded lane.
+  const publishAgain = page.getByRole('button', { name: 'Publish', exact: true });
+  await expect(publishAgain).toBeEnabled({ timeout: 10000 });
+  await publishAgain.click();
+  await expect(page.getByText(/Published version/)).toBeVisible({ timeout: 10000 });
 });

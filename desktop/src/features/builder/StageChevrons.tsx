@@ -16,12 +16,14 @@ export function StageChevrons({
   onSelectStage,
   onMoveStage,
   onAddStage,
+  onDeleteStage,
 }: {
   stages: LaneStage[];
   selectedStageId: string | null;
   onSelectStage: (stageId: string) => void;
   onMoveStage: (stageId: string, direction: -1 | 1) => void;
   onAddStage: () => void;
+  onDeleteStage?: (stageId: string) => void;
 }) {
   return (
     <div>
@@ -64,6 +66,16 @@ export function StageChevrons({
             >
               ›
             </button>
+            {onDeleteStage && (
+              <button
+                type="button"
+                className="btn"
+                aria-label={`Delete stage ${stage.name}`}
+                onClick={() => onDeleteStage(stage.id)}
+              >
+                Delete stage
+              </button>
+            )}
           </li>
         ))}
       </ol>

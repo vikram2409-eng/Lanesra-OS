@@ -673,3 +673,123 @@ fn import_refuses_a_lane_id_without_the_lane_prefix() {
     });
     assert!(process_lane_service::import_lane_definition(&conn, &ws, &json, Some(&admin)).is_err());
 }
+
+// --------------------------------------------------------------------------
+// Builder gaps fix: Q-33/Q-34/Q-35 shapes + gap 6 (object-less) + gap 7
+// (self-loop). Covers: REQ-LANE-024 (WP-0718 AC-2)
+// --------------------------------------------------------------------------
+
+/// Covers: REQ-LANE-024 (WP-0718 AC-2)
+#[test]
+fn import_refuses_a_self_loop_branch() {
+    let (conn, ws, admin) = setup_workspace();
+    let json = mutated_example(|v| {
+        // The discrepancy check's fail branch points at itself.
+        v["lane"]["stages"][1]["steps"][1]["branches"][1]["target"] =
+            serde_json::json!({"stage": "record-receipt", "step": "discrepancy-check"});
+    });
+    let err = process_lane_service::import_lane_definition(&conn, &ws, &json, Some(&admin))
+        .expect_err("a self-loop branch must refuse");
+    assert!(
+        err.to_string().contains("targets the step itself"),
+        "the refusal names the self-loop: {err}"
+    );
+}
+
+/// Covers: REQ-LANE-024 (WP-0718 AC-2)
+#[test]
+fn import_refuses_a_lane_with_no_object() {
+    let (conn, ws, admin) = setup_workspace();
+    let json = mutated_example(|v| {
+        v["lane"]["object_key"] = serde_json::json!("");
+    });
+    let err = process_lane_service::import_lane_definition(&conn, &ws, &json, Some(&admin))
+        .expect_err("an object-less lane must refuse");
+    assert!(
+        err.to_string().contains("a lane must name its object"),
+        "the refusal names the missing object: {err}"
+    );
+}
+
+/// Covers: REQ-LANE-024 (WP-0718 AC-2)
+#[test]
+fn import_refuses_skip_when_on_a_non_repeating_step() {
+    let (conn, ws, admin) = setup_workspace();
+    let json = mutated_example(|v| {
+        // Confirm-arrival is a plain form step: no repeat_over.
+        v["lane"]["stages"][0]["steps"][0]["skip_when"] = serde_json::json!({
+            "field": "$item.qty_received", "operator": "greater_than", "value": 0
+        });
+    });
+    let err = process_lane_service::import_lane_definition(&conn, &ws, &json, Some(&admin))
+        .expect_err("skip_when on a non-repeating step must refuse");
+    assert!(
+        err.to_string().contains("skip_when"),
+        "the refusal names skip_when: {err}"
+    );
+}
+
+/// Covers: REQ-LANE-024 (WP-0718 AC-2)
+#[test]
+fn import_refuses_child_field_assignment_without_a_field() {
+    let (conn, ws, admin) = setup_workspace();
+    let json = mutated_example(|v| {
+        // Match-delivery-note repeats over lines; assign by child_field
+        // with no field naming the assignee.
+        v["lane"]["stages"][0]["steps"][1]["repeat_over"]["assign"] =
+            serde_json::json!({"by": "child_field"});
+    });
+    let err = process_lane_service::import_lane_definition(&conn, &ws, &json, Some(&admin))
+        .expect_err("child_field assignment without a field must refuse");
+    assert!(
+        err.to_string().contains("needs a field"),
+        "the refusal names the missing field: {err}"
+    );
+}
+
+/// Covers: REQ-LANE-024 (WP-0718 AC-2)
+#[test]
+fn import_refuses_a_resolve_kind_other_than_latest_record() {
+    let (conn, ws, admin) = setup_workspace();
+    let json = mutated_example(|v| {
+        v["lane"]["stages"][0]["steps"][0]["fields"][0]["resolve"] = serde_json::json!({
+            "kind": "first_match", "object": "purchase_order", "field": "supplier_id"
+        });
+    });
+    let err = process_lane_service::import_lane_definition(&conn, &ws, &json, Some(&admin))
+        .expect_err("a non-latest_record resolve kind must refuse");
+    assert!(
+        err.to_string().contains("must be 'latest_record'"),
+        "the refusal names the only v1 kind: {err}"
+    );
+}
+
+/// Covers: REQ-LANE-024 (WP-0718 AC-2)
+#[test]
+fn import_accepts_the_q33_q34_q35_shapes_together() {
+    let (conn, ws, admin) = setup_workspace();
+    let json = mutated_example(|v| {
+        // Q-33: per-item assignment on the repeating match step.
+        v["lane"]["stages"][0]["steps"][1]["repeat_over"]["assign"] =
+            serde_json::json!({"by": "child_field", "field": "counted_by"});
+        // Q-34: skip filter on the repeating post-receipt-moves step.
+        v["lane"]["stages"][3]["steps"][1]["skip_when"] = serde_json::json!({
+            "field": "$item.qty_received", "operator": "greater_than", "value": 0
+        });
+        // Q-35: supplier resolve on the carrier field.
+        v["lane"]["stages"][0]["steps"][0]["fields"][0]["resolve"] = serde_json::json!({
+            "kind": "latest_record", "object": "purchase_order",
+            "where": {"product_id": "$record.id"},
+            "order_by": "order_date", "direction": "desc", "take": 1,
+            "field": "supplier_id"
+        });
+    });
+    let lane =
+        process_lane_service::import_lane_definition(&conn, &ws, &json, Some(&admin)).unwrap();
+    assert_eq!(lane.lane_key, "lane-wh-receiving");
+    // The stored definition is the file's bytes, new fields included.
+    let stored = &lane.versions[0].definition_json;
+    assert!(stored.contains("counted_by"), "assign survives import");
+    assert!(stored.contains("skip_when"), "skip_when survives import");
+    assert!(stored.contains("latest_record"), "resolve survives import");
+}

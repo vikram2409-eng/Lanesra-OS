@@ -265,15 +265,21 @@ test('AC-5: Replenish previews the draft PO and states the reject behaviour', as
   await expect(perLane).toContainText('nothing is submitted');
 });
 
-test('AC-5: New lane starts blank and its publish button explains the demo cannot publish', async ({ page }) => {
+test('AC-5: New lane starts blank and its publish button is disabled until it has content', async ({ page }) => {
   await page.goto(`${BASE}/demo/warehouse`);
   await page.click('[data-lane-builder-new]');
   await expect(page.locator('#laneBuilder')).toBeVisible();
   await expect(page.locator('#view h2')).toHaveText('New lane');
   await expect(page.locator('.lb-step-card')).toHaveCount(1);
-  // A blank lane with no writes passes every REFUSE check, so publish is
-  // enabled — but publishing from the demo is a no-op that says so.
+  // A blank lane passes every REFUSE check, but Publish is disabled —
+  // enabled-then-no-op was the old behaviour (gap 13 cosmetic fix).
   const publish = page.locator('#laneBuilderPublish');
+  await expect(publish).toBeDisabled();
+  await expect(publish).toContainText('blank lane');
+  // Adding a field makes the lane non-blank: Publish enables, and the
+  // click still says the demo cannot publish.
+  await page.click('.lb-step-card[data-lb-step="work/first-step"]');
+  await page.click('[data-lb-ff-add="work/first-step"]');
   await expect(publish).toBeEnabled();
   await page.click('#laneBuilderPublish');
   await expect(page.locator('#laneBuilderPublishNote')).toContainText('demo cannot publish');
@@ -286,4 +292,211 @@ test('AC-5: the blueprint page opens the same lane in the builder', async ({ pag
   await page.click('[data-lane-builder="lane-wh-receiving"]');
   await expect(page.locator('#laneBuilder')).toBeVisible();
   await expect(page.locator('.lb-step-card')).toHaveCount(13);
+});
+
+test('Covers: REQ-LANE-024 (WP-0718 AC-5): Add step / Add stage grow a new lane', async ({ page }) => {
+  await page.goto(`${BASE}/demo/warehouse`);
+  await page.click('[data-lane-builder-new]');
+  await expect(page.locator('.lb-step-card')).toHaveCount(1);
+  await page.click('[data-lb-step-add="work"]');
+  await expect(page.locator('.lb-step-card')).toHaveCount(2);
+  await page.click('[data-lb-stage-add]');
+  await expect(page.locator('.lb-step-card')).toHaveCount(3);
+  await expect(page.locator('.lb-stage-chevron')).toHaveCount(2);
+  const exported = await exportDef(page);
+  expect(exported.lane.stages).toHaveLength(2);
+  expect(exported.lane.stages[0].steps).toHaveLength(2);
+  expect(exported.lane.stages[1].steps).toHaveLength(1);
+  expect(exported.lane.stages[1].steps[0].id).toBe('new-step-2');
+});
+
+test('Covers: REQ-LANE-024 (WP-0718 AC-5): deleting a step removes the branches that pointed at it and says so', async ({ page }) => {
+  page.on('dialog', (d) => d.accept());
+  await openBuilder(page, 'lane-wh-receiving');
+  await expect(page.locator('.lb-step-card')).toHaveCount(13);
+  // assign-staging-bin is the target of two branches (discrepancy-check
+  // pass, review-discrepancy approved).
+  await page.click('[data-lb-step-delete="stage-put-away/assign-staging-bin"]');
+  await expect(page.locator('.lb-step-card')).toHaveCount(12);
+  await expect(page.locator('.lb-delete-note')).toContainText('Also removed 2 branch(es)');
+  const exported = await exportDef(page);
+  const allBranches = exported.lane.stages.flatMap((s: any) => s.steps.flatMap((st: any) => st.branches || []));
+  expect(allBranches.some((b: any) => b.target && b.target.step === 'assign-staging-bin')).toBe(false);
+});
+
+test('Covers: REQ-LANE-024 (WP-0718 AC-5): deleting a stage removes it and its steps', async ({ page }) => {
+  page.on('dialog', (d) => d.accept());
+  await openBuilder(page, 'lane-wh-count');
+  await expect(page.locator('.lb-step-card')).toHaveCount(7);
+  await page.click('[data-lb-stage-delete="hold-review"]');
+  await expect(page.locator('.lb-step-card')).toHaveCount(5);
+  await expect(page.locator('.lb-delete-note')).toContainText("Removed stage 'Hold & review' and its 2 steps");
+  const exported = await exportDef(page);
+  expect(exported.lane.stages.map((s: any) => s.id)).not.toContain('hold-review');
+});
+
+test('Covers: REQ-LANE-024 (WP-0718 AC-5): the run-data editor declares a field and refuses a duplicate key', async ({ page }) => {
+  await page.goto(`${BASE}/demo/warehouse`);
+  await page.click('[data-lane-builder-new]');
+  await expect(page.locator('#laneBuilder')).toContainText('No run-data fields declared yet');
+  await page.fill('#lbRunDataKey', 'carrier');
+  await page.selectOption('#lbRunDataType', 'string');
+  await page.check('#lbRunDataRequired');
+  await page.click('[data-lb-rundata-add]');
+  await expect(page.locator('.lb-plumbing')).toContainText('carrier');
+  let exported = await exportDef(page);
+  expect(exported.lane.run_data.fields).toEqual([{ key: 'carrier', type: 'string', required: true }]);
+  // A duplicate key is refused inline and adds nothing.
+  await page.fill('#lbRunDataKey', 'carrier');
+  await page.click('[data-lb-rundata-add]');
+  await expect(page.locator('#laneBuilder')).toContainText('already declared');
+  exported = await exportDef(page);
+  expect(exported.lane.run_data.fields).toHaveLength(1);
+});
+
+test('Covers: REQ-LANE-024 (WP-0718 AC-5): Receiving shows no wall of missing-object refusals and no "not evaluated" flood', async ({ page }) => {
+  await openBuilder(page, 'lane-wh-receiving');
+  const checks = page.locator('#lanePublishChecks');
+  // P-11 and P-13 pass: the warehouse objects and workflows exist in the seed.
+  await expect(checks.locator('tbody tr', { hasText: 'P-11' })).toContainText('Pass');
+  await expect(checks.locator('tbody tr', { hasText: 'P-13' })).toContainText('Pass');
+  await expect(checks).not.toContainText('not evaluated');
+  // P-09 reasons are labelled by half.
+  await expect(checks).toContainText('reachability + outcome coverage');
+});
+
+test('Covers: REQ-LANE-024 (WP-0718 AC-5): a branch target list excludes its own step', async ({ page }) => {
+  await openBuilder(page, 'lane-wh-receiving');
+  await page.click('.lb-step-card[data-lb-step="record-receipt/discrepancy-check"]');
+  const panel = page.locator('#laneBuilderPanel');
+  await expect(panel.locator('option[value="record-receipt/discrepancy-check"]')).toHaveCount(0);
+  // End outcomes now include done and rejected as well as held.
+  await expect(panel.locator('option[value="end:done"]')).toHaveCount(2);
+  await expect(panel.locator('option[value="end:rejected"]')).toHaveCount(2);
+});
+
+test('Covers: REQ-LANE-024 (WP-0718 AC-5): Add missing branch defaults to the next step, else ends held', async ({ page }) => {
+  await page.goto(`${BASE}/demo/warehouse`);
+  await page.click('[data-lane-builder-new]');
+  await page.click('[data-lb-step-add="work"]');
+  // The first step becomes a check; its pass branch targets the next step.
+  await page.click('.lb-step-card[data-lb-step="work/first-step"]');
+  await page.selectOption('[data-lb-field="kind"]', 'check');
+  await page.click('[data-lb-branch-add="work/first-step"]');
+  let exported = await exportDef(page);
+  expect(exported.lane.stages[0].steps[0].branches[0]).toEqual({ on: 'pass', target: { stage: 'work', step: 'new-step' } });
+  // The last step has no next step: its branch ends the run held.
+  await page.click('.lb-step-card[data-lb-step="work/new-step"]');
+  await page.selectOption('[data-lb-field="kind"]', 'check');
+  await page.click('[data-lb-branch-add="work/new-step"]');
+  exported = await exportDef(page);
+  expect(exported.lane.stages[0].steps[1].branches[0]).toEqual({ on: 'pass', end: { outcome: 'held' } });
+});
+
+test('Covers: REQ-LANE-024 (WP-0718 AC-5): Count assignment and skip filter write through; the per-line table stays a read-only preview', async ({ page }) => {
+  await openBuilder(page, 'lane-wh-count');
+  const perLane = page.locator('#laneBuilderPerLane');
+  // The per-line table has no inputs: counted values are dry-run fixtures.
+  await expect(perLane.locator('table input')).toHaveCount(0);
+  await expect(perLane).toContainText('Read-only preview');
+  await expect(perLane).toContainText('dry-run fixtures');
+  // Assignment: a child field on the repeating form step.
+  await perLane.locator('[data-lb-count-assign-by]').selectOption('child_field');
+  await perLane.locator('[data-lb-count-assign-field]').fill('counted_by');
+  await page.keyboard.press('Tab');
+  // Skip: zero-variance lines on the repeating record step.
+  await page.click('[data-lb-count-skip-add]');
+  await perLane.locator('[data-lb-count-skip-field]').fill('$item.variance');
+  await page.keyboard.press('Tab');
+  await perLane.locator('[data-lb-count-skip-operator]').selectOption('equals');
+  await perLane.locator('[data-lb-count-skip-value]').fill('0');
+  await page.keyboard.press('Tab');
+  const exported = await exportDef(page);
+  const steps = exported.lane.stages.flatMap((s: any) => s.steps);
+  expect(steps.find((st: any) => st.id === 'count-lines').repeat_over.assign).toEqual({ by: 'child_field', field: 'counted_by' });
+  expect(steps.find((st: any) => st.id === 'post-count-adjustments').skip_when).toEqual({ field: '$item.variance', operator: 'equals', value: 0 });
+  await expect(perLane).toContainText('Skips lines where $item.variance equals 0');
+  await expect(perLane).not.toContainText('has no filter');
+  await expect(perLane).toContainText('WP-0710');
+});
+
+test('Covers: REQ-LANE-024 (WP-0718 AC-5): the Replenish supplier select lists suppliers, not reorder rules', async ({ page }) => {
+  await openBuilder(page, 'lane-wh-replenish');
+  const picker = page.locator('[data-lb-supplier-pick]');
+  await expect(picker).toHaveValue('sup-01');
+  const options = await picker.locator('option').allTextContents();
+  expect(options).toContain('Kiln & Clay Co. (sup-01)');
+  expect(options).toContain('Northern Linen Mills (sup-02)');
+  // The dry-run anchor is a different control: it lists reorder rules.
+  await expect(page.locator('[data-dryrun-anchor]')).toHaveValue('rr-01');
+  await picker.selectOption('sup-02');
+  await expect(page.locator('#laneBuilderPerLane')).toContainText('Northern Linen Mills');
+  // The pick also sets the supplier dry-run fixture.
+  await expect(page.locator('[data-dryrun-fixture="supplier_id"]')).toHaveValue('sup-02');
+});
+
+test('Covers: REQ-LANE-024 (WP-0718 AC-5): the replaces editor writes through to the export', async ({ page }) => {
+  await openBuilder(page, 'lane-wh-replenish');
+  await page.click('.lb-step-card[data-lb-step="approve/approve-draft-po"]');
+  const panel = page.locator('#laneBuilderPanel');
+  await expect(panel).toContainText('Replaces');
+  await expect(panel.locator('[data-lb-replaces-wf]')).toHaveValue('wf-wh-02');
+  await panel.locator('[data-lb-replaces-wf]').selectOption('wf-wh-03');
+  let exported = await exportDef(page);
+  let step = exported.lane.stages.flatMap((s: any) => s.steps).find((st: any) => st.id === 'approve-draft-po');
+  expect(step.replaces).toEqual([{ workflow_id: 'wf-wh-03', action_index: 0 }]);
+  // Add a replaces entry to a step that has none.
+  await page.click('.lb-step-card[data-lb-step="review/confirm-rule"]');
+  await page.click('[data-lb-replaces-add="review/confirm-rule"]');
+  exported = await exportDef(page);
+  step = exported.lane.stages.flatMap((s: any) => s.steps).find((st: any) => st.id === 'confirm-rule');
+  expect(step.replaces).toEqual([{ workflow_id: 'wf-wh-01', action_index: 0 }]);
+});
+
+test('Covers: REQ-LANE-024 (WP-0718 AC-5): the resolve control writes a latest-record lookup onto the supplier field', async ({ page }) => {
+  await openBuilder(page, 'lane-wh-replenish');
+  await page.click('.lb-step-card[data-lb-step="review/confirm-rule"]');
+  const panel = page.locator('#laneBuilderPanel');
+  await page.click('[data-lb-resolve-add="review/confirm-rule|1"]');
+  await expect(panel).toContainText('Resolve from latest record');
+  await expect(panel).toContainText('Runtime support for resolve is a follow-up');
+  const exported = await exportDef(page);
+  const step = exported.lane.stages.flatMap((s: any) => s.steps).find((st: any) => st.id === 'confirm-rule');
+  expect(step.fields[1].resolve).toEqual({
+    kind: 'latest_record',
+    object: 'purchase_order',
+    where: { product_id: '$record.product_id' },
+    order_by: 'order_date',
+    direction: 'desc',
+    take: 1,
+    field: 'supplier_id',
+  });
+});
+
+test('Covers: REQ-LANE-024 (WP-0718 AC-5): the step role is a picker over the six warehouse roles and saves through', async ({ page }) => {
+  await openBuilder(page, 'lane-wh-receiving');
+  // Step 1.1 starts as the receiver.
+  await page.click('.lb-step-card[data-lb-step="verify/confirm-arrival"]');
+  const panel = page.locator('#laneBuilderPanel');
+  const role = panel.locator('[data-lb-field="role"]');
+  await expect(role).toHaveValue('role_wh_receiver');
+  const options = await role.locator('option').allTextContents();
+  expect(options).toContain('Warehouse Manager — role_wh_warehouse_manager');
+  expect(options).toContain('Receiver — role_wh_receiver');
+  expect(options).toContain('Picker — role_wh_picker');
+  expect(options).toContain('Packer — role_wh_packer');
+  expect(options).toContain('Admin — role_wh_admin');
+  expect(options).toContain('Viewer — role_wh_viewer');
+  await expect(role.locator('option')).toHaveCount(6);
+  // Change the role, save, and check the stored draft carries it.
+  await role.selectOption('role_wh_warehouse_manager');
+  await page.click('#laneBuilderSave');
+  await expect(page.locator('#laneBuilderSaveNote')).toContainText('Saved as a draft');
+  const store = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) || '{}'), STORE_KEY);
+  const draft = (store.draftLanes as any[]).find((d) => d.id === 'lane-wh-receiving');
+  expect(draft).toBeTruthy();
+  expect(draft.definition.lane.stages[0].steps[0].role).toBe('role_wh_warehouse_manager');
+  // The export agrees with the stored draft.
+  const exported = await exportDef(page);
+  expect(exported.lane.stages[0].steps[0].role).toBe('role_wh_warehouse_manager');
 });

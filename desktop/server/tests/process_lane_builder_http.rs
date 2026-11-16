@@ -10,9 +10,10 @@
 use std::net::SocketAddr;
 
 use lanesra_core::db::open_workspace_db;
+use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
 use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
 use lanesra_core::models::custom_record::CustomRecordInput;
-use lanesra_core::services::{custom_object_service, custom_record_service};
+use lanesra_core::services::{custom_field_service, custom_object_service, custom_record_service};
 use lanesra_server::state::SharedState;
 use lanesra_server::{build_router, SecurityConfig, ServerState};
 use serde_json::{json, Value};
@@ -258,4 +259,100 @@ async fn builder_check_dry_run_reads_writes_action_types_and_save_work_over_http
     assert_eq!(dry["data"]["matches_expected"], true);
     assert_eq!(dry["data"]["checks"][0]["outcome"], "passed");
     assert_eq!(dry["data"]["completed"], true);
+}
+
+/// Covers: REQ-LANE-024 (WP-0718 AC-2)
+#[tokio::test]
+async fn adopt_builder_action_type_over_http_adopts_and_refuses() {
+    let (addr, state, _dir) = spawn_file_backed_server().await;
+    let client = client_with_cookies();
+    let setup = first_run(&client, addr).await;
+    let workspace_id = setup["data"][0]["id"].as_str().unwrap().to_string();
+    let admin_id = setup["data"][1]["id"].as_str().unwrap().to_string();
+
+    // Adoption needs the target object to exist and to carry a `status`
+    // custom field (the set_fields template writes it).
+    {
+        let conn = state.conn.lock().unwrap();
+        custom_object_service::create_with_key(
+            &conn,
+            &workspace_id,
+            "purchase_order",
+            &CustomObjectDefinitionInput {
+                singular_label: "Purchase Order".into(),
+                plural_label: "Purchase Orders".into(),
+                icon: "▣".into(),
+                prefix: "PO".into(),
+                digits: 6,
+            },
+            Some(&admin_id),
+        )
+        .unwrap();
+        custom_field_service::create_definition_with_key(
+            &conn,
+            &workspace_id,
+            "status",
+            &CustomFieldDefinitionInput {
+                entity_type: "purchase_order".into(),
+                label: "status".into(),
+                field_type: "text".into(),
+                options: vec![],
+                required: false,
+                show_in_list: false,
+                sort_order: 0,
+                min_value: None,
+                max_value: None,
+                max_length: None,
+                regex_pattern: None,
+                is_searchable: false,
+                is_filterable: false,
+                is_reportable: false,
+                default_value: None,
+                is_unique: false,
+                help_text: None,
+                placeholder: None,
+                is_hidden_by_default: false,
+            },
+            Some(&admin_id),
+        )
+        .unwrap();
+    }
+
+    let adopted = invoke(
+        &client,
+        addr,
+        "adopt_builder_action_type",
+        json!({"name": "purchase_order.set_status", "targetObjectType": "purchase_order"}),
+    )
+    .await;
+    assert_eq!(adopted["data"]["name"], "purchase_order.set_status");
+    assert_eq!(adopted["data"]["target_object_type"], "purchase_order");
+    assert_eq!(adopted["data"]["effect"], "set_fields");
+
+    // Idempotent over HTTP too: adopting again returns the same row.
+    let again = invoke(
+        &client,
+        addr,
+        "adopt_builder_action_type",
+        json!({"name": "purchase_order.set_status", "targetObjectType": "purchase_order"}),
+    )
+    .await;
+    assert_eq!(again["data"]["id"], adopted["data"]["id"]);
+
+    // `run_data.set` is never adopted (ADR-0025 decision 5).
+    let refused = invoke(
+        &client,
+        addr,
+        "adopt_builder_action_type",
+        json!({"name": "run_data.set", "targetObjectType": "purchase_order"}),
+    )
+    .await;
+    assert_eq!(refused["ok"], false);
+    assert!(
+        refused["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("ADR-0025 decision 5"),
+        "the refusal cites the ADR: {refused:?}"
+    );
 }

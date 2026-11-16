@@ -16,9 +16,15 @@ import example from "./lane-wh-receiving.example.json";
 import {
   blankLaneDefinition,
   checkLastWarnings,
+  collapseNotEvaluatedChecks,
   collectRunDataRefs,
   computeReadsWrites,
   CONDITION_OPERATORS,
+  countPerChildFixtures,
+  DEFAULT_CHECK,
+  defaultBranchFor,
+  deleteStageFromDefinition,
+  deleteStepFromDefinition,
   findStepSettingField,
   flattenSteps,
   localPublishChecks,
@@ -167,6 +173,107 @@ describe("builderUtils", () => {
     expect(carrier?.field_type).toBe("string");
     expect(carrier?.steps).toContainEqual({ step_id: "confirm-arrival", access: "write" });
     expect(report.plumbing.length).toBe(definition.run_data?.fields.length);
+  });
+
+  it("a repeating record step WITH skip_when no longer warns (Count Q-34)", () => {
+    const count = {
+      id: "lane-wh-count",
+      name: "Count",
+      object_key: "cycle_count",
+      version: 1,
+      status: "draft",
+      stages: [
+        {
+          id: "post-adjustments",
+          name: "Post adjustments",
+          steps: [
+            {
+              id: "post-count-adjustments",
+              name: "Post count adjustments",
+              kind: "record",
+              repeat_over: { field: "lines", item_id_field: "id" },
+              skip_when: { field: "$item.variance", operator: "equals", value: 0 },
+              writes: [{ action_type: "warehouse.post_stock_move", inputs: {} }],
+            },
+          ],
+        },
+      ],
+    } as unknown as LaneDefinition;
+    expect(repeatingRecordStepsWithoutFilter(count)).toEqual([]);
+  });
+
+  it("kind-change default check matches the demo exactly", () => {
+    expect(DEFAULT_CHECK).toEqual({
+      scope: "anchor",
+      condition: { field: "", operator: "equals", value: "" },
+      message: "",
+    });
+  });
+
+  it("deleting a step removes the branches pointing at it and counts them", () => {
+    const { definition: edited, removedBranches } = deleteStepFromDefinition(
+      definition,
+      "review-discrepancy",
+    );
+    expect(removedBranches).toBe(1);
+    expect(edited.stages.flatMap((s) => s.steps).some((s) => s.id === "review-discrepancy")).toBe(false);
+    const check = edited.stages.flatMap((s) => s.steps).find((s) => s.id === "discrepancy-check");
+    expect(check?.branches?.map((b) => b.on)).toEqual(["pass"]);
+    // Deleting a step nothing points at removes no branches.
+    expect(deleteStepFromDefinition(definition, "close-po").removedBranches).toBe(0);
+  });
+
+  it("deleting a stage deletes its steps and branches pointing at them", () => {
+    const edited = deleteStageFromDefinition(definition, "record-receipt");
+    expect(edited.stages.some((s) => s.id === "record-receipt")).toBe(false);
+    expect(edited.stages.flatMap((s) => s.steps).some((s) => s.id === "discrepancy-check")).toBe(false);
+    expect(edited.stages.flatMap((s) => s.steps)).toHaveLength(11);
+  });
+
+  it("a new branch defaults to the next step, else end held", () => {
+    const next = defaultBranchFor(definition, "confirm-arrival", "fail");
+    expect(next).toEqual({
+      on: "fail",
+      target: { stage: "verify", step: "match-delivery-note" },
+    });
+    const last = defaultBranchFor(definition, "close-po", "fail");
+    expect(last).toEqual({ on: "fail", end: { outcome: "held" } });
+  });
+
+  it("collapses consecutive not-evaluated entries into one line naming the blocker", () => {
+    const checks = [
+      { id: "P-03", step: "check-it", status: "refuse" as const, reason: "step 'check-it' needs a role" },
+      ...["P-04", "P-05", "P-06"].map((id) => ({
+        id,
+        step: null,
+        status: "warn" as const,
+        reason: "not evaluated: validate_definition stopped at P-03 - step 'check-it' needs a role",
+      })),
+      { id: "P-12", step: null, status: "pass" as const, reason: null },
+    ];
+    const collapsed = collapseNotEvaluatedChecks(checks);
+    expect(collapsed).toHaveLength(3);
+    expect(collapsed[0].id).toBe("P-03");
+    expect(collapsed[1].collapsedCount).toBe(3);
+    expect(collapsed[1].reason).toBe(
+      "3 checks not evaluated — fix P-03 first: step 'check-it' needs a role",
+    );
+    expect(collapsed[2].id).toBe("P-12");
+    // A lone not-evaluated entry still collapses to one line.
+    const single = collapseNotEvaluatedChecks([
+      { id: "P-04", step: null, status: "warn", reason: "not evaluated: validate_definition stopped at P-02 - bad object" },
+    ]);
+    expect(single).toHaveLength(1);
+    expect(single[0].reason).toBe("1 check not evaluated — fix P-02 first: bad object");
+  });
+
+  it("Count per-line edits become per-child dry-run fixtures", () => {
+    expect(
+      countPerChildFixtures([
+        { line: "HG-1001", expected: 10, counted: 8 },
+        { line: "HG-1003", expected: 6, counted: 7 },
+      ]),
+    ).toEqual({ "HG-1001": { counted_qty: 8 }, "HG-1003": { counted_qty: 7 } });
   });
 
   it("condition operators come from the schema list", () => {

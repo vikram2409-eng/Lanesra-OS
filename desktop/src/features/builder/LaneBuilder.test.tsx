@@ -30,7 +30,12 @@ vi.mock("../../lib/api", () => ({
     builderDryRunLane: vi.fn(),
     builderReadsWrites: vi.fn(),
     builderActionTypes: vi.fn(),
+    adoptBuilderActionType: vi.fn(),
     listCustomRecords: vi.fn(),
+    listCustomObjects: vi.fn(),
+    listAccessRoles: vi.fn(),
+    listLaneBlueprints: vi.fn(),
+    listWorkflowRules: vi.fn(),
     publishLane: vi.fn(),
   },
   ApiError: class ApiError extends Error {
@@ -65,8 +70,10 @@ const REFUSE_REPORT = {
   ],
 };
 
-function renderBuilder(def: LaneDefinition = definition, onChange = vi.fn()) {
-  const utils = render(<LaneBuilder definition={def} laneKey="lane-wh-receiving" onDefinitionChange={onChange} />);
+function renderBuilder(def: LaneDefinition = definition, onChange = vi.fn(), laneKeyArg: string | null = "lane-wh-receiving") {
+  const utils = render(
+    <LaneBuilder definition={def} laneKey={laneKeyArg} onDefinitionChange={onChange} />,
+  );
   return { ...utils, onChange };
 }
 
@@ -80,9 +87,34 @@ beforeEach(() => {
     plumbing: [],
   } as never);
   vi.mocked(api.builderActionTypes).mockResolvedValue([] as never);
+  vi.mocked(api.adoptBuilderActionType).mockResolvedValue({ name: "Set Tracking" } as never);
   vi.mocked(api.listCustomRecords).mockResolvedValue([] as never);
-  vi.mocked(api.saveBuilderLane).mockResolvedValue({ version: 2 } as never);
+  vi.mocked(api.listCustomObjects).mockResolvedValue([] as never);
+  vi.mocked(api.listAccessRoles).mockResolvedValue([] as never);
+  vi.mocked(api.listLaneBlueprints).mockResolvedValue([] as never);
+  vi.mocked(api.listWorkflowRules).mockResolvedValue([] as never);
+  vi.mocked(api.saveBuilderLane).mockResolvedValue({ lane_key: "lane-wh-receiving", version: 2 } as never);
   vi.mocked(api.publishLane).mockResolvedValue({ version: 2 } as never);
+  vi.mocked(api.builderDryRunLane).mockResolvedValue({
+    lane_key: "lane-wh-receiving",
+    lane_version: 1,
+    anchor_object_key: "widget",
+    anchor_record_id: "rec-1",
+    would_start: true,
+    refusal_reason: null,
+    stages_visited: ["capture"],
+    steps: [],
+    checks: [],
+    branches_taken: [],
+    writes: [],
+    zero_quantity_flags: [],
+    unevaluated: [],
+    end_outcome: "done",
+    expected_outcome: null,
+    matches_expected: false,
+    completed: true,
+    stopped_reason: null,
+  } as never);
 });
 
 describe("LaneBuilder", () => {
@@ -333,5 +365,486 @@ describe("LaneBuilder", () => {
     renderBuilder();
     await waitFor(() => expect(screen.getByRole("table", { name: "Run-data plumbing" })).toBeVisible());
     expect(screen.getByText("carrier")).toBeVisible();
+  });
+});
+
+/**
+ * Builder-gaps batch (WP-0718 follow-up).
+ * Covers: REQ-LANE-024 (WP-0718 AC-2).
+ *
+ * A small two-stage lane used by the gap tests: form → record → check
+ * (pass only) → approval, with one declared run-data field.
+ */
+const SMALL_DEF: LaneDefinition = {
+  id: "lane-small",
+  name: "Small lane",
+  object_key: "widget",
+  version: 1,
+  status: "draft",
+  run_data: { fields: [{ key: "carrier", type: "string", required: true }] },
+  stages: [
+    {
+      id: "s1",
+      name: "Stage 1",
+      steps: [
+        {
+          id: "enter",
+          name: "Enter details",
+          kind: "form",
+          fields: [
+            { key: "carrier", label: "Carrier", type: "string", binds_to: "run_data.carrier", required: true },
+          ],
+        },
+        {
+          id: "post",
+          name: "Post tracking",
+          kind: "record",
+          writes: [{ action_type: "Set Tracking", inputs: { val: "$run_data.carrier" } }],
+        },
+      ],
+    },
+    {
+      id: "s2",
+      name: "Stage 2",
+      steps: [
+        {
+          id: "check-it",
+          name: "Check it",
+          kind: "check",
+          check: {
+            scope: "anchor",
+            message: "Not active.",
+            condition: { field: "$record.status", operator: "equals", value: "Active" },
+          },
+          branches: [{ on: "pass", target: { stage: "s2", step: "approve-it" } }],
+        },
+        {
+          id: "approve-it",
+          name: "Approve it",
+          kind: "approval",
+          writes: [{ action_type: "Set Tracking", inputs: { val: "ok" } }],
+          branches: [
+            { on: "approved", end: { outcome: "done" } },
+            { on: "rejected", end: { outcome: "held" } },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
+const COUNT_DEF: LaneDefinition = {
+  id: "lane-wh-count",
+  name: "Count",
+  object_key: "cycle_count",
+  version: 1,
+  status: "draft",
+  run_data: { fields: [] },
+  stages: [
+    {
+      id: "post",
+      name: "Post",
+      steps: [
+        {
+          id: "post-adjustments",
+          name: "Post adjustments",
+          kind: "record",
+          repeat_over: { field: "lines", item_id_field: "id" },
+          writes: [{ action_type: "warehouse.post_stock_move", inputs: {} }],
+        },
+      ],
+    },
+  ],
+};
+
+describe("LaneBuilder gaps batch", () => {
+  it("gap 1: run-data editor declares a field and rejects a duplicate key", async () => {
+    const { onChange } = renderBuilder(SMALL_DEF);
+    fireEvent.change(screen.getByLabelText("New run-data field key"), { target: { value: "carrier" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add run-data field" }));
+    expect(screen.getByText(/already exists/)).toBeVisible();
+    fireEvent.change(screen.getByLabelText("New run-data field key"), { target: { value: "tracking_no" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add run-data field" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const edited = onChange.mock.calls[onChange.mock.calls.length - 1][0] as LaneDefinition;
+    expect(edited.run_data?.fields.map((f) => f.key)).toContain("tracking_no");
+  });
+
+  it("gap 1: Add field never creates a P-11 trap — it declares the field when none exists", async () => {
+    const noFields: LaneDefinition = JSON.parse(JSON.stringify(SMALL_DEF));
+    noFields.run_data = { fields: [] };
+    const { onChange } = renderBuilder(noFields);
+    fireEvent.click(screen.getByRole("button", { name: /Step 1 of 4.*Enter details/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Add field" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const edited = onChange.mock.calls[onChange.mock.calls.length - 1][0] as LaneDefinition;
+    expect(edited.run_data?.fields.map((f) => f.key)).toContain("new_field");
+    const added = edited.stages
+      .flatMap((s) => s.steps)
+      .find((s) => s.id === "enter")
+      ?.fields?.find((f) => f.key === "new_field");
+    expect(added?.binds_to).toBe("run_data.new_field");
+  });
+
+  it("gap 2: a write's +Input adds an editable name/value pair", async () => {
+    const { onChange } = renderBuilder(SMALL_DEF);
+    fireEvent.click(screen.getByRole("button", { name: /Step 2 of 4.*Post tracking/ }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Input" }));
+    // The write already had one input (val), so there are now two
+    // editable name inputs — one per input.
+    expect(screen.getAllByLabelText("Write 1 input name")).toHaveLength(2);
+    fireEvent.change(screen.getByLabelText("Write 1 input new_input"), { target: { value: "FastFreight" } });
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const edited = onChange.mock.calls[onChange.mock.calls.length - 1][0] as LaneDefinition;
+    const write = edited.stages
+      .flatMap((s) => s.steps)
+      .find((s) => s.id === "post")
+      ?.writes?.[0];
+    expect(write?.inputs.new_input).toBe("FastFreight");
+  });
+
+  it("gap 3: kind-change to check initialises the demo default check", async () => {
+    const { onChange } = renderBuilder(SMALL_DEF);
+    fireEvent.click(screen.getByRole("button", { name: /Step 1 of 4.*Enter details/ }));
+    fireEvent.change(screen.getByLabelText("Kind"), { target: { value: "check" } });
+    // The check fieldset renders now that the step has a check object.
+    expect(screen.getByLabelText("Message")).toBeVisible();
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const edited = onChange.mock.calls[onChange.mock.calls.length - 1][0] as LaneDefinition;
+    const step = edited.stages.flatMap((s) => s.steps).find((s) => s.id === "enter");
+    expect(step?.kind).toBe("check");
+    expect(step?.check).toEqual({
+      scope: "anchor",
+      condition: { field: "", operator: "equals", value: "" },
+      message: "",
+    });
+  });
+
+  it("gap 4: deleting a step removes the branches pointing at it and says so", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { onChange } = renderBuilder();
+    fireEvent.click(screen.getByRole("button", { name: /Step 6 of 13.*Review discrepancy/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete step" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const edited = onChange.mock.calls[onChange.mock.calls.length - 1][0] as LaneDefinition;
+    expect(edited.stages.flatMap((s) => s.steps).some((s) => s.id === "review-discrepancy")).toBe(false);
+    const check = edited.stages.flatMap((s) => s.steps).find((s) => s.id === "discrepancy-check");
+    expect(check?.branches?.map((b) => b.on)).toEqual(["pass"]);
+    expect(screen.getByText(/also removed 1 branch/)).toBeVisible();
+  });
+
+  it("gap 4: deleting a stage deletes its steps", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const { onChange } = renderBuilder();
+    fireEvent.click(screen.getByRole("button", { name: "Delete stage Record receipt" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const edited = onChange.mock.calls[onChange.mock.calls.length - 1][0] as LaneDefinition;
+    expect(edited.stages.some((s) => s.id === "record-receipt")).toBe(false);
+    expect(edited.stages.flatMap((s) => s.steps).some((s) => s.id === "discrepancy-check")).toBe(false);
+  });
+
+  it("gap 5: save adopts the returned lane key so Publish enables at once", async () => {
+    renderBuilder(definition, vi.fn(), null);
+    fireEvent.click(screen.getByRole("button", { name: "Save lane" }));
+    await waitFor(() => expect(screen.getByText(/Saved as version 2/)).toBeVisible());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Publish" })).toBeEnabled());
+  });
+
+  it("gap 6: a blank lane gets an object picker and cannot publish without one", async () => {
+    vi.mocked(api.listCustomObjects).mockResolvedValue([
+      { key: "widget", plural_label: "Widgets" },
+    ] as never);
+    const { onChange } = renderBuilder(
+      {
+        id: "lane-new-x",
+        name: "Untitled lane",
+        object_key: "",
+        version: 1,
+        status: "draft",
+        stages: [{ id: "stage-1", name: "Stage 1", steps: [] }],
+        run_data: { fields: [] },
+      },
+      vi.fn(),
+      null,
+    );
+    const publish = screen.getByRole("button", { name: "Publish" });
+    expect(publish).toBeDisabled();
+    expect(publish).toHaveAttribute("title", expect.stringContaining("Pick an object first"));
+    await waitFor(() =>
+      expect(screen.getByRole("option", { name: "Widgets (widget)" })).toBeVisible(),
+    );
+    const picker = screen.getByLabelText("Lane object");
+    fireEvent.change(picker, { target: { value: "widget" } });
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const edited = onChange.mock.calls[onChange.mock.calls.length - 1][0] as LaneDefinition;
+    expect(edited.object_key).toBe("widget");
+  });
+
+  it("gap 7: branch targets exclude the step itself and Add branch defaults to the next step", async () => {
+    const { onChange } = renderBuilder(SMALL_DEF);
+    fireEvent.click(screen.getByRole("button", { name: /Step 3 of 4.*Check it/ }));
+    const panel = screen.getByRole("region", { name: "Step panel" });
+    const options = Array.from(
+      within(panel).getByLabelText("Branch pass target").querySelectorAll("option"),
+    ).map((o) => o.textContent);
+    expect(options.join(" ")).not.toContain("Check it");
+    fireEvent.click(screen.getByRole("button", { name: "Add fail branch" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const edited = onChange.mock.calls[onChange.mock.calls.length - 1][0] as LaneDefinition;
+    const fail = edited.stages
+      .flatMap((s) => s.steps)
+      .find((s) => s.id === "check-it")
+      ?.branches?.find((b) => b.on === "fail");
+    expect(fail?.target?.step).toBe("approve-it");
+  });
+
+  it("gap 8 (UI half): adopting a provisional Action Type calls the adopt wrapper", async () => {
+    renderBuilder(SMALL_DEF);
+    fireEvent.click(screen.getByRole("button", { name: /Step 2 of 4.*Post tracking/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Adopt Set Tracking" }));
+    await waitFor(() =>
+      expect(api.adoptBuilderActionType).toHaveBeenCalledWith("Set Tracking", "widget"),
+    );
+  });
+
+  it("gap 9: the publish report framing renders as a banner above the checks", async () => {
+    vi.mocked(api.builderCheckLane).mockResolvedValue({
+      lane_key: "lane-wh-receiving",
+      version: 1,
+      refused: true,
+      framing: "This lane's object doesn't exist in this workspace.",
+      checks: [
+        { id: "P-11", step: "confirm-arrival", status: "refuse", reason: "object 'purchase_order' does not exist" },
+        { id: "P-13", step: "close-po", status: "refuse", reason: "workflow 'wf-wh-01' does not exist" },
+      ],
+    } as never);
+    renderBuilder();
+    await waitFor(() =>
+      expect(screen.getByText(/doesn't exist in this workspace/)).toBeVisible(),
+    );
+    expect(screen.getByText(/P-11/)).toBeVisible();
+    expect(screen.getByText(/P-13/)).toBeVisible();
+  });
+
+  it("gap 10: dry-run fixtures feed the dry run (form values, run data, approvals)", async () => {
+    vi.mocked(api.listCustomRecords).mockResolvedValue([
+      { id: "rec-1", primary_name: "Widget one", display_number: "WID-000001" },
+    ] as never);
+    renderBuilder(SMALL_DEF);
+    await waitFor(() =>
+      expect(screen.getByRole("option", { name: "Widget one (WID-000001)" })).toBeVisible(),
+    );
+    fireEvent.change(screen.getByLabelText("Anchor record"), { target: { value: "rec-1" } });
+    fireEvent.change(screen.getByLabelText("Fixture Enter details Carrier"), {
+      target: { value: "FastFreight" },
+    });
+    fireEvent.change(screen.getByLabelText("Fixture run-data carrier"), {
+      target: { value: "FastFreight" },
+    });
+    fireEvent.change(screen.getByLabelText("Fixture approval Approve it"), {
+      target: { value: "rejected" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Run dry run" }));
+    await waitFor(() => expect(api.builderDryRunLane).toHaveBeenCalled());
+    const fixtures = vi.mocked(api.builderDryRunLane).mock.calls[0][2] as {
+      run_data: Record<string, unknown>;
+      form_values?: Record<string, Record<string, unknown>>;
+      approvals?: Record<string, string>;
+    };
+    expect(fixtures.form_values?.enter?.carrier).toBe("FastFreight");
+    expect(fixtures.run_data.carrier).toBe("FastFreight");
+    expect(fixtures.approvals?.["approve-it"]).toBe("rejected");
+  });
+
+  it("gap 10: an untouched approval select still sends its displayed decision", async () => {
+    vi.mocked(api.listCustomRecords).mockResolvedValue([
+      { id: "rec-1", primary_name: "Widget one", display_number: "WID-000001" },
+    ] as never);
+    renderBuilder(SMALL_DEF);
+    await waitFor(() =>
+      expect(screen.getByRole("option", { name: "Widget one (WID-000001)" })).toBeVisible(),
+    );
+    fireEvent.change(screen.getByLabelText("Anchor record"), { target: { value: "rec-1" } });
+    // The approval select is never touched — it shows "Approve".
+    fireEvent.click(screen.getByRole("button", { name: "Run dry run" }));
+    await waitFor(() => expect(api.builderDryRunLane).toHaveBeenCalled());
+    const fixtures = vi.mocked(api.builderDryRunLane).mock.calls[0][2] as {
+      approvals?: Record<string, string>;
+    };
+    expect(fixtures.approvals?.["approve-it"]).toBe("approved");
+  });
+
+  it("gap 10: with no records the dry run says so and stays disabled", async () => {
+    renderBuilder(SMALL_DEF);
+    await waitFor(() =>
+      expect(screen.getByText(/No widget records exist yet/)).toBeVisible(),
+    );
+    expect(screen.getByRole("button", { name: "Run dry run" })).toBeDisabled();
+  });
+
+  it("gap 14: a dry-run error names the step and the remedy in two sentences", async () => {
+    vi.mocked(api.listCustomRecords).mockResolvedValue([
+      { id: "rec-1", primary_name: "Widget one", display_number: "WID-000001" },
+    ] as never);
+    vi.mocked(api.builderDryRunLane).mockRejectedValue(
+      new Error("step 'tracking-check' needs a role"),
+    );
+    renderBuilder(SMALL_DEF);
+    await waitFor(() =>
+      expect(screen.getByRole("option", { name: "Widget one (WID-000001)" })).toBeVisible(),
+    );
+    fireEvent.change(screen.getByLabelText("Anchor record"), { target: { value: "rec-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run dry run" }));
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          "Can't dry-run this draft: step 'tracking-check' needs a role. Fix the checks above, then dry-run here.",
+        ),
+      ).toBeVisible(),
+    );
+  });
+
+  it("gap 11: the role picker lists workspace roles", async () => {
+    vi.mocked(api.listAccessRoles).mockResolvedValue([
+      {
+        id: "role_wh_manager",
+        workspace_id: "w",
+        name: "Warehouse Manager",
+        description: "",
+        is_system: false,
+        created_at: "",
+        updated_at: "",
+      },
+    ] as never);
+    const { onChange } = renderBuilder(SMALL_DEF);
+    fireEvent.click(screen.getByRole("button", { name: /Step 1 of 4.*Enter details/ }));
+    await waitFor(() => expect(screen.getByLabelText("Role").tagName).toBe("SELECT"));
+    expect(screen.getByText("Warehouse Manager (role_wh_manager)")).toBeVisible();
+    fireEvent.change(screen.getByLabelText("Role"), { target: { value: "role_wh_manager" } });
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const edited = onChange.mock.calls[onChange.mock.calls.length - 1][0] as LaneDefinition;
+    expect(
+      edited.stages.flatMap((s) => s.steps).find((s) => s.id === "enter")?.role,
+    ).toBe("role_wh_manager");
+  });
+
+  it("gap 11: with no role list the free-text fallback warns", async () => {
+    renderBuilder(SMALL_DEF);
+    fireEvent.click(screen.getByRole("button", { name: /Step 1 of 4.*Enter details/ }));
+    await waitFor(() => expect(screen.getByText(/Role list unavailable/)).toBeVisible());
+    expect(screen.getByLabelText("Role").tagName).toBe("INPUT");
+  });
+
+  it("gap 12: consecutive not-evaluated entries collapse into one line naming the blocker", async () => {
+    const checks = [
+      { id: "P-03", step: "check-it", status: "refuse", reason: "step 'check-it' needs a role" },
+      ...["P-04", "P-05", "P-06", "P-07", "P-08", "P-09", "P-10", "P-11"].map((id) => ({
+        id,
+        step: null,
+        status: "warn",
+        reason: "not evaluated: validate_definition stopped at P-03 - step 'check-it' needs a role",
+      })),
+    ];
+    vi.mocked(api.builderCheckLane).mockResolvedValue({
+      lane_key: "lane-small",
+      version: 1,
+      refused: true,
+      checks,
+    } as never);
+    renderBuilder(SMALL_DEF);
+    await waitFor(() =>
+      expect(
+        screen.getByText("8 checks not evaluated — fix P-03 first: step 'check-it' needs a role"),
+      ).toBeVisible(),
+    );
+    expect(screen.getAllByText(/not evaluated/).length).toBe(1);
+    // The one real refusal is still there, and its reason text appears
+    // in both the refuse entry and the collapsed line.
+    expect(screen.getByText("P-03")).toBeVisible();
+    expect(screen.getAllByText(/needs a role/).length).toBe(2);
+  });
+
+  it("gap 15: a repeating step gets an assignment control and a skip-condition builder", async () => {
+    const { onChange } = renderBuilder(COUNT_DEF);
+    fireEvent.click(screen.getByRole("button", { name: /Step 1 of 1.*Post adjustments/ }));
+    fireEvent.change(screen.getByLabelText("Per-item assignment"), {
+      target: { value: "child_field" },
+    });
+    fireEvent.change(screen.getByLabelText("Assignment child field"), {
+      target: { value: "counted_by" },
+    });
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const edited = onChange.mock.calls[onChange.mock.calls.length - 1][0] as LaneDefinition;
+    const step = edited.stages.flatMap((s) => s.steps).find((s) => s.id === "post-adjustments");
+    expect(
+      (step?.repeat_over as unknown as { assign?: { by: string; field: string } })?.assign,
+    ).toEqual({ by: "child_field", field: "counted_by" });
+    fireEvent.click(screen.getByRole("button", { name: "Add condition group" }));
+    await waitFor(() =>
+      expect(
+        (
+          onChange.mock.calls[onChange.mock.calls.length - 1][0] as LaneDefinition
+        ).stages
+          .flatMap((s) => s.steps)
+          .find((s) => s.id === "post-adjustments"),
+      ).toHaveProperty("skip_when"),
+    );
+    expect(screen.getByText(/runner honors skip conditions once WP-0710 lands/)).toBeVisible();
+  });
+
+  it("gap 15: Count per-line edits feed the dry run as per-child fixtures", async () => {
+    vi.mocked(api.listCustomRecords).mockResolvedValue([
+      { id: "cc-1", primary_name: "CC-2026-001", display_number: "CC-2026-001" },
+    ] as never);
+    renderBuilder(COUNT_DEF);
+    await waitFor(() =>
+      expect(screen.getByRole("option", { name: "CC-2026-001 (CC-2026-001)" })).toBeVisible(),
+    );
+    fireEvent.change(screen.getByLabelText("Counted quantity for HG-1001"), {
+      target: { value: "9" },
+    });
+    fireEvent.change(screen.getByLabelText("Anchor record"), { target: { value: "cc-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run dry run" }));
+    await waitFor(() => expect(api.builderDryRunLane).toHaveBeenCalled());
+    const fixtures = vi.mocked(api.builderDryRunLane).mock.calls[0][2] as {
+      per_child?: Record<string, Record<string, unknown>>;
+    };
+    expect(fixtures.per_child?.["HG-1001"]).toEqual({ counted_qty: 9 });
+    expect(screen.getByText(/dry-run fixtures for the count step/)).toBeVisible();
+  });
+
+  it("gap 16: a form field gets a resolve-from-latest-record control", async () => {
+    const { onChange } = renderBuilder(SMALL_DEF);
+    fireEvent.click(screen.getByRole("button", { name: /Step 1 of 4.*Enter details/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Resolve from latest record" }));
+    fireEvent.change(screen.getByLabelText("Field 1 resolve field"), {
+      target: { value: "supplier_id" },
+    });
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const edited = onChange.mock.calls[onChange.mock.calls.length - 1][0] as LaneDefinition;
+    const field = edited.stages
+      .flatMap((s) => s.steps)
+      .find((s) => s.id === "enter")
+      ?.fields?.[0];
+    expect(
+      (field as unknown as { resolve?: { kind: string; field: string } })?.resolve,
+    ).toEqual(
+      expect.objectContaining({ kind: "latest_record", field: "supplier_id", object: "widget" }),
+    );
+    expect(screen.getByText(/runner does not resolve it yet/)).toBeVisible();
+  });
+
+  it("gap 17: a step gets a replaces editor (workflow id + action index)", async () => {
+    const { onChange } = renderBuilder(SMALL_DEF);
+    fireEvent.click(screen.getByRole("button", { name: /Step 1 of 4.*Enter details/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Add replaces" }));
+    fireEvent.change(screen.getByLabelText("Replaces 1 workflow id"), {
+      target: { value: "wf-wh-01" },
+    });
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const edited = onChange.mock.calls[onChange.mock.calls.length - 1][0] as LaneDefinition;
+    expect(
+      edited.stages.flatMap((s) => s.steps).find((s) => s.id === "enter")?.replaces,
+    ).toEqual([{ workflow_id: "wf-wh-01", action_index: 0 }]);
   });
 });

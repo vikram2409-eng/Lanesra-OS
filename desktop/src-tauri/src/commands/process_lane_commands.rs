@@ -522,6 +522,27 @@ pub fn builder_action_types(
     )
 }
 
+/// WP-0718 follow-up (builder gaps fix, gap 8): adopts one warehouse
+/// DOMAIN Action Type (`<object>.set_status`) into the adopted catalog,
+/// so a lane step using it can pass P-12. Admin-only; `run_data.set`
+/// and cross-object writes are refused by the service, never adopted.
+#[tauri::command]
+pub fn adopt_builder_action_type(
+    state: State<AppState>,
+    name: String,
+    target_object_type: String,
+) -> AppResult<lanesra_core::models::action_type::ActionTypeDefinition> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    lanesra_core::services::process_lane_builder::adopt_builder_action_type(
+        &conn,
+        &workspace_id,
+        &name,
+        &target_object_type,
+        current_actor(&state).as_deref(),
+    )
+}
+
 /// WP-0706: hands the current form step of a lane run to a different role.
 #[tauri::command]
 pub fn handoff_process_lane_step(

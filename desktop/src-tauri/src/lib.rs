@@ -422,6 +422,7 @@ pub fn run() {
             commands::process_lane_commands::builder_dry_run_lane,
             commands::process_lane_commands::builder_reads_writes,
             commands::process_lane_commands::builder_action_types,
+            commands::process_lane_commands::adopt_builder_action_type,
             commands::process_lane_commands::list_lane_cases,
             commands::process_lane_commands::store_lane_case,
             commands::process_lane_commands::run_lane_case,

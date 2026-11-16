@@ -20,8 +20,8 @@ use lanesra_core::models::workflow::{WorkflowActionInput, WorkflowDefinitionInpu
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::{
     action_type_service, custom_field_service, custom_object_service, custom_record_service,
-    industry_package_service, process_lane_publish, process_lane_service, relationship_service,
-    workflow_service, workspace_service,
+    industry_package_service, process_lane_builder, process_lane_publish, process_lane_service,
+    relationship_service, workflow_service, workspace_service,
 };
 
 fn setup() -> (rusqlite::Connection, String, String) {
@@ -1699,5 +1699,296 @@ async fn unified_test_run_discovers_and_runs_stored_cases() {
         results[0].passed,
         "the discovered case passes: {:?}",
         results[0].failures
+    );
+}
+
+// --------------------------------------------------------------------------
+// Builder gaps fix: gap 8 (adopt) + gap 9 (framing) + P-09 labelling.
+// Covers: REQ-LANE-024 (WP-0718 AC-2)
+// --------------------------------------------------------------------------
+
+/// Covers: REQ-LANE-024 (WP-0718 AC-2)
+#[test]
+fn adopting_warehouse_set_status_types_leaves_exactly_the_cross_object_p12_refusals() {
+    let (conn, ws, admin) = setup();
+    let _seed = seed_warehouse(&conn, &ws, &admin);
+    for name in [
+        "lane-wh-receiving",
+        "lane-wh-pickpack",
+        "lane-wh-count",
+        "lane-wh-replenish",
+        "lane-wh-supplier-check",
+    ] {
+        import_lane(&conn, &ws, &admin, &example_lane(name));
+    }
+    // The three faithful adoptions: `<object>.set_status` on its own
+    // anchor object. Adopting twice returns the same row (idempotent).
+    for (name, target) in [
+        ("purchase_order.set_status", "purchase_order"),
+        ("sales_order.set_status", "sales_order"),
+        ("cycle_count.set_status", "cycle_count"),
+    ] {
+        let adopted =
+            process_lane_builder::adopt_builder_action_type(&conn, &ws, name, target, Some(&admin))
+                .unwrap_or_else(|e| panic!("adopting {name} on {target} must succeed: {e}"));
+        assert_eq!(adopted.name, name);
+        assert_eq!(adopted.target_object_type, target);
+        assert!(adopted.is_active, "{name} must be active after adoption");
+        let again =
+            process_lane_builder::adopt_builder_action_type(&conn, &ws, name, target, Some(&admin))
+                .unwrap();
+        assert_eq!(
+            again.id, adopted.id,
+            "re-adopting {name} returns the same row"
+        );
+    }
+    // After adoption, exactly these P-12 refusals remain - all
+    // cross-object writes (WP-0705 follow-up) plus run_data.set
+    // (ADR-0025 decision 5, never adopted).
+    let expected: [(&str, &[(&str, usize)]); 5] = [
+        (
+            "lane-wh-receiving",
+            &[
+                ("warehouse.post_stock_move", 2),
+                ("purchase_order.close_receipt", 1),
+            ],
+        ),
+        (
+            "lane-wh-pickpack",
+            &[
+                ("picking.set_status", 2),
+                ("warehouse.post_stock_move", 3),
+                ("shipment.create", 1),
+                ("sales_order.ship", 1),
+                ("run_data.set", 1),
+            ],
+        ),
+        ("lane-wh-count", &[("warehouse.post_stock_move", 1)]),
+        (
+            "lane-wh-replenish",
+            &[
+                ("purchase_order.create", 1),
+                // Refused because no row exists for the `reorder_rule`
+                // anchor - adopting it there would be unfaithful.
+                ("purchase_order.set_status", 1),
+            ],
+        ),
+        ("lane-wh-supplier-check", &[("run_data.set", 1)]),
+    ];
+    for (lane_key, remaining) in expected {
+        let report =
+            process_lane_publish::check_publish(&conn, &ws, lane_key, Some(&admin)).unwrap();
+        let p12 = report_entries(&report, "P-12", "refuse");
+        let total: usize = remaining.iter().map(|(_, n)| n).sum();
+        assert_eq!(
+            p12.len(),
+            total,
+            "lane {lane_key} keeps exactly {total} P-12 refusals: {p12:?}"
+        );
+        for (action_type, count) in remaining {
+            let found = p12
+                .iter()
+                .filter(|e| e.reason.as_deref().unwrap_or("").contains(action_type))
+                .count();
+            assert_eq!(
+                found, *count,
+                "lane {lane_key} keeps {count}x '{action_type}': {p12:?}"
+            );
+        }
+    }
+    // The three adoption refusals, each with its named reason.
+    let err = process_lane_builder::adopt_builder_action_type(
+        &conn,
+        &ws,
+        "warehouse.post_stock_move",
+        "purchase_order",
+        Some(&admin),
+    )
+    .expect_err("post_stock_move has no faithful adoption template");
+    assert!(
+        err.to_string().contains("no faithful adoption template"),
+        "the refusal names the missing template: {err}"
+    );
+    let err = process_lane_builder::adopt_builder_action_type(
+        &conn,
+        &ws,
+        "run_data.set",
+        "purchase_order",
+        Some(&admin),
+    )
+    .expect_err("run_data.set is never adopted");
+    assert!(
+        err.to_string().contains("ADR-0025 decision 5"),
+        "the refusal cites the ADR: {err}"
+    );
+    let err = process_lane_builder::adopt_builder_action_type(
+        &conn,
+        &ws,
+        "purchase_order.set_status",
+        "reorder_rule",
+        Some(&admin),
+    )
+    .expect_err("a set_status for another anchor is unfaithful");
+    assert!(
+        err.to_string().contains("cross-record writes"),
+        "the refusal names the cross-record write: {err}"
+    );
+}
+
+/// Covers: REQ-LANE-024 (WP-0718 AC-2)
+#[test]
+fn publish_report_frames_a_lane_whose_object_is_missing() {
+    let (conn, ws, admin) = setup();
+    // No seed: `purchase_order` does not exist in this workspace.
+    import_lane(&conn, &ws, &admin, &example_lane("lane-wh-receiving"));
+    let report =
+        process_lane_publish::check_publish(&conn, &ws, "lane-wh-receiving", Some(&admin)).unwrap();
+    assert_eq!(
+        report.framing.as_deref(),
+        Some("This lane's object 'purchase_order' doesn't exist in this workspace — the P-11/P-13 refusals below trace to the missing object, not to broken steps."),
+        "the missing object is framed"
+    );
+    // The checks themselves stay as they are: the P-11 wall and both
+    // P-13 workflow refusals are still listed underneath.
+    assert!(
+        !report_entries(&report, "P-11", "refuse").is_empty(),
+        "P-11 still refuses: {:?}",
+        report.checks
+    );
+    assert_eq!(
+        report_entries(&report, "P-13", "refuse").len(),
+        2,
+        "both missing workflows still refuse: {:?}",
+        report.checks
+    );
+    // In the seeded workspace the same lane has no framing.
+    let (conn, ws, admin) = setup();
+    let _seed = seed_warehouse(&conn, &ws, &admin);
+    import_lane(&conn, &ws, &admin, &example_lane("lane-wh-receiving"));
+    let report =
+        process_lane_publish::check_publish(&conn, &ws, "lane-wh-receiving", Some(&admin)).unwrap();
+    assert_eq!(report.framing, None, "a known object gets no framing");
+}
+
+/// Covers: REQ-LANE-024 (WP-0718 AC-2)
+#[test]
+fn p09_reasons_name_their_half() {
+    let (conn, ws, admin) = setup();
+    let _record = seed_widget_with_tracking_action(&conn, &ws, &admin);
+    // A check with a pass branch but no fail branch refuses P-09 with
+    // the outcome-coverage label; the substring the lane-publish E2E
+    // asserts on survives the prefix.
+    let lane = widget_lane_json(
+        "lane-p09-labels",
+        json!([{"action_type": "Set Tracking", "inputs": {"val": "x"}}]),
+        json!({}),
+    );
+    let mut value: Value = serde_json::from_str(&lane).unwrap();
+    value["lane"]["stages"][0]["steps"][1]["branches"] =
+        json!([{"on": "pass", "end": {"outcome": "done"}}]);
+    import_lane(&conn, &ws, &admin, &value.to_string());
+    let report =
+        process_lane_publish::check_publish(&conn, &ws, "lane-p09-labels", Some(&admin)).unwrap();
+    let p09 = report_entries(&report, "P-09", "refuse");
+    assert_eq!(p09.len(), 1, "exactly the missing fail branch: {p09:?}");
+    let reason = p09[0].reason.as_deref().unwrap_or("");
+    assert!(
+        reason.starts_with("outcome coverage: "),
+        "the P-09 refuse names its half: {reason}"
+    );
+    assert!(
+        reason.contains("has no fail branch"),
+        "the missing-outcome wording survives: {reason}"
+    );
+    // The same lane with both branches passes P-09 with both halves
+    // labelled.
+    let mut value: Value = serde_json::from_str(&lane).unwrap();
+    value["lane"]["id"] = json!("lane-p09-labels-full");
+    import_lane(&conn, &ws, &admin, &value.to_string());
+    let report =
+        process_lane_publish::check_publish(&conn, &ws, "lane-p09-labels-full", Some(&admin))
+            .unwrap();
+    let passes = report_entries(&report, "P-09", "pass");
+    assert_eq!(passes.len(), 2, "one pass per P-09 half: {passes:?}");
+    let reasons: Vec<&str> = passes
+        .iter()
+        .map(|e| e.reason.as_deref().unwrap_or(""))
+        .collect();
+    assert!(
+        reasons.iter().any(|r| r.starts_with("reachability: ")),
+        "the reachability half is labelled: {reasons:?}"
+    );
+    assert!(
+        reasons.iter().any(|r| r.starts_with("outcome coverage: ")),
+        "the outcome-coverage half is labelled: {reasons:?}"
+    );
+}
+
+/// Covers: REQ-LANE-024 (WP-0718 AC-2)
+#[test]
+fn dry_run_ignores_skip_when_assign_and_resolve_without_evaluating_them() {
+    let (conn, ws, admin) = setup();
+    let seed = seed_warehouse(&conn, &ws, &admin);
+    // The Q-33/Q-34/Q-35 shapes on the Receiving lane. The skip filter
+    // would skip both receipt moves if the walker evaluated it
+    // ($item.qty_received is 40 / 30, both > 0); runtime enforcement is
+    // WP-0710 / the post-WP-0705 follow-up, so the walker must ignore
+    // all three fields and walk exactly as the unadorned lane does.
+    let mut value: Value = serde_json::from_str(&example_lane("lane-wh-receiving")).unwrap();
+    value["lane"]["stages"][0]["steps"][1]["repeat_over"]["assign"] =
+        json!({"by": "child_field", "field": "counted_by"});
+    value["lane"]["stages"][3]["steps"][1]["skip_when"] =
+        json!({"field": "$item.qty_received", "operator": "greater_than", "value": 0});
+    value["lane"]["stages"][0]["steps"][0]["fields"][0]["resolve"] = json!({
+        "kind": "latest_record", "object": "purchase_order",
+        "where": {"product_id": "$record.id"},
+        "order_by": "order_date", "direction": "desc", "take": 1,
+        "field": "supplier_id"
+    });
+    import_lane(&conn, &ws, &admin, &value.to_string());
+    let mut per_child = Map::new();
+    for (i, line) in seed.po_lines.iter().enumerate() {
+        let qty = ["40", "30"][i];
+        per_child.insert(
+            line.clone(),
+            json!({
+                "delivery_note_qty": qty,
+                "qty_received": qty,
+                "qty_rejected": "0",
+                "putaway_bin": "A-01-03",
+            }),
+        );
+    }
+    let report = process_lane_publish::dry_run_lane(
+        &conn,
+        &ws,
+        "lane-wh-receiving",
+        &seed.po,
+        &fixtures(
+            json!({"carrier": "FastFreight", "delivery_note_number": "DN-8812",
+                   "received_date": "2026-11-20", "staging_bin": "RCV-01"}),
+            Value::Object(per_child),
+            json!({}),
+        ),
+        Some("completed"),
+        Some(&admin),
+    )
+    .unwrap();
+    assert!(
+        report.completed,
+        "the walk reaches an end: {:?}",
+        report.steps
+    );
+    assert_eq!(report.end_outcome.as_deref(), Some("completed"));
+    let stock_moves: Vec<_> = report
+        .writes
+        .iter()
+        .filter(|w| w.action_type == "warehouse.post_stock_move")
+        .collect();
+    assert_eq!(
+        stock_moves.len(),
+        4,
+        "the skip filter is not evaluated: receipt + putaway per line still post: {:?}",
+        report.writes
     );
 }

@@ -13,10 +13,21 @@
 import type {
   BuilderPlumbingCell,
   BuilderReadsWrites,
+  LaneBranch,
   LaneDefinition,
   LaneStep,
   PublishCheckResult,
 } from "../../lib/types";
+
+/// The demo's default check object (app.js `laneBuilderOnChange`,
+/// kind→check): scope anchor, an empty single condition, empty
+/// message. The desktop kind-change initialises exactly this, so a
+/// check made by kind-change has a fieldset to render.
+export const DEFAULT_CHECK = {
+  scope: "anchor",
+  condition: { field: "", operator: "equals", value: "" },
+  message: "",
+};
 
 /// The schema's operator list (WP-0718 §2): operators come from the
 /// schema, never free text.
@@ -201,12 +212,147 @@ export function checkLastWarnings(definition: LaneDefinition): CheckLastWarning[
 
 /// The Q-34 warning (§8, Count): a repeating record step has no filter,
 /// so it will post for every child — including the ones with nothing to
-/// post. No schema change: this is a warning, not an editor.
+/// post. No schema change: this is a warning, not an editor. A step WITH
+/// a `skip_when` condition no longer warns: the author has said which
+/// children to skip (Q-34, accepted for this batch; the runner honors
+/// it once WP-0710 lands).
 export function repeatingRecordStepsWithoutFilter(definition: LaneDefinition): string[] {
   return definition.stages
     .flatMap((s) => s.steps)
-    .filter((s) => s.kind === "record" && s.repeat_over)
+    .filter((s) => s.kind === "record" && s.repeat_over && !(s as unknown as { skip_when?: unknown }).skip_when)
     .map((s) => s.id);
+}
+
+/// Delete a step: the step goes, and every branch that pointed at it
+/// goes with it (a branch to a deleted step would dangle, P-06). The
+/// caller reports how many branches were removed.
+export function deleteStepFromDefinition(
+  definition: LaneDefinition,
+  stepId: string,
+): { definition: LaneDefinition; removedBranches: number } {
+  const next: LaneDefinition = JSON.parse(JSON.stringify(definition));
+  let removedBranches = 0;
+  for (const stage of next.stages) {
+    for (const step of stage.steps) {
+      const before = (step.branches ?? []).length;
+      step.branches = (step.branches ?? []).filter(
+        (b) => !(b.target && b.target.step === stepId),
+      );
+      removedBranches += before - (step.branches ?? []).length;
+    }
+    stage.steps = stage.steps.filter((s) => s.id !== stepId);
+  }
+  return { definition: next, removedBranches };
+}
+
+/// Delete a stage: its steps go with it, and branches anywhere in the
+/// lane that pointed at one of those steps go too (same dangling-branch
+/// rule as deleting a step).
+export function deleteStageFromDefinition(definition: LaneDefinition, stageId: string): LaneDefinition {
+  const stage = definition.stages.find((s) => s.id === stageId);
+  if (!stage) return definition;
+  const removed = new Set(stage.steps.map((s) => s.id));
+  const next: LaneDefinition = JSON.parse(JSON.stringify(definition));
+  for (const s of next.stages) {
+    for (const step of s.steps) {
+      step.branches = (step.branches ?? []).filter(
+        (b) => !(b.target && removed.has(b.target.step)),
+      );
+    }
+  }
+  next.stages = next.stages.filter((s) => s.id !== stageId);
+  return next;
+}
+
+/// The next step in definition order after `stepId`, or null when the
+/// step is the last one. A new branch defaults to it (never to the
+/// step itself — a self-loop publishes today and retries forever).
+export function nextStepInDefinitionOrder(definition: LaneDefinition, stepId: string): FlatStep | null {
+  const flat = flattenSteps(definition);
+  const i = flat.findIndex((f) => f.step.id === stepId);
+  if (i < 0 || i + 1 >= flat.length) return null;
+  return flat[i + 1];
+}
+
+/// The default for a new branch on a step: the next step in definition
+/// order if there is one, else an end with outcome `held`.
+export function defaultBranchFor(definition: LaneDefinition, stepId: string, on: string): LaneBranch {
+  const next = nextStepInDefinitionOrder(definition, stepId);
+  if (next) return { on, target: { stage: next.stage.id, step: next.step.id } };
+  return { on, end: { outcome: "held" } };
+}
+
+export interface CollapsedCheck {
+  key: string;
+  id: string;
+  step: string | null;
+  status: PublishCheckResult["status"];
+  reason: string | null;
+  /** How many `not evaluated` entries this one line stands for. */
+  collapsedCount?: number;
+}
+
+/// Gap 12: one early refusal floods the list with `warn — not
+/// evaluated` entries (`not evaluated: validate_definition stopped at
+/// P-0Y - <message>`). Collapse each consecutive run of them into one
+/// line that names the blocking check, so the one real refusal is not
+/// drowned. Non-`not evaluated` entries pass through untouched.
+export function collapseNotEvaluatedChecks(checks: PublishCheckResult[]): CollapsedCheck[] {
+  const out: CollapsedCheck[] = [];
+  let i = 0;
+  while (i < checks.length) {
+    const c = checks[i];
+    if (c.status === "warn" && c.reason?.startsWith("not evaluated:")) {
+      let j = i;
+      while (
+        j < checks.length &&
+        checks[j].status === "warn" &&
+        checks[j].reason?.startsWith("not evaluated:")
+      ) {
+        j++;
+      }
+      const n = j - i;
+      const m = /validate_definition stopped at (P-\d+)(?: - (.*))?/.exec(c.reason ?? "");
+      const reason = m
+        ? `${n} check${n === 1 ? "" : "s"} not evaluated — fix ${m[1]} first: ${m[2] ?? "see the refusal above"}`
+        : `${n} check${n === 1 ? "" : "s"} not evaluated — ${c.reason ?? ""}`;
+      out.push({
+        key: `not-evaluated-${i}`,
+        id: "not-evaluated",
+        step: null,
+        status: "warn",
+        reason,
+        collapsedCount: n,
+      });
+      i = j;
+    } else {
+      out.push({
+        key: `${c.id}:${c.step ?? ""}:${i}`,
+        id: c.id,
+        step: c.step,
+        status: c.status,
+        reason: c.reason,
+      });
+      i++;
+    }
+  }
+  return out;
+}
+
+export interface CountLineRow {
+  line: string;
+  expected: number;
+  counted: number;
+}
+
+/// Gap 15: the Count per-line table's edits are dry-run fixtures for
+/// the count step (`per_child[line].counted_qty`), keyed the way
+/// `DryRunFixtures.per_child` expects (child id, then field name).
+/// `counted_qty` is record data, not lane data, so the edits never
+/// touch the stored definition — they change what the next dry run
+/// simulates, and the dry run previews the variances/adjustments.
+export function countPerChildFixtures(rows: CountLineRow[]): Record<string, Record<string, unknown>> {
+  return Object.fromEntries(rows.map((r) => [r.line, { counted_qty: r.counted }]));
 }
 
 /// Client-side subset of the WP-0714 publish checks, for the live panel

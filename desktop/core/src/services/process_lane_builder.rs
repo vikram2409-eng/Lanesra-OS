@@ -39,7 +39,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::domain::{AppError, AppResult, ErrorClass};
-use crate::models::action_type::ActionParameterSpec;
+use crate::models::action_type::{
+    ActionParameterSpec, ActionTypeDefinition, ActionTypeDefinitionInput,
+};
 use crate::models::process_lane::{parse_definition, ConditionOrGroup, LaneDefinitionFile};
 use crate::repositories::process_lane_repo;
 use crate::services::{action_type_service, process_lane_publish, process_lane_service};
@@ -570,12 +572,98 @@ pub fn builder_action_types(
             parameters: Vec::new(),
         });
     }
+    // Gap 8 (builder gaps fix, cosmetic): dedupe by name, first wins.
+    // The adopted entries were pushed first, so an adopted catalog
+    // entry beats a provisional one with the same name; a provisional
+    // id used by several lanes on different objects lists once.
+    let mut seen_names: HashSet<String> = HashSet::new();
+    out.retain(|e| seen_names.insert(e.name.clone()));
     out.sort_by(|a, b| {
         a.target_object_type
             .cmp(&b.target_object_type)
             .then(a.name.cmp(&b.name))
     });
     Ok(out)
+}
+
+// --- adopt a warehouse Action Type (gap 8) ----------------------------------
+
+/// Adopts one warehouse DOMAIN Action Type into the adopted catalog, so
+/// a lane step that uses it can pass P-12. Admin-only - the same gate
+/// `publish_lane` uses (`user_service::require_admin`, via the local
+/// `require_admin`).
+///
+/// Only `<object>.set_status` has a faithful template: effect
+/// `set_fields`, fields `{"status": "status"}`, one required `status`
+/// parameter, capability `update`. Anything else has no faithful
+/// adoption template and is refused - it needs a new invoke effect
+/// (WP-0705 follow-up), not a faked adoption. `run_data.set` is never
+/// adopted (ADR-0025 decision 5: it is not an Action Type in the core).
+/// Adopting onto a different anchor than the name's own object is
+/// refused - a cross-record write needs a WP-0705 follow-up. Adopting
+/// the same (name, target object) twice returns the existing entry
+/// (idempotent).
+pub fn adopt_builder_action_type(
+    conn: &Connection,
+    workspace_id: &str,
+    name: &str,
+    target_object_type: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<ActionTypeDefinition> {
+    require_admin(conn, actor_user_id)?;
+    if name == "run_data.set" {
+        return Err(classified_validation(
+            "validation.arguments",
+            "run_data.set is not an Action Type in the core (ADR-0025 decision 5)",
+        ));
+    }
+    let Some(prefix) = name
+        .strip_suffix(".set_status")
+        .filter(|p| !p.is_empty() && !p.contains('.'))
+    else {
+        return Err(classified_validation(
+            "validation.arguments",
+            format!(
+                "cannot adopt '{name}': no faithful adoption template — needs a new invoke effect (WP-0705 follow-up)"
+            ),
+        ));
+    };
+    if prefix != target_object_type {
+        return Err(classified_validation(
+            "validation.arguments",
+            format!(
+                "cannot adopt '{name}' for '{target_object_type}': it targets the '{prefix}' record, not the '{target_object_type}' anchor — cross-record writes need a WP-0705 follow-up"
+            ),
+        ));
+    }
+    if let Some(existing) =
+        action_type_service::get_by_name(conn, workspace_id, target_object_type, name)?
+    {
+        return Ok(existing);
+    }
+    action_type_service::create(
+        conn,
+        workspace_id,
+        &ActionTypeDefinitionInput {
+            name: name.to_string(),
+            description:
+                "Adopted from the warehouse lane definitions (builder gaps fix, 2026-11-15)"
+                    .to_string(),
+            target_object_type: target_object_type.to_string(),
+            required_capability: "update".to_string(),
+            parameters: vec![ActionParameterSpec {
+                key: "status".to_string(),
+                label: "Status".to_string(),
+                field_type: "text".to_string(),
+                required: true,
+                default_value: None,
+            }],
+            effect: "set_fields".to_string(),
+            effect_config_json: serde_json::json!({"field_sources": {"status": "status"}})
+                .to_string(),
+        },
+        actor_user_id,
+    )
 }
 
 // --- save path --------------------------------------------------------------
