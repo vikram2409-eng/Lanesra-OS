@@ -23,8 +23,10 @@
 //!   ids the stored lanes use, each marked provisional (never
 //!   publishable - P-12).
 //! - Save: `save_builder_lane` reuses `import_lane_definition` for a
-//!   brand-new lane key and `create_version` for a new version of an
-//!   existing lane.
+//!   brand-new lane key; for an existing lane it updates the draft
+//!   version in place while one exists, and `create_version` for a new
+//!   version of a published lane. The one-draft rule still holds: there
+//!   is never a second draft.
 //!
 //! What this module deliberately does NOT do: no schema change (Q-33..
 //! Q-36 are out of scope), no builder-only publish rule, no graph
@@ -618,13 +620,29 @@ pub fn save_builder_lane(
             })
         }
         Some(key) => {
-            let version = process_lane_service::create_version(
-                conn,
-                workspace_id,
-                key,
-                definition_json,
-                actor_user_id,
-            )?;
+            // An author iterating on a draft saves into that draft
+            // (update_draft_version); a published lane gets a new draft
+            // version (create_version). Either way there is never a
+            // second draft version of the lane.
+            let lane = process_lane_repo::get_lane_by_key(conn, workspace_id, key)?
+                .ok_or_else(|| AppError::NotFound("Process lane".into()))?;
+            let latest = process_lane_repo::latest_version(conn, &lane.id)?;
+            let version = match latest {
+                Some(v) if v.status == "draft" => process_lane_service::update_draft_version(
+                    conn,
+                    workspace_id,
+                    key,
+                    definition_json,
+                    actor_user_id,
+                )?,
+                _ => process_lane_service::create_version(
+                    conn,
+                    workspace_id,
+                    key,
+                    definition_json,
+                    actor_user_id,
+                )?,
+            };
             Ok(BuilderSaveResult {
                 lane_key: key.to_string(),
                 version: version.version,

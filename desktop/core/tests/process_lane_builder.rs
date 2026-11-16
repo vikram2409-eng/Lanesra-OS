@@ -1048,3 +1048,108 @@ fn save_builder_lane_refuses_a_new_lane_key_that_already_exists() {
         "saving as a brand-new lane must refuse when the key exists - use the existing-lane path"
     );
 }
+
+// Covers: REQ-LANE-024 (WP-0718 AC-1)
+#[test]
+fn save_builder_lane_updates_an_existing_draft_in_place() {
+    let (conn, ws, admin) = setup();
+    let _record = seed_widget_with_tracking_action(&conn, &ws, &admin);
+    let v1 = widget_lane_json(
+        "lane-widget-clean",
+        json!([{"action_type": "Set Tracking", "inputs": {"val": "$run_data.carrier"}}]),
+        1,
+    );
+    import_lane(&conn, &ws, &admin, &v1);
+    // First edit: rename a step, version stays 1.
+    let mut value: Value = serde_json::from_str(&v1).unwrap();
+    value["lane"]["stages"][0]["steps"][0]["name"] = json!("Enter, renamed once");
+    let saved = process_lane_builder::save_builder_lane(
+        &conn,
+        &ws,
+        Some("lane-widget-clean"),
+        &value.to_string(),
+        Some(&admin),
+    )
+    .unwrap();
+    assert_eq!(saved.version, 1);
+    assert_eq!(saved.status, "draft");
+    // Second edit: rename again - still version 1, still one version.
+    value["lane"]["stages"][0]["steps"][0]["name"] = json!("Enter, renamed twice");
+    let saved = process_lane_builder::save_builder_lane(
+        &conn,
+        &ws,
+        Some("lane-widget-clean"),
+        &value.to_string(),
+        Some(&admin),
+    )
+    .unwrap();
+    assert_eq!(saved.version, 1);
+    assert_eq!(saved.status, "draft");
+    let stored =
+        process_lane_service::get_lane(&conn, &ws, "lane-widget-clean", Some(&admin)).unwrap();
+    assert_eq!(
+        stored.versions.len(),
+        1,
+        "iterating on a draft must not mint versions"
+    );
+    let stored_value: Value = serde_json::from_str(&stored.versions[0].definition_json).unwrap();
+    assert_eq!(
+        stored_value["lane"]["stages"][0]["steps"][0]["name"],
+        json!("Enter, renamed twice"),
+        "the stored draft must carry the latest edit"
+    );
+}
+
+// Covers: REQ-LANE-024 (WP-0718 AC-1)
+#[test]
+fn save_builder_lane_refuses_a_draft_save_naming_the_wrong_version() {
+    let (conn, ws, admin) = setup();
+    let _record = seed_widget_with_tracking_action(&conn, &ws, &admin);
+    let v1 = widget_lane_json(
+        "lane-widget-clean",
+        json!([{"action_type": "Set Tracking", "inputs": {"val": "$run_data.carrier"}}]),
+        1,
+    );
+    import_lane(&conn, &ws, &admin, &v1);
+    // The draft is version 1; a save naming version 2 must refuse rather
+    // than mint a second version or silently renumber the draft.
+    let mut value: Value = serde_json::from_str(&v1).unwrap();
+    value["lane"]["version"] = json!(2);
+    assert!(
+        process_lane_builder::save_builder_lane(
+            &conn,
+            &ws,
+            Some("lane-widget-clean"),
+            &value.to_string(),
+            Some(&admin),
+        )
+        .is_err(),
+        "a draft save must name the draft's own version"
+    );
+}
+
+// Covers: REQ-LANE-024 (WP-0718 AC-1)
+#[test]
+fn save_builder_lane_refuses_a_draft_save_for_a_different_lane_id() {
+    let (conn, ws, admin) = setup();
+    let _record = seed_widget_with_tracking_action(&conn, &ws, &admin);
+    let v1 = widget_lane_json(
+        "lane-widget-clean",
+        json!([{"action_type": "Set Tracking", "inputs": {"val": "$run_data.carrier"}}]),
+        1,
+    );
+    import_lane(&conn, &ws, &admin, &v1);
+    let mut value: Value = serde_json::from_str(&v1).unwrap();
+    value["lane"]["id"] = json!("lane-widget-other");
+    assert!(
+        process_lane_builder::save_builder_lane(
+            &conn,
+            &ws,
+            Some("lane-widget-clean"),
+            &value.to_string(),
+            Some(&admin),
+        )
+        .is_err(),
+        "the definition's id must match the lane being saved"
+    );
+}

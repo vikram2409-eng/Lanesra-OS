@@ -235,6 +235,74 @@ pub fn create_version(
     Ok(created)
 }
 
+/// Updates the definition of an existing lane's draft version in place.
+/// Drafts are unpublished work-in-progress: an author iterating on one
+/// must not mint a new version for every save (WP-0718 builder save flow
+/// — the author edits the draft, saves, and publishes it when the checks
+/// go green). Refused unless the latest version is a draft, and refused
+/// when the definition disagrees with the lane (id, object) or names a
+/// different version than the draft's own. A draft has no compiled graph
+/// yet (publish compiles), so replacing its definition moves nothing a
+/// run depends on.
+pub fn update_draft_version(
+    conn: &Connection,
+    workspace_id: &str,
+    lane_key: &str,
+    definition_json: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<ProcessLaneVersion> {
+    require_admin(conn, actor_user_id)?;
+    let lane = process_lane_repo::get_lane_by_key(conn, workspace_id, lane_key)?
+        .ok_or_else(|| AppError::NotFound("Process lane".into()))?;
+    let file = parse_definition(definition_json)?;
+    if file.lane.id != lane.lane_key {
+        return Err(classified_validation(
+            "validation.arguments",
+            "the definition's id does not match this lane",
+        ));
+    }
+    if file.lane.object_key != lane.object_key {
+        return Err(classified_validation(
+            "validation.arguments",
+            "a lane stays on the object it was created for",
+        ));
+    }
+    let latest = process_lane_repo::latest_version(conn, &lane.id)?;
+    let draft = match latest {
+        Some(v) if v.status == "draft" => v,
+        _ => {
+            return Err(classified_validation(
+                "validation.arguments",
+                "this lane has no draft version - create a new version instead",
+            ));
+        }
+    };
+    if file.lane.version != draft.version {
+        return Err(classified_validation(
+            "validation.arguments",
+            format!(
+                "the definition's version must be {} for this lane",
+                draft.version
+            ),
+        ));
+    }
+    process_lane_repo::update_version_definition(conn, &draft.id, definition_json, actor_user_id)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "update",
+        Some("process_lane_version"),
+        Some(&draft.id),
+        &format!(
+            "Updated draft version {} of lane '{lane_key}'",
+            draft.version
+        ),
+        None,
+    )?;
+    Ok(process_lane_repo::get_version_by_id(conn, &draft.id)?.expect("just updated"))
+}
+
 /// Publishes the lane's latest draft version: compiles it to an execution
 /// graph (which must pass `validate_for_publish`), publishes that graph,
 /// and flips the version to published with the graph's id. The graph's
