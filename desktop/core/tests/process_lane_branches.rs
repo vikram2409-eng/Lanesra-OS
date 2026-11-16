@@ -254,8 +254,11 @@ async fn a_dead_end_branch_blocks_publish_and_names_the_step() {
     let (conn, ws, admin) = setup();
     seed(&conn, &ws, &admin);
 
-    // The rejection branch leads to a hold check that only ever loops back to
-    // itself - no path from it reaches the end of the lane.
+    // The rejection branch leads to a pair of hold checks that only ever
+    // loop back to each other - no path from either reaches the end of
+    // the lane. (The two steps must point at each other, not at
+    // themselves: a branch that targets its own step is refused earlier,
+    // at P-06, as a self-loop since the builder-gaps fix.)
     let stages = json!([
         {"id": "decide", "name": "Decide", "steps": [{
             "id": "decide", "name": "Decide", "kind": "approval", "role": "r",
@@ -269,6 +272,14 @@ async fn a_dead_end_branch_blocks_publish_and_names_the_step() {
         {"id": "hold", "name": "Hold", "steps": [{
             "id": "stuck", "name": "Stuck", "kind": "check", "required": true,
             "check": {"scope": "anchor", "message": "stuck",
+                      "condition": {"field": "$record.tracking", "operator": "equals", "value": "x"}},
+            "branches": [
+                {"on": "pass", "target": {"stage": "hold", "step": "loop"}},
+                {"on": "fail", "target": {"stage": "hold", "step": "loop"}}
+            ]
+        }, {
+            "id": "loop", "name": "Loop", "kind": "check", "required": true,
+            "check": {"scope": "anchor", "message": "loop",
                       "condition": {"field": "$record.tracking", "operator": "equals", "value": "x"}},
             "branches": [
                 {"on": "pass", "target": {"stage": "hold", "step": "stuck"}},

@@ -349,3 +349,31 @@ not an Action Type)." No warehouse lane is claimed publishable.
   `program/log/2026/11/15-2311-muse-builder-gaps-fix.md` (this log).
 - `desktop/test-results/` (untracked, E2E output — not part of the
   batch; leave for the coordinator to decide).
+
+## CI fix on PR #788 (2026-11-16, after the gate's first green check)
+
+- CI run 43855419056 on head aaafa3ef: everything green except
+  `rust (tests 3/4)` — exactly one failure out of 323 tests in that
+  partition: `lanesra-core::process_lane_branches`
+  `a_dead_end_branch_blocks_publish_and_names_the_step`
+  (`desktop/core/tests/process_lane_branches.rs:285`).
+- Cause: the fixture is a check whose pass/fail branches both target
+  the check itself — both a self-loop AND a dead end. Before this
+  batch the dead-end refusal ("has no way out") fired; the batch's
+  gap-7 P-06 self-loop refusal ("targets the step itself — a check
+  that fails would retry forever") now fires first, so the test's
+  `assert!(err.contains("no way out"))` failed. Publish was still
+  blocked and the step still named — the implementation was right,
+  the fixture was stale.
+- Fix (test-only, this commit): the hold stage is now a two-check
+  cycle (`stuck` <-> `loop`) instead of a self-loop, so the fixture
+  is a genuine dead end with no way out and no self-loop. Both
+  assertions (`contains "stuck"`, `contains "no way out"`) are
+  unchanged — the test still tests WP-0706 AC-2 exactly as named.
+  The self-loop refusal itself stays covered by the batch's own
+  tests (`builder_check_refuses_a_self_loop_branch_at_p06`,
+  `import_refuses_a_self_loop_branch`).
+- Lesson: a full /tmp (512M tmpfs, filled by two killed
+  `cargo install cargo-nextest` temp dirs) silently zeroed the
+  first local repro log — clear /tmp before re-running, and log to
+  ~/workspace, not /tmp.
