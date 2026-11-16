@@ -10706,7 +10706,10 @@ function laneCheckRef(ref,stepId,def,fields,out){
   return declared;
  }
  if(parts[0]==='record'){
-  const path=parts.slice(1).filter(p=>p!=='[]');
+  // A collection is written `lines[]`: strip the trailing [] from each
+  // segment (the core's P-11 does the same) so `record.lines[].x`
+  // resolves to the `lines` collection, not to an unknown field `lines[]`.
+  const path=parts.slice(1).map(p=>p.endsWith('[]')?p.slice(0,-2):p).filter(p=>p!=='');
   if(path[0]==='lines'&&path[1]){
    if(!fields.child.has(path[1])){out.push({id:'P-11',step:stepId,status:'refuse',reason:`step '${stepId}' references unknown child field '${path[1]}'`});return false;}
    return true;
