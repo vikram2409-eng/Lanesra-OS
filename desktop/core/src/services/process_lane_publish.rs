@@ -40,8 +40,9 @@ use crate::models::process_lane::{
 };
 use crate::repositories::{custom_field_repo, process_lane_repo};
 use crate::services::{
-    action_type_service, builtin_field_service, custom_field_service, custom_record_service,
-    process_lane_service, relationship_service, workflow_service,
+    action_type_service, builtin_field_service, custom_field_service, custom_object_service,
+    custom_record_service, entity_registry, process_lane_service, relationship_service,
+    workflow_service,
 };
 
 fn classified_validation(code: &'static str, message: impl Into<String>) -> AppError {
@@ -88,6 +89,12 @@ pub struct PublishReport {
     pub version: Option<i64>,
     pub refused: bool,
     pub checks: Vec<PublishCheckEntry>,
+    /// Gap 9 (builder gaps fix): set when the lane's `object_key` is not
+    /// a known object in this workspace. The P-11/P-13 refusals below
+    /// trace to the missing object, not to broken steps; the checks
+    /// themselves stay as they are.
+    #[serde(default)]
+    pub framing: Option<String>,
 }
 
 fn entry(
@@ -159,7 +166,9 @@ fn classify_definition_error(message: &str) -> (&'static str, Option<String>) {
         || message.contains("only record and approval steps declare writes")
     {
         "P-05"
-    } else if message.contains("branches to unknown step") {
+    } else if message.contains("branches to unknown step")
+        || message.contains("targets the step itself")
+    {
         "P-06"
     } else if message.starts_with("run_data declares field")
         || message.starts_with("run_data field")
@@ -391,6 +400,30 @@ fn collect_step_refs(lane: &LaneDefinition) -> Vec<RefUse> {
                             context: format!("field '{}' binds to", field.key),
                         });
                     }
+                    // Q-35 (builder gaps fix): a `resolve.where` value
+                    // that is a `$`-reference resolves against the
+                    // anchor / run data as usual. `resolve.field` is a
+                    // field name on the resolve target object, not a
+                    // reference, so it is never collected here.
+                    if let Some(resolve) = &field.resolve {
+                        if let Some(where_clause) = &resolve.where_clause {
+                            for (key, value) in where_clause {
+                                if let Value::String(s) = value {
+                                    if let Some((kind, path)) = split_ref(s) {
+                                        out.push(RefUse {
+                                            kind,
+                                            path,
+                                            step: step_id.clone(),
+                                            context: format!(
+                                                "field '{}' resolve where '{key}'",
+                                                field.key
+                                            ),
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             if let Some(writes) = &step.writes {
@@ -436,6 +469,11 @@ fn collect_step_refs(lane: &LaneDefinition) -> Vec<RefUse> {
                         context: "child lane anchor".to_string(),
                     });
                 }
+            }
+            // Q-34 (builder gaps fix): a skip filter's references resolve
+            // like any other step condition ($item / $record / $run_data).
+            if let Some(skip_when) = &step.skip_when {
+                collect_refs_from_condition(skip_when, step_id.clone(), "skip_when", &mut out);
             }
         }
     }
@@ -607,11 +645,25 @@ pub fn check_publish_definition(
             ] {
                 checks.push(pass(id, None));
             }
-            checks.push(pass_reason("P-09", None, "every step reaches an end"));
+            checks.push(pass_reason(
+                "P-09",
+                None,
+                "reachability: every step reaches an end",
+            ));
         }
         Err(e) => {
             let message = e.to_string();
             let (id, step) = classify_definition_error(&message);
+            // Gap 9 (builder gaps fix): the P-09 halves are labelled, so
+            // the two P-09 entries read as reachability vs outcome
+            // coverage. The `validate_definition stopped at P-0Y`
+            // substring stays intact inside any not_evaluated reason
+            // (the frontend collapse parser depends on it).
+            let message = if id == "P-09" {
+                format!("reachability: {message}")
+            } else {
+                message
+            };
             checks.push(refuse(id, step, message.clone()));
             for other in [
                 "P-01", "P-02", "P-03", "P-04", "P-05", "P-06", "P-07", "P-08",
@@ -626,9 +678,12 @@ pub fn check_publish_definition(
             if id != "P-09" {
                 // The reachability half of P-09 never ran: the failure was
                 // an earlier check.
-                checks.push(not_evaluated(
+                checks.push(warn(
                     "P-09",
-                    &format!("validate_definition stopped at {id} - {message}"),
+                    None,
+                    format!(
+                        "reachability: not evaluated: validate_definition stopped at {id} - {message}"
+                    ),
                 ));
             }
         }
@@ -649,7 +704,7 @@ pub fn check_publish_definition(
                         "P-09",
                         Some(step.id.clone()),
                         format!(
-                            "branch '{}' of step '{}' has no exit — declare a target step or an end outcome",
+                            "outcome coverage: branch '{}' of step '{}' has no exit — declare a target step or an end outcome",
                             branch.on, step.id
                         ),
                     ));
@@ -667,7 +722,7 @@ pub fn check_publish_definition(
                             checks.push(refuse(
                                 "P-09",
                                 Some(step.id.clone()),
-                                format!("check '{}' {missing}", step.id),
+                                format!("outcome coverage: check '{}' {missing}", step.id),
                             ));
                             outcome_failures += 1;
                         }
@@ -682,7 +737,7 @@ pub fn check_publish_definition(
                             checks.push(refuse(
                                 "P-09",
                                 Some(step.id.clone()),
-                                format!("approval '{}' {missing}", step.id),
+                                format!("outcome coverage: approval '{}' {missing}", step.id),
                             ));
                             outcome_failures += 1;
                         }
@@ -696,7 +751,7 @@ pub fn check_publish_definition(
         checks.push(pass_reason(
             "P-09",
             None,
-            "every check declares pass and fail; every approval declares approve and reject",
+            "outcome coverage: every check declares pass and fail; every approval declares approve and reject",
         ));
     }
 
@@ -1028,11 +1083,32 @@ pub fn check_publish_definition(
     }
 
     let refused = checks.iter().any(|c| c.status == "refuse");
+    // Gap 9 (builder gaps fix): when the lane's object does not exist
+    // in this workspace, frame the P-11/P-13 refusals below as tracing
+    // to the missing object, not to broken steps. The checks themselves
+    // stay as they are. Known means a core entity type or a dynamic
+    // entity type - the same lookup P-11's resolver uses.
+    let object_known = entity_registry::CORE_ENTITY_TYPES.contains(&lane.object_key.as_str())
+        || custom_object_service::is_valid_dynamic_entity_type(
+            conn,
+            workspace_id,
+            &lane.object_key,
+        )
+        .unwrap_or(false);
+    let framing = if object_known {
+        None
+    } else {
+        Some(format!(
+            "This lane's object '{}' doesn't exist in this workspace — the P-11/P-13 refusals below trace to the missing object, not to broken steps.",
+            lane.object_key
+        ))
+    };
     Ok(PublishReport {
         lane_key: lane.id.clone(),
         version,
         refused,
         checks,
+        framing,
     })
 }
 
@@ -1084,6 +1160,7 @@ pub fn check_publish(
                 version: None,
                 refused: true,
                 checks,
+                framing: None,
             })
         }
     }

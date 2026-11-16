@@ -586,6 +586,8 @@ export const api = {
     call<BuilderActionType[]>("builder_action_types", {
       objectKey: objectKey ?? null,
     }),
+  adoptBuilderActionType: (name: string, targetObjectType: string) =>
+    call<ActionTypeDefinition>("adopt_builder_action_type", { name, targetObjectType }),
 
   // WP-0707: the lane runner (REQ-LANE-014, REQ-LANE-015). `getLaneRunView`
   // and `listLaneRunsForRecord` are sync `call`s; starting, submitting and

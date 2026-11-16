@@ -3,7 +3,18 @@
  * renders. Loads a saved lane by key through getLaneBlueprint, starts
  * from a blank definition for "New lane", or renders the definition
  * it is handed (tests, and the blueprint page's "Open in builder").
+ *
+ * Gap 5: the page keeps the lane key in its own state — when a new
+ * lane is saved the builder adopts the returned key (LaneBuilder's
+ * onLaneKeyChange) and the page holds it, so the saved lane stays
+ * addressable after the save without closing and reopening it. A lane
+ * created in this session keeps the definition it was built with even
+ * after that save: reloading it from the server would remount the
+ * builder and wipe the save confirmation, the dry-run report and the
+ * fixture inputs the author just filled in. Only a lane opened by key
+ * is loaded from the server.
  */
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "../../lib/api";
@@ -20,25 +31,35 @@ export function LaneBuilderPage({
   initialDefinition?: LaneDefinition;
   onClose?: () => void;
 }) {
+  const [pageLaneKey, setPageLaneKey] = useState<string | null>(laneKey ?? null);
+  // Created once per mount: the definition a brand-new lane is built
+  // with. Stable across renders — and across the first save adopting a
+  // key — so the builder below never remounts for it.
+  const [newLaneDefinition] = useState<LaneDefinition | null>(() =>
+    laneKey == null && !initialDefinition ? blankLaneDefinition() : null,
+  );
   const detail = useQuery({
-    queryKey: ["laneBlueprint", laneKey],
-    queryFn: () => api.getLaneBlueprint(laneKey as string),
-    enabled: !initialDefinition && laneKey !== null && laneKey !== undefined,
+    queryKey: ["laneBlueprint", pageLaneKey],
+    queryFn: () => api.getLaneBlueprint(pageLaneKey as string),
+    enabled:
+      !initialDefinition && !newLaneDefinition && pageLaneKey !== null && pageLaneKey !== undefined,
   });
 
-  if (initialDefinition) {
-    return <LaneBuilder definition={initialDefinition} laneKey={laneKey ?? null} onClose={onClose} />;
+  const definition = initialDefinition ?? newLaneDefinition ?? detail.data?.definition;
+  if (!definition) {
+    if (detail.isLoading) return <p>Loading lane…</p>;
+    if (detail.error) return <p>Could not load the lane: {(detail.error as Error).message}</p>;
+    return <p>No lane selected.</p>;
   }
-  if (laneKey === null || laneKey === undefined) {
-    return (
-      <div>
-        <h2>New lane</h2>
-        <LaneBuilder definition={blankLaneDefinition()} laneKey={null} onClose={onClose} />
-      </div>
-    );
-  }
-  if (detail.isLoading) return <p>Loading lane…</p>;
-  if (detail.error) return <p>Could not load the lane: {(detail.error as Error).message}</p>;
-  if (!detail.data) return <p>No lane selected.</p>;
-  return <LaneBuilder definition={detail.data.definition} laneKey={laneKey} onClose={onClose} />;
+  return (
+    <div>
+      {newLaneDefinition && pageLaneKey === null && <h2>New lane</h2>}
+      <LaneBuilder
+        definition={definition}
+        laneKey={pageLaneKey}
+        onLaneKeyChange={setPageLaneKey}
+        onClose={onClose}
+      />
+    </div>
+  );
 }

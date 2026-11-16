@@ -4834,12 +4834,26 @@ export interface LaneRunDataField {
   description?: string | null;
 }
 
+export interface LaneFieldResolve {
+  kind: string;
+  object: string;
+  where?: Record<string, unknown> | null;
+  order_by?: string | null;
+  direction?: "asc" | "desc" | string | null;
+  take?: number | null;
+  field: string;
+}
+
 export interface LaneFormField {
   key: string;
   label: string;
   type: string;
   binds_to: string;
   required: boolean;
+  // Q-35 (accepted 2026-11-15): resolve the suggested value from the
+  // latest matching record. Runtime resolution is a post-WP-0705
+  // follow-up; the runner does not honor it yet.
+  resolve?: LaneFieldResolve | null;
 }
 
 export interface LaneWriteOp {
@@ -4866,6 +4880,20 @@ export interface LaneCheck {
   aggregate?: string | null;
 }
 
+export interface LaneRepeatAssign {
+  // Q-33 (accepted 2026-11-15): "child_field" reads the assignee from a
+  // field on each child; "role" (default) assigns the step to its role.
+  // Runtime enforcement is WP-0710.
+  by?: "child_field" | "role";
+  field?: string | null;
+}
+
+export interface LaneRepeatOver {
+  field: string;
+  item_id_field: string;
+  assign?: LaneRepeatAssign | null;
+}
+
 export interface LaneStep {
   id: string;
   name: string;
@@ -4879,7 +4907,11 @@ export interface LaneStep {
   check?: LaneCheck | null;
   validation?: { condition?: unknown | null; expression?: string | null; message: string } | null;
   branches?: LaneBranch[] | null;
-  repeat_over?: { field: string; item_id_field: string } | null;
+  repeat_over?: LaneRepeatOver | null;
+  // Q-34 (accepted 2026-11-15): skip this step for a child whose
+  // condition matches. Only meaningful on a repeating step; runtime
+  // enforcement is WP-0710.
+  skip_when?: unknown | null;
   ends_run?: { outcome: string } | null;
   notify?: { to_role: string; message: string }[] | null;
   replaces?: { workflow_id: string; action_index: number }[] | null;
@@ -5048,6 +5080,9 @@ export interface PublishReport {
   version: number | null;
   refused: boolean;
   checks: PublishCheckResult[];
+  // Gap 9 (builder gaps fix): set when the lane's object does not exist
+  // in this workspace, framing the P-11/P-13 refusals below it.
+  framing?: string | null;
 }
 
 /** One published version of a lane, as `publish_lane` returns it. */

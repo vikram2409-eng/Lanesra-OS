@@ -191,6 +191,12 @@ pub struct LaneStep {
     pub branches: Option<Vec<Branch>>,
     #[serde(default)]
     pub repeat_over: Option<RepeatOver>,
+    /// Q-34 (accepted 2026-11-15): skip this step for a child whose
+    /// condition matches, evaluated per child before the step posts for
+    /// it. Only meaningful on a repeating step (`repeat_over` present).
+    /// Runtime enforcement is WP-0710, not this batch.
+    #[serde(default)]
+    pub skip_when: Option<ConditionOrGroup>,
     #[serde(default)]
     pub ends_run: Option<EndsRun>,
     #[serde(default)]
@@ -221,6 +227,30 @@ pub struct FormField {
     pub binds_to: String,
     #[serde(default)]
     pub required: bool,
+    /// Q-35 (accepted 2026-11-15): resolve the field's suggested value
+    /// from the latest matching record. Runtime resolution is a
+    /// post-WP-0705 follow-up, not this batch.
+    #[serde(default)]
+    pub resolve: Option<FieldResolve>,
+}
+
+/// Q-35: a record lookup that suggests a form field's value - the record
+/// to look in, how to find it, and which field to take. V1 has one kind
+/// only (`latest_record`); anything else is refused by
+/// `validate_definition`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FieldResolve {
+    pub kind: String,
+    pub object: String,
+    #[serde(default, rename = "where")]
+    pub where_clause: Option<serde_json::Map<String, serde_json::Value>>,
+    #[serde(default)]
+    pub order_by: Option<String>,
+    #[serde(default)]
+    pub direction: Option<String>,
+    #[serde(default)]
+    pub take: Option<i64>,
+    pub field: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -275,6 +305,29 @@ pub struct RepeatOver {
     pub field: String,
     #[serde(default = "default_item_id_field")]
     pub item_id_field: String,
+    /// Q-33 (accepted 2026-11-15): per-item assignment for a repeating
+    /// step. Runtime enforcement is WP-0710, not this batch.
+    #[serde(default)]
+    pub assign: Option<RepeatAssign>,
+}
+
+/// Q-33: how a repeating step assigns each child item - by a field on
+/// the child holding the assignee, or by the step's own role (the
+/// default, today's behaviour).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepeatAssign {
+    #[serde(default)]
+    pub by: RepeatAssignBy,
+    #[serde(default)]
+    pub field: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum RepeatAssignBy {
+    ChildField,
+    #[default]
+    Role,
 }
 
 fn default_item_id_field() -> String {
@@ -354,6 +407,12 @@ pub fn validate_definition(lane: &LaneDefinition) -> AppResult<()> {
     }
     if lane.name.trim().is_empty() {
         return Err(validation_error("lane name is required"));
+    }
+    // Gap 6 (builder gaps fix): a lane with no object must not be
+    // publishable - refuse with a named reason (P-01), not silent
+    // P-02-only. Backstop for the frontend object picker.
+    if lane.object_key.trim().is_empty() {
+        return Err(validation_error("a lane must name its object"));
     }
     if lane.version < 1 {
         return Err(validation_error("lane version must be at least 1"));
@@ -436,6 +495,17 @@ pub fn validate_definition(lane: &LaneDefinition) -> AppResult<()> {
             if let Some(branches) = &step.branches {
                 for branch in branches {
                     if let Some(target) = &branch.target {
+                        // Gap 7 (builder gaps fix): a branch whose target
+                        // is the step itself would retry forever at
+                        // runtime - refuse at P-06, naming the step and
+                        // the branch. The frontend/demo workers exclude
+                        // the step itself from the target lists (UI half).
+                        if target.stage == stage.id && target.step == step.id {
+                            return Err(validation_error(format!(
+                                "branch '{}' on step '{}' targets the step itself — a check that fails would retry forever",
+                                branch.on, step.id
+                            )));
+                        }
                         let found = lane.stages.iter().any(|s| {
                             s.id == target.stage && s.steps.iter().any(|st| st.id == target.step)
                         });
@@ -683,6 +753,41 @@ fn validate_step(
             "only form, record and agent steps repeat over child records (step '{}')",
             step.id
         )));
+    }
+    // Q-33/Q-34/Q-35 (builder gaps fix, accepted 2026-11-15): the schema
+    // shapes, enforced here so the core refuses a definition the JSON
+    // Schema would refuse. Runtime enforcement is WP-0710 / the
+    // post-WP-0705 follow-up, not this batch.
+    if let Some(assign) = step.repeat_over.as_ref().and_then(|r| r.assign.as_ref()) {
+        if assign.by == RepeatAssignBy::ChildField
+            && assign.field.as_deref().unwrap_or("").trim().is_empty()
+        {
+            return Err(validation_error(format!(
+                "step '{}' repeat_over.assign with by 'child_field' needs a field naming the assignee on each child",
+                step.id
+            )));
+        }
+    }
+    if let Some(skip_when) = &step.skip_when {
+        if step.repeat_over.is_none() {
+            return Err(validation_error(format!(
+                "step '{}' declares skip_when but does not repeat over child records - skip_when is only meaningful on a repeating step",
+                step.id
+            )));
+        }
+        validate_condition(skip_when, "skip_when")?;
+    }
+    if let Some(fields) = &step.fields {
+        for field in fields {
+            if let Some(resolve) = &field.resolve {
+                if resolve.kind != "latest_record" {
+                    return Err(validation_error(format!(
+                        "field '{}' on step '{}' resolve kind '{}' must be 'latest_record' (the only kind in v1)",
+                        field.key, step.id, resolve.kind
+                    )));
+                }
+            }
+        }
     }
     if let Some(assistance) = &step.assistance {
         if !LANE_AUTONOMY_LEVELS.contains(&assistance.autonomy.as_str()) {

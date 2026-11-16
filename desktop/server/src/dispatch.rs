@@ -3370,6 +3370,19 @@ pub fn dispatch(
                 actor,
             )?)
         }
+        // WP-0718 follow-up (builder gaps fix, gap 8): adopt one
+        // warehouse DOMAIN Action Type into the adopted catalog.
+        "adopt_builder_action_type" => {
+            let name: String = arg(args, "name")?;
+            let target_object_type: String = arg(args, "targetObjectType")?;
+            to_value(process_lane_builder::adopt_builder_action_type(
+                conn,
+                &require_workspace_id(conn)?,
+                &name,
+                &target_object_type,
+                actor,
+            )?)
+        }
         // WP-0704: the viewer-facing state of a lane run (status, run data,
         // the current human step). Submitting a step is async and lives in
         // `admin_actions.rs`, like starting a run.

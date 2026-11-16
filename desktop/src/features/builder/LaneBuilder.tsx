@@ -21,8 +21,11 @@ import { api } from "../../lib/api";
 import type {
   BuilderActionType,
   BuilderReadsWrites,
+  CustomObjectDefinition,
+  DryRunFixtures,
   DryRunReport,
   LaneDefinition,
+  LaneFormField,
   LaneStep,
   PublishReport,
 } from "../../lib/types";
@@ -31,6 +34,11 @@ import { StageChevrons } from "./StageChevrons";
 import { StepPanel } from "./StepPanel";
 import {
   checkLastWarnings,
+  collapseNotEvaluatedChecks,
+  countPerChildFixtures,
+  declaredRunDataKeys,
+  deleteStageFromDefinition,
+  deleteStepFromDefinition,
   flattenSteps,
   localPublishChecks,
   plumbingFromLocal,
@@ -136,16 +144,28 @@ const COUNT_SEED = [
   { line: "HG-1005", expected: 2, counted: 0 },
 ];
 
-function CountPanel({ definition }: { definition: LaneDefinition }) {
+function CountPanel({
+  definition,
+  onFixturesChange,
+}: {
+  definition: LaneDefinition;
+  onFixturesChange?: (fixtures: Record<string, Record<string, unknown>>) => void;
+}) {
   const [rows, setRows] = useState(COUNT_SEED);
   const noFilter = repeatingRecordStepsWithoutFilter(definition);
+  function updateRows(next: { line: string; expected: number; counted: number }[]) {
+    setRows(next);
+    onFixturesChange?.(countPerChildFixtures(next));
+  }
   return (
     <section className="card" aria-labelledby="count-panel-heading">
       <h3 id="count-panel-heading">Count — per-line table</h3>
       <p style={{ color: "var(--text-muted)" }}>
         Example seed from the lane description (CC-2026-001, Zone A pick face). Edit the counted
-        quantities; the variance is computed. The approval step sees this whole table at once, not
-        one line at a time.
+        quantities; the variance is computed. These edits are dry-run fixtures for the count step:
+        they feed the next dry run, not the stored lane — counted quantities live on the records,
+        so the lane definition itself does not change. The approval step sees this whole table at
+        once, not one line at a time.
       </p>
       {noFilter.length > 0 && (
         <p role="alert" style={{ color: "var(--warning, #8a6d00)" }}>
@@ -175,7 +195,7 @@ function CountPanel({ definition }: { definition: LaneDefinition }) {
                     aria-label={`Expected quantity for ${row.line}`}
                     value={row.expected}
                     onChange={(e) =>
-                      setRows(rows.map((r, j) => (j === i ? { ...r, expected: Number(e.target.value) } : r)))
+                      updateRows(rows.map((r, j) => (j === i ? { ...r, expected: Number(e.target.value) } : r)))
                     }
                   />
                 </td>
@@ -185,7 +205,7 @@ function CountPanel({ definition }: { definition: LaneDefinition }) {
                     aria-label={`Counted quantity for ${row.line}`}
                     value={row.counted}
                     onChange={(e) =>
-                      setRows(rows.map((r, j) => (j === i ? { ...r, counted: Number(e.target.value) } : r)))
+                      updateRows(rows.map((r, j) => (j === i ? { ...r, counted: Number(e.target.value) } : r)))
                     }
                   />
                 </td>
@@ -213,11 +233,13 @@ export function LaneBuilder({
   laneKey,
   onDefinitionChange,
   onClose,
+  onLaneKeyChange,
 }: {
   definition: LaneDefinition;
   laneKey?: string | null;
   onDefinitionChange?: (definition: LaneDefinition) => void;
   onClose?: () => void;
+  onLaneKeyChange?: (laneKey: string) => void;
 }) {
   const [def, setDefState] = useState(initialDefinition);
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
@@ -229,6 +251,7 @@ export function LaneBuilder({
   const [dryRunning, setDryRunning] = useState(false);
   const [anchorRecordId, setAnchorRecordId] = useState("");
   const [records, setRecords] = useState<{ id: string; primary_name: string; display_number: string }[]>([]);
+  const [recordsLoaded, setRecordsLoaded] = useState(false);
   const [actionTypes, setActionTypes] = useState<BuilderActionType[]>([]);
   const [adoptedActionTypes, setAdoptedActionTypes] = useState<string[]>([]);
   const [plumbing, setPlumbing] = useState<BuilderReadsWrites | null>(null);
@@ -236,6 +259,51 @@ export function LaneBuilder({
   const [publishMessage, setPublishMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  // Gap 5: the lane key is state, not just the prop — save() adopts
+  // the key the save returns, so Publish enables immediately, and the
+  // page keeps the key (via onLaneKeyChange) so it survives a reload
+  // of the saved lane.
+  const [currentLaneKey, setCurrentLaneKey] = useState<string | null>(laneKey ?? null);
+  const [objects, setObjects] = useState<CustomObjectDefinition[]>([]);
+  const [deleteNote, setDeleteNote] = useState<string | null>(null);
+  // Gap 10: dry-run fixtures, collected in the preview and passed to
+  // the dry run (form values per step, run-data values, approval
+  // decisions, and the Count table's per-line fixtures).
+  const [formFixtures, setFormFixtures] = useState<Record<string, Record<string, string>>>({});
+  const [runDataFixtures, setRunDataFixtures] = useState<Record<string, string>>({});
+  const [approvalFixtures, setApprovalFixtures] = useState<Record<string, "approved" | "rejected">>({});
+  const [countFixtures, setCountFixtures] = useState<Record<string, Record<string, unknown>>>({});
+  // Gap 8 (UI half): adopting a provisional Action Type from the
+  // step panel refreshes the picker catalog, so the P-12 clears.
+  const [catalogVersion, setCatalogVersion] = useState(0);
+  // Gap 1: the new run-data field form (key / type / required).
+  const [newFieldKey, setNewFieldKey] = useState("");
+  const [newFieldType, setNewFieldType] = useState("string");
+  const [newFieldRequired, setNewFieldRequired] = useState(false);
+  const [newFieldError, setNewFieldError] = useState<string | null>(null);
+
+  // Keep the internal key in step when the page hands us a saved lane.
+  useEffect(() => {
+    setCurrentLaneKey(laneKey ?? null);
+  }, [laneKey]);
+
+  // Gap 6: the object list for the picker on a new lane. Custom
+  // objects only — the frontend has no builtin-object list to include
+  // (only builtin *fields* exist, and they belong to custom objects).
+  useEffect(() => {
+    let cancelled = false;
+    const pending = api.listCustomObjects?.(true);
+    if (pending) {
+      pending
+        .then((o) => {
+          if (!cancelled) setObjects(o);
+        })
+        .catch(() => {});
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Visual canvas positions for the step cards, driven by useNodeDrag
   // (the shared drag hook). Positions are visual only — definition
@@ -373,7 +441,7 @@ export function LaneBuilder({
     return () => {
       cancelled = true;
     };
-  }, [def.object_key]);
+  }, [def.object_key, catalogVersion]);
 
   // Action-Type picker: the adopted catalog when the service answers,
   // else the provisional ids this lane already uses, marked provisional.
@@ -403,21 +471,113 @@ export function LaneBuilder({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [def.object_key]);
+  }, [def.object_key, catalogVersion]);
 
   useEffect(() => {
-    if (!def.object_key) return;
+    if (!def.object_key) {
+      setRecords([]);
+      setRecordsLoaded(false);
+      return;
+    }
     let cancelled = false;
+    setRecordsLoaded(false);
     api
       .listCustomRecords(def.object_key)
       .then((r) => {
-        if (!cancelled) setRecords(r as { id: string; primary_name: string; display_number: string }[]);
+        if (!cancelled) {
+          setRecords(r as { id: string; primary_name: string; display_number: string }[]);
+          setRecordsLoaded(true);
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!cancelled) setRecordsLoaded(true);
+      });
     return () => {
       cancelled = true;
     };
   }, [def.object_key]);
+
+  /// Gap 1: Add field on a step when nothing is declared yet — the
+  /// field declaration and the field add are ONE setDef, so the
+  /// declaration cannot be clobbered by a stale second update.
+  function declareRunDataField(stepId: string, key: string, field: LaneFormField) {
+    const next: LaneDefinition = JSON.parse(JSON.stringify(def));
+    if (!declaredRunDataKeys(next).includes(key)) {
+      next.run_data = {
+        fields: [...(next.run_data?.fields ?? []), { key, type: "string", required: false }],
+      };
+    }
+    for (const stage of next.stages) {
+      for (const s of stage.steps) {
+        if (s.id === stepId) s.fields = [...(s.fields ?? []), field];
+      }
+    }
+    setDef(next);
+  }
+
+  function addRunDataField() {
+    const key = newFieldKey.trim();
+    if (!key) {
+      setNewFieldError("Give the field a key.");
+      return;
+    }
+    if (!/^[A-Za-z0-9_]+$/.test(key)) {
+      setNewFieldError("A run-data field key uses letters, digits and underscores only.");
+      return;
+    }
+    if (declaredRunDataKeys(def).includes(key)) {
+      setNewFieldError(`Run-data field '${key}' already exists — pick a different key.`);
+      return;
+    }
+    setDef({
+      ...def,
+      run_data: {
+        fields: [
+          ...(def.run_data?.fields ?? []),
+          { key, type: newFieldType, required: newFieldRequired },
+        ],
+      },
+    });
+    setNewFieldKey("");
+    setNewFieldRequired(false);
+    setNewFieldError(null);
+  }
+
+  function removeRunDataField(key: string) {
+    setDef({
+      ...def,
+      run_data: { fields: (def.run_data?.fields ?? []).filter((f) => f.key !== key) },
+    });
+  }
+
+  /// Gap 4: deleting a step also removes the branches that pointed
+  /// at it, and says so — a branch to a deleted step would dangle.
+  function deleteStep(stepId: string) {
+    const { definition, removedBranches } = deleteStepFromDefinition(def, stepId);
+    setDef(definition);
+    setSelectedStepId(null);
+    setDeleteNote(
+      removedBranches > 0
+        ? `Deleted step '${stepId}' — also removed ${removedBranches} branch${removedBranches === 1 ? "" : "es"} that pointed at it.`
+        : `Deleted step '${stepId}'.`,
+    );
+  }
+
+  function deleteStage(stageId: string) {
+    const stage = def.stages.find((s) => s.id === stageId);
+    if (!stage) return;
+    if (
+      !window.confirm(
+        `Delete stage '${stage.name}' and its ${stage.steps.length} step${stage.steps.length === 1 ? "" : "s"}?`,
+      )
+    ) {
+      return;
+    }
+    setDef(deleteStageFromDefinition(def, stageId));
+    if (selectedStepId && stage.steps.some((s) => s.id === selectedStepId)) setSelectedStepId(null);
+    if (selectedStageId === stageId) setSelectedStageId(null);
+    setDeleteNote(`Deleted stage '${stage.name}' and its ${stage.steps.length} step${stage.steps.length === 1 ? "" : "s"}.`);
+  }
 
   function commitDragReorder() {
     const next: LaneDefinition = JSON.parse(JSON.stringify(def));
@@ -440,8 +600,14 @@ export function LaneBuilder({
     setSaving(true);
     setSaveMessage(null);
     try {
-      const version = await api.saveBuilderLane(def, laneKey ?? null);
-      setSaveMessage(`Saved as version ${version.version}.`);
+      const result = await api.saveBuilderLane(def, currentLaneKey ?? null);
+      // Gap 5: adopt the lane key from the save result, so Publish
+      // enables immediately with no close-and-reopen.
+      if (result.lane_key && result.lane_key !== currentLaneKey) {
+        setCurrentLaneKey(result.lane_key);
+        onLaneKeyChange?.(result.lane_key);
+      }
+      setSaveMessage(`Saved as version ${result.version}.`);
     } catch (err) {
       setSaveMessage(
         `Could not save: ${err instanceof Error ? err.message : "save_builder_lane is not available yet."}`,
@@ -458,11 +624,15 @@ export function LaneBuilder({
   /// while the editor shows green would be a lie, so a save failure
   /// stops the publish and says so instead of publishing stale state.
   async function publish() {
-    if (!laneKey) return;
+    if (!currentLaneKey) return;
     setPublishing(true);
     setPublishMessage(null);
     try {
-      await api.saveBuilderLane(def, laneKey);
+      const saved = await api.saveBuilderLane(def, currentLaneKey);
+      if (saved.lane_key && saved.lane_key !== currentLaneKey) {
+        setCurrentLaneKey(saved.lane_key);
+        onLaneKeyChange?.(saved.lane_key);
+      }
     } catch (err) {
       setPublishMessage(
         `Could not save the edited lane before publishing: ${err instanceof Error ? err.message : "save_builder_lane is not available yet."} The saved lane is unchanged.`,
@@ -471,7 +641,7 @@ export function LaneBuilder({
       return;
     }
     try {
-      const version = await api.publishLane(laneKey);
+      const version = await api.publishLane(currentLaneKey);
       setPublishMessage(`Published version ${version.version}.`);
     } catch (err) {
       setPublishMessage(`Publish refused: ${err instanceof Error ? err.message : "publishing failed."}`);
@@ -480,31 +650,102 @@ export function LaneBuilder({
     }
   }
 
+  /// Gap 14: the dry-run error names the step and the reason, in two
+  /// sentences — never the misleading "not available yet" framing.
+  /// The core error is `step '<id>' needs a role` (validate_definition).
+  function dryRunErrorCopy(err: unknown): string {
+    const message = err instanceof Error ? err.message : "";
+    const needsRole = /step '([^']+)' needs a role/.exec(message);
+    if (needsRole) {
+      return `Can't dry-run this draft: step '${needsRole[1]}' needs a role. Fix the checks above, then dry-run here.`;
+    }
+    const namesStep = /step '([^']+)' (.*)/.exec(message);
+    if (namesStep) {
+      return `Can't dry-run this draft: step '${namesStep[1]}' ${namesStep[2]}. Fix the checks above, then dry-run here.`;
+    }
+    return `Can't dry-run this draft: ${message || "the dry run failed"}. Fix the checks above, then dry-run here.`;
+  }
+
+  /// A fixture value is typed by the field that declares it: integers
+  /// and numbers travel as numbers, booleans as booleans, the rest as
+  /// the typed string.
+  function coerceFixtureValue(raw: string, type: string): unknown {
+    if (type === "boolean") return raw === "true";
+    if (type === "integer" || type === "number") {
+      if (raw.trim() === "") return "";
+      const n = Number(raw);
+      return Number.isNaN(n) ? raw : n;
+    }
+    return raw;
+  }
+
+  function buildFixtures(): DryRunFixtures {
+    const runData: Record<string, unknown> = {};
+    for (const field of def.run_data?.fields ?? []) {
+      const raw = runDataFixtures[field.key];
+      if (raw !== undefined && raw !== "") runData[field.key] = coerceFixtureValue(raw, field.type);
+    }
+    const formValues: Record<string, Record<string, unknown>> = {};
+    for (const f of flat) {
+      if (f.step.kind !== "form") continue;
+      const values: Record<string, unknown> = {};
+      for (const field of f.step.fields ?? []) {
+        const raw = formFixtures[f.step.id]?.[field.key];
+        if (raw !== undefined && raw !== "") values[field.key] = coerceFixtureValue(raw, field.type);
+      }
+      if (Object.keys(values).length > 0) formValues[f.step.id] = values;
+    }
+    const fixtures: DryRunFixtures = { run_data: runData };
+    if (Object.keys(formValues).length > 0) fixtures.form_values = formValues;
+    // The approval selects show "Approve" unless the author changes
+    // them, so an untouched approval still sends its displayed
+    // decision — otherwise the dry run reports the approval
+    // "unevaluated (needs fixture)" even though the preview shows a
+    // decision.
+    const approvals: Record<string, "approved" | "rejected"> = {};
+    for (const f of approvalSteps) {
+      approvals[f.step.id] = approvalFixtures[f.step.id] ?? "approved";
+    }
+    if (Object.keys(approvals).length > 0) fixtures.approvals = approvals;
+    if (Object.keys(countFixtures).length > 0) fixtures.per_child = countFixtures;
+    return fixtures;
+  }
+
   async function runDryRun() {
     if (!anchorRecordId) return;
     setDryRunning(true);
     setDryRunError(null);
     try {
-      setDryRun(await api.builderDryRunLane(def, anchorRecordId, { run_data: {} }));
+      setDryRun(await api.builderDryRunLane(def, anchorRecordId, buildFixtures()));
     } catch (err) {
       setDryRun(null);
-      setDryRunError(
-        `The builder dry run is not available yet (builder_dry_run_lane): ${err instanceof Error ? err.message : ""} Save the lane and dry-run the saved version from the blueprint page.`,
-      );
+      setDryRunError(dryRunErrorCopy(err));
     } finally {
       setDryRunning(false);
     }
   }
 
-  const publishTitle = !laneKey
-    ? "Save the lane first — publish works on a saved lane."
-    : firstRefuse
-      ? `Cannot publish — ${firstRefuse.id}: ${firstRefuse.reason ?? "failing check"}`
-      : "Publish this lane";
+  const publishTitle = !def.object_key
+    ? "Pick an object first — a lane with no object cannot publish."
+    : !currentLaneKey
+      ? "Save the lane first — publish works on a saved lane."
+      : firstRefuse
+        ? `Cannot publish — ${firstRefuse.id}: ${firstRefuse.reason ?? "failing check"}`
+        : "Publish this lane";
+  const framing = report?.framing ?? null;
+  const displayChecks = report ? collapseNotEvaluatedChecks(report.checks) : [];
   const stockMoves = (dryRun?.writes ?? []).filter((w) => w.action_type.includes("stock_move"));
   const draftPoWrite = flat
     .find((f) => f.step.id === "create-draft-po")
     ?.step.writes?.find((w) => w.action_type === "purchase_order.create");
+  const formSteps = flat.filter((f) => f.step.kind === "form" && (f.step.fields ?? []).length > 0);
+  const approvalSteps = flat.filter((f) => f.step.kind === "approval");
+  const runDataFields = def.run_data?.fields ?? [];
+  const dryRunBlockedReason = !def.object_key
+    ? "Pick an object first — the dry run needs its records."
+    : recordsLoaded && records.length === 0
+      ? `No ${def.object_key} records exist yet — the dry run needs a real anchor record.`
+      : null;
 
   return (
     <div>
@@ -542,7 +783,7 @@ export function LaneBuilder({
           type="button"
           className="btn"
           onClick={publish}
-          disabled={publishing || !laneKey || refuses.length > 0}
+          disabled={publishing || !currentLaneKey || refuses.length > 0 || !def.object_key}
           title={publishTitle}
         >
           {publishing ? "Publishing…" : "Publish"}
@@ -551,11 +792,42 @@ export function LaneBuilder({
         {publishMessage && <span>{publishMessage}</span>}
       </div>
 
+      {!def.object_key && (
+        <section className="card" aria-labelledby="builder-object-heading" style={{ marginBottom: 12 }}>
+          <h3 id="builder-object-heading">Object</h3>
+          <p style={{ color: "var(--text-muted)" }}>
+            This lane has no object yet — pick the object its records belong to. A lane with no
+            object cannot publish.
+          </p>
+          <label>
+            Object{" "}
+            <select
+              aria-label="Lane object"
+              value=""
+              onChange={(e) => {
+                if (e.target.value) setDef({ ...def, object_key: e.target.value });
+              }}
+            >
+              <option value="">Choose an object…</option>
+              {objects.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.plural_label} ({o.key})
+                </option>
+              ))}
+            </select>
+          </label>
+          {objects.length === 0 && (
+            <p style={{ color: "var(--text-muted)" }}>No custom objects in this workspace yet.</p>
+          )}
+        </section>
+      )}
+
       <StageChevrons
         stages={def.stages}
         selectedStageId={selectedStageId}
         onSelectStage={setSelectedStageId}
         onMoveStage={moveStage}
+        onDeleteStage={deleteStage}
         onAddStage={() =>
           setDef({
             ...def,
@@ -563,6 +835,11 @@ export function LaneBuilder({
           })
         }
       />
+      {deleteNote && (
+        <p role="status" style={{ color: "var(--text-muted)" }}>
+          {deleteNote}
+        </p>
+      )}
 
       <section className="card" aria-labelledby="builder-canvas-heading" style={{ marginTop: 12 }}>
         <h3 id="builder-canvas-heading">Canvas</h3>
@@ -677,6 +954,9 @@ export function LaneBuilder({
             onJumpToStep={setSelectedStepId}
             onMoveStep={(dir) => moveStep(selected.step.id, dir)}
             onMoveCheckToEnd={() => moveCheckToEnd(selected.step.id)}
+            onDeclareRunDataField={declareRunDataField}
+            onDeleteStep={deleteStep}
+            onActionTypeAdopted={() => setCatalogVersion((v) => v + 1)}
           />
         </div>
       )}
@@ -688,21 +968,32 @@ export function LaneBuilder({
           failing step&apos;s card is marked. Publish stays disabled until the REFUSE checks pass.
         </p>
         {checksNote && <p style={{ color: "var(--text-muted)" }}>{checksNote}</p>}
+        {framing && (
+          <p role="note" style={{ color: "var(--warning, #8a6d00)", fontWeight: 600 }}>
+            {framing}
+          </p>
+        )}
         {report ? (
           <ul aria-label="Builder publish checks" style={{ paddingLeft: 20, margin: 0 }}>
-            {report.checks.map((check) => (
-              <li key={`${check.id}:${check.step ?? ""}`} style={{ marginBottom: 8 }}>
+            {displayChecks.map((check) => (
+              <li key={check.key} style={{ marginBottom: 8 }}>
                 <span className={`badge ${check.status === "pass" ? "badge-success" : check.status === "warn" ? "badge-warning" : "badge-danger"}`}>
                   {check.status}
                 </span>{" "}
-                <strong>{check.id}</strong>
-                {check.step && (
+                {check.collapsedCount ? (
+                  <>{check.reason}</>
+                ) : (
                   <>
-                    {" · "}
-                    <span>{check.step}</span>
+                    <strong>{check.id}</strong>
+                    {check.step && (
+                      <>
+                        {" · "}
+                        <span>{check.step}</span>
+                      </>
+                    )}
+                    {check.reason ? <> — {check.reason}</> : ""}
                   </>
                 )}
-                {check.reason ? <> — {check.reason}</> : ""}
               </li>
             ))}
           </ul>
@@ -724,6 +1015,7 @@ export function LaneBuilder({
               <th>Type</th>
               <th>Per line</th>
               <th>Steps</th>
+              <th>Remove</th>
             </tr>
           </thead>
           <tbody>
@@ -739,10 +1031,64 @@ export function LaneBuilder({
                     ? "—"
                     : row.steps.map((c) => `${c.step_id} (${c.access})`).join(", ")}
                 </td>
+                <td>
+                  <button
+                    type="button"
+                    className="btn"
+                    aria-label={`Remove run-data field ${row.field}`}
+                    onClick={() => removeRunDataField(row.field)}
+                  >
+                    Remove
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
+        {(plumbing ?? plumbingFromLocal(def)).plumbing.length === 0 && (
+          <p style={{ color: "var(--text-muted)" }}>No run-data fields declared yet.</p>
+        )}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 8 }}>
+          <label>
+            Key{" "}
+            <input
+              aria-label="New run-data field key"
+              value={newFieldKey}
+              placeholder="carrier"
+              onChange={(e) => setNewFieldKey(e.target.value)}
+            />
+          </label>
+          <label>
+            Type{" "}
+            <select
+              aria-label="New run-data field type"
+              value={newFieldType}
+              onChange={(e) => setNewFieldType(e.target.value)}
+            >
+              <option value="string">string</option>
+              <option value="integer">integer</option>
+              <option value="number">number</option>
+              <option value="boolean">boolean</option>
+              <option value="date">date</option>
+            </select>
+          </label>
+          <label>
+            <input
+              type="checkbox"
+              checked={newFieldRequired}
+              onChange={(e) => setNewFieldRequired(e.target.checked)}
+            />{" "}
+            Required
+          </label>
+          <button type="button" className="btn" onClick={addRunDataField}>
+            Add run-data field
+          </button>
+        </div>
+        {newFieldError && (
+          <p role="alert" style={{ color: "var(--danger)" }}>
+            {newFieldError}
+          </p>
+        )}
       </section>
 
       <section className="card" aria-labelledby="builder-dryrun-heading" style={{ marginTop: 12 }}>
@@ -762,7 +1108,122 @@ export function LaneBuilder({
             ))}
           </select>
         </div>
-        <button type="button" className="btn" onClick={runDryRun} disabled={!anchorRecordId || dryRunning}>
+        {dryRunBlockedReason && (
+          <p role="note" style={{ color: "var(--text-muted)" }}>
+            {dryRunBlockedReason}
+          </p>
+        )}
+        {formSteps.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <h4>Form values</h4>
+            {formSteps.flatMap((f) =>
+              (f.step.fields ?? []).map((field) => (
+                <div key={`${f.step.id}/${field.key}`} style={{ marginBottom: 4 }}>
+                  <label>
+                    {f.step.name} — {field.label}{" "}
+                    {field.type === "boolean" ? (
+                      <input
+                        type="checkbox"
+                        aria-label={`Fixture ${f.step.name} ${field.label}`}
+                        checked={formFixtures[f.step.id]?.[field.key] === "true"}
+                        onChange={(e) =>
+                          setFormFixtures({
+                            ...formFixtures,
+                            [f.step.id]: {
+                              ...(formFixtures[f.step.id] ?? {}),
+                              [field.key]: e.target.checked ? "true" : "false",
+                            },
+                          })
+                        }
+                      />
+                    ) : (
+                      <input
+                        type={field.type === "integer" || field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+                        aria-label={`Fixture ${f.step.name} ${field.label}`}
+                        value={formFixtures[f.step.id]?.[field.key] ?? ""}
+                        onChange={(e) =>
+                          setFormFixtures({
+                            ...formFixtures,
+                            [f.step.id]: {
+                              ...(formFixtures[f.step.id] ?? {}),
+                              [field.key]: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                    )}
+                  </label>
+                </div>
+              )),
+            )}
+          </div>
+        )}
+        {runDataFields.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <h4>Run-data values</h4>
+            {runDataFields.map((field) => (
+              <div key={field.key} style={{ marginBottom: 4 }}>
+                <label>
+                  Run data — {field.key}{" "}
+                  {field.type === "boolean" ? (
+                    <input
+                      type="checkbox"
+                      aria-label={`Fixture run-data ${field.key}`}
+                      checked={runDataFixtures[field.key] === "true"}
+                      onChange={(e) =>
+                        setRunDataFixtures({
+                          ...runDataFixtures,
+                          [field.key]: e.target.checked ? "true" : "false",
+                        })
+                      }
+                    />
+                  ) : (
+                    <input
+                      type={field.type === "integer" || field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+                      aria-label={`Fixture run-data ${field.key}`}
+                      value={runDataFixtures[field.key] ?? ""}
+                      onChange={(e) =>
+                        setRunDataFixtures({ ...runDataFixtures, [field.key]: e.target.value })
+                      }
+                    />
+                  )}
+                </label>
+              </div>
+            ))}
+          </div>
+        )}
+        {approvalSteps.length > 0 && (
+          <div style={{ marginBottom: 8 }}>
+            <h4>Approval decisions</h4>
+            {approvalSteps.map((f) => (
+              <div key={f.step.id} style={{ marginBottom: 4 }}>
+                <label>
+                  {f.step.name}{" "}
+                  <select
+                    aria-label={`Fixture approval ${f.step.name}`}
+                    value={approvalFixtures[f.step.id] ?? "approved"}
+                    onChange={(e) =>
+                      setApprovalFixtures({
+                        ...approvalFixtures,
+                        [f.step.id]: e.target.value as "approved" | "rejected",
+                      })
+                    }
+                  >
+                    <option value="approved">Approve</option>
+                    <option value="rejected">Reject</option>
+                  </select>
+                </label>
+              </div>
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          className="btn"
+          onClick={runDryRun}
+          disabled={!anchorRecordId || dryRunning || !!dryRunBlockedReason}
+          title={dryRunBlockedReason ?? undefined}
+        >
           {dryRunning ? "Running dry run…" : "Run dry run"}
         </button>
         {dryRunError && (
@@ -852,7 +1313,7 @@ export function LaneBuilder({
 
       {def.id === "lane-wh-count" && (
         <div style={{ marginTop: 12 }}>
-          <CountPanel definition={def} />
+          <CountPanel definition={def} onFixturesChange={setCountFixtures} />
         </div>
       )}
 

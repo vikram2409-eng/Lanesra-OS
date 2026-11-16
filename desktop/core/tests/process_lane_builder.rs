@@ -1153,3 +1153,74 @@ fn save_builder_lane_refuses_a_draft_save_for_a_different_lane_id() {
         "the definition's id must match the lane being saved"
     );
 }
+
+// --------------------------------------------------------------------------
+// Builder gaps fix: gap 7 (self-loop at P-06) + catalogue dedupe.
+// Covers: REQ-LANE-024 (WP-0718 AC-2)
+// --------------------------------------------------------------------------
+
+/// Covers: REQ-LANE-024 (WP-0718 AC-2)
+#[test]
+fn builder_check_refuses_a_self_loop_branch_at_p06() {
+    let (conn, ws, admin) = setup();
+    let mut value: Value = serde_json::from_str(&example_lane("lane-wh-receiving")).unwrap();
+    // The discrepancy check's fail branch points at itself.
+    value["lane"]["stages"][1]["steps"][1]["branches"][1]["target"] =
+        json!({"stage": "record-receipt", "step": "discrepancy-check"});
+    let report =
+        process_lane_builder::builder_check(&conn, &ws, &value.to_string(), Some(&admin)).unwrap();
+    assert!(report.refused, "a self-loop lane must refuse: {report:?}");
+    let p06 = report
+        .checks
+        .iter()
+        .find(|c| c.id == "P-06" && c.status == "refuse")
+        .expect("P-06 must refuse the self-loop");
+    assert!(
+        p06.reason
+            .as_deref()
+            .unwrap_or("")
+            .contains("targets the step itself"),
+        "P-06 names the self-loop: {p06:?}"
+    );
+}
+
+/// Covers: REQ-LANE-024 (WP-0718 AC-4)
+#[test]
+fn builder_action_types_lists_each_name_once_with_adopted_winning() {
+    let (conn, ws, admin) = setup();
+    let _seed = seed_warehouse(&conn, &ws, &admin);
+    for name in [
+        "lane-wh-receiving",
+        "lane-wh-pickpack",
+        "lane-wh-count",
+        "lane-wh-replenish",
+    ] {
+        import_lane(&conn, &ws, &admin, &example_lane(name));
+    }
+    // `warehouse.post_stock_move` is used by three lanes on three
+    // different objects, and `purchase_order.set_status` by two: the
+    // unscoped catalogue lists each name once.
+    let all = process_lane_builder::builder_action_types(&conn, &ws, None, Some(&admin)).unwrap();
+    for name in ["warehouse.post_stock_move", "purchase_order.set_status"] {
+        let found = all.iter().filter(|e| e.name == name).count();
+        assert_eq!(found, 1, "'{name}' lists once, not per lane: {all:?}");
+    }
+    // An adopted entry beats a provisional one with the same name.
+    let adopted = process_lane_builder::adopt_builder_action_type(
+        &conn,
+        &ws,
+        "purchase_order.set_status",
+        "purchase_order",
+        Some(&admin),
+    )
+    .unwrap();
+    assert_eq!(adopted.target_object_type, "purchase_order");
+    let all = process_lane_builder::builder_action_types(&conn, &ws, None, Some(&admin)).unwrap();
+    let entry = all
+        .iter()
+        .find(|e| e.name == "purchase_order.set_status")
+        .expect("the adopted type is listed");
+    assert!(entry.adopted, "the adopted entry wins: {entry:?}");
+    assert!(!entry.provisional, "the adopted entry is not provisional");
+    assert_eq!(entry.target_object_type, "purchase_order");
+}
