@@ -415,6 +415,52 @@ async fn execute_node(
                 Some(&output.to_string()),
                 None
             );
+            // WP-0710 AC-2: a lane stage gate that resolves to skipping the
+            // stage - a `skip` condition that holds, or an `entry` condition
+            // that fails - records why in the audit trail, naming the stage and
+            // the condition. A gate that lets the stage run writes nothing.
+            if let Some(gate) = config.get("lane_gate").and_then(|v| v.as_str()) {
+                let skipped = (gate == "skip" && result) || (gate == "entry" && !result);
+                if skipped {
+                    // The lane anchor is the run's source entity (it is set on
+                    // the run row before the graph is driven; the `anchor_*`
+                    // columns are only filled in once the drive parks).
+                    let anchor_object = run
+                        .source_entity_type
+                        .as_deref()
+                        .or(run.anchor_object_key.as_deref());
+                    let anchor_record = run
+                        .source_entity_id
+                        .as_deref()
+                        .or(run.anchor_record_id.as_deref());
+                    let stage_name = config
+                        .get("lane_stage_name")
+                        .and_then(|v| v.as_str())
+                        .or_else(|| config.get("lane_stage_id").and_then(|v| v.as_str()))
+                        .unwrap_or("stage");
+                    let reason = if gate == "skip" {
+                        "its skip condition held"
+                    } else {
+                        "its entry condition was not met"
+                    };
+                    let message = format!("stage '{stage_name}' was skipped: {reason}");
+                    let detail = json!({
+                        "stage_id": config.get("lane_stage_id"),
+                        "gate": gate,
+                        "condition": config.get("lane_condition"),
+                    });
+                    crate::repositories::audit_repo::record(
+                        conn,
+                        workspace_id,
+                        actor,
+                        "lane_stage_skipped",
+                        anchor_object,
+                        anchor_record,
+                        &message,
+                        Some(&detail.to_string()),
+                    )?;
+                }
+            }
             let label = if result { "true" } else { "false" };
             Ok(NodeOutcome::Continue(
                 branch_outgoing(graph, &node.id, label)?.to_string(),

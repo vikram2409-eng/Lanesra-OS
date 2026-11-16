@@ -508,3 +508,186 @@ async fn an_item_is_gated_by_its_own_child_field_assignee() {
         Some("40")
     );
 }
+
+// --------------------------------------------------------------------------
+// AC-3: a lane cannot start on a record that fails its start condition, and
+// the reason is shown.
+// --------------------------------------------------------------------------
+
+// Covers: REQ-LANE-017 (WP-0710 AC-3)
+#[tokio::test]
+async fn a_lane_refuses_to_start_on_a_record_that_fails_its_start_condition() {
+    let (conn, ws, admin) = setup();
+    make_object(&conn, &ws, &admin, "batch", "BAT");
+    make_text_field(&conn, &ws, &admin, "batch", "state");
+
+    // The lane only runs on a batch whose `state` is "ready".
+    let lane = json!({
+        "format_version": "1.0.0",
+        "lane": {
+            "id": "lane-gated", "name": "Gated", "object_key": "batch",
+            "version": 1, "status": "published",
+            "run_data": {"fields": []},
+            "start_condition": {
+                "field": "$record.state", "operator": "equals", "value": "ready"
+            },
+            "stages": [{
+                "id": "do", "name": "Do", "steps": [{
+                    "id": "step", "name": "Step", "kind": "form",
+                    "role": "r", "required": true, "fields": []
+                }]
+            }]
+        }
+    });
+    process_lane_service::import_lane_definition(&conn, &ws, &lane.to_string(), Some(&admin))
+        .unwrap();
+    process_lane_service::publish_lane(&conn, &ws, "lane-gated", Some(&admin)).unwrap();
+
+    let ready = make_record(&conn, &ws, &admin, "batch", "BAT-READY");
+    set_field(&conn, &admin, "batch", &ready, "state", "ready");
+    let not_ready = make_record(&conn, &ws, &admin, "batch", "BAT-HOLD");
+    set_field(&conn, &admin, "batch", &not_ready, "state", "hold");
+
+    // The record that meets the condition starts.
+    let run = process_lane_service::start_lane_run(
+        &conn,
+        &ws,
+        &master_key(),
+        "lane-gated",
+        &ready,
+        Some(&admin),
+    )
+    .await
+    .unwrap();
+    assert_eq!(run.status, "waiting_person");
+
+    // The record that fails it is refused, and the reason names the start
+    // condition - nothing is started.
+    let err = process_lane_service::start_lane_run(
+        &conn,
+        &ws,
+        &master_key(),
+        "lane-gated",
+        &not_ready,
+        Some(&admin),
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        format!("{err:?}")
+            .to_lowercase()
+            .contains("start condition"),
+        "the refusal explains the start condition: {err:?}"
+    );
+    assert!(
+        process_lane_service::list_lane_runs_for_record(&conn, &ws, "batch", &not_ready)
+            .unwrap()
+            .runs
+            .is_empty(),
+        "a refused start leaves no run on the record"
+    );
+}
+
+// --------------------------------------------------------------------------
+// AC-2: a stage whose skip condition holds is skipped, and the audit trail
+// says why.
+// --------------------------------------------------------------------------
+
+// Covers: REQ-LANE-017 (WP-0710 AC-2)
+#[tokio::test]
+async fn a_stage_whose_skip_condition_holds_is_skipped_and_audited() {
+    let (conn, ws, admin) = setup();
+    make_object(&conn, &ws, &admin, "batch", "BAT");
+    make_text_field(&conn, &ws, &admin, "batch", "state");
+
+    // Two stages. The first is skipped when `state` is "skip"; the run then
+    // parks on the second stage's step. Each stage's step is a plain form so
+    // the run stops where it lands.
+    let lane = json!({
+        "format_version": "1.0.0",
+        "lane": {
+            "id": "lane-skip", "name": "Skip", "object_key": "batch",
+            "version": 1, "status": "published",
+            "run_data": {"fields": []},
+            "stages": [
+                {
+                    "id": "alpha", "name": "Alpha",
+                    "skip_condition": {
+                        "field": "$record.state", "operator": "equals", "value": "skip"
+                    },
+                    "steps": [{
+                        "id": "a-step", "name": "A", "kind": "form",
+                        "role": "r", "required": true, "fields": []
+                    }]
+                },
+                {
+                    "id": "beta", "name": "Beta",
+                    "steps": [{
+                        "id": "b-step", "name": "B", "kind": "form",
+                        "role": "r", "required": true, "fields": []
+                    }]
+                }
+            ]
+        }
+    });
+    process_lane_service::import_lane_definition(&conn, &ws, &lane.to_string(), Some(&admin))
+        .unwrap();
+    process_lane_service::publish_lane(&conn, &ws, "lane-skip", Some(&admin)).unwrap();
+
+    // A record that meets the skip condition: Alpha is skipped, and the run
+    // parks on Beta's step.
+    let skip_rec = make_record(&conn, &ws, &admin, "batch", "BAT-SKIP");
+    set_field(&conn, &admin, "batch", &skip_rec, "state", "skip");
+    let run = process_lane_service::start_lane_run(
+        &conn,
+        &ws,
+        &master_key(),
+        "lane-skip",
+        &skip_rec,
+        Some(&admin),
+    )
+    .await
+    .unwrap();
+    assert_eq!(run.status, "waiting_person");
+
+    // The audit trail names the skipped stage and why.
+    let audit =
+        lanesra_core::repositories::audit_repo::list_for_entity(&conn, "batch", &skip_rec).unwrap();
+    let skip_entry = audit
+        .iter()
+        .find(|e| e.event_type == "lane_stage_skipped")
+        .expect("a lane_stage_skipped audit entry");
+    assert!(
+        skip_entry.summary.contains("Alpha"),
+        "the audit names the stage: {}",
+        skip_entry.summary
+    );
+    assert!(
+        skip_entry.summary.to_lowercase().contains("skip condition"),
+        "the audit says why: {}",
+        skip_entry.summary
+    );
+
+    // A record that does not meet the skip condition runs Alpha normally - no
+    // skip is recorded.
+    let keep_rec = make_record(&conn, &ws, &admin, "batch", "BAT-KEEP");
+    set_field(&conn, &admin, "batch", &keep_rec, "state", "run");
+    process_lane_service::start_lane_run(
+        &conn,
+        &ws,
+        &master_key(),
+        "lane-skip",
+        &keep_rec,
+        Some(&admin),
+    )
+    .await
+    .unwrap();
+    let kept_audit =
+        lanesra_core::repositories::audit_repo::list_for_entity(&conn, "batch", &keep_rec).unwrap();
+    assert!(
+        !kept_audit
+            .iter()
+            .any(|e| e.event_type == "lane_stage_skipped"),
+        "a stage that runs is not recorded as skipped"
+    );
+}

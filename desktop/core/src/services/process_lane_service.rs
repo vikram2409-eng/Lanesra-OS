@@ -785,6 +785,10 @@ pub fn compile_lane(lane: &LaneDefinition) -> AppResult<ExecutionGraphInput> {
                 runtime_conditions(condition).unwrap_or_else(|| ("all".to_string(), Vec::new()));
             let mut config = Map::new();
             config.insert("lane_stage_id".into(), json!(stage.id));
+            config.insert("lane_stage_name".into(), json!(stage.name));
+            // WP-0710 AC-2: the runtime audits a skipped stage, and needs to
+            // know which kind of gate this is to tell "skipped" from "entered".
+            config.insert("lane_gate".into(), json!(gate_name));
             config.insert(
                 "lane_condition".into(),
                 serde_json::to_value(condition).unwrap_or(json!(null)),
