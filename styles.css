@@ -2562,6 +2562,50 @@ body.has-demo-banner{padding-top:36px}
 .lane-o360-run{margin-bottom:12px}
 .lane-o360-run-head{margin-bottom:6px}
 @media(max-width:1100px){.lane-layout{grid-template-columns:minmax(0,1fr)}}
+/* ---- Mobile round 2 (2026-11-15): record pages on phones ----
+   The user's iPhone screenshots (390px) after PR #785: the lane-runner
+   fixes landed, but the RECORD pages were still laid out 818px wide inside
+   the 390px .main-area scroll container, so every card ran off the right
+   edge (lane title clipped, Lines table ORDERED column cut, headings
+   half-hidden under the sticky topbar) and iOS Safari inflated fonts on
+   the too-wide page, which is why the type looked uneven. Root causes:
+   1. .record-grid collapsed to `1fr` (= minmax(auto,1fr)) at <=1040px, so
+      the grid item's automatic minimum (its min-content, driven by the
+      Lines .table's 760px min-width) widened the single column to 802px.
+   2. The topbar's five fixed-width actions left the search ~97px wide.
+   3. scroll-padding/scroll-margin lived on html/.page-head, but phones
+      scroll inside .main-area, so scroll targets landed under the topbar.
+   4. .page bottom padding had no safe-area allowance for the fixed pill. */
+@media(max-width:1040px){
+  .record-grid{grid-template-columns:minmax(0,1fr)}
+  .record-grid>*{min-width:0}
+}
+@media(max-width:900px){
+  /* The phones' real scroll container: keep scroll targets below the
+     sticky topbar and above the fixed bottom nav. */
+  html.app-mode .main-area{scroll-padding-top:70px;scroll-padding-bottom:calc(96px + env(safe-area-inset-bottom,0px))}
+  .record-head,.card-head{scroll-margin-top:70px}
+  .page{padding-bottom:calc(var(--space-8)*3 + env(safe-area-inset-bottom,0px))}
+  .bottom-nav{bottom:calc(var(--space-3) + env(safe-area-inset-bottom,0px))}
+}
+@media(max-width:640px){
+  /* Coherent mobile type scale: no fixed px heading may force overflow. */
+  .record-name h2{font-size:clamp(20px,5.6vw,24px)}
+  .page-heading h2{font-size:clamp(20px,5.6vw,24px)}
+  .card-head h3{overflow-wrap:break-word}
+  .lane-step-card h3{font-size:clamp(17px,4.6vw,20px)}
+  .field-grid .field-value{font-size:15px}
+  /* iOS Safari inflates fonts on pages wider than the viewport
+     (-webkit-text-size-adjust:auto); with the grid fixed the page is
+     390px wide, and this pins the designed sizes so the type stays even. */
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+}
+@media(max-width:480px){
+  /* Topbar: hide the three lowest-priority actions so the search has room
+     to show its placeholder (was ~97px wide, "Searc"). Bell + avatar stay. */
+  .bar-actions .notif-wrap:has(> #voiceButton){display:none}
+  .bar-actions #helpButton,.bar-actions #themeToggle{display:none}
+}
 /* Print / Save as PDF (WP-0712): the lane blueprint's Print button calls
 window.print(); the print sheet shows only the blueprint itself - the
 sidebar, topbar, demo banner, bottom nav and toasts stay on screen. */
