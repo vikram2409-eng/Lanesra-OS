@@ -3,8 +3,8 @@ id: WP-0710
 title: Repeat over child records, and stage and start conditions
 phase: 7
 epic: E7.2 Steps and rules
-status: proposed
-owner: unassigned
+status: in_progress
+owner: claude
 planned_for: claude
 depends_on: [WP-0705]
 requirements: [REQ-LANE-017]
@@ -12,9 +12,9 @@ estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
-branch: 
+branch: wp/WP-0710-per-item-assignment-runtime
 pr: 
-updated: 2026-11-14
+updated: 2026-11-16
 ---
 
 # WP-0710 — Repeat over child records, and stage and start conditions
@@ -52,3 +52,4 @@ Model line-by-line work and conditional stages instead of hand-building them.
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 - 2026-11-14 muse: Schema-extension proposal for RAID Q-33..Q-36 written at program/spec/schema-extension-proposal-q33-q36.md (prep track, separate PR). Q-33 (`repeat_over.assign`) and Q-34 (`skip_when`) are this WP's to implement on owner acceptance; Q-35 is WP-0705's, Q-36 is a role-model change. This WP stays proposed and unassigned — the proposal settles the design so the engine can build it cleanly; it does not start the build.
+- 2026-11-16 claude: AC-1 built. Per-item execution on the lane service: a repeating step (`repeat_over` over a relationship of the anchor) is worked one item per child record. `submit_person_step_item` validates the item's form fields, writes its values to the child record (`record.<coll>[].<field>`, governed path) or a per-child run-data map (`run_data.<key>` → `{item_id: value}`, the dry run's shape), marks the item done under `__items.<step_id>`, and hands off to `drive_child_lanes` which jumps the run past the loop (via the new `graph_runtime_service::resume_lane_run_at_node`) once every item is done; an empty or all-done repeating step advances instead of parking. Per-item assignment (Q-33 `repeat_over.assign` by `child_field`) reads each item's assignee from a child field and gates completion on it. Concurrency-safe: each submit writes only its own item's keys, so two people never overwrite each other. Wired as the `submit_process_lane_step_item` Tauri command and `POST /api/admin/process-lane-runs/:id/submit-item`. Tests: new `core/tests/process_lane_repeat_conditions.rs` (4). Next (mine): AC-2 stage `skip_when` + audit, AC-3 lane start condition + reason. AC-5 demo + AC-6 docs are muse's lane. Do not merge — report when the engine ACs are verified.

@@ -105,6 +105,10 @@ pub fn router() -> Router<SharedState> {
             post(submit_process_lane_step_admin),
         )
         .route(
+            "/api/admin/process-lane-runs/:id/submit-item",
+            post(submit_process_lane_step_item_admin),
+        )
+        .route(
             "/api/admin/process-lane-runs/:id/skip-step",
             post(skip_process_lane_step_admin),
         )
@@ -571,6 +575,43 @@ async fn submit_process_lane_step_admin(
             &workspace_id,
             &master_key,
             &id,
+            &body.values,
+            Some(&actor),
+        )
+        .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+struct SubmitProcessLaneStepItemBody {
+    item_id: String,
+    #[serde(default)]
+    values: serde_json::Map<String, Value>,
+}
+
+/// WP-0710: completes one item of a repeating step on a `waiting_person` lane
+/// run - the per-item counterpart of `submit-step`. Two people can submit
+/// different items at once; the run advances past the loop once the last item
+/// is done.
+async fn submit_process_lane_step_item_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(body): Json<SubmitProcessLaneStepItemBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::submit_person_step_item(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &id,
+            &body.item_id,
             &body.values,
             Some(&actor),
         )

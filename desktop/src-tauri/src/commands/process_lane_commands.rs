@@ -338,6 +338,40 @@ pub async fn submit_process_lane_step(
     .await
 }
 
+/// WP-0710: completes one item of a repeating step (`repeat_over`) on a
+/// `waiting_person` lane run - validates and writes just that item's values
+/// (to its child record or a per-child run-data field) and, when it is the
+/// last open item, advances the run past the loop. Two people can submit
+/// different items at once without overwriting each other. Async because
+/// resuming the run may reach an Agent node.
+#[tauri::command]
+pub async fn submit_process_lane_step_item(
+    state: State<'_, AppState>,
+    run_id: String,
+    item_id: String,
+    values: Map<String, Value>,
+) -> AppResult<GraphRun> {
+    let master_key = crate::commands::resolve_master_key(&state)?;
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::submit_person_step_item(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &run_id,
+            &item_id,
+            &values,
+            actor.as_deref(),
+        )
+        .await
+    })
+    .await
+}
+
 /// WP-0705: skips the current optional step of a lane run, recording the
 /// reason. A required step is refused by the service. Async because resuming
 /// the run may reach an Agent node.
