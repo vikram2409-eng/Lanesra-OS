@@ -481,7 +481,9 @@ describe("LaneRunnerView", () => {
     // by keyboard, and the locked ones are disabled, not fake text.
     const list = screen.getByRole("group", { name: "Steps — Verify" });
     const buttons = within(list).getAllByRole("button");
-    expect(buttons.length).toBe(2);
+    // Three steps in Verify since WP-0716 AC-5 added the verify-supplier
+    // child step (was two when this test was written).
+    expect(buttons.length).toBe(3);
     expect(buttons[0]).not.toBeDisabled();
     expect(screen.getByRole("button", { name: "Complete step" })).not.toBeDisabled();
   });

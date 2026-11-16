@@ -21,6 +21,7 @@ import { AdminPanel, type AdminTab } from "./features/settings/Settings";
 import { AssistantPage } from "./features/assistant/AssistantPage";
 import { LaneBlueprintPage } from "./features/lanes/LaneBlueprint";
 import { LaneRunnerPage } from "./features/lanes/LaneRunner";
+import { LaneBuilderPage } from "./features/builder/LaneBuilderPage";
 import { CustomObjectRecords } from "./features/customObjects/CustomObjectRecords";
 import { Account } from "./features/account/Account";
 import { VoiceContextProvider } from "./features/voice/VoiceContext";
@@ -124,6 +125,12 @@ function Ready({
   // WP-0707: the lane runner is a full screen opened from a record or a
   // list ("Start lane run"); closing it returns to the section underneath.
   const [laneRun, setLaneRun] = useState<{ runId: string; recordLabel: string } | null>(null);
+  // WP-0718: the lane builder is the same kind of full screen, opened
+  // from the blueprint page ("Open in builder" with a lane key, "New
+  // lane" with null). It is not a `Section` — the Section union lives
+  // in AppShell.tsx, outside this WP's ownership — so it rides on this
+  // overlay state exactly like the runner does.
+  const [builderLane, setBuilderLane] = useState<{ laneKey: string | null } | null>(null);
   function navigateTo(target: Section, pre: Prefill) {
     setPrefill(pre);
     setSection(target);
@@ -183,6 +190,8 @@ function Ready({
       >
         {laneRun ? (
           <LaneRunnerPage runId={laneRun.runId} recordLabel={laneRun.recordLabel} onClose={() => setLaneRun(null)} />
+        ) : builderLane ? (
+          <LaneBuilderPage laneKey={builderLane.laneKey} onClose={() => setBuilderLane(null)} />
         ) : (
           <>
         {section === "dashboard" && (
@@ -236,7 +245,9 @@ function Ready({
         {section === "assistant" && (
           <AssistantPage user={user} onOpenAdminTab={(tab) => openAdminTab(tab as AdminTab)} />
         )}
-        {section === "lanes" && <LaneBlueprintPage />}
+        {section === "lanes" && (
+          <LaneBlueprintPage onOpenInBuilder={(laneKey) => setBuilderLane({ laneKey })} />
+        )}
         {section === "admin" && <AdminPanel openAdminTab={pendingAdminTab} />}
         {section === "account" && <Account user={user} />}
         {activeCustomObject && (

@@ -216,6 +216,23 @@ pub fn set_version_published(
     Ok(())
 }
 
+/// Replaces a draft version's stored definition in place (WP-0718: the
+/// builder saves an author's edits into the draft they are working on).
+/// Only ever called on a draft version - published versions are immutable
+/// and a run keeps the version it started with.
+pub fn update_version_definition(
+    conn: &Connection,
+    version_id: &str,
+    definition_json: &str,
+    actor_user_id: Option<&str>,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE process_lane_versions SET definition_json = ?1, updated_at = ?2, updated_by = ?3 WHERE id = ?4",
+        (definition_json, now_iso(), actor_user_id, version_id),
+    )?;
+    Ok(())
+}
+
 /// The active run of a lane on one anchor record, if any - the one-active-
 /// run rule (ADR-0024 §6). A run is active while its status is not terminal;
 /// a run's lane is read from its graph's `source_id` (`{lane_key}@v{n}`),

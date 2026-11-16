@@ -427,6 +427,101 @@ pub async fn cancel_process_lane_run(
     .await
 }
 
+/// WP-0718 (REQ-LANE-024 AC-1/AC-2): saves a builder lane - a new lane
+/// when `lane_key` is None (the import path), a new draft version of the
+/// existing lane otherwise (the version path). The definition JSON is the
+/// builder's own output; the service validates it either way.
+#[tauri::command]
+pub fn save_builder_lane(
+    state: State<AppState>,
+    lane_key: Option<String>,
+    definition_json: String,
+) -> AppResult<lanesra_core::services::process_lane_builder::BuilderSaveResult> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    lanesra_core::services::process_lane_builder::save_builder_lane(
+        &conn,
+        &workspace_id,
+        lane_key.as_deref(),
+        &definition_json,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0718 (REQ-LANE-024 AC-2): the publish report for an unsaved draft -
+/// the same P-01..P-16 checks `check_process_lane_publish` runs on a
+/// stored lane, evaluated on the definition the builder holds. No side
+/// effects.
+#[tauri::command]
+pub fn builder_check_lane(
+    state: State<AppState>,
+    definition_json: String,
+) -> AppResult<lanesra_core::services::process_lane_publish::PublishReport> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    lanesra_core::services::process_lane_builder::builder_check(
+        &conn,
+        &workspace_id,
+        &definition_json,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0718 (REQ-LANE-024 AC-2): dry-runs an unsaved draft against an
+/// anchor record - the same walk `dry_run_process_lane` runs on a stored
+/// lane. Posts nothing and changes nothing.
+#[tauri::command]
+pub fn builder_dry_run_lane(
+    state: State<AppState>,
+    definition_json: String,
+    anchor_record_id: String,
+    fixtures: lanesra_core::services::process_lane_publish::DryRunFixtures,
+    expected_outcome: Option<String>,
+) -> AppResult<lanesra_core::services::process_lane_publish::DryRunReport> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    lanesra_core::services::process_lane_builder::builder_dry_run(
+        &conn,
+        &workspace_id,
+        &definition_json,
+        &anchor_record_id,
+        &fixtures,
+        expected_outcome.as_deref(),
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0718 (REQ-LANE-024 AC-4, design §4): the per-step reads/writes map
+/// and the lane-level run-data plumbing table for an unsaved draft. Pure
+/// function over the definition; no side effects.
+#[tauri::command]
+pub fn builder_reads_writes(
+    state: State<AppState>,
+    definition_json: String,
+) -> AppResult<lanesra_core::services::process_lane_builder::ReadsWritesReport> {
+    let _ = &state;
+    lanesra_core::services::process_lane_builder::builder_reads_writes(&definition_json)
+}
+
+/// WP-0718 (REQ-LANE-024 AC-4, design §6): the Action-Type picker
+/// catalogue for an object (or every object when `object_key` is None):
+/// the adopted catalog entries plus the provisional ids the stored
+/// lanes use, each marked provisional.
+#[tauri::command]
+pub fn builder_action_types(
+    state: State<AppState>,
+    object_key: Option<String>,
+) -> AppResult<Vec<lanesra_core::services::process_lane_builder::BuilderActionType>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    lanesra_core::services::process_lane_builder::builder_action_types(
+        &conn,
+        &workspace_id,
+        object_key.as_deref(),
+        current_actor(&state).as_deref(),
+    )
+}
+
 /// WP-0706: hands the current form step of a lane run to a different role.
 #[tauri::command]
 pub fn handoff_process_lane_step(

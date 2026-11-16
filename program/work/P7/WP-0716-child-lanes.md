@@ -3,14 +3,14 @@ id: WP-0716
 title: Child lanes
 phase: 7
 epic: E7.2 Steps and rules
-status: in_review
+status: done
 owner: claude
 planned_for: muse
 depends_on: [WP-0706]
 requirements: [REQ-LANE-023]
 estimate: M
 editions: [desktop, workspace, demo]
-delivered: []
+delivered: [desktop, workspace, demo]
 docs: [process-lanes]
 branch: wp/WP-0716-child-lanes
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/783
@@ -56,3 +56,4 @@ Let one process hand part of the job to another and wait.
 - 2026-11-15 muse: Test fix (separate commit, per repo AGENTS.md — a wrong test is fixed, never weakened): the Program tracker CI job failed on the AC-5 head because two programctl self-tests asserted the Receiving lane has 12 steps — `test_lane_blueprint_in_demo.py` and `test_lane_definition_in_demo.py`. The AC-5 child step makes it 13, so both now assert 13 and additionally assert the child step itself (id `verify-supplier`, `child_lane` lane `lane-wh-supplier-check` on `$record.supplier_id`). Proof: `python3 -m unittest discover -s program/tools -p 'test_*.py'` 85/85 OK (was 2 failures); `programctl validate` 0 errors; schema check 5 examples validate. Next: push, then merge #783 when CI is green.
 - 2026-11-15 muse: Rust test fix (separate commit, per repo AGENTS.md): CI failed on the test-fix head 1204cacd — three Rust tests still asserted the Receiving lane has 12 steps: `process_lane_blueprint.rs` (core, steps.len), `process_lane_blueprint_http.rs` (server, shown_steps.len), `process_lane_definition.rs` (compiled graph nodes 19 / edges 25, plus the verify-stage node count 3). All now assert the 13-step shape (nodes 20, edges 26, verify stage 4 nodes) and additionally assert the child step itself (verify-supplier node is human_step; blueprint tests assert its child_lane lane/anchor). Proof: the three test targets green locally (6/6 + 13/13 + 1/1), fmt clean, clippy 0 warnings. Next: push, then merge #783 when CI is green.
 - 2026-11-15 muse: Publish-check test fix (separate commit, per repo AGENTS.md): CI failed on the Rust-fix head 2301317a — `warehouse_lanes_refuse_publish_with_named_p12_reasons` failed P-11 on the child step: the anchor `$record.supplier_id` did not resolve because the test's `seed_warehouse` modelled purchase_order with only `status` + `expected_date`. The real warehouse purchase_order object has `supplier_id` (demo seed: sup-01), so the seed now creates it. The lane and the P-11 check were both right; the fixture was incomplete. (Note: the gate's paraphrase of the P-11/P-12/P-13 reasons was wrong — verified against the real failure output, the only new refusal was the single P-11 entry on verify-supplier.) Proof: `process_lane_publish` 20/20 locally. Next: push, then merge #783 when CI is green.
+- 2026-11-15 muse: Merged (PR #783, merge cdfcc07; CI + Program tracker all green on head 8fcfdd81, mergeable clean). Status in_review → done, delivered [desktop, workspace, demo]. Closeout folded into WP-0718's claim commit.

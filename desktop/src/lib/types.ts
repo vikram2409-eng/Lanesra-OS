@@ -5146,3 +5146,74 @@ export interface DryRunReport {
   completed: boolean;
   stopped_reason: string | null;
 }
+
+// WP-0718: the visual lane builder (REQ-LANE-024). These mirror the
+// core service shapes in core::services::process_lane_builder,
+// verified against that file 2026-11-15 (after the core agent's
+// commands landed): snake_case, as the API returns them. Until the
+// WP-0705 catalog lands, every Action Type the four warehouse lanes
+// use is provisional: the picker marks them provisional and the P-12
+// check refuses publish on them. An Action Type is identified by its
+// `name` (e.g. "Set Tracking") — there is no separate id.
+export interface BuilderActionTypeParameter {
+  key: string;
+  label: string;
+  field_type: string;
+  required: boolean;
+  default_value: string | null;
+}
+
+export interface BuilderActionType {
+  name: string;
+  target_object_type: string;
+  adopted: boolean;
+  provisional: boolean;
+  effect: string | null;
+  description: string;
+  parameters: BuilderActionTypeParameter[];
+}
+
+export interface BuilderStepRead {
+  reference: string;
+  context: string;
+}
+
+export interface BuilderStepWrite {
+  action_type: string;
+  inputs: string[];
+}
+
+export interface BuilderStepReadsWrites {
+  step_id: string;
+  stage_id: string;
+  kind: string;
+  reads: BuilderStepRead[];
+  writes: BuilderStepWrite[];
+  run_data_writes: string[];
+}
+
+export interface BuilderPlumbingCell {
+  step_id: string;
+  /** `read`, `write` or `both`. */
+  access: string;
+}
+
+export interface BuilderPlumbingRow {
+  field: string;
+  field_type: string | null;
+  per_child: boolean;
+  steps: BuilderPlumbingCell[];
+}
+
+export interface BuilderReadsWrites {
+  lane_key: string;
+  steps: BuilderStepReadsWrites[];
+  lane_reads: BuilderStepRead[];
+  plumbing: BuilderPlumbingRow[];
+}
+
+export interface BuilderSaveResult {
+  lane_key: string;
+  version: number;
+  status: string;
+}

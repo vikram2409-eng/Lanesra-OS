@@ -1513,6 +1513,34 @@ pub fn dry_run_lane(
     })?;
     let file = parse_definition_lenient(&version_row.definition_json)?;
     let lane = file.lane;
+    dry_run_definition(
+        conn,
+        workspace_id,
+        &lane,
+        version_row.version,
+        anchor_record_id,
+        fixtures,
+        expected_outcome,
+        actor_user_id,
+    )
+}
+
+/// The definition-level dry-run walk (WP-0718, REQ-LANE-024): the same
+/// walk `dry_run_lane` runs, but over an already-parsed definition
+/// instead of a stored lane - so the visual builder can dry-run an
+/// unsaved draft. The stored-lane wrapper above is the only other
+/// caller; the walk itself is shared, never duplicated.
+pub fn dry_run_definition(
+    conn: &Connection,
+    workspace_id: &str,
+    lane: &LaneDefinition,
+    lane_version: i64,
+    anchor_record_id: &str,
+    fixtures: &DryRunFixtures,
+    expected_outcome: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> AppResult<DryRunReport> {
+    require_admin(conn, actor_user_id)?;
     let record = custom_record_service::get(conn, anchor_record_id)?;
     if record.workspace_id != workspace_id || record.object_key != lane.object_key {
         return Err(classified_validation(
@@ -1524,7 +1552,7 @@ pub fn dry_run_lane(
     // The live state: the seed record's fields, the fixtures' run data,
     // and one child list per repeat collection in the lane.
     let anchor_fields = record_field_names(conn, workspace_id, &lane.object_key)?;
-    let run_data_keys: HashSet<String> = run_data_fields(&lane).keys().cloned().collect();
+    let run_data_keys: HashSet<String> = run_data_fields(lane).keys().cloned().collect();
     let mut children: HashMap<String, Vec<DryChild>> = HashMap::new();
     let mut child_fields: HashMap<String, HashSet<String>> = HashMap::new();
     let mut collections: Vec<String> = Vec::new();
@@ -1590,7 +1618,7 @@ pub fn dry_run_lane(
 
     let mut report = DryRunReport {
         lane_key: lane.id.clone(),
-        lane_version: version_row.version,
+        lane_version,
         anchor_object_key: lane.object_key.clone(),
         anchor_record_id: anchor_record_id.to_string(),
         would_start: true,
@@ -1719,7 +1747,7 @@ pub fn dry_run_lane(
         let mut end_outcome: Option<String> = None;
         match step.kind.as_str() {
             "form" => {
-                match simulate_form_step(&mut state, fixtures, &lane, stage, step)? {
+                match simulate_form_step(&mut state, fixtures, lane, stage, step)? {
                     FormOutcome::Executed => {
                         report.steps.push(DryRunStep {
                             stage_id: stage.id.clone(),
@@ -1762,7 +1790,7 @@ pub fn dry_run_lane(
                 }
             }
             "record" => {
-                match simulate_record_step(&mut state, fixtures, &lane, stage, step, &mut report)? {
+                match simulate_record_step(&mut state, fixtures, lane, stage, step, &mut report)? {
                     RecordOutcome::Executed => {
                         report.steps.push(DryRunStep {
                             stage_id: stage.id.clone(),
@@ -1858,7 +1886,7 @@ pub fn dry_run_lane(
                 }
             }
             "approval" => {
-                match simulate_approval_step(&mut state, fixtures, &lane, stage, step, &mut report)?
+                match simulate_approval_step(&mut state, fixtures, lane, stage, step, &mut report)?
                 {
                     ApprovalOutcome::Executed { decision, target } => {
                         report.steps.push(DryRunStep {
