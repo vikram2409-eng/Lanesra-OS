@@ -1705,6 +1705,7 @@ table.company-table .actions{justify-content:flex-start}
 .bottom-nav .bn-ic{font-size:20px;line-height:1}
 .bottom-nav button.active{background:color-mix(in srgb,var(--muted) 70%,transparent);color:var(--foreground)}
 .page{padding-bottom:calc(var(--space-8)*3)}
+html{scroll-padding-bottom:96px}
 }
 }
 
@@ -2391,6 +2392,7 @@ button.settings-count:hover{border-color:color-mix(in srgb,var(--primary) 38%,tr
  .og-toolbar-card .tool-group{border-bottom:none!important;border-right:1px solid #f3f4f6!important;
   padding-right:16px!important;padding-bottom:0!important;margin-bottom:0!important;}
  .og-toolbar-card .tool-group:last-child{border-right:none!important;padding-right:0!important;}
+}
 /* og-mockup-parity: exact mockup matching */
 /* B2. Active edges → indigo 3px on hover (mockup .edge.active) */
 .ontology-graph-canvas.graph-hover-dim line.graph-hover-on{stroke:#4f46e5!important;stroke-width:3!important;stroke-opacity:1!important;}
@@ -2492,6 +2494,7 @@ body.has-demo-banner{padding-top:36px}
 .lane-stages{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0 20px}
 .lane-stage{display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--muted);font-size:13px;line-height:1.3}
 .lane-stage-name{white-space:nowrap}
+@media(max-width:400px){.lane-stage-name{white-space:normal}}
 .lane-stage.current{border-color:var(--brand);color:var(--text);font-weight:600;background:color-mix(in srgb,var(--brand) 7%,var(--panel));box-shadow:0 0 0 1px var(--brand),0 2px 8px rgba(79,70,229,.12)}
 .lane-stage.done{color:var(--success)}
 .lane-stage-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);font-size:12px;flex-shrink:0}
@@ -2558,7 +2561,7 @@ body.has-demo-banner{padding-top:36px}
 .kv b{text-align:right;font-weight:600;overflow-wrap:break-word;min-width:0}
 .lane-o360-run{margin-bottom:12px}
 .lane-o360-run-head{margin-bottom:6px}
-@media(max-width:1100px){.lane-layout{grid-template-columns:1fr}}
+@media(max-width:1100px){.lane-layout{grid-template-columns:minmax(0,1fr)}}
 /* Print / Save as PDF (WP-0712): the lane blueprint's Print button calls
 window.print(); the print sheet shows only the blueprint itself - the
 sidebar, topbar, demo banner, bottom nav and toasts stay on screen. */
