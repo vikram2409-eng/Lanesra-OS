@@ -2512,3 +2512,49 @@ sidebar, topbar, demo banner, bottom nav and toasts stay on screen. */
  .main-area{display:block}
  .content{padding:0}
 }
+
+/* Visual lane builder (WP-0718, demo): stage chevrons, step cards,
+   branch arrows, step panel, condition tree, plumbing table. */
+.lb-chevrons{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:14px 0}
+.lb-stage-chevron{display:inline-flex;align-items:center;padding:8px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);font-weight:600}
+.lb-chevron-sep{color:var(--muted)}
+.lb-stage{margin-bottom:20px}
+.lb-stage-head{margin-bottom:8px}
+.lb-step-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px;background:var(--card);cursor:pointer}
+.lb-step-card:hover{border-color:var(--brand)}
+.lb-step-card.lb-selected{border-color:var(--brand);box-shadow:0 0 0 2px color-mix(in srgb,var(--brand) 30%,transparent)}
+.lb-step-card.lb-failed{border-left:4px solid var(--destructive)}
+.lb-step-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.lb-order{font-weight:700;color:var(--muted)}
+.lb-step-moves{margin-left:auto;display:inline-flex;gap:4px}
+.lb-step-moves .btn{padding:2px 8px}
+.lb-step-meta{font-size:13px;color:var(--muted);margin-top:4px}
+.lb-step-rw{font-size:13px;margin-top:4px;overflow-wrap:anywhere}
+.lb-step-child{font-size:13px;color:var(--muted);margin-top:4px}
+.lb-check-last-warn{margin-top:8px;padding:8px;border:1px solid var(--warn);border-radius:8px;font-size:13px}
+.lb-gap{padding:8px;border:1px solid var(--destructive);border-radius:8px;font-size:13px}
+.lb-branches-svg{max-width:100%;height:auto;display:block;overflow-x:auto;color:var(--text)}
+.lb-branches-svg .lb-node rect{fill:var(--panel);stroke:var(--line)}
+.lb-branches-svg .lb-node text{fill:var(--text);font-size:12px}
+.lb-arrow{stroke:var(--text);stroke-width:1.5;marker-end:url(#lbArrow)}
+.lb-arrow-gap{stroke-dasharray:4 3}
+.lb-end-marker{fill:none;stroke:var(--text);stroke-width:1.5}
+.lb-arrow-label{fill:var(--muted);font-size:12px}
+.lb-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start;margin-bottom:20px}
+.lb-cond-group{border:1px solid var(--line);border-radius:8px;padding:8px;margin:8px 0}
+.lb-cond-group-head{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.lb-cond-row{display:flex;gap:8px;align-items:flex-start;margin:6px 0 6px 16px}
+.lb-cond-row .lb-cond-group,.lb-cond-row .lb-cond-leaf{flex:1}
+.lb-cond-leaf{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.lb-cond-leaf .input{flex:1;min-width:140px}
+.lb-cond-add{margin-top:6px}
+.lb-form-field{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.lb-form-field .input,.lb-form-field .select{flex:1;min-width:120px}
+.lb-write{border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px}
+.lb-write-input{display:flex;gap:6px;flex-wrap:wrap}
+.lb-write-input .input{flex:1;min-width:120px}
+.lb-approval-view s{color:var(--muted)}
+.lb-variance{font-weight:700;color:var(--destructive)}
+.lb-plumbing th,.lb-plumbing td{text-align:center}
+.lb-plumbing td:first-child,.lb-plumbing td:nth-child(2){text-align:left}
+@media(max-width:900px){.lb-layout{grid-template-columns:1fr}.lb-cond-row{margin-left:8px}}
