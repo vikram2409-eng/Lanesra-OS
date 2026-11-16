@@ -3,7 +3,7 @@ id: WP-0710
 title: Repeat over child records, and stage and start conditions
 phase: 7
 epic: E7.2 Steps and rules
-status: in_progress
+status: in_review
 owner: claude
 planned_for: claude
 depends_on: [WP-0705]
@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
 branch: wp/WP-0710-per-item-assignment-runtime
-pr: 
+pr: 789
 updated: 2026-11-16
 ---
 
