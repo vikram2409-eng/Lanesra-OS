@@ -34,7 +34,14 @@ import path from 'node:path';
  */
 
 const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD = 'admin-password-1';
+// Shared with lane-publish.spec.ts and lane-runner.spec.ts: the three
+// server-mode specs run against ONE server and ONE data dir, so they
+// share ONE admin account. Whichever spec runs first_run_setup first
+// sets the admin password; a different password here makes the other
+// specs' beforeAll logins fail with "Invalid username or password"
+// (CI e2e failure on PR #784, head aa2efe75 — this spec used a
+// different password and ran first).
+const ADMIN_PASSWORD = 'e2e-runner-admin-1';
 const DATA_DIR = process.env.LANESRA_DATA_DIR ?? '/tmp/e2e-data';
 const OBJECT_LABEL = 'Widget';
 const OBJECT_PLURAL = 'Widgets';
