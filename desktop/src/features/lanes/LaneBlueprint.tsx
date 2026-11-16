@@ -816,7 +816,14 @@ function DryRunSection({ blueprint }: { blueprint: LaneBlueprint }) {
 /// publishes the lane; the dry-run section walks the lane against a seed
 /// record and writes nothing. Neither section renders inside PrintOverlay
 /// - the print export stays the definition only (WP-0712 AC-2).
-export function LaneBlueprintPage() {
+export function LaneBlueprintPage({
+  onOpenInBuilder,
+}: {
+  /// WP-0718: open the selected lane (or a blank lane for "New lane")
+  /// in the visual builder. Absent when the page is rendered outside
+  /// the app shell (existing tests render it bare).
+  onOpenInBuilder?: (laneKey: string | null) => void;
+} = {}) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
 
@@ -882,7 +889,17 @@ export function LaneBlueprintPage() {
       {detail.error && <p>Could not load the blueprint: {(detail.error as Error).message}</p>}
       {detail.data && (
         <>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 12 }}>
+            {onOpenInBuilder && (
+              <>
+                <button className="btn" onClick={() => onOpenInBuilder(selected)}>
+                  Open in builder
+                </button>
+                <button className="btn" onClick={() => onOpenInBuilder(null)}>
+                  New lane
+                </button>
+              </>
+            )}
             <button className="btn" onClick={() => setPrinting(true)}>
               Print / Save as PDF
             </button>

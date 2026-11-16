@@ -48,12 +48,16 @@ import type {
   GraphRun,
   LaneBlueprint,
   LaneBlueprintSummary,
+  LaneDefinition,
   LaneRunListItem,
   LaneRunView,
   PublishReport,
   ProcessLaneVersion,
   DryRunFixtures,
   DryRunReport,
+  BuilderActionType,
+  BuilderReadsWrites,
+  BuilderSaveResult,
   SystemNodeType,
   SystemNode,
   SystemGraphHit,
@@ -540,6 +544,47 @@ export const api = {
       anchorRecordId,
       fixtures,
       expectedOutcome: expectedOutcome ?? null,
+    }),
+
+  // WP-0718: the visual lane builder (REQ-LANE-024). All five are sync
+  // `call`s through the shared dual-transport dispatcher — the same
+  // command name and args on desktop (Tauri) and Team Workspace (HTTP),
+  // which is the AC-4 guarantee at this layer. The signatures are
+  // verified against the landed core service
+  // (core::services::process_lane_builder + the dispatch arms and
+  // Tauri commands, 2026-11-15): the definition travels as the
+  // `{ format_version: "1.0.0", lane }` file shape the import command
+  // takes, so a lane built in the builder equals the same lane written
+  // as data (AC-1). `builder_check_lane` / `builder_dry_run_lane`
+  // evaluate an UNSAVED definition — that is what makes the checks live
+  // while editing — where checkLanePublish / dryRunLane evaluate the
+  // saved version. `save_builder_lane` takes the lane key when the lane
+  // already exists (a new draft version) and none for a brand-new lane
+  // (the import path); `builder_action_types` takes the object key, not
+  // the target-object-type arg `list_action_types` uses.
+  saveBuilderLane: (definition: LaneDefinition, laneKey?: string | null) =>
+    call<BuilderSaveResult>("save_builder_lane", {
+      laneKey: laneKey ?? null,
+      definitionJson: JSON.stringify({ format_version: "1.0.0", lane: definition }),
+    }),
+  builderCheckLane: (definition: LaneDefinition) =>
+    call<PublishReport>("builder_check_lane", {
+      definitionJson: JSON.stringify({ format_version: "1.0.0", lane: definition }),
+    }),
+  builderDryRunLane: (definition: LaneDefinition, anchorRecordId: string, fixtures: DryRunFixtures, expectedOutcome?: string) =>
+    call<DryRunReport>("builder_dry_run_lane", {
+      definitionJson: JSON.stringify({ format_version: "1.0.0", lane: definition }),
+      anchorRecordId,
+      fixtures,
+      expectedOutcome: expectedOutcome ?? null,
+    }),
+  builderReadsWrites: (definition: LaneDefinition) =>
+    call<BuilderReadsWrites>("builder_reads_writes", {
+      definitionJson: JSON.stringify({ format_version: "1.0.0", lane: definition }),
+    }),
+  builderActionTypes: (objectKey?: string) =>
+    call<BuilderActionType[]>("builder_action_types", {
+      objectKey: objectKey ?? null,
     }),
 
   // WP-0707: the lane runner (REQ-LANE-014, REQ-LANE-015). `getLaneRunView`
