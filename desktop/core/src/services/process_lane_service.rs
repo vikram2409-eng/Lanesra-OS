@@ -785,6 +785,10 @@ pub fn compile_lane(lane: &LaneDefinition) -> AppResult<ExecutionGraphInput> {
                 runtime_conditions(condition).unwrap_or_else(|| ("all".to_string(), Vec::new()));
             let mut config = Map::new();
             config.insert("lane_stage_id".into(), json!(stage.id));
+            config.insert("lane_stage_name".into(), json!(stage.name));
+            // WP-0710 AC-2: the runtime audits a skipped stage, and needs to
+            // know which kind of gate this is to tell "skipped" from "entered".
+            config.insert("lane_gate".into(), json!(gate_name));
             config.insert(
                 "lane_condition".into(),
                 serde_json::to_value(condition).unwrap_or(json!(null)),
@@ -1414,6 +1418,33 @@ fn drive_child_lanes<'a>(
                     .await?;
                     continue;
                 }
+                // WP-0710: a repeating step with no outstanding items - a set
+                // that is empty, or one whose every item is already done -
+                // advances past its loop rather than parking with nothing for a
+                // person to submit. Items are initialised first so a set that
+                // genuinely has open items is never mistaken for an empty one.
+                if let Some((node, step)) = current_human_step(conn, &run)
+                    .ok()
+                    .filter(|(_, s)| s.repeat_over.is_some())
+                {
+                    ensure_items_initialized(conn, workspace_id, &run, &step)?;
+                    let run = graph_run_repo::get_run(conn, run_id)?
+                        .ok_or_else(|| AppError::NotFound("Run".into()))?;
+                    if all_items_done(&run, &step.id) {
+                        if let Some(exit) = loop_exit_target(conn, &run, &node.id)? {
+                            graph_runtime_service::resume_lane_run_at_node(
+                                conn,
+                                workspace_id,
+                                master_key,
+                                run_id,
+                                &exit,
+                                actor,
+                            )
+                            .await?;
+                            continue;
+                        }
+                    }
+                }
             }
             return Ok(run);
         }
@@ -1576,6 +1607,315 @@ async fn resume_parent_after_child(
         .await?;
     drive_child_lanes(conn, workspace_id, master_key, parent_id, actor).await?;
     Ok(())
+}
+
+// ===========================================================================
+// WP-0710: repeat over child records - per-item execution (REQ-LANE-017).
+//
+// A repeating step (`repeat_over` names a relationship to a child object) is
+// worked one entry per child record: each child is an item. A repeating FORM
+// step stays `waiting_person` while its items are open; each item is completed
+// on its own through `submit_person_step_item`, so two people can complete
+// different items at once - each submit touches only its item's state (run
+// data `__items.<step_id>`) and its own child record. When every item is done
+// the run jumps past the loop to the next step. Per-item assignment (Q-33
+// `repeat_over.assign`) reads each item's assignee from a field on the child.
+// ===========================================================================
+
+/// One item of a repeating step, for the runner (WP-0710).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RepeatItemView {
+    pub item_id: String,
+    pub display_name: String,
+    pub assignee: Option<String>,
+    pub done: bool,
+}
+
+/// The child records a repeating step works over: `(item_id, object_key,
+/// display_name, assignee)`, in relationship order.
+fn repeating_items(
+    conn: &Connection,
+    workspace_id: &str,
+    run: &GraphRun,
+    step: &LaneStep,
+) -> AppResult<Vec<(String, String, String, Option<String>)>> {
+    let Some(repeat) = &step.repeat_over else {
+        return Ok(Vec::new());
+    };
+    let (Some(object_key), Some(record_id)) = (
+        run.anchor_object_key.as_deref(),
+        run.anchor_record_id.as_deref(),
+    ) else {
+        return Ok(Vec::new());
+    };
+    let related = crate::services::relationship_service::related_records_for(
+        conn,
+        workspace_id,
+        object_key,
+        record_id,
+    )?;
+    let assign_field = repeat.assign.as_ref().and_then(|a| {
+        matches!(
+            a.by,
+            crate::models::process_lane::RepeatAssignBy::ChildField
+        )
+        .then(|| a.field.clone())
+        .flatten()
+    });
+    let mut items = Vec::new();
+    for r in related {
+        if r.relationship_key != repeat.field && r.label != repeat.field {
+            continue;
+        }
+        let assignee = assign_field
+            .as_deref()
+            .and_then(|field| child_field_value(conn, &r.entity_type, &r.entity_id, field));
+        items.push((r.entity_id, r.entity_type, r.display_name, assignee));
+    }
+    Ok(items)
+}
+
+/// A field value on a child record (builtin or custom), if non-empty.
+fn child_field_value(
+    conn: &Connection,
+    object_key: &str,
+    record_id: &str,
+    field: &str,
+) -> Option<String> {
+    let mut ctx = builtin_field_service::field_values(conn, object_key, record_id).ok()?;
+    for (k, v) in custom_field_repo::get_values(conn, record_id).ok()? {
+        ctx.insert(k, v);
+    }
+    ctx.get(field).cloned().filter(|s| !s.trim().is_empty())
+}
+
+/// The `__items.<step_id>` map on a run: item_id -> {"done": bool, ...}.
+fn items_state(run: &GraphRun, step_id: &str) -> Map<String, Value> {
+    run_data_of(run)
+        .get("__items")
+        .and_then(|v| v.get(step_id))
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default()
+}
+
+fn all_items_done(run: &GraphRun, step_id: &str) -> bool {
+    items_state(run, step_id)
+        .values()
+        .all(|v| v.get("done").and_then(Value::as_bool).unwrap_or(false))
+}
+
+/// Initializes `__items.<step_id>` the first time the run reaches a repeating
+/// step, so the item set is stable for the rest of the step.
+fn ensure_items_initialized(
+    conn: &Connection,
+    workspace_id: &str,
+    run: &GraphRun,
+    step: &LaneStep,
+) -> AppResult<()> {
+    let mut all = run_data_of(run)
+        .get("__items")
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    if all.contains_key(&step.id) {
+        return Ok(());
+    }
+    let items = repeating_items(conn, workspace_id, run, step)?;
+    let mut state = Map::new();
+    for (id, _obj, _name, _assignee) in &items {
+        state.insert(id.clone(), json!({"done": false}));
+    }
+    all.insert(step.id.clone(), Value::Object(state));
+    patch_run_data(conn, run, &[("__items", Value::Object(all))])
+}
+
+/// The node the run jumps to when every item of a repeating step is done - the
+/// `exit` edge of the `loop` node wrapping the step.
+fn loop_exit_target(
+    conn: &Connection,
+    run: &GraphRun,
+    step_node_id: &str,
+) -> AppResult<Option<String>> {
+    let graph = execution_graph_repo::get(conn, &run.graph_id)?
+        .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+    let Some(loop_node_id) = graph
+        .edges
+        .iter()
+        .find(|e| e.to_node_id == step_node_id && e.branch_label.as_deref() == Some("body"))
+        .map(|e| e.from_node_id.clone())
+    else {
+        return Ok(None);
+    };
+    Ok(graph
+        .edges
+        .iter()
+        .find(|e| e.from_node_id == loop_node_id && e.branch_label.as_deref() == Some("exit"))
+        .map(|e| e.to_node_id.clone()))
+}
+
+/// Completes one item of a repeating form step (WP-0710, REQ-LANE-017). Two
+/// people can call this for different items at the same time without
+/// overwriting each other: each call writes only its item's child record and
+/// its own `__items.<step_id>.<item_id>` entry. When the last item is done the
+/// run jumps past the loop to the next step.
+pub async fn submit_person_step_item(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    run_id: &str,
+    item_id: &str,
+    values: &Map<String, Value>,
+    actor_user_id: Option<&str>,
+) -> AppResult<GraphRun> {
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.workspace_id != workspace_id {
+        return Err(AppError::NotFound("Run".into()));
+    }
+    if run.status != "waiting_person" {
+        return Err(classified_validation(
+            "validation.state",
+            format!("run is '{}', not waiting on a person", run.status),
+        ));
+    }
+    let (_node, step) = current_human_step(conn, &run)?;
+    if step.repeat_over.is_none() {
+        return Err(classified_validation(
+            "validation.state",
+            "this step is not a repeating step; submit it with submit_person_step",
+        ));
+    }
+    ensure_items_initialized(conn, workspace_id, &run, &step)?;
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    let items = repeating_items(conn, workspace_id, &run, &step)?;
+    let Some((_, item_object, _name, assignee)) = items.iter().find(|(id, _, _, _)| id == item_id)
+    else {
+        return Err(classified_validation(
+            "validation.arguments",
+            format!("'{item_id}' is not an item of this step"),
+        ));
+    };
+    if items_state(&run, &step.id)
+        .get(item_id)
+        .and_then(|v| v.get("done"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false)
+    {
+        return Err(classified_validation(
+            "validation.state",
+            "this item is already done",
+        ));
+    }
+
+    // The item's assignee (a child field) or the step's role may act on it.
+    let acting_role = assignee
+        .clone()
+        .or_else(|| effective_step_role(&run, &step));
+    if !actor_may_act(conn, actor_user_id, acting_role.as_deref())? {
+        return Err(AppError::classified(
+            ErrorClass::Validation,
+            "validation.permission",
+            format!(
+                "this item is assigned to {}; you cannot complete it",
+                acting_role.as_deref().unwrap_or("another role")
+            ),
+        ));
+    }
+
+    // Per-item field validation: only declared fields, required ones present.
+    let form_fields = step.fields.clone().unwrap_or_default();
+    for key in values.keys() {
+        if !form_fields.iter().any(|f| &f.key == key) {
+            return Err(classified_validation(
+                "validation.arguments",
+                format!("'{key}' is not a field of this step"),
+            ));
+        }
+    }
+    for field in &form_fields {
+        if field.required && !values.get(&field.key).is_some_and(|v| !is_blank(v)) {
+            return Err(classified_validation(
+                "validation.arguments",
+                format!("'{}' is required", field.label),
+            ));
+        }
+    }
+
+    // A repeating form step's values bind onto the item's child record (a
+    // `record.<coll>[].<field>` path, written through the governed field path)
+    // or into a per-child run-data field (`run_data.<key>`), which the lane
+    // keeps as a map keyed by item id - the same `{item_id: value}` shape the
+    // dry run's `per_child` fixtures take.
+    let mut child_updates = CustomFieldValues::new();
+    let mut per_child_updates: Vec<(String, Value)> = Vec::new();
+    for field in &form_fields {
+        let Some(value) = values.get(&field.key) else {
+            continue;
+        };
+        if let Some(rest) = field.binds_to.strip_prefix("record.") {
+            let child_field = rest.rsplit("[].").next().unwrap_or(rest);
+            child_updates.insert(child_field.to_string(), value_to_field_string(value));
+        } else if let Some(key) = field.binds_to.strip_prefix("run_data.") {
+            per_child_updates.push((key.to_string(), value.clone()));
+        } else {
+            return Err(classified_validation(
+                "validation.arguments",
+                format!(
+                    "field '{}' binds to '{}', which is neither a child record field nor run_data",
+                    field.key, field.binds_to
+                ),
+            ));
+        }
+    }
+    if !child_updates.is_empty() {
+        custom_field_service::set_entity_values(
+            conn,
+            item_object,
+            item_id,
+            &child_updates,
+            actor_user_id,
+        )?;
+    }
+
+    // Mark this item done and fold in its per-child run-data values - each a
+    // targeted write of only this item's key, so a concurrent submit of a
+    // different item is never overwritten.
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    let rd = run_data_of(&run);
+    let mut updates: Vec<(String, Value)> = Vec::new();
+    for (key, value) in &per_child_updates {
+        let mut map = rd
+            .get(key)
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+        map.insert(item_id.to_string(), value.clone());
+        updates.push((key.clone(), Value::Object(map)));
+    }
+    let mut all_items = rd
+        .get("__items")
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    let mut step_items = all_items
+        .get(&step.id)
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    step_items.insert(
+        item_id.to_string(),
+        json!({"done": true, "by": actor_user_id, "at": now_iso()}),
+    );
+    all_items.insert(step.id.clone(), Value::Object(step_items));
+    updates.push(("__items".to_string(), Value::Object(all_items)));
+    let patch: Vec<(&str, Value)> = updates
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.clone()))
+        .collect();
+    patch_run_data(conn, &run, &patch)?;
+
+    // Hand off to the advance hook: when this was the last open item it jumps
+    // the run past the loop to the next step; otherwise the step stays open,
+    // waiting on the people working its other items.
+    drive_child_lanes(conn, workspace_id, master_key, run_id, actor_user_id).await
 }
 
 // ===========================================================================

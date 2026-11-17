@@ -431,6 +431,7 @@ pub fn run() {
             commands::process_lane_commands::get_process_lane_run_view,
             commands::process_lane_commands::list_lane_runs_for_record,
             commands::process_lane_commands::submit_process_lane_step,
+            commands::process_lane_commands::submit_process_lane_step_item,
             commands::process_lane_commands::resolve_process_lane_approval,
             commands::process_lane_commands::cancel_process_lane_run,
             commands::process_lane_commands::handoff_process_lane_step,
