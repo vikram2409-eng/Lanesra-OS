@@ -132,6 +132,18 @@ const seed = {
 // on_hand/reserved too. ensureWarehouseData() strips the alias keys from
 // any stored workspace that still has them.
 const IS_WAREHOUSE=(typeof location!=='undefined'&&location.pathname.replace(/\/$/,'')==='/demo/warehouse');
+// ---- Agent Foundry demo (/demo/foundry) ----------------------------------
+// A third demo variant (main /demo and /demo/warehouse untouched). Same
+// engine, same seeded Agent Foundry data (ensureAdminData's agents, skills,
+// pipelines and eval suites), re-presented through the Create / Observe /
+// Improve information architecture a model-platform buyer expects (Azure AI
+// Foundry, Bedrock). It reuses the real agent screens (Agents, Models,
+// Tools, Guardrails, Evaluations) and adds Foundry-native panels for the
+// pieces that have no standalone admin tab (Services, Knowledge, Memory,
+// Monitor, Traces, Data and the optimization/Improve run). Its own store key
+// keeps it isolated from the sales demo. See FOUNDRY_NAV / foundryRenderView.
+const IS_FOUNDRY=(typeof location!=='undefined'&&location.pathname.replace(/\/$/,'')==='/demo/foundry');
+const foundryStoreKey='lanesra-os-foundry-demo-v1';
 const WAREHOUSE_TODAY='2026-11-13';
 const warehouseStoreKey='lanesra-os-warehouse-demo-v1';
 const WAREHOUSE_OBJECT_KEYS=['warehouse','location','product','stock','lot','supplier','customer','purchase_order','sales_order','picking','pick_task','shipment','cycle_count','stock_move','reorder_rule','demo_user'];
@@ -8277,7 +8289,7 @@ const WAREHOUSE_REL_FK={
  wrel_reorder_rule_warehouse:['reorder_rule','warehouse_id'],
  wrel_demo_user_warehouse:['demo_user','warehouse_id'],
 };
-const storeKey=IS_WAREHOUSE?warehouseStoreKey:'lanesra-os-demo-v10';
+const storeKey=IS_FOUNDRY?foundryStoreKey:IS_WAREHOUSE?warehouseStoreKey:'lanesra-os-demo-v10';
 // Workspace feature flags (WP-0010, ADR-0012). The online demo shows a
 // flagged feature only once the release that turns it on for desktop and
 // Team Workspace is published - never earlier (owner decision, ADR-0013 #3).
@@ -8287,7 +8299,7 @@ const storeKey=IS_WAREHOUSE?warehouseStoreKey:'lanesra-os-demo-v10';
 const DEMO_RELEASED_FEATURES=['agents.identities_ui','guardrails.admin'];
 function demoFeature(key){return DEMO_RELEASED_FEATURES.includes(key);}
 let data = JSON.parse(localStorage.getItem(storeKey)||'null') || structuredClone(IS_WAREHOUSE?warehouseSeed:seed);
-let current='dashboard';
+let current=IS_FOUNDRY?'f_home':'dashboard';
 let onboardBannerSeen=false;
 let viewFilter=null;
 // Customer/Contact 360 (Phase 5): which record's detail page is open, if
@@ -10074,7 +10086,7 @@ function appShell(){
  try{history.scrollRestoration='manual'}catch(e){}
  document.documentElement.classList.add('app-mode');
  if(/[?&]debug=scroll\b/.test(location.search)&&!document.getElementById('scrollDebug')){const d=document.createElement('pre');d.id='scrollDebug';d.style.cssText='position:fixed;left:4px;bottom:92px;z-index:9999;margin:0;padding:6px 8px;background:rgba(0,0,0,.78);color:#0f0;font:11px/1.35 monospace;border-radius:6px;pointer-events:none;white-space:pre';document.body.appendChild(d);const upd=()=>{const r=s=>{const e=document.querySelector(s);return e?Math.round(e.getBoundingClientRect().top)+'..'+Math.round(e.getBoundingClientRect().bottom):'-'},vv=window.visualViewport||{};d.textContent='scrollY '+Math.round(scrollY)+' mainScroll '+Math.round((document.querySelector('.main-area')||{}).scrollTop||0)+' docH '+document.documentElement.scrollHeight+'\ninnerH '+innerHeight+' vv '+Math.round(vv.offsetTop||0)+'/'+Math.round(vv.height||0)+'\ntopbar '+r('.topbar')+'\nheading '+r('#view .page-heading, #view .page-head')+'\nmain '+r('.main-area')};['scroll','resize','touchend'].forEach(t=>addEventListener(t,upd,{passive:true}));window.visualViewport&&visualViewport.addEventListener('resize',upd);setInterval(upd,500);upd()}
- $('#app').innerHTML=`<div class="app-shell"><div class="side-backdrop" id="sidebarBackdrop" data-close-side hidden></div><aside class="sidebar" id="appSidebar"><div class="side-top side-brand"><img class="theme-brand-logo" alt="Workspace logo" hidden><a href="https://lanesraos.com" class="product-mark" style="text-decoration:none;color:inherit"><img class="brand-mark-img" src="/media/lanesraos-logo-icon.png" alt="LanesraOS" style="width:32px;height:32px;border-radius:8px;display:inline-block;vertical-align:middle;"/><!--__headerLogoV6--><span class="product-name">LanesraOS</span><span class="demo-pill">DEMO</span></a></div><div id="sideNav"></div><div class="side-demo-links"><button type="button" id="sideResetDemo">↻ Reset demo</button><a href="/">🌐 Product website</a></div><button type="button" class="btn btn-ghost collapse-side" id="sidebarCollapse" aria-label="Collapse sidebar" data-tooltip="Collapse sidebar">«<span class="collapse-label">Collapse sidebar</span></button></aside><div class="main-area"><header class="topbar"><button type="button" class="btn btn-ghost btn-icon mobile-menu" id="mobileNavToggle" aria-label="Open navigation" aria-expanded="false">☰</button><img class="theme-brand-logo topbar-brand-logo" alt="" hidden><div class="search search-wrap"><span class="search-icon" aria-hidden="true">⌕</span><input class="input" id="globalSearch" autocomplete="off" placeholder="${IS_WAREHOUSE?'Search SKUs, orders, bins…  ⌘K':'Search companies, contacts, deals…  ⌘K'}" aria-label="Search" data-tooltip="Search (Ctrl+K)"><div id="searchResults" class="search-results" hidden></div></div><div class="bar-actions"><div class="notif-wrap"><button class="icon-btn" id="voiceButton" aria-label="Voice-First Mode">🎙️</button><div id="voicePanel" class="notif-panel voice-panel" hidden></div></div><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><button class="btn btn-ghost btn-icon" id="themeToggle" aria-label="Toggle theme" data-tooltip="Toggle light/dark theme">🌙</button>${IS_WAREHOUSE?'<div class="avatar">SC</div>':'<div class="avatar">MC</div>'}</div></header><div class="content page" id="view"></div><nav class="bottom-nav" id="bottomNav" aria-label="Primary"><button type="button" data-nav="assistant" aria-label="Assistant" title="Assistant"><span class="bn-ic" aria-hidden="true">💬</span></button><button type="button" data-nav="companies" aria-label="Companies" title="Companies"><span class="bn-ic" aria-hidden="true">▤</span></button><button type="button" data-nav="reports" aria-label="Reports" title="Reports"><span class="bn-ic" aria-hidden="true">💡</span></button><button type="button" data-nav="tasks" aria-label="Tasks" title="Tasks"><span class="bn-ic" aria-hidden="true">✓</span></button><button type="button" data-nav="dashboard" aria-label="Dashboard" title="Dashboard"><span class="bn-ic" aria-hidden="true">▦</span></button></nav></div></div><div id="voiceConversation" class="voice-convo" hidden></div><div id="cmdPalette" hidden><div class="cmd-palette" role="dialog" aria-modal="true" aria-label="Command palette"><input class="cmd-input" id="cmdInput" autocomplete="off" placeholder="Type a command or search…" aria-label="Command palette search"><div class="cmd-list" id="cmdList" role="listbox"></div></div></div>`;
+ $('#app').innerHTML=`<div class="app-shell"><div class="side-backdrop" id="sidebarBackdrop" data-close-side hidden></div><aside class="sidebar" id="appSidebar"><div class="side-top side-brand"><img class="theme-brand-logo" alt="Workspace logo" hidden><a href="https://lanesraos.com" class="product-mark" style="text-decoration:none;color:inherit"><img class="brand-mark-img" src="/media/lanesraos-logo-icon.png" alt="LanesraOS" style="width:32px;height:32px;border-radius:8px;display:inline-block;vertical-align:middle;"/><!--__headerLogoV6--><span class="product-name">LanesraOS</span><span class="demo-pill">${IS_FOUNDRY?'FOUNDRY':'DEMO'}</span></a></div><div id="sideNav"></div><div class="side-demo-links"><button type="button" id="sideResetDemo">↻ Reset demo</button><a href="/">🌐 Product website</a></div><button type="button" class="btn btn-ghost collapse-side" id="sidebarCollapse" aria-label="Collapse sidebar" data-tooltip="Collapse sidebar">«<span class="collapse-label">Collapse sidebar</span></button></aside><div class="main-area"><header class="topbar"><button type="button" class="btn btn-ghost btn-icon mobile-menu" id="mobileNavToggle" aria-label="Open navigation" aria-expanded="false">☰</button><img class="theme-brand-logo topbar-brand-logo" alt="" hidden><div class="search search-wrap"><span class="search-icon" aria-hidden="true">⌕</span><input class="input" id="globalSearch" autocomplete="off" placeholder="${IS_FOUNDRY?'Search agents, evals, traces…  ⌘K':IS_WAREHOUSE?'Search SKUs, orders, bins…  ⌘K':'Search companies, contacts, deals…  ⌘K'}" aria-label="Search" data-tooltip="Search (Ctrl+K)"><div id="searchResults" class="search-results" hidden></div></div><div class="bar-actions"><div class="notif-wrap"><button class="icon-btn" id="voiceButton" aria-label="Voice-First Mode">🎙️</button><div id="voicePanel" class="notif-panel voice-panel" hidden></div></div><div class="notif-wrap"><button class="icon-btn" id="notifButton" aria-label="Notifications">🔔<span id="notifBadge" class="notif-badge" hidden></span></button><div id="notifPanel" class="notif-panel" hidden></div></div><button class="icon-btn" id="helpButton" aria-label="Help">?</button><button class="btn btn-ghost btn-icon" id="themeToggle" aria-label="Toggle theme" data-tooltip="Toggle light/dark theme">🌙</button>${IS_WAREHOUSE?'<div class="avatar">SC</div>':'<div class="avatar">MC</div>'}</div></header><div class="content page" id="view"></div><nav class="bottom-nav" id="bottomNav" aria-label="Primary"><button type="button" data-nav="assistant" aria-label="Assistant" title="Assistant"><span class="bn-ic" aria-hidden="true">💬</span></button><button type="button" data-nav="companies" aria-label="Companies" title="Companies"><span class="bn-ic" aria-hidden="true">▤</span></button><button type="button" data-nav="reports" aria-label="Reports" title="Reports"><span class="bn-ic" aria-hidden="true">💡</span></button><button type="button" data-nav="tasks" aria-label="Tasks" title="Tasks"><span class="bn-ic" aria-hidden="true">✓</span></button><button type="button" data-nav="dashboard" aria-label="Dashboard" title="Dashboard"><span class="bn-ic" aria-hidden="true">▦</span></button></nav></div></div><div id="voiceConversation" class="voice-convo" hidden></div><div id="cmdPalette" hidden><div class="cmd-palette" role="dialog" aria-modal="true" aria-label="Command palette"><input class="cmd-input" id="cmdInput" autocomplete="off" placeholder="Type a command or search…" aria-label="Command palette search"><div class="cmd-list" id="cmdList" role="listbox"></div></div></div>`;
  // Modern UI PR-A: restore persisted shell state (theme + sidebar) before
  // the first render, so a returning visitor never flashes the wrong theme.
  // Best-effort: a fresh visitor with an empty store gets Light + expanded.
@@ -10197,6 +10209,7 @@ function selectHtml(name,label,items,value,required=true,cls='field'){return `<d
 // function called again, same as any other sidebar-affecting change.
 function renderSidebarNav(){
  const nav=$('#sideNav'); if(!nav)return;
+ if(IS_FOUNDRY)return renderFoundrySidebar(nav);
  const apps=ensureApps().filter(a=>a.isPublished);
  const switcherHtml=apps.length?`<div class="side-app-switcher"><select id="appSwitcher" aria-label="Switch app"><option value="">All</option>${apps.map(a=>`<option value="${a.id}" ${a.id===activeAppId?'selected':''}>${a.icon} ${a.name}</option>`).join('')}</select></div>`:'';
  // title (not just aria-label) so the collapsed icon-only rail
@@ -10230,6 +10243,7 @@ function renderView(){
  // own - the sticky sidebar/topbar both rely on the window itself
  // scrolling.
  {const de=document.documentElement,resetScroll=()=>{de.style.scrollBehavior='auto';window.scrollTo(0,0);document.body.scrollTop=0;de.scrollTop=0;const ma=document.querySelector('.main-area');if(ma)ma.scrollTop=0;de.style.scrollBehavior=''};resetScroll();requestAnimationFrame(resetScroll)}
+ if(IS_FOUNDRY)return foundryRenderView();
  document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('active',b.dataset.nav===current));
  if(current==='dashboard') return IS_WAREHOUSE?warehouseDashboard():dashboard();
  if(current==='laneRunner') return laneRunnerPage();
@@ -29414,6 +29428,219 @@ function bindAnalyticsClicks(){
   el.addEventListener('click',()=>{try{const props=el.dataset.analyticsProps?JSON.parse(el.dataset.analyticsProps):{};posthog.capture(el.dataset.analyticsEvent,props)}catch(e){}});
  });
 }
+// ===========================================================================
+// Agent Foundry demo (/demo/foundry) - Create / Observe / Improve IA.
+//
+// Re-presents the already-seeded Agent Foundry data through the information
+// architecture a model-platform buyer expects. Items with `tab` reuse the
+// real demo screen verbatim (same code the main demo's Admin runs); items
+// with `render` are Foundry-native panels for the pieces that have no
+// standalone admin tab. Nothing here touches the sales or warehouse demo.
+// ===========================================================================
+const FOUNDRY_NAV=[
+ {group:'Create',items:[
+  {key:'f_agents',label:'Agents',icon:'◈',tab:'aiAgents',blurb:'Named agents with their own persona, actions, memory, skills and delegation.'},
+  {key:'f_models',label:'Models',icon:'▣',tab:'ai',blurb:'The Unified AI Gateway: bring your own LLM key (Anthropic, OpenAI-compatible, Gemini) or a fully local model, with failover and token budgets.'},
+  {key:'f_services',label:'Services',icon:'⟐',render:'services',blurb:'The native Model Context Protocol server and client, plus the Integration Hub that connects agents to everything else.'},
+  {key:'f_tools',label:'Tools',icon:'⚒',tab:'aiSkills',blurb:'Reusable Skills and the governed Actions an agent may call - every call risk-classified by the Tool-Call Firewall.'},
+  {key:'f_knowledge',label:'Knowledge',icon:'▤',render:'knowledge',blurb:'Document RAG: curated Knowledge Collections any agent can cite through search_knowledge.'},
+  {key:'f_memory',label:'Memory',icon:'❖',render:'memory',blurb:'Typed Session, Working and Entity memory an agent writes and reads across turns.'},
+  {key:'f_guardrails',label:'Guardrails',icon:'⛉',tab:'guardrails',blurb:'Input and output guardrails that gate what an agent may receive and emit at each hook point.'},
+ ]},
+ {group:'Observe',items:[
+  {key:'f_monitor',label:'Monitor',icon:'⌁',render:'monitor',blurb:'Live health of the foundry: agents, runs, approvals waiting and guardrail activity.'},
+  {key:'f_traces',label:'Traces',icon:'⇶',render:'traces',blurb:'OTLP-shaped run traces - every step, tool call and delegation as a span tree.'},
+ ]},
+ {group:'Improve',items:[
+  {key:'f_data',label:'Data',icon:'▦',render:'data',blurb:'The golden datasets and cases each evaluation runs against.'},
+  {key:'f_evaluations',label:'Evaluations',icon:'⚖',tab:'aiEval',blurb:'The Evaluation Harness: score an agent against golden cases and track it over versions.'},
+  {key:'f_optimization',label:'Optimization',icon:'✦',render:'optimization',blurb:'Iterate a candidate agent against the eval set and keep the best - the Improve loop.'},
+ ]},
+];
+const FOUNDRY_ITEMS=FOUNDRY_NAV.flatMap(g=>g.items);
+function foundryItem(key){return FOUNDRY_ITEMS.find(i=>i.key===key)||null}
+function renderFoundrySidebar(nav){
+ // The shell's bottom nav is the sales demo's (Companies/Reports/Tasks) -
+ // meaningless in the foundry IA, so hide it here.
+ const bn=document.getElementById('bottomNav');if(bn)bn.style.display='none';
+ if(current!=='f_home'&&!foundryItem(current))current='f_home';
+ const navBtn=i=>`<button type="button" class="nav-item" data-fnav="${i.key}" aria-label="${i.label}" title="${i.label}"><span class="nav-ic" aria-hidden="true">${i.icon}</span><span class="nav-label">${i.label}</span></button>`;
+ const groups=FOUNDRY_NAV.map(g=>`<div class="side-group"><div class="side-label">${g.group}</div><nav class="side-nav" aria-label="${g.group}">${g.items.map(navBtn).join('')}</nav></div>`).join('');
+ nav.innerHTML=`<div class="side-group"><nav class="side-nav" aria-label="Overview"><button type="button" class="nav-item" data-fnav="f_home" aria-label="Overview" title="Overview"><span class="nav-ic" aria-hidden="true">⌂</span><span class="nav-label">Overview</span></button></nav></div>${groups}`;
+ nav.querySelectorAll('[data-fnav]').forEach(b=>{
+  b.classList.toggle('active',b.dataset.fnav===current);
+  b.onclick=()=>{current=b.dataset.fnav;detailRecord=null;closeMobileSidebar();renderView()};
+ });
+}
+function ensureFoundryData(){
+ if(typeof ensureKnowledge==='function')ensureKnowledge();
+ if(typeof ensureMemoryItems==='function')ensureMemoryItems();
+ // Light, demo-only grounding so the Knowledge and Memory panels show real
+ // structured data rather than a bare empty state. Guarded like every other
+ // demo seed so a reset or re-render never duplicates it.
+ if(!data._foundrySeeded){
+  data._foundrySeeded=true;
+  const now=new Date().toISOString();
+  if((data.aiKnowledgeCollections||[]).length===0){
+   const col={id:'kc_foundry',name:'Sales playbook',createdAt:now};
+   data.aiKnowledgeCollections.push(col);
+   data.aiKnowledgeSources.push({id:'ks_f1',collectionId:col.id,name:'Objection handling guide.md',content:'How to respond to the ten most common objections, with example phrasing.',chunkCount:12,createdAt:now});
+   data.aiKnowledgeSources.push({id:'ks_f2',collectionId:col.id,name:'ICP & qualification.md',content:'The ideal-customer profile and the qualifying questions a rep should ask on a first call.',chunkCount:7,createdAt:now});
+  }
+  if((data.aiMemoryItems||[]).length===0){
+   data.aiMemoryItems.push({id:'mem_f1',memoryType:'entity',content:'BrightPath Logistics prefers email over calls; decision-maker is the VP of Ops.',classification:'standard',source:'agent_learned',createdAt:now});
+   data.aiMemoryItems.push({id:'mem_f2',memoryType:'working',content:'Current task: draft a follow-up for Harbour Health Group after their pricing question.',classification:'standard',source:'agent_learned',createdAt:now});
+   data.aiMemoryItems.push({id:'mem_f3',memoryType:'session',content:'The user asked for concise, under-150-word briefings.',classification:'standard',source:'user_provided',createdAt:now});
+  }
+ }
+ const suite=(data.aiEvalSuites||[])[0];
+ const agent=(data.aiAgents||[]).find(a=>a.id===suite?.targetId)||(data.aiAgents||[])[0];
+ if(!data.foundryOptimization){
+  const base=0.71;
+  data.foundryOptimization={
+   id:'opt_'+(suite?.id||'run').slice(-6),
+   goal:`Improve answer quality for the ${agent?.name||'Research Analyst'} against the "${suite?.name||'quality check'}" eval set without adding tools.`,
+   agentName:agent?.name||'Research Analyst',
+   suiteName:suite?.name||'Research Analyst quality check',
+   baseline:base,
+   taskWeighted:true,
+   iterations:[
+    {i:0,score:0.71,change:'Baseline candidate (current published prompt).',keep:false},
+    {i:1,score:0.76,change:'Tightened the system prompt: lead with the company name, then status and open opportunities.',keep:false},
+    {i:2,score:0.79,change:'Added a 150-word ceiling and an explicit "flag anything overdue" instruction.',keep:false},
+    {i:3,score:0.82,change:'Required the industry line before the summary; dropped the generic sign-off.',keep:true},
+   ],
+  };
+  data.foundryOptimization.avg=data.foundryOptimization.iterations.reduce((b,x)=>x.keep?x.score:b,base);
+ }
+ if(!data.foundryTraces){
+  data.foundryTraces=[
+   {id:'trc_7f3a21',agent:agent?.name||'Research Analyst',status:'ok',durationMs:2140,at:'2026-11-17T11:31:00Z',spans:[
+     {name:'agent.run',ms:2140,depth:0},
+     {name:'tool.search_records',ms:410,depth:1},
+     {name:'tool.get_record',ms:160,depth:1},
+     {name:'guardrail.output.pii_leak',ms:12,depth:1},
+   ]},
+   {id:'trc_7f3a0e',agent:'Ops Supervisor',status:'ok',durationMs:3610,at:'2026-11-17T11:18:00Z',spans:[
+     {name:'agent.run',ms:3610,depth:0},
+     {name:'delegate.Research Analyst',ms:2180,depth:1},
+     {name:'tool.search_records',ms:395,depth:2},
+     {name:'delegate.Draft Writer',ms:1020,depth:1},
+   ]},
+   {id:'trc_7e99c4',agent:'Quality Reviewer',status:'blocked',durationMs:880,at:'2026-11-17T10:54:00Z',spans:[
+     {name:'agent.run',ms:880,depth:0},
+     {name:'guardrail.input.jailbreak',ms:9,depth:1,blocked:true},
+   ]},
+  ];
+ }
+}
+function foundryHeader(title,blurb){
+ return `<div class="page-heading"><div><div class="eyebrow">Agent Foundry</div><h2 style="margin-top:5px">${title}</h2>${blurb?`<p>${blurb}</p>`:''}</div></div>`;
+}
+function foundryRenderView(){
+ ensureFoundryData();
+ const item=foundryItem(current);
+ if(!item)return foundryHome();
+ if(item.tab){
+  adminTab=item.tab;
+  $('#view').innerHTML=`<div class="settings-page"><div class="admin-panel active">${foundryHeader(item.label,item.blurb)}<div id="adminBody" class="admin-body"></div></div></div>`;
+  return renderAdminTab();
+ }
+ ({services:foundryServices,knowledge:foundryKnowledge,memory:foundryMemory,monitor:foundryMonitor,traces:foundryTracesPanel,data:foundryData,optimization:foundryOptimization}[item.render])(item);
+}
+function foundryOptimizationCard(){
+ const o=data.foundryOptimization;const best=o.iterations.find(x=>x.keep)||o.iterations[o.iterations.length-1];
+ const gain=Math.round((best.score-o.baseline)*100);
+ const rows=o.iterations.map(x=>`<tr${x.keep?' style="background:var(--surface-alt,#f3f5fb)"':''}><td>${x.i}</td><td><strong>${x.score.toFixed(2)}</strong></td><td>${x.i===0?'—':`<span class="badge ${x.score>=o.iterations[x.i-1].score?'badge-success':'badge-warning'}">${x.score>=o.iterations[x.i-1].score?'+':''}${((x.score-o.iterations[x.i-1].score)*100).toFixed(0)} pts</span>`}</td><td class="muted" style="font-size:13px">${x.change}</td><td>${x.keep?'<span class="badge badge-success">Kept</span>':''}</td></tr>`).join('');
+ return `<section class="card"><div class="card-head panel-title"><div><h3>Run details · Improvement</h3><p class="card-desc">Optimization run ${o.id}</p></div><span class="badge ${best.keep?'badge-success':'badge-outline'}">${best.keep?'Candidate kept':'In progress'}</span></div><div class="card-body">
+ <p class="muted" style="margin-top:0"><strong>Goal</strong><br>${o.goal}</p>
+ <div class="kpi-grid" style="margin:12px 0">
+  <div class="card kpi-card" style="cursor:default"><span class="kpi-label"><span>Avg. score</span></span><span class="kpi-number">${o.avg.toFixed(2)}</span><span class="kpi-meta">Baseline ${o.baseline.toFixed(2)} · <strong>+${gain} pts</strong></span></div>
+  <div class="card kpi-card" style="cursor:default"><span class="kpi-label"><span>Candidate</span></span><span class="kpi-number">#${best.i}</span><span class="kpi-meta">of ${o.iterations.length} iterations</span></div>
+  <div class="card kpi-card" style="cursor:default"><span class="kpi-label"><span>Scoring</span></span><span class="kpi-number" style="font-size:20px;padding-top:10px">${o.taskWeighted?'Task-weighted':'Unweighted'}</span><span class="kpi-meta">${o.suiteName}</span></div>
+ </div>
+ <div style="font-weight:700;margin-bottom:6px">Candidate iterations</div>
+ <div class="table-wrap"><table class="table"><thead><tr><th>Iteration</th><th>Score</th><th>Change</th><th>What changed</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+ <p class="muted" style="font-size:12px;margin-bottom:0">This browser demo synthesizes the run deterministically; in the desktop edition and Team Workspace each iteration re-runs the Evaluation Harness against the live model.</p>
+ </div></section>`;
+}
+function foundryHome(){
+ const agents=(data.aiAgents||[]);const active=agents.filter(a=>a.isActive);
+ const o=data.foundryOptimization;const traces=data.foundryTraces||[];
+ const pipelines=(data.aiAgentPipelines||[]).length;const teams=(data.aiExecutionGraphs||[]).length;
+ const suites=(data.aiEvalSuites||[]);
+ const kpis=[
+  {label:'Agents',num:agents.length,meta:`${active.length} active`},
+  {label:'Avg. eval score',num:o.avg.toFixed(2),meta:`baseline ${o.baseline.toFixed(2)}`},
+  {label:'Eval suites',num:suites.length,meta:`${suites.reduce((s,x)=>s+(x.cases||[]).length,0)} cases`},
+  {label:'Traces (24h)',num:traces.length,meta:`${traces.filter(t=>t.status==='blocked').length} blocked`},
+ ];
+ $('#view').innerHTML=`${foundryHeader('Agent Foundry','Build, govern, observe and improve named AI agents on data you control. Create agents and the models, tools, knowledge, memory and guardrails they run on; observe every run; and improve against a real evaluation set.')}
+ <div class="kpi-grid">${kpis.map(k=>`<div class="card kpi-card" style="cursor:default"><span class="kpi-label"><span>${k.label}</span></span><span class="kpi-number">${k.num}</span><span class="kpi-meta">${k.meta}</span></div>`).join('')}</div>
+ <div style="height:16px"></div>
+ ${foundryOptimizationCard()}
+ <div class="dash-grid" style="margin-top:16px">
+  <section class="card"><div class="card-head panel-title"><div><h3>Agents</h3><p class="card-desc">${active.length} active of ${agents.length}</p></div><button class="btn btn-link btn-sm" data-fgo="f_agents">Open Agents →</button></div><div class="card-body"><div class="pipeline-list">${agents.slice(0,5).map(a=>`<div class="pipeline-row"><div><div class="name">${a.icon||'◈'} ${a.name}</div><div class="sub">${(a.actionNames||[]).length} actions · ${(a.skillIds||[]).length} skills${(a.delegateAgentIds||[]).length?` · delegates to ${(a.delegateAgentIds||[]).length}`:''}</div></div><div class="sub">${a.isActive?'<span class="badge badge-success">Active</span>':'<span class="badge badge-outline">Inactive</span>'}</div></div>`).join('')||'<div class="empty">No agents yet.</div>'}</div></div></section>
+  <section class="card"><div class="card-head panel-title"><div><h3>Orchestration</h3><p class="card-desc">${pipelines} pipeline${pipelines===1?'':'s'} · ${teams} team${teams===1?'':'s'}</p></div><button class="btn btn-link btn-sm" data-fgo="f_traces">View traces →</button></div><div class="card-body"><div class="pipeline-list">${traces.slice(0,4).map(t=>`<div class="pipeline-row"><div><div class="name">${t.agent}</div><div class="sub">${t.spans.length} spans · ${(t.durationMs/1000).toFixed(1)}s</div></div><div class="sub">${t.status==='blocked'?'<span class="badge badge-warning">Blocked</span>':'<span class="badge badge-success">OK</span>'}</div></div>`).join('')}</div></div></section>
+ </div>`;
+ document.querySelectorAll('[data-fgo]').forEach(b=>b.onclick=()=>{current=b.dataset.fgo;renderView()});
+}
+function foundryOptimization(item){
+ $('#view').innerHTML=`<div class="settings-page"><div class="admin-panel active">${foundryHeader('Optimization',item.blurb)}${foundryOptimizationCard()}</div></div>`;
+}
+function foundryServices(item){
+ const integrations=(data.integrations||data.connections||[]);
+ const mcp=[
+  {name:'MCP Server',desc:'Exposes this workspace’s records, actions and agents to Claude Desktop, an IDE agent or any MCP-capable client - authenticated like the REST API.',on:true},
+  {name:'MCP Client',desc:'Lets Lanesra agents call out to an external MCP server and opt its tools in, authenticated the same way.',on:true},
+  {name:'REST API & Webhooks',desc:'A generic REST API over every object plus HMAC-signed webhooks for outbound events.',on:true},
+ ];
+ $('#view').innerHTML=`<div class="settings-page"><div class="admin-panel active">${foundryHeader('Services',item.blurb)}
+ <div class="dash-grid">${mcp.map(s=>`<section class="card"><div class="card-head panel-title"><div><h3>${s.name}</h3></div><span class="badge badge-success">Enabled</span></div><div class="card-body"><p class="muted" style="margin:0">${s.desc}</p></div></section>`).join('')}</div>
+ <section class="card" style="margin-top:16px"><div class="card-head panel-title"><h3>Integration Hub</h3></div><div class="card-body"><p class="muted" style="margin-top:0">Encrypted Connections, OpenAPI Connectors and scheduled Integration Jobs wire agents into the systems a business already runs. Configure these in the main workspace Admin → Integration Hub.</p></div></section>
+ </div></div>`;
+}
+function foundryKnowledge(item){
+ $('#view').innerHTML=`<div class="settings-page"><div class="admin-panel active">${foundryHeader('Knowledge',item.blurb)}<div class="panel"><div id="fKnowledgeWrap"></div></div></div></div>`;
+ if(typeof renderKnowledgeSection==='function')renderKnowledgeSection($('#fKnowledgeWrap'));
+ else $('#fKnowledgeWrap').innerHTML='<div class="empty">Knowledge collections appear here.</div>';
+}
+function foundryMemory(item){
+ $('#view').innerHTML=`<div class="settings-page"><div class="admin-panel active">${foundryHeader('Memory',item.blurb)}<div class="panel"><div id="fMemoryWrap"></div></div></div></div>`;
+ if(typeof renderMemoryInspectorSection==='function')renderMemoryInspectorSection($('#fMemoryWrap'));
+ else $('#fMemoryWrap').innerHTML='<div class="empty">Memory items appear here.</div>';
+}
+function foundryMonitor(item){
+ const agents=(data.aiAgents||[]);const traces=data.foundryTraces||[];
+ const approvals=(data.aiApprovals||[]).filter(a=>a.status==='pending');
+ const o=data.foundryOptimization;
+ const kpis=[
+  {label:'Active agents',num:agents.filter(a=>a.isActive).length},
+  {label:'Runs (24h)',num:traces.length},
+  {label:'Approvals waiting',num:approvals.length},
+  {label:'Guardrail blocks',num:traces.filter(t=>t.status==='blocked').length},
+ ];
+ $('#view').innerHTML=`<div class="settings-page"><div class="admin-panel active">${foundryHeader('Monitor',item.blurb)}
+ <div class="kpi-grid">${kpis.map(k=>`<div class="card kpi-card" style="cursor:default"><span class="kpi-label"><span>${k.label}</span></span><span class="kpi-number">${k.num}</span></div>`).join('')}</div>
+ <section class="card" style="margin-top:16px"><div class="card-head panel-title"><h3>Recent runs</h3></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Trace</th><th>Agent</th><th>Spans</th><th>Duration</th><th>Status</th></tr></thead><tbody>${traces.map(t=>`<tr><td><code>${t.id}</code></td><td>${t.agent}</td><td>${t.spans.length}</td><td>${(t.durationMs/1000).toFixed(1)}s</td><td>${t.status==='blocked'?'<span class="badge badge-warning">Blocked</span>':'<span class="badge badge-success">OK</span>'}</td></tr>`).join('')}</tbody></table></div></div></section>
+ <p class="muted" style="font-size:12px">Avg. eval score is holding at <strong>${o.avg.toFixed(2)}</strong> (baseline ${o.baseline.toFixed(2)}). This browser demo shows representative activity; the desktop edition streams live run events and OTLP spans.</p>
+ </div></div>`;
+}
+function foundryTracesPanel(item){
+ const traces=data.foundryTraces||[];
+ const span=s=>`<div style="padding:4px 0 4px ${12+s.depth*20}px;border-left:2px solid var(--line,#e2e5ee);display:flex;justify-content:space-between;gap:12px"><span>${s.blocked?'⛉ ':''}<code>${s.name}</code></span><span class="muted">${s.ms} ms</span></div>`;
+ $('#view').innerHTML=`<div class="settings-page"><div class="admin-panel active">${foundryHeader('Traces',item.blurb)}
+ ${traces.map(t=>`<section class="card" style="margin-bottom:14px"><div class="card-head panel-title"><div><h3><code>${t.id}</code></h3><p class="card-desc">${t.agent} · ${new Date(t.at).toLocaleString()}</p></div><span class="badge ${t.status==='blocked'?'badge-warning':'badge-success'}">${t.status==='blocked'?'Blocked by guardrail':'OK'} · ${(t.durationMs/1000).toFixed(1)}s</span></div><div class="card-body">${t.spans.map(span).join('')}</div></section>`).join('')}
+ <p class="muted" style="font-size:12px">Spans mirror the OTLP trace the desktop edition emits for every run - each step, tool call, delegation and guardrail check.</p>
+ </div></div>`;
+}
+function foundryData(item){
+ const suites=(data.aiEvalSuites||[]);
+ $('#view').innerHTML=`<div class="settings-page"><div class="admin-panel active">${foundryHeader('Data',item.blurb)}
+ ${suites.length?suites.map(s=>`<section class="card" style="margin-bottom:14px"><div class="card-head panel-title"><div><h3>${s.name}</h3><p class="card-desc">${s.description||''}</p></div><span class="badge badge-outline">${(s.cases||[]).length} case${(s.cases||[]).length===1?'':'s'}</span></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Input</th><th>Success criteria</th></tr></thead><tbody>${(s.cases||[]).map(c=>`<tr><td>${c.inputText}</td><td class="muted">${c.successCriteria}</td></tr>`).join('')||'<tr><td colspan="2" class="muted">No cases yet.</td></tr>'}</tbody></table></div></div></section>`).join(''):'<div class="empty">No evaluation datasets yet.</div>'}
+ <p class="muted" style="font-size:12px">These golden datasets feed both Evaluations and the Optimization loop.</p>
+ </div></div>`;
+}
 const path=location.pathname.replace(/\/$/,'')||'/';
 // /backlog and /changelog are retired URLs - Roadmap absorbed the backlog
 
@@ -29550,4 +29777,4 @@ function renderDocsBrowse(root){
 // preview deploy without the redirect rules), so old links still work.
 if(path==='/backlog'){history.replaceState(null,'','/roadmap');roadmapPage()}
 else if(path==='/changelog'){history.replaceState(null,'','/releases');releasesPage()}
-else if(path==='/demo')appShell();else if(path==='/demo/warehouse')appShell();else if(path==='/roadmap')roadmapPage();else if(path==='/releases')releasesPage();else if(path==='/platform'||path==='/build')modernSitePage('product-apps');else if(path==='/agent-foundry')modernSitePage('product-agents');else if(path==='/product/orchestration')modernSitePage('product-orchestration');else if(path==='/low-code')lowCodePage();else if(path==='/apps')appCatalogPage();else if(path.startsWith('/apps/'))appDetailPage(path.slice(6));else if(path==='/integrations')modernSitePage('dev-integrations');else if(path==='/voice')voicePage();else if(path==='/developers')modernSitePage('dev-architecture');else if(path==='/developers/apis')modernSitePage('dev-apis');else if(path==='/developers/mcp')modernSitePage('dev-mcp');else if(path==='/developers/solutions')modernSitePage('dev-solutions');else if(path==='/compare')comparePage();else if(path==='/download')downloadPage();else if(path==='/help')modernSitePage('docs');else if(path==='/pricing')modernSitePage('pricing');else if(path==='/open-source')modernSitePage('open-source');else if(path.startsWith('/help/'))helpTopicPage(path.slice(6));else modernSitePage('home');
+else if(path==='/demo')appShell();else if(path==='/demo/warehouse')appShell();else if(path==='/demo/foundry')appShell();else if(path==='/roadmap')roadmapPage();else if(path==='/releases')releasesPage();else if(path==='/platform'||path==='/build')modernSitePage('product-apps');else if(path==='/agent-foundry')modernSitePage('product-agents');else if(path==='/product/orchestration')modernSitePage('product-orchestration');else if(path==='/low-code')lowCodePage();else if(path==='/apps')appCatalogPage();else if(path.startsWith('/apps/'))appDetailPage(path.slice(6));else if(path==='/integrations')modernSitePage('dev-integrations');else if(path==='/voice')voicePage();else if(path==='/developers')modernSitePage('dev-architecture');else if(path==='/developers/apis')modernSitePage('dev-apis');else if(path==='/developers/mcp')modernSitePage('dev-mcp');else if(path==='/developers/solutions')modernSitePage('dev-solutions');else if(path==='/compare')comparePage();else if(path==='/download')downloadPage();else if(path==='/help')modernSitePage('docs');else if(path==='/pricing')modernSitePage('pricing');else if(path==='/open-source')modernSitePage('open-source');else if(path.startsWith('/help/'))helpTopicPage(path.slice(6));else modernSitePage('home');
