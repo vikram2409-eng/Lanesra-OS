@@ -31,8 +31,8 @@
 //! caused it, without threading a depth parameter through every entity
 //! service's public API.
 
-use std::cell::Cell;
-use std::collections::HashMap;
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 
 use chrono::{Duration, Utc};
 use rusqlite::Connection;
@@ -81,6 +81,53 @@ impl Drop for DepthGuard {
     fn drop(&mut self) {
         WORKFLOW_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
     }
+}
+
+// WP-0709 (REQ-LANE-013): a Process Lane step can declare the workflow
+// actions it replaces, so a change the lane makes itself does not also fire
+// those actions a second time - no duplicate work. The declaration lives on
+// the step (`replaces`: [{workflow_id, action_index}]); the lane runtime sets
+// this thread-local origin around its own writes, naming the (workflow,
+// action) pairs to skip. `run_workflow` consults it and skips exactly those
+// actions, recording each skip so the suppression is visible, never hidden.
+// A write made outside a lane leaves the origin empty, so every workflow
+// fires in full. A stack handles writes nested inside one another.
+thread_local! {
+    static LANE_WRITE_ORIGIN: RefCell<Vec<HashSet<(String, i64)>>> =
+        const { RefCell::new(Vec::new()) };
+}
+
+/// RAII guard naming the `(workflow_id, action_index)` pairs the current lane
+/// step replaces. Held for the lifetime of that step's write; dropped (on
+/// every path, including `?`) when the write returns.
+#[must_use]
+pub struct LaneWriteOrigin;
+impl LaneWriteOrigin {
+    /// Enter a lane-write scope that suppresses the given `(workflow_id,
+    /// action_index)` actions. An empty set still enters a scope (a lane step
+    /// that replaces nothing suppresses nothing) so the call site is uniform.
+    pub fn enter(suppressed: HashSet<(String, i64)>) -> LaneWriteOrigin {
+        LANE_WRITE_ORIGIN.with(|s| s.borrow_mut().push(suppressed));
+        LaneWriteOrigin
+    }
+}
+impl Drop for LaneWriteOrigin {
+    fn drop(&mut self) {
+        LANE_WRITE_ORIGIN.with(|s| {
+            s.borrow_mut().pop();
+        });
+    }
+}
+
+/// Whether the current lane-write origin declares that `action_index` of
+/// `workflow_id` is replaced by the lane - checked per action in
+/// `run_workflow`.
+fn lane_replaces_action(workflow_id: &str, action_index: i64) -> bool {
+    LANE_WRITE_ORIGIN.with(|s| {
+        s.borrow()
+            .iter()
+            .any(|set| set.contains(&(workflow_id.to_string(), action_index)))
+    })
 }
 
 /// Administrator always passes (unchanged); a non-Administrator additionally
@@ -1505,6 +1552,13 @@ struct RunAiAgentParams {
     agent_identity_id: Option<String>,
 }
 
+/// WP-0709 (REQ-LANE-013): parameters for the `start_lane` action - the
+/// `lane_key` of a published Process Lane to start on the triggering record.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct StartLaneParams {
+    lane_key: String,
+}
+
 fn parse_params<T: for<'de> Deserialize<'de>>(
     action_type: &str,
     params_json: &str,
@@ -1756,6 +1810,28 @@ fn parse_and_validate_params(
                 return Err(AppError::Validation(format!(
                     "Invalid notification audience '{}'",
                     p.audience
+                )));
+            }
+        }
+        "start_lane" => {
+            // WP-0709 (REQ-LANE-013): the lane must exist and anchor on this
+            // workflow's entity type, so the run it starts is on a record of
+            // the right object. (Whether it is published is checked when the
+            // action fires, so a lane can be wired up before it is published.)
+            let p: StartLaneParams = parse_params(action_type, params_json)?;
+            let lane = crate::repositories::process_lane_repo::get_lane_by_key(
+                conn,
+                workspace_id,
+                &p.lane_key,
+            )
+            .map_err(|e| AppError::Validation(e.to_string()))?
+            .ok_or_else(|| {
+                AppError::Validation(format!("start_lane: unknown lane '{}'", p.lane_key))
+            })?;
+            if lane.object_key != entity_type {
+                return Err(AppError::Validation(format!(
+                    "start_lane: lane '{}' anchors on '{}', not this workflow's '{}'",
+                    p.lane_key, lane.object_key, entity_type
                 )));
             }
         }
@@ -2259,6 +2335,51 @@ pub(crate) fn apply_action(
             )?;
             Ok(format!("queued {} run", p.target_type))
         }
+        // WP-0709 (REQ-LANE-013): start a Process Lane run on the triggering
+        // record. Enqueue-not-inline like `run_ai_agent`: a lane run is async
+        // and needs the workspace master key, so it must not run inside this
+        // sync write path. The lane's published compiled graph is queued into
+        // `graph_pending_runs` anchored on this record; `graph_runtime_service
+        // ::drain_pending_graph_runs` recognizes a lane graph and starts it as
+        // a proper lane run (anchor, run data, start condition).
+        "start_lane" => {
+            let p: StartLaneParams = parse_params(action_type, params_json)?;
+            let lane = crate::repositories::process_lane_repo::get_lane_by_key(
+                conn,
+                workspace_id,
+                &p.lane_key,
+            )
+            .map_err(|e| AppError::Validation(e.to_string()))?
+            .ok_or_else(|| {
+                AppError::Validation(format!("start_lane: unknown lane '{}'", p.lane_key))
+            })?;
+            let version =
+                crate::repositories::process_lane_repo::latest_published_version(conn, &lane.id)
+                    .map_err(|e| AppError::Validation(e.to_string()))?
+                    .ok_or_else(|| {
+                        AppError::Validation(format!(
+                            "start_lane: lane '{}' has no published version to run",
+                            p.lane_key
+                        ))
+                    })?;
+            let graph_id = version.graph_id.ok_or_else(|| {
+                AppError::Validation(format!(
+                    "start_lane: published version {} of lane '{}' has no compiled graph",
+                    version.version, p.lane_key
+                ))
+            })?;
+            crate::repositories::graph_pending_run_repo::enqueue(
+                conn,
+                &new_uuid(),
+                workspace_id,
+                &graph_id,
+                "{}",
+                Some("workflow"),
+                Some(entity_type),
+                Some(entity_id),
+            )?;
+            Ok(format!("queued lane '{}' on this record", p.lane_key))
+        }
         other => Err(AppError::Validation(format!(
             "Unknown action type '{other}'"
         ))),
@@ -2313,7 +2434,21 @@ fn run_workflow(
     }
     let mut summaries = Vec::new();
     let mut errors = Vec::new();
-    for action in &wf.actions {
+    for (index, action) in wf.actions.iter().enumerate() {
+        // WP-0709 (REQ-LANE-013): when this change was made by a Process Lane
+        // step that declares it replaces this action, skip it - the lane did
+        // that work itself. The skip is recorded in the run summary, never
+        // silent (no hidden suppression). A change made outside a lane leaves
+        // the origin empty, so nothing is skipped and the workflow fires in
+        // full.
+        if lane_replaces_action(&wf.id, index as i64) {
+            summaries.push(format!(
+                "skipped action {} ({}) - replaced by a process lane step",
+                index + 1,
+                action.action_type
+            ));
+            continue;
+        }
         match apply_action(
             conn,
             workspace_id,

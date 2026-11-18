@@ -35,6 +35,10 @@ pub const ACTION_TYPES: &[&str] = &[
     // already established, for the same reason (an LLM call has no
     // business blocking a record save).
     "run_ai_agent",
+    // Phase 7, WP-0709 (REQ-LANE-013): start a Process Lane run on the
+    // triggering record. Enqueue-not-inline like `run_ai_agent`, since a lane
+    // run is async and must not block the record save that triggered it.
+    "start_lane",
 ];
 pub const NOTIFICATION_AUDIENCES: &[&str] = &["owner", "all_admins"];
 
