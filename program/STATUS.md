@@ -34,7 +34,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 |---|---|---|---|---|---|
 | [WP-0653](work/P6/WP-0653-online-demo-agent-foundry-create-observe-improve.md) | Online demo: Agent Foundry (Create / Observe / Improve) | in_review | claude | `claude/agent-foundry-demo` | 790 |
 | [WP-0709](work/P7/WP-0709-lanes-and-workflows-declared-replacement-and-starting-a-lane.md) | Lanes and workflows: declared replacement, and starting a lane from a workflow | in_review | claude | `wp/WP-0709-lanes-workflows-interplay` | 792 |
-| [WP-0710](work/P7/WP-0710-repeat-over-child-records-and-stage-and-start-conditions.md) | Repeat over child records, and stage and start conditions | in_review | muse | `wp/WP-0710-demo-and-docs-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/794 |
+| [WP-0710](work/P7/WP-0710-repeat-over-child-records-and-stage-and-start-conditions.md) | Repeat over child records, and stage and start conditions | in_review | muse | `wp/WP-0710-demo-and-docs-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/796 |
 
 ## Ready to start (all dependencies done)
 
