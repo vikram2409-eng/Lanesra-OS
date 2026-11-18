@@ -2497,6 +2497,8 @@ body.has-demo-banner{padding-top:36px}
 @media(max-width:400px){.lane-stage-name{white-space:normal}}
 .lane-stage.current{border-color:var(--brand);color:var(--text);font-weight:600;background:color-mix(in srgb,var(--brand) 7%,var(--panel));box-shadow:0 0 0 1px var(--brand),0 2px 8px rgba(79,70,229,.12)}
 .lane-stage.done{color:var(--success)}
+.lane-stage.skipped{color:var(--muted);border-style:dashed}
+.lane-stage.skipped .lane-stage-num{border-color:var(--muted);color:var(--muted)}
 .lane-stage-num{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;border:1px solid var(--line);font-size:12px;flex-shrink:0}
 .lane-stage.current .lane-stage-num{background:var(--brand);border-color:var(--brand);color:#fff}
 .lane-stage.done .lane-stage-num{border-color:var(--success);color:var(--success)}
@@ -2520,6 +2522,11 @@ body.has-demo-banner{padding-top:36px}
 .lane-step-card .muted{line-height:1.55}
 .lane-line-group{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px;background:color-mix(in srgb,var(--muted) 8%,transparent)}
 .lane-line-head{font-weight:600;font-size:14px;margin-bottom:10px}
+.lane-line-assignee{font-size:13px;color:var(--muted);margin-bottom:10px}
+.lane-line-done{font-size:13px;color:var(--success);line-height:1.55}
+.lane-line-done-group{border-color:var(--success)}
+.lane-line-skipped{border-style:dashed}
+.lane-line-skipped .lane-line-done{color:var(--muted)}
 .lane-form .field{display:block;margin-bottom:14px}
 .lane-form .field-label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text)}
 .lane-form .input{min-height:40px;padding:9px 12px;font-size:14px;border-radius:8px;width:100%}
