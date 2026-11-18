@@ -3,8 +3,8 @@ id: WP-0709
 title: Lanes and workflows: declared replacement, and starting a lane from a workflow
 phase: 7
 epic: E7.2 Steps and rules
-status: proposed
-owner: unassigned
+status: in_progress
+owner: claude
 planned_for: claude
 depends_on: [WP-0705]
 requirements: [REQ-LANE-013]
@@ -12,9 +12,9 @@ estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
-branch: 
+branch: wp/WP-0709-lanes-workflows-interplay
 pr: 
-updated: 2026-11-14
+updated: 2026-11-18
 ---
 
 # WP-0709 — Lanes and workflows: declared replacement, and starting a lane from a workflow
@@ -50,3 +50,4 @@ No duplicate work and no hidden suppression.
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+- 2026-11-18 claude: Built the declared-replacement engine (AC-1, AC-2, AC-5). The schema (`LaneStep.replaces: [{workflow_id, action_index}]`) and the P-13 publish check already existed; this adds the runtime. A thread-local `workflow_service::LaneWriteOrigin` (mirroring the existing `DepthGuard`) names the `(workflow_id, action_index)` pairs to skip; the lane runtime enters it around a step's own writes — the record-step action arm in `graph_runtime_service` (via `lane_replaces_from_config`) and the form-step write in `submit_person_step` (via `replaces_suppress_set`). `run_workflow` now enumerates actions and skips exactly the declared ones, recording each skip in the run summary (visible, not hidden). A non-lane write leaves the origin empty, so every action fires. Tests: new `core/tests/process_lane_workflow_interplay.rs` (2: AC-1 skips only the replaced action and the skip shows on the run; AC-2 a direct change fires in full). Local: interplay 2 passed; no regressions (workflow_automation 23, workflow_action_expansion 10, workflow_studio_v2 7, process_lane_writes 6, human_step 5, runner 5, repeat_conditions 6); clippy + fmt clean. Next (mine): AC-4 — a workflow action that starts a lane run on the triggering record (needs async pending-run plumbing, since `apply_action` is sync without a master key). Then AC-3 (editor links), AC-6 (demo), AC-7 (docs) are muse's.

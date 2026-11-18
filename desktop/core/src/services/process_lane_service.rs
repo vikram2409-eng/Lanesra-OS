@@ -2694,6 +2694,21 @@ fn waiting_for_run(
     }))
 }
 
+/// WP-0709 (REQ-LANE-013): the `(workflow_id, action_index)` pairs a lane step
+/// declares it replaces, built from its `replaces`. The lane runtime holds
+/// this as a `workflow_service::LaneWriteOrigin` around the step's own writes,
+/// so a workflow the write fires skips exactly those actions.
+fn replaces_suppress_set(step: &LaneStep) -> std::collections::HashSet<(String, i64)> {
+    step.replaces
+        .as_ref()
+        .map(|rs| {
+            rs.iter()
+                .map(|r| (r.workflow_id.clone(), r.action_index))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Submits the current human step of a `waiting_person` lane run
 /// (WP-0704). Validates the entered values against the step's fields and its
 /// `validation`, stores them (run-data fields on the run, record-bound
@@ -2816,6 +2831,12 @@ pub async fn submit_person_step(
     // is the run data persisted, so a blocked record write leaves nothing
     // changed. Full all-or-nothing posting of record *steps* is WP-0705.
     if !record_updates.is_empty() {
+        // WP-0709 (REQ-LANE-013): hold the lane-write origin across this write,
+        // so a workflow it fires skips the actions this step declares it
+        // replaces. Empty for a step that replaces nothing.
+        let suppress = replaces_suppress_set(&step);
+        let _lane_origin = (!suppress.is_empty())
+            .then(|| crate::services::workflow_service::LaneWriteOrigin::enter(suppress));
         custom_field_service::set_entity_values(
             conn,
             &object_key,

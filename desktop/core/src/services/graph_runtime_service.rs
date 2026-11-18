@@ -332,6 +332,26 @@ fn evaluate_conditions_config(
     )
 }
 
+/// WP-0709 (REQ-LANE-013): the `(workflow_id, action_index)` pairs a lane
+/// step declares it replaces, read from the compiled node config (the whole
+/// lane step is serialized into it, so `replaces` rides along). Fed to
+/// `workflow_service::LaneWriteOrigin` around the step's writes.
+fn lane_replaces_from_config(config: &Value) -> std::collections::HashSet<(String, i64)> {
+    config
+        .get("replaces")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|r| {
+                    let wf = r.get("workflow_id")?.as_str()?.to_string();
+                    let idx = r.get("action_index")?.as_i64()?;
+                    Some((wf, idx))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn execute_node(
     conn: &Connection,
@@ -548,6 +568,14 @@ async fn execute_node(
                     .and_then(|s| serde_json::from_str::<Value>(s).ok())
                     .and_then(|v| v.as_object().cloned())
                     .unwrap_or_default();
+                // WP-0709 (REQ-LANE-013): hold the lane-write origin across
+                // these writes, naming the workflow actions this step declares
+                // it replaces, so a workflow fired by the write skips exactly
+                // those actions (no duplicate work). Dropped when the writes
+                // return. Empty for a step that replaces nothing.
+                let suppress = lane_replaces_from_config(&config);
+                let _lane_origin = (!suppress.is_empty())
+                    .then(|| super::workflow_service::LaneWriteOrigin::enter(suppress));
                 let result = super::idempotency_service::run_once(
                     conn,
                     workspace_id,

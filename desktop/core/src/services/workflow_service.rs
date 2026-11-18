@@ -31,8 +31,8 @@
 //! caused it, without threading a depth parameter through every entity
 //! service's public API.
 
-use std::cell::Cell;
-use std::collections::HashMap;
+use std::cell::{Cell, RefCell};
+use std::collections::{HashMap, HashSet};
 
 use chrono::{Duration, Utc};
 use rusqlite::Connection;
@@ -81,6 +81,53 @@ impl Drop for DepthGuard {
     fn drop(&mut self) {
         WORKFLOW_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
     }
+}
+
+// WP-0709 (REQ-LANE-013): a Process Lane step can declare the workflow
+// actions it replaces, so a change the lane makes itself does not also fire
+// those actions a second time - no duplicate work. The declaration lives on
+// the step (`replaces`: [{workflow_id, action_index}]); the lane runtime sets
+// this thread-local origin around its own writes, naming the (workflow,
+// action) pairs to skip. `run_workflow` consults it and skips exactly those
+// actions, recording each skip so the suppression is visible, never hidden.
+// A write made outside a lane leaves the origin empty, so every workflow
+// fires in full. A stack handles writes nested inside one another.
+thread_local! {
+    static LANE_WRITE_ORIGIN: RefCell<Vec<HashSet<(String, i64)>>> =
+        const { RefCell::new(Vec::new()) };
+}
+
+/// RAII guard naming the `(workflow_id, action_index)` pairs the current lane
+/// step replaces. Held for the lifetime of that step's write; dropped (on
+/// every path, including `?`) when the write returns.
+#[must_use]
+pub struct LaneWriteOrigin;
+impl LaneWriteOrigin {
+    /// Enter a lane-write scope that suppresses the given `(workflow_id,
+    /// action_index)` actions. An empty set still enters a scope (a lane step
+    /// that replaces nothing suppresses nothing) so the call site is uniform.
+    pub fn enter(suppressed: HashSet<(String, i64)>) -> LaneWriteOrigin {
+        LANE_WRITE_ORIGIN.with(|s| s.borrow_mut().push(suppressed));
+        LaneWriteOrigin
+    }
+}
+impl Drop for LaneWriteOrigin {
+    fn drop(&mut self) {
+        LANE_WRITE_ORIGIN.with(|s| {
+            s.borrow_mut().pop();
+        });
+    }
+}
+
+/// Whether the current lane-write origin declares that `action_index` of
+/// `workflow_id` is replaced by the lane - checked per action in
+/// `run_workflow`.
+fn lane_replaces_action(workflow_id: &str, action_index: i64) -> bool {
+    LANE_WRITE_ORIGIN.with(|s| {
+        s.borrow()
+            .iter()
+            .any(|set| set.contains(&(workflow_id.to_string(), action_index)))
+    })
 }
 
 /// Administrator always passes (unchanged); a non-Administrator additionally
@@ -2313,7 +2360,21 @@ fn run_workflow(
     }
     let mut summaries = Vec::new();
     let mut errors = Vec::new();
-    for action in &wf.actions {
+    for (index, action) in wf.actions.iter().enumerate() {
+        // WP-0709 (REQ-LANE-013): when this change was made by a Process Lane
+        // step that declares it replaces this action, skip it - the lane did
+        // that work itself. The skip is recorded in the run summary, never
+        // silent (no hidden suppression). A change made outside a lane leaves
+        // the origin empty, so nothing is skipped and the workflow fires in
+        // full.
+        if lane_replaces_action(&wf.id, index as i64) {
+            summaries.push(format!(
+                "skipped action {} ({}) - replaced by a process lane step",
+                index + 1,
+                action.action_type
+            ));
+            continue;
+        }
         match apply_action(
             conn,
             workspace_id,
