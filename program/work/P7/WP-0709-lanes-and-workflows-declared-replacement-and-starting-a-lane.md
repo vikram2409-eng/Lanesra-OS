@@ -3,7 +3,7 @@ id: WP-0709
 title: Lanes and workflows: declared replacement, and starting a lane from a workflow
 phase: 7
 epic: E7.2 Steps and rules
-status: in_progress
+status: in_review
 owner: claude
 planned_for: claude
 depends_on: [WP-0705]
@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
 branch: wp/WP-0709-lanes-workflows-interplay
-pr: 
+pr: 792
 updated: 2026-11-18
 ---
 
