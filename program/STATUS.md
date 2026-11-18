@@ -22,9 +22,9 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 196 | 41 | 111 / 642 |
-| Team Workspace | 223 | 47 | 121 / 736 |
-| Online demo | 152 | 24 | 62 / 506 |
+| Desktop | 196 | 42 | 113 / 642 |
+| Team Workspace | 223 | 48 | 123 / 736 |
+| Online demo | 152 | 25 | 64 / 506 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -34,7 +34,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 |---|---|---|---|---|---|
 | [WP-0653](work/P6/WP-0653-online-demo-agent-foundry-create-observe-improve.md) | Online demo: Agent Foundry (Create / Observe / Improve) | in_review | claude | `claude/agent-foundry-demo` | 790 |
 | [WP-0709](work/P7/WP-0709-lanes-and-workflows-declared-replacement-and-starting-a-lane.md) | Lanes and workflows: declared replacement, and starting a lane from a workflow | in_review | claude | `wp/WP-0709-lanes-workflows-interplay` | 792 |
-| [WP-0710](work/P7/WP-0710-repeat-over-child-records-and-stage-and-start-conditions.md) | Repeat over child records, and stage and start conditions | in_review | claude | `wp/WP-0710-per-item-assignment-runtime` | 789 |
+| [WP-0710](work/P7/WP-0710-repeat-over-child-records-and-stage-and-start-conditions.md) | Repeat over child records, and stage and start conditions | in_review | muse | `wp/WP-0710-demo-and-docs-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/794 |
 
 ## Ready to start (all dependencies done)
 
@@ -343,7 +343,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0707](work/P7/WP-0707-lane-runner-screen-entry-points-and-object-360.md) | Lane runner, first cut: the straight path on desktop and Team Workspace | E7.3 Runner and visibility | ✅ done | L | ✓Desktop ✓Team Workspace ✓Online demo | WP-0704, WP-0705 |
 | [WP-0708](work/P7/WP-0708-agent-steps-assistance-and-autonomy-level-per-step.md) | Agent steps, assistance and autonomy level per step | E7.4 Agents in lanes | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0707 |
 | [WP-0709](work/P7/WP-0709-lanes-and-workflows-declared-replacement-and-starting-a-lane.md) | Lanes and workflows: declared replacement, and starting a lane from a workflow | E7.2 Steps and rules | 👀 in review | M | ○Desktop ○Team Workspace ○Online demo | WP-0705 |
-| [WP-0710](work/P7/WP-0710-repeat-over-child-records-and-stage-and-start-conditions.md) | Repeat over child records, and stage and start conditions | E7.2 Steps and rules | 👀 in review | M | ○Desktop ○Team Workspace ○Online demo | WP-0705 |
+| [WP-0710](work/P7/WP-0710-repeat-over-child-records-and-stage-and-start-conditions.md) | Repeat over child records, and stage and start conditions | E7.2 Steps and rules | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0705 |
 | [WP-0711](work/P7/WP-0711-notes-attachments-and-reassign-at-any-point.md) | Notes, attachments and reassign at any point | E7.3 Runner and visibility | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0707 |
 | [WP-0712](work/P7/WP-0712-blueprint-view-and-export-of-a-lane.md) | Blueprint view and export of a lane | E7.5 Authoring | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0703 |
 | [WP-0713](work/P7/WP-0713-board-by-stage-my-steps-and-lane-timing.md) | Board by stage, "my steps" and lane timing | E7.3 Runner and visibility | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0707 |
