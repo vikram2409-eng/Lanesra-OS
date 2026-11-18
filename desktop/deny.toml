@@ -32,7 +32,7 @@ yanked = "deny"
 #     dependency we chose - so removing it depends on those upstreams moving to
 #     jiff/time. This is an unmaintained-status advisory, not a known
 #     vulnerability. Same class as R-22 (unsafe-libyaml).
-#   RAID: R-30 | Review: 2027-02-17
+#   RAID: R-35 | Review: 2027-02-17
 ignore = [
     "RUSTSEC-2023-0071",
     "RUSTSEC-2024-0449",
