@@ -1552,6 +1552,13 @@ struct RunAiAgentParams {
     agent_identity_id: Option<String>,
 }
 
+/// WP-0709 (REQ-LANE-013): parameters for the `start_lane` action - the
+/// `lane_key` of a published Process Lane to start on the triggering record.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct StartLaneParams {
+    lane_key: String,
+}
+
 fn parse_params<T: for<'de> Deserialize<'de>>(
     action_type: &str,
     params_json: &str,
@@ -1803,6 +1810,28 @@ fn parse_and_validate_params(
                 return Err(AppError::Validation(format!(
                     "Invalid notification audience '{}'",
                     p.audience
+                )));
+            }
+        }
+        "start_lane" => {
+            // WP-0709 (REQ-LANE-013): the lane must exist and anchor on this
+            // workflow's entity type, so the run it starts is on a record of
+            // the right object. (Whether it is published is checked when the
+            // action fires, so a lane can be wired up before it is published.)
+            let p: StartLaneParams = parse_params(action_type, params_json)?;
+            let lane = crate::repositories::process_lane_repo::get_lane_by_key(
+                conn,
+                workspace_id,
+                &p.lane_key,
+            )
+            .map_err(|e| AppError::Validation(e.to_string()))?
+            .ok_or_else(|| {
+                AppError::Validation(format!("start_lane: unknown lane '{}'", p.lane_key))
+            })?;
+            if lane.object_key != entity_type {
+                return Err(AppError::Validation(format!(
+                    "start_lane: lane '{}' anchors on '{}', not this workflow's '{}'",
+                    p.lane_key, lane.object_key, entity_type
                 )));
             }
         }
@@ -2305,6 +2334,51 @@ pub(crate) fn apply_action(
                 p.agent_identity_id.as_deref(),
             )?;
             Ok(format!("queued {} run", p.target_type))
+        }
+        // WP-0709 (REQ-LANE-013): start a Process Lane run on the triggering
+        // record. Enqueue-not-inline like `run_ai_agent`: a lane run is async
+        // and needs the workspace master key, so it must not run inside this
+        // sync write path. The lane's published compiled graph is queued into
+        // `graph_pending_runs` anchored on this record; `graph_runtime_service
+        // ::drain_pending_graph_runs` recognizes a lane graph and starts it as
+        // a proper lane run (anchor, run data, start condition).
+        "start_lane" => {
+            let p: StartLaneParams = parse_params(action_type, params_json)?;
+            let lane = crate::repositories::process_lane_repo::get_lane_by_key(
+                conn,
+                workspace_id,
+                &p.lane_key,
+            )
+            .map_err(|e| AppError::Validation(e.to_string()))?
+            .ok_or_else(|| {
+                AppError::Validation(format!("start_lane: unknown lane '{}'", p.lane_key))
+            })?;
+            let version =
+                crate::repositories::process_lane_repo::latest_published_version(conn, &lane.id)
+                    .map_err(|e| AppError::Validation(e.to_string()))?
+                    .ok_or_else(|| {
+                        AppError::Validation(format!(
+                            "start_lane: lane '{}' has no published version to run",
+                            p.lane_key
+                        ))
+                    })?;
+            let graph_id = version.graph_id.ok_or_else(|| {
+                AppError::Validation(format!(
+                    "start_lane: published version {} of lane '{}' has no compiled graph",
+                    version.version, p.lane_key
+                ))
+            })?;
+            crate::repositories::graph_pending_run_repo::enqueue(
+                conn,
+                &new_uuid(),
+                workspace_id,
+                &graph_id,
+                "{}",
+                Some("workflow"),
+                Some(entity_type),
+                Some(entity_id),
+            )?;
+            Ok(format!("queued lane '{}' on this record", p.lane_key))
         }
         other => Err(AppError::Validation(format!(
             "Unknown action type '{other}'"

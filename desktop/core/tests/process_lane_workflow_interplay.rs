@@ -22,8 +22,8 @@ use lanesra_core::models::custom_record::CustomRecordInput;
 use lanesra_core::models::workflow::{WorkflowActionInput, WorkflowDefinitionInput};
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::{
-    custom_field_service, custom_object_service, custom_record_service, process_lane_service,
-    task_service, workflow_service, workspace_service,
+    custom_field_service, custom_object_service, custom_record_service, graph_runtime_service,
+    process_lane_service, task_service, workflow_service, workspace_service,
 };
 
 fn setup() -> (rusqlite::Connection, String, String) {
@@ -315,4 +315,99 @@ async fn the_same_change_outside_a_lane_fires_the_workflow_in_full() {
         "a non-lane change fires every workflow action, including the one a lane step would replace"
     );
     assert_eq!(note(&conn, &widget).as_deref(), Some("touched"));
+}
+
+/// Publishes a minimal published lane `lane-followup` on `widget`: one form
+/// step a person submits, writing nothing to the record (so it cannot loop
+/// with the workflow that starts it).
+fn publish_followup_lane(conn: &rusqlite::Connection, ws: &str, admin: &str) {
+    let lane = json!({
+        "format_version": "1.0.0",
+        "lane": {
+            "id": "lane-followup", "name": "Follow up", "object_key": "widget",
+            "version": 1, "status": "published",
+            "run_data": {"fields": [{"key": "outcome", "type": "string", "required": false}]},
+            "stages": [{
+                "id": "do", "name": "Do", "steps": [{
+                    "id": "review", "name": "Review", "kind": "form",
+                    "role": "r", "required": true,
+                    "fields": [{
+                        "key": "outcome", "label": "Outcome", "type": "string",
+                        "binds_to": "run_data.outcome", "required": false
+                    }]
+                }]
+            }]
+        }
+    });
+    process_lane_service::import_lane_definition(conn, ws, &lane.to_string(), Some(admin)).unwrap();
+    process_lane_service::publish_lane(conn, ws, "lane-followup", Some(admin)).unwrap();
+}
+
+// --------------------------------------------------------------------------
+// AC-4: a workflow starts a lane run on the triggering record.
+// --------------------------------------------------------------------------
+
+// Covers: REQ-LANE-013 (WP-0709 AC-4)
+#[tokio::test]
+async fn a_workflow_action_starts_a_lane_run_on_the_triggering_record() {
+    let (conn, ws, admin) = setup();
+    seed(&conn, &ws, &admin);
+    publish_followup_lane(&conn, &ws, &admin);
+    let widget = make_widget(&conn, &ws, &admin, "W3");
+
+    // A workflow on widget: when `stage` changes, start the follow-up lane on
+    // the record.
+    workflow_service::create_rule(
+        &conn,
+        &ws,
+        &WorkflowDefinitionInput {
+            app_id: None,
+            entity_type: "widget".into(),
+            name: "Stage change starts follow-up".into(),
+            description: None,
+            trigger_type: "field_changed".into(),
+            trigger_status: None,
+            trigger_field_key: Some("stage".into()),
+            trigger_field_source: "custom".into(),
+            trigger_offset_days: 0,
+            match_type: "all".into(),
+            priority: 0,
+            conditions: vec![],
+            actions: vec![WorkflowActionInput {
+                action_type: "start_lane".into(),
+                params_json: json!({"lane_key": "lane-followup"}).to_string(),
+            }],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+
+    // No lane run yet.
+    assert!(
+        process_lane_service::list_lane_runs_for_record(&conn, &ws, "widget", &widget)
+            .unwrap()
+            .runs
+            .is_empty()
+    );
+
+    // Change stage - the workflow fires and enqueues the lane start.
+    set_stage_directly(&conn, &admin, &widget, "Done");
+
+    // Draining the pending queue starts the lane as a real lane run on the
+    // record (anchor + run data), parked on its first person step.
+    let drained = graph_runtime_service::drain_pending_graph_runs(&conn, &ws, &master_key(), 10)
+        .await
+        .unwrap();
+    assert_eq!(drained, 1, "the enqueued lane start is drained");
+
+    let runs = process_lane_service::list_lane_runs_for_record(&conn, &ws, "widget", &widget)
+        .unwrap()
+        .runs;
+    assert_eq!(
+        runs.len(),
+        1,
+        "a lane run was started on the triggering record"
+    );
+    assert_eq!(runs[0].lane_id, "lane-followup");
+    assert_eq!(runs[0].status, "waiting_person");
 }

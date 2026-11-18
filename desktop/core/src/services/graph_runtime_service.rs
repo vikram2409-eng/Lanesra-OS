@@ -2054,18 +2054,44 @@ pub async fn drain_pending_graph_runs(
     let batch = crate::repositories::graph_pending_run_repo::list_batch(conn, workspace_id, limit)?;
     let mut drained = 0;
     for item in &batch {
-        let _ = start_run(
-            conn,
-            workspace_id,
-            master_key,
-            &item.graph_id,
-            &item.trigger_input,
-            None,
-            item.triggered_by.as_deref(),
-            item.source_entity_type.as_deref(),
-            item.source_entity_id.as_deref(),
-        )
-        .await;
+        // WP-0709 (REQ-LANE-013): a pending run whose graph belongs to a
+        // Process Lane (enqueued by a workflow's `start_lane` action) is
+        // started as a proper lane run - anchor record, run data and start
+        // condition - not a bare graph run. Any other graph takes the normal
+        // path.
+        let lane =
+            crate::repositories::process_lane_repo::get_version_by_graph_id(conn, &item.graph_id)
+                .ok()
+                .flatten()
+                .and_then(|v| {
+                    crate::repositories::process_lane_repo::get_lane(conn, &v.lane_id)
+                        .ok()
+                        .flatten()
+                });
+        if let (Some(lane), Some(record_id)) = (lane, item.source_entity_id.as_deref()) {
+            let _ = super::process_lane_service::start_lane_run(
+                conn,
+                workspace_id,
+                master_key,
+                &lane.lane_key,
+                record_id,
+                item.triggered_by.as_deref(),
+            )
+            .await;
+        } else {
+            let _ = start_run(
+                conn,
+                workspace_id,
+                master_key,
+                &item.graph_id,
+                &item.trigger_input,
+                None,
+                item.triggered_by.as_deref(),
+                item.source_entity_type.as_deref(),
+                item.source_entity_id.as_deref(),
+            )
+            .await;
+        }
         crate::repositories::graph_pending_run_repo::delete(conn, &item.id)?;
         drained += 1;
     }
