@@ -37,3 +37,11 @@ Finished WP-0710 on branch `wp/WP-0710-demo-and-docs` (claimed earlier the same 
 ## Next
 
 Push, open the draft PR `[WP-0710] …`, CI is the final proof, merge under blanket approval. Then WP-0653 finish.
+
+## CI failure on #796 and the fix (2026-11-18, head d52935f)
+
+- CI: 19 successful, 6 neutral (Netlify deploy canceled), 2 failing — `rust (tests 4/4)` and the aggregate `rust (tests)`. One test failed: `dry_run_count_flags_the_two_zero_variance_lines` (`desktop/core/tests/process_lane_publish.rs`): expected 1 zero-quantity flag, got `[]`.
+- Cause: the Count lane's new Post adjustments `skip_condition` (`$record.status == COUNTING`) fired in the CORE dry run on the approved path too. The core dry run never applied simulated `set_status` writes to the simulated record — the approval's `cycle_count.set_status` → APPROVED was recorded as a write, but the anchor status stayed COUNTING, so the stage was skipped and `post-count-adjustments` was never simulated. The online demo's dry run already applies that rule (`app.js` `laneDryRun`: a `.set_status` write moves `simRecord.status`).
+- Fix (simulator parity, not a test change): `simulate_record_step` in `desktop/core/src/services/process_lane_publish.rs` now applies a non-repeating step's `.set_status` write to `state.record_fields["status"]` (anchor only; a repeating step's writes act on its children). The WP file Progress log carries the same record.
+- Local proof after the fix: the failing test passes; full `process_lane_publish` target 24/24; `cargo fmt` clean; clippy on the core lib clean (re-run at push time if the tree moved).
+- Next: push the fix to the r2 branch; CI re-run is the final proof, then mark #796 ready and merge under blanket approval.
