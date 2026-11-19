@@ -3,8 +3,8 @@ id: WP-0711
 title: Notes, attachments and reassign at any point
 phase: 7
 epic: E7.3 Runner and visibility
-status: proposed
-owner: unassigned
+status: in_progress
+owner: muse
 planned_for: muse
 depends_on: [WP-0707]
 requirements: [REQ-LANE-018]
@@ -12,9 +12,9 @@ estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
-branch: 
+branch: wp/WP-0711-notes-attachments-reassign
 pr: 
-updated: 2026-11-12
+updated: 2026-11-18
 ---
 
 # WP-0711 — Notes, attachments and reassign at any point
@@ -49,3 +49,18 @@ Real work needs a few actions outside the scripted steps.
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+### 2026-11-18 muse
+Claimed on branch wp/WP-0711-notes-attachments-reassign from main 0db8977
+(the #797 merge). WP-0653's done-status folds into this PR per the
+no-small-PRs rule. Read first: REQ-LANE-018 ("add a note, attach a file,
+reassign the current step; each is audited"), SOLUTION-DESIGN §17 (runner:
+"Notes, attachments and reassign are available at every step"), ADR-0024
+A3.8. Existing pieces found: `handoff_step` (WP-0706) already hands a step
+to a different ROLE, audited as `lane_step_handoff`, stored in run-data
+`__handoffs` — WP-0711's reassign is the distinct person-level action
+(narrow the waiter to one person who holds the step's role, AC-2).
+`attachments` table exists in schema (0001) but nothing in code reads or
+writes it — the attachment write/read path is greenfield. No notes table
+exists. Audit pattern is `audit_repo::record` (`audit_events` table).
+Next: design the three service fns (add_note, attach, reassign) + migration
+0098, then Tauri/server, desktop runner UI, demo runner UI + E2E, help/docs.
