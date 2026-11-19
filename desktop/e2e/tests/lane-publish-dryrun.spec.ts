@@ -133,6 +133,25 @@ test('AC-5: a Count dry run on CC-2026-001 flags the 2 zero-variance lines', asy
   await expect(result).toContainText('Nothing was written');
 });
 
+test('AC-5: a Count dry run on CC-2026-011 skips Post adjustments (WP-0710 AC-2)', async ({ page }) => {
+  await openBlueprint(page, 'lane-wh-count');
+  await expect(page.locator('#view h2')).toHaveText('Count');
+  // CC-2026-011 has no variance, so the check passes and the run reaches
+  // Post adjustments with the count still COUNTING — the stage's skip
+  // condition holds, the stage is skipped, and the count closes.
+  await page.selectOption('[data-dryrun-anchor]', 'cc-2026-011');
+  await runDryRun(page);
+
+  const result = page.locator('#laneDryRunResult');
+  await expect(result).toContainText('Check the variances');
+  await expect(result).toContainText('passed');
+  await expect(result).toContainText('Post adjustments');
+  await expect(result).toContainText('skipped');
+  await expect(result).toContainText('$record.status equals "COUNTING"');
+  await expect(result).toContainText('ends with outcome done');
+  await expect(result).toContainText('Nothing was written');
+});
+
 test('AC-5: a check with a missing fixture reports unevaluated', async ({ page }) => {
   await openBlueprint(page, 'lane-wh-receiving');
   // Clear the received quantity the discrepancy check reads: with no

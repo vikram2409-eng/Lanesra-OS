@@ -29,8 +29,23 @@ def demo_definition():
     return obj
 
 
+def demo_count_definition():
+    """Parse the LANE_WH_COUNT literal out of app.js (WP-0710 AC-5)."""
+    text = APP_JS.read_text()
+    assign = text.index("const LANE_WH_COUNT = ")
+    brace = text.index("{", assign)
+    obj, _ = json.JSONDecoder().raw_decode(text[brace:])
+    return obj
+
+
 def example_definition():
     return json.loads(EXAMPLE_PATH.read_text())
+
+
+def example_count_definition():
+    return json.loads(
+        (REPO / "program/spec/schemas/examples/lane-wh-count.json").read_text()
+    )
 
 
 def schema():
@@ -67,6 +82,59 @@ class LaneDefinitionInDemoTests(unittest.TestCase):
                         "post-receipt-moves", "post-putaway-moves",
                         "close-po"):
             self.assertIn(step_id, steps)
+
+
+class LaneCountDefinitionInDemoTests(unittest.TestCase):
+    # Covers: REQ-LANE-017 (WP-0710 AC-5) — the demo runs the shared Count
+    # definition, not a copy that drifted.
+    def test_demo_count_definition_matches_example_file(self):
+        self.assertEqual(demo_count_definition(), example_count_definition())
+
+    # Covers: REQ-LANE-017 (WP-0710 AC-5) — the embedded Count definition
+    # validates against the shared schema (the same check CI runs).
+    def test_demo_count_definition_validates_against_schema(self):
+        self.assertEqual(
+            cls.check(schema(), {"lane-wh-count.json": demo_count_definition()}),
+            [],
+        )
+
+    # Covers: REQ-LANE-017 (WP-0710 AC-5) — the worked example's shape the
+    # runner relies on: 5 stages, 7 steps, the per-item assignment on the
+    # count step (Q-33), the zero-variance skip on the adjustments step
+    # (Q-34), the no-variance stage skip, and the PASS branch that routes
+    # a clean count through Post adjustments so the skip can fire.
+    def test_demo_count_definition_has_the_worked_example_shape(self):
+        lane = demo_count_definition()["lane"]
+        self.assertEqual(lane["id"], "lane-wh-count")
+        self.assertEqual(
+            [s["id"] for s in lane["stages"]],
+            ["count", "variance-review", "hold-review",
+             "post-adjustments", "confirm-close"],
+        )
+        steps = {st["id"]: st for s in lane["stages"] for st in s["steps"]}
+        self.assertEqual(len(steps), 7)
+        for step_id in ("count-lines", "verify-count", "check-variances",
+                        "review-variances", "record-hold",
+                        "post-count-adjustments", "close-count"):
+            self.assertIn(step_id, steps)
+        self.assertEqual(
+            steps["count-lines"]["repeat_over"]["assign"],
+            {"by": "child_field", "field": "counted_by"},
+        )
+        self.assertEqual(
+            steps["post-count-adjustments"]["skip_when"],
+            {"field": "$item.variance", "operator": "equals", "value": 0},
+        )
+        post_stage = [s for s in lane["stages"] if s["id"] == "post-adjustments"][0]
+        self.assertEqual(
+            post_stage["skip_condition"],
+            {"field": "$record.status", "operator": "equals", "value": "COUNTING"},
+        )
+        check = steps["check-variances"]
+        self.assertEqual(
+            [b["target"] for b in check["branches"] if b["on"] == "pass"],
+            [{"stage": "post-adjustments", "step": "post-count-adjustments"}],
+        )
 
 
 if __name__ == "__main__":

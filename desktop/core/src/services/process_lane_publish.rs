@@ -2517,6 +2517,22 @@ fn simulate_record_step(
                     state.run_data.insert(key.clone(), value.clone());
                 }
             }
+            // A status write moves the simulated record's status, mirroring
+            // the online demo's dry run: later stage conditions read the
+            // new value, not the seed value. Without this, a lane whose
+            // stage skip condition tests a status set by an earlier step
+            // (the Count lane's Post adjustments stage, skipped while the
+            // count is still COUNTING) always reads the seed status and
+            // the stage is skipped on every path. Only the anchor record
+            // is tracked here; a repeating step's writes act on its
+            // children, not the anchor.
+            if child.is_none() && write.action_type.ends_with(".set_status") {
+                if let Some(Value::String(status)) = inputs.get("status") {
+                    state
+                        .record_fields
+                        .insert("status".to_string(), status.clone());
+                }
+            }
         }
     }
     Ok(RecordOutcome::Executed)
