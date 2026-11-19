@@ -2801,39 +2801,49 @@ const warehouseSeed = {
    "approved_by": null,
    "lines": [
     {
+     "id": "ccl-001-1",
      "product_id": "prod-hg-1001",
      "location_id": "loc-a-01-03",
      "expected_qty": 48,
      "counted_qty": 46,
-     "variance": -2
+     "variance": -2,
+     "counted_by": "user-05"
     },
     {
+     "id": "ccl-001-2",
      "product_id": "prod-hg-1002",
      "location_id": "loc-a-01-03",
      "expected_qty": 22,
      "counted_qty": 22,
-     "variance": 0
+     "variance": 0,
+     "counted_by": "user-05"
     },
     {
+     "id": "ccl-001-3",
      "product_id": "prod-hg-1003",
      "location_id": "loc-a-02-02",
      "expected_qty": 14,
      "counted_qty": 15,
-     "variance": 1
+     "variance": 1,
+     "counted_by": "user-05"
     },
     {
+     "id": "ccl-001-4",
      "product_id": "prod-hg-1005",
      "location_id": "loc-a-03-01",
      "expected_qty": 26,
      "counted_qty": 24,
-     "variance": -2
+     "variance": -2,
+     "counted_by": "user-05"
     },
     {
+     "id": "ccl-001-5",
      "product_id": "prod-hg-1013",
      "location_id": "loc-a-03-01",
      "expected_qty": 60,
      "counted_qty": 60,
-     "variance": 0
+     "variance": 0,
+     "counted_by": "user-05"
     }
    ]
   },
@@ -3176,6 +3186,41 @@ const warehouseSeed = {
      "expected_qty": 6,
      "counted_qty": 6,
      "variance": 0
+    }
+   ]
+  },
+  {
+   "number": "CC-2026-011",
+   "name": "CC-2026-011 · Zone B (B-01-02)",
+   "status": "COUNTING",
+   "owner": "Emily Zhao",
+   "notes": "",
+   "id": "cc-2026-011",
+   "count_number": "CC-2026-011",
+   "warehouse_id": "wh1",
+   "scope": "Zone B pick face (B-01-02)",
+   "count_type": "BLIND",
+   "counted_by": "user-05",
+   "count_date": "2026-11-13",
+   "approved_by": null,
+   "lines": [
+    {
+     "id": "ccl-011-1",
+     "product_id": "prod-hg-1006",
+     "location_id": "loc-b-01-02",
+     "expected_qty": 31,
+     "counted_qty": 31,
+     "variance": 0,
+     "counted_by": "user-05"
+    },
+    {
+     "id": "ccl-011-2",
+     "product_id": "prod-hg-1007",
+     "location_id": "loc-b-01-02",
+     "expected_qty": 5,
+     "counted_qty": 5,
+     "variance": 0,
+     "counted_by": "user-05"
     }
    ]
   }
@@ -8388,6 +8433,9 @@ function ownershipByline(r){
 const LANE_WH_RECEIVING = {"format_version":"1.0.0","lane":{"description":"Receive a shipment for one purchase order: verify the delivery, record what arrived, stage and put away the stock, and close the order. One run per purchase order. The discrepancy branch sends a short or damaged receipt to the Warehouse Manager for review.","id":"lane-wh-receiving","name":"Receive Shipment","object_key":"purchase_order","run_data":{"fields":[{"description":"Carrier who delivered the shipment, entered at step 1.1.","key":"carrier","required":true,"type":"string"},{"description":"Delivery-note number from the carrier's paperwork, entered at step 1.1.","key":"delivery_note_number","required":true,"type":"string"},{"description":"Date the shipment arrived, entered at step 1.1. Must match the PO's expected date.","key":"received_date","required":true,"type":"date"},{"description":"Quantity on the delivery note, per order line, entered at step 1.2. Keyed by line id.","key":"delivery_note_qty","per_child":true,"required":true,"type":"integer"},{"description":"Rejection reason, per order line, entered at step 2.1 when units are rejected. Keyed by line id.","key":"rejection_reason","per_child":true,"type":"string"},{"description":"Receiving bin the goods are staged in (RCV-01 or RCV-02), entered at step 3.1.","key":"staging_bin","required":true,"type":"string"},{"description":"Put-away bin, per order line, confirmed at step 3.3. Suggested by the Receiving Agent from the product's preferred bin. Keyed by line id.","key":"putaway_bin","per_child":true,"required":true,"type":"string"},{"description":"Why the receipt is held, entered at step 2B.2 when the manager rejects the discrepancy.","key":"hold_reason","type":"string"}]},"stages":[{"id":"verify","name":"Verify","steps":[{"description":"Confirm the truck and delivery: carrier, delivery-note number, received date.","fields":[{"binds_to":"run_data.carrier","key":"carrier","label":"Carrier","required":true,"type":"string"},{"binds_to":"run_data.delivery_note_number","key":"delivery_note_number","label":"Delivery-note number","required":true,"type":"string"},{"binds_to":"run_data.received_date","key":"received_date","label":"Received date","required":true,"type":"date"}],"id":"confirm-arrival","kind":"form","name":"Confirm shipment arrived","required":true,"role":"role_wh_receiver","validation":{"condition":{"compare_field":"$record.expected_date","field":"$run_data.received_date","operator":"equals"},"message":"Received date must match the PO's expected date."}},{"assistance":{"agent":"wh-agt-receiving","autonomy":"propose"},"description":"Match each order line to the delivery note: enter the quantity on the delivery note per line. The Receiving Agent proposes the match; the receiver confirms or overrides. Runs once per order line.","fields":[{"binds_to":"run_data.delivery_note_qty","key":"delivery_note_qty","label":"Delivery-note quantity","required":true,"type":"integer"}],"id":"match-delivery-note","kind":"form","name":"Match lines to the delivery note","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver"},{"child_lane":{"anchor_record":"$record.supplier_id","lane_id":"lane-wh-supplier-check"},"description":"Hand the supplier check to the Supplier Check lane: it runs on this PO's supplier (Kiln & Clay Co.) and the run waits until it finishes. The parent records the outcome and carries on.","id":"verify-supplier","kind":"form","name":"Verify the supplier","required":true,"role":"role_wh_receiver"}]},{"id":"record-receipt","name":"Record receipt","steps":[{"description":"Per line: quantity received, quantity rejected and the rejection reason. The quantities are written to the PO lines; the reason is stored in run data. Runs once per order line.","fields":[{"binds_to":"record.lines[].qty_received","key":"qty_received","label":"Quantity received","required":true,"type":"integer"},{"binds_to":"record.lines[].qty_rejected","key":"qty_rejected","label":"Quantity rejected","required":true,"type":"integer"},{"binds_to":"run_data.rejection_reason","key":"rejection_reason","label":"Rejection reason","type":"string"}],"id":"enter-quantities","kind":"form","name":"Enter received quantities","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver","validation":{"expression":"$item.qty_received + $item.qty_rejected <= $item.qty_ordered","message":"Received + rejected must not exceed ordered for this line."}},{"branches":[{"on":"pass","target":{"stage":"stage-put-away","step":"assign-staging-bin"}},{"on":"fail","target":{"stage":"hold-review","step":"review-discrepancy"}}],"check":{"aggregate":"all","condition":{"conditions":[{"compare_field":"$item.qty_ordered","field":"$item.qty_received","operator":"equals"},{"field":"$item.qty_rejected","operator":"equals","value":0}],"match":"all"},"message":"A line is short or has rejected units.","scope":"per_item"},"description":"Automatic check: every line fully received. If any line is short or rejected, the run branches to manager review instead of continuing to put-away.","id":"discrepancy-check","kind":"check","name":"Discrepancy check"}]},{"id":"hold-review","name":"Hold & review","steps":[{"branches":[{"on":"approved","target":{"stage":"stage-put-away","step":"assign-staging-bin"}},{"on":"rejected","target":{"stage":"hold-review","step":"record-hold"}}],"description":"The Warehouse Manager sees per-line ordered vs received vs rejected, with the receiver's note. Approve: continue to Stage 3 with the adjusted quantities; the PO becomes PARTIALLY_RECEIVED. Reject: the run goes to the hold step; no receipt is posted for the disputed lines.","id":"review-discrepancy","kind":"approval","name":"Review discrepancy","replaces":[{"action_index":0,"workflow_id":"wf-wh-07"}],"required":true,"role":"role_wh_warehouse_manager","writes":[{"action_type":"purchase_order.set_status","inputs":{"status":"PARTIALLY_RECEIVED"}}]},{"description":"Record why the receipt is held. Completing this step ends the run as held. Put-away never happens for the disputed lines. Resuming the receipt is a new run on the same PO.","ends_run":{"outcome":"held"},"fields":[{"binds_to":"run_data.hold_reason","key":"hold_reason","label":"Hold reason","required":true,"type":"string"}],"id":"record-hold","kind":"form","name":"Record hold","required":true,"role":"role_wh_warehouse_manager"}]},{"id":"stage-put-away","name":"Stage & put away","steps":[{"assistance":{"agent":"wh-agt-receiving","autonomy":"propose"},"description":"Assign a receiving bin for the staged goods: RCV-01 or RCV-02. The Receiving Agent proposes the bin; the receiver confirms or overrides.","fields":[{"binds_to":"run_data.staging_bin","key":"staging_bin","label":"Staging bin","required":true,"type":"string"}],"id":"assign-staging-bin","kind":"form","name":"Stage the goods","required":true,"role":"role_wh_receiver"},{"description":"Post a RECEIPT StockMove per order line (MV-2026-016, MV-2026-017 for PO-2026-001). Runs once per order line. The move number is assigned by the Action Type; the ledger is append-only.","id":"post-receipt-moves","kind":"record","name":"Post receipt moves","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver","writes":[{"action_type":"warehouse.post_stock_move","inputs":{"from_location":null,"move_type":"RECEIPT","product_id":"$item.product_id","quantity":"$item.qty_received","reference_id":"$record.id","to_location":"$run_data.staging_bin"}}]},{"assistance":{"agent":"wh-agt-receiving","autonomy":"propose"},"description":"Confirm the put-away bin per line, suggested by the Receiving Agent from the product's preferred bin (HG-1001 and HG-1002 both go to A-01-03). Runs once per order line.","fields":[{"binds_to":"run_data.putaway_bin","key":"putaway_bin","label":"Put-away bin","required":true,"type":"string"}],"id":"confirm-putaway-bins","kind":"form","name":"Confirm put-away","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver"},{"description":"Post a PUTAWAY StockMove per order line (MV-2026-018, MV-2026-019 for PO-2026-001) and update stock on hand (48 to 88 for HG-1001, 22 to 52 for HG-1002). Runs once per order line. Available is recomputed, never written.","id":"post-putaway-moves","kind":"record","name":"Post put-away moves","repeat_over":{"field":"lines","item_id_field":"id"},"required":true,"role":"role_wh_receiver","writes":[{"action_type":"warehouse.post_stock_move","inputs":{"from_location":"$run_data.staging_bin","move_type":"PUTAWAY","product_id":"$item.product_id","quantity":"$item.qty_received","reference_id":"$record.id","to_location":"$run_data.putaway_bin"}}]}]},{"id":"confirm","name":"Confirm","steps":[{"description":"Read-only summary of the run: what was received, staged and put away, and the new on-hand quantities (88 / 52 for PO-2026-001). No fields to fill; completing the step moves on.","id":"review-summary","kind":"form","name":"Review summary","required":true,"role":"role_wh_receiver"},{"description":"Close the receipt. The Action Type closes the PO as RECEIVED when every line is fully received, or PARTIALLY_RECEIVED when the run took the discrepancy branch. The Warehouse Manager is notified automatically. This step replaces the wf-wh-01 put-away task: put-away already happened in Stage 3, so no duplicate task is created. The workflow stays the fallback for a PO that becomes RECEIVED outside a lane.","id":"close-po","kind":"record","name":"Close the PO","notify":[{"message":"PO-2026-001 received: 40 x HG-1001, 30 x HG-1002. Stock on hand 88 / 52.","to_role":"role_wh_warehouse_manager"}],"replaces":[{"action_index":0,"workflow_id":"wf-wh-01"}],"required":true,"role":"role_wh_receiver","writes":[{"action_type":"purchase_order.close_receipt","inputs":{"purchase_order_id":"$record.id"}}]}]}],"start_condition":{"field":"$record.status","operator":"equals","value":"OPEN"},"status":"draft","version":1}};
 // Embedded copy of program/spec/schemas/examples/lane-wh-pickpack.json. Do not edit by hand:
 const LANE_WH_PICKPACK = {"format_version":"1.0.0","lane":{"id":"lane-wh-pickpack","name":"Pick & Pack","description":"Pick, pack and ship one sales order: confirm the order and wave, pick the remaining lines, pack at PACK-01 and ship with tracking. One run per sales order. A short or damaged pick goes to the Warehouse Manager for review. The run_data.set write used by the damage approval is provisional, demo only — it is not an Action Type in the core.","object_key":"sales_order","version":1,"status":"draft","start_condition":{"conditions":[{"field":"$record.status","operator":"equals","value":"ALLOCATED"},{"field":"$record.status","operator":"equals","value":"PICKING"}],"match":"any"},"run_data":{"fields":[{"key":"damage_reason","type":"string","per_child":true,"description":"Reason a unit was damaged, per order line, entered at step 1.2. Keyed by line id."},{"key":"parcel_count","type":"integer","required":true,"description":"Number of parcels, entered at step 3.1."},{"key":"parcel_weight","type":"string","required":true,"description":"Weighed weight of the parcels in kg, entered at step 3.1, e.g. 1.2."},{"key":"tracking_number","type":"string","required":true,"description":"Tracking number, entered at step 4.1. Suggested as the next number in the carrier's sequence."},{"key":"hold_reason","type":"string","description":"Why the pick is held, entered at step 1B.2 when the manager rejects the discrepancy."},{"key":"damage_approved","type":"boolean","description":"Set by the Warehouse Manager approving a short or damaged pick at 1B.1. The pick check passes a line whose damage was approved — the damaged unit stays on the line and is dispositioned by the Count Lane, not erased."}]},"stages":[{"id":"pick","name":"Pick","steps":[{"id":"confirm-order-wave","kind":"form","name":"Confirm order & wave","description":"Confirm the order, customer, wave and route before picking. The Picking Agent has planned the wave; the picker confirms.","role":"role_wh_picker","required":true,"assistance":{"agent":"wh-agt-picking","autonomy":"propose"}},{"id":"pick-remaining-lines","kind":"form","name":"Pick the remaining lines","description":"Pick the remaining lines from their bins. Enter the total picked per line and any damaged units with the reason. Lines already fully picked are shown, not re-picked.","role":"role_wh_picker","required":true,"repeat_over":{"field":"lines","item_id_field":"id"},"fields":[{"key":"qty_picked","label":"Quantity picked","type":"integer","required":true,"binds_to":"record.lines[].qty_picked"},{"key":"qty_damaged","label":"Quantity damaged","type":"integer","required":true,"binds_to":"record.lines[].qty_damaged"},{"key":"damage_reason","label":"Damage reason","type":"string","binds_to":"run_data.damage_reason"}],"validation":{"expression":"$item.qty_picked <= $item.qty_reserved","message":"Picked must not exceed reserved for this line."}},{"id":"pick-check","kind":"check","name":"Pick check","description":"Automatic check: every line fully picked, and nothing damaged — unless the manager already approved the damage at 1B.1. If any line is short or damaged-and-unapproved, the run branches to manager review instead of continuing to pack.","check":{"scope":"per_item","aggregate":"all","condition":{"match":"any","conditions":[{"match":"all","conditions":[{"field":"$item.qty_picked","compare_field":"$item.qty_reserved","operator":"equals"},{"field":"$item.qty_damaged","operator":"equals","value":0}]},{"match":"all","conditions":[{"field":"$item.qty_picked","compare_field":"$item.qty_reserved","operator":"equals"},{"field":"$run_data.damage_approved","operator":"equals","value":true}]}]},"message":"A line is short or has damaged units the manager has not approved."},"branches":[{"on":"pass","target":{"stage":"close-pick","step":"post-pick-moves"}},{"on":"fail","target":{"stage":"hold-review","step":"review-short-pick"}}]}]},{"id":"hold-review","name":"Hold & review","steps":[{"id":"review-short-pick","kind":"approval","name":"Review short pick / damage","description":"The Warehouse Manager sees per-line ordered vs reserved vs picked vs damaged, with the picker's note. Approve: the damage is marked approved, the picking re-opens as In progress and the run returns to the pick step to pick a replacement from the same bin. Reject: the run goes to the hold step; nothing is packed or shipped.","role":"role_wh_warehouse_manager","required":true,"branches":[{"on":"approved","target":{"stage":"pick","step":"pick-remaining-lines"}},{"on":"rejected","target":{"stage":"hold-review","step":"record-hold"}}],"writes":[{"action_type":"picking.set_status","inputs":{"status":"IN_PROGRESS"}},{"action_type":"run_data.set","inputs":{"key":"damage_approved","value":true}}]},{"id":"record-hold","kind":"form","name":"Record hold","description":"Record why the pick is held. Completing this step ends the run as held. Nothing is packed or shipped for this order. Resuming the pick is a new run on the same SO.","role":"role_wh_warehouse_manager","required":true,"ends_run":{"outcome":"held"},"fields":[{"key":"hold_reason","label":"Hold reason","type":"string","required":true,"binds_to":"run_data.hold_reason"}]}]},{"id":"close-pick","name":"Close pick","steps":[{"id":"post-pick-moves","kind":"record","name":"Post pick moves","description":"Post a PICK StockMove per order line for what this run picked (MV-2026-020 for SO-2026-002). Runs once per order line. Only the quantity picked in this run is posted — lines already picked before the run are not re-posted. The ledger is append-only.","role":"role_wh_picker","required":true,"repeat_over":{"field":"lines","item_id_field":"id"},"writes":[{"action_type":"warehouse.post_stock_move","inputs":{"move_type":"PICK","product_id":"$item.product_id","quantity":"$item.qty_picked","reference_id":"$record.id","to_location":"loc-pk-01"}}]},{"id":"close-pick","kind":"record","name":"Close the pick","description":"Close the pick: the picking is done and the order is picked. This step replaces the wf-wh-04 pack task — the lane packs in Stage 3, so no duplicate task is created. The workflow stays the fallback for a picking that becomes DONE outside a lane.","role":"role_wh_picker","required":true,"replaces":[{"action_index":0,"workflow_id":"wf-wh-04"}],"writes":[{"action_type":"picking.set_status","inputs":{"status":"DONE"}},{"action_type":"sales_order.set_status","inputs":{"status":"PICKED"}}]}]},{"id":"pack","name":"Pack","steps":[{"id":"pack-order","kind":"form","name":"Pack the order","description":"At PACK-01: parcels and weighed weight, entered by the packer. The Packing & Shipping Agent proposes the parcel split; the packer confirms or changes it.","role":"role_wh_packer","required":true,"assistance":{"agent":"wh-agt-packing","autonomy":"propose"},"fields":[{"key":"parcel_count","label":"Parcels","type":"integer","required":true,"binds_to":"run_data.parcel_count"},{"key":"parcel_weight","label":"Weighed weight (kg)","type":"string","required":true,"binds_to":"run_data.parcel_weight"}]},{"id":"post-pack-moves","kind":"record","name":"Post pack moves","description":"Post a PACK StockMove per order line (MV-2026-021, MV-2026-022 for SO-2026-002). Runs once per order line. The packed quantity follows the picked quantity.","role":"role_wh_packer","required":true,"repeat_over":{"field":"lines","item_id_field":"id"},"writes":[{"action_type":"warehouse.post_stock_move","inputs":{"move_type":"PACK","product_id":"$item.product_id","quantity":"$item.qty_picked","reference_id":"$record.id","from_location":"loc-pk-01","to_location":"loc-sh-01"}}]},{"id":"create-shipment-and-pack","kind":"record","name":"Create shipment & pack","description":"Create the shipment (SHIP-2026-013 for SO-2026-002) and mark the order PACKED. This step replaces the wf-wh-05 shipment task — the lane created the shipment here, so no duplicate task is created. The workflow stays the fallback for an order that becomes PACKED outside a lane.","role":"role_wh_packer","required":true,"replaces":[{"action_index":0,"workflow_id":"wf-wh-05"}],"writes":[{"action_type":"shipment.create","inputs":{"carrier":"$record.carrier","service":"$record.ship_method","weight":"$run_data.parcel_weight","status":"PACKED"}},{"action_type":"sales_order.set_status","inputs":{"status":"PACKED"}}]}]},{"id":"ship","name":"Ship & close","steps":[{"id":"confirm-carrier-tracking","kind":"form","name":"Confirm carrier & tracking","description":"Carrier and service from the order; the tracking number is carrier-assigned. The demo suggests the next number in the carrier's sequence.","role":"role_wh_packer","required":true,"assistance":{"agent":"wh-agt-packing","autonomy":"propose"},"fields":[{"key":"tracking_number","label":"Tracking number","type":"string","required":true,"binds_to":"run_data.tracking_number"}]},{"id":"post-ship-moves","kind":"record","name":"Post ship moves","description":"Post a SHIP StockMove per order line (MV-2026-023, MV-2026-024 for SO-2026-002). Shipping removes the goods from the warehouse: on hand falls and the reservation is released. Runs once per order line.","role":"role_wh_packer","required":true,"repeat_over":{"field":"lines","item_id_field":"id"},"writes":[{"action_type":"warehouse.post_stock_move","inputs":{"move_type":"SHIP","product_id":"$item.product_id","quantity":"$item.qty_packed","reference_id":"$record.id","from_location":"loc-sh-01","to_location":null}}]},{"id":"ship-and-close","kind":"record","name":"Ship & close","description":"Ship the order: the shipment is marked shipped with its tracking, the order closes as SHIPPED, and the customer and the Warehouse Manager are notified automatically.","role":"role_wh_packer","required":true,"writes":[{"action_type":"sales_order.ship","inputs":{"tracking":"$run_data.tracking_number"}}]}]}]}};
+// __LANE_WH_COUNT_START__
+const LANE_WH_COUNT = {"format_version":"1.0.0","lane":{"id":"lane-wh-count","name":"Count","description":"Count one cycle count: count the lines in the zone, review the variances, get the Warehouse Manager's approval, and post the count adjustments. One run per cycle count. A rejected variance goes back to recount.","object_key":"cycle_count","version":1,"status":"draft","start_condition":{"field":"$record.status","operator":"equals","value":"COUNTING"},"run_data":{"fields":[{"key":"recount_reason","type":"string","description":"Why the variances are rejected and the count must be recounted, entered at step 3.2 when the manager rejects them."}]},"stages":[{"id":"count","name":"Count","steps":[{"id":"count-lines","kind":"form","name":"Count the lines","description":"Count every line in the zone, bin by bin. CC-2026-001 is Zone A pick face (A-01-03, A-02-02, A-03-01): 5 lines. The Counting & Audit Agent proposes the expected quantities; the counter enters what is actually on the shelf.","role":"role_wh_picker","required":true,"assistance":{"agent":"wh-agt-counting","autonomy":"propose"},"repeat_over":{"field":"lines","item_id_field":"id","assign":{"by":"child_field","field":"counted_by"}},"fields":[{"key":"counted_qty","label":"Counted quantity","type":"integer","required":true,"binds_to":"record.lines[].counted_qty"}],"validation":{"expression":"$item.counted_qty >= 0","message":"Counted quantity cannot be negative."}},{"id":"verify-count","kind":"check","name":"Verify the count","description":"Automatic check: every line has a counted quantity. A line with no count sends the run back to the count step.","required":true,"check":{"scope":"per_item","aggregate":"all","condition":{"field":"$item.counted_qty","operator":"is_not_empty"},"message":"Every line needs a counted quantity before the variances can be reviewed."},"branches":[{"on":"pass","target":{"stage":"variance-review","step":"check-variances"}},{"on":"fail","target":{"stage":"count","step":"count-lines"}}]}]},{"id":"variance-review","name":"Variance review","steps":[{"id":"check-variances","kind":"check","name":"Check the variances","description":"Automatic check: every line's counted quantity matches the expected quantity. CC-2026-001 has three variances (HG-1001 -2, HG-1003 +1, HG-1005 -2), so it goes to manager review. A count with no variance passes through Post adjustments \u2014 which skips itself, since the count is still COUNTING and there is nothing to post \u2014 and closes straight away.","required":true,"check":{"scope":"per_item","aggregate":"all","condition":{"field":"$item.variance","operator":"equals","value":0},"message":"Some lines have a variance - the Warehouse Manager reviews them."},"branches":[{"on":"pass","target":{"stage":"post-adjustments","step":"post-count-adjustments"}},{"on":"fail","target":{"stage":"hold-review","step":"review-variances"}}]}]},{"id":"hold-review","name":"Hold & review","steps":[{"id":"review-variances","kind":"approval","name":"Review the variances","description":"The Warehouse Manager sees expected vs counted vs variance per line. Approve: the variances are accepted, the count is marked approved and the run posts the adjustments. Reject: nothing is posted and the run goes to the hold step.","role":"role_wh_warehouse_manager","required":true,"writes":[{"action_type":"cycle_count.set_status","inputs":{"status":"APPROVED"}}],"replaces":[{"workflow_id":"wf-wh-06","action_index":0}],"branches":[{"on":"approved","target":{"stage":"post-adjustments","step":"post-count-adjustments"}},{"on":"rejected","target":{"stage":"hold-review","step":"record-hold"}}]},{"id":"record-hold","kind":"form","name":"Record hold","description":"Record why the variances are rejected. Completing this step ends the run as held. Nothing is posted; the count stays COUNTING and a new run recounts it.","role":"role_wh_warehouse_manager","required":true,"fields":[{"key":"recount_reason","label":"Recount reason","type":"string","required":true,"binds_to":"run_data.recount_reason"}],"ends_run":{"outcome":"held"}}]},{"id":"post-adjustments","name":"Post adjustments","steps":[{"id":"post-count-adjustments","kind":"record","name":"Post count adjustments","description":"Post a COUNT_ADJUSTMENT StockMove per counted line for the variance (MV-2026-016 for HG-1001's -2 on CC-2026-001). Runs once per line. The ledger is append-only; a line with no variance posts no real adjustment - the runner skips zero-variance lines. Stock on hand moves by the variance.","role":"role_wh_picker","required":true,"repeat_over":{"field":"lines","item_id_field":"id"},"writes":[{"action_type":"warehouse.post_stock_move","inputs":{"move_type":"COUNT_ADJUSTMENT","product_id":"$item.product_id","quantity":"$item.variance","reference_id":"$record.id","from_location":"$item.location_id","to_location":"$item.location_id"}}],"skip_when":{"field":"$item.variance","operator":"equals","value":0}}],"skip_condition":{"field":"$record.status","operator":"equals","value":"COUNTING"}},{"id":"confirm-close","name":"Confirm & close","steps":[{"id":"close-count","kind":"record","name":"Close the count","description":"Close the count as APPROVED - the adjustments are posted (or there were none) and the count is approved. This step sets APPROVED again on the variance path, where the approval already set it, because the no-variance path never runs the approval; setting a status to the value it already has is harmless.","role":"role_wh_picker","required":true,"writes":[{"action_type":"cycle_count.set_status","inputs":{"status":"APPROVED"}}]}]}]}};
+// __LANE_WH_COUNT_END__
 const LANE_WH_SUPPLIER_CHECK = {"format_version":"1.0.0","lane":{"description":"Verify the supplier for a delivery: confirm the contact on the paperwork matches the supplier record, check the supplier is active, and record the check. One run per supplier. A supplier that is not active ends the run as held.","id":"lane-wh-supplier-check","name":"Supplier Check","object_key":"supplier","run_data":{"fields":[{"description":"Contact name confirmed at step 1.1, checked against the supplier record.","key":"contact_name","required":true,"type":"string"},{"description":"Set to 'verified' when the check completes at step 2.1.","key":"supplier_verified","type":"string"}]},"stages":[{"id":"verify","name":"Verify","steps":[{"description":"Confirm the contact on the delivery paperwork matches the supplier record: Kiln & Clay Co.'s contact is Priya Nair.","fields":[{"binds_to":"run_data.contact_name","key":"contact_name","label":"Contact name","required":true,"type":"string"}],"id":"confirm-contact","kind":"form","name":"Confirm the supplier contact","required":true,"role":"role_wh_receiver","validation":{"condition":{"compare_field":"$record.contact_name","field":"$run_data.contact_name","operator":"equals"},"message":"Contact name must match the supplier record."}},{"branches":[{"on":"pass","target":{"stage":"confirm-close","step":"mark-verified"}},{"end":{"outcome":"held"},"on":"fail"}],"check":{"condition":{"field":"$record.status","operator":"equals","value":"Active"},"message":"Supplier is not active.","scope":"anchor"},"description":"Automatic check: the supplier is active. A supplier that is not active ends the run as held.","id":"check-active","kind":"check","name":"Supplier is active"}]},{"id":"confirm-close","name":"Confirm & close","steps":[{"description":"Record that the supplier check is complete. The check result is stored in the run data.","id":"mark-verified","kind":"record","name":"Mark the supplier check complete","required":true,"role":"role_wh_receiver","writes":[{"action_type":"run_data.set","inputs":{"key":"supplier_verified","value":"verified"}}]}]}],"start_condition":{"field":"$record.status","operator":"equals","value":"Active"},"status":"draft","version":1}};
 // __LANE_WH_RECEIVING_END__
 
@@ -10533,7 +10581,7 @@ function warehouseDashboard(){
   if(so.status==='PICKING'||so.status==='ALLOCATED')return ` <button class="btn" data-lane-start="lane-wh-pickpack:${oid}">Pick & pack ${agentEsc(so.so_number)}</button>`;
   return '';
  }).join('');
- $('#view').innerHTML=`<div class="page-heading"><div><h2>Toronto Distribution Centre</h2><p>Friday, November 13, 2026 · Warehouse Manager: Sarah Chen · ${k.onHand} units on hand, ${k.reserved} reserved, ${k.available} available.</p></div></div><div class="kpi-grid">${card('sales_order','Fill rate',(k.fillRate*100).toFixed(1)+'%',k.shippedUnits+' of '+k.ordered+' units shipped →')}${card('shipment','Orders shipped today',k.shippedToday,k.shippedTodayParcels+' parcels · '+k.shippedUnits+' units →')}${card('purchase_order','Receiving backlog',k.openPOs.length,k.dueToday.length+' due today →')}${card('stock','Stockouts',k.outOfStock.length,k.lowStock.length+' low-stock SKUs →')}${card('stock','Inventory value (cost)',moneyCAD(k.valueCost),'At sale '+moneyCAD(k.valueSale)+' →')}${card('reorder_rule','Reorder rules triggered',k.triggered.length,k.triggered.length+' SKUs at or below level →')}</div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Process Lanes</h3><p class="card-desc">Guided, step-by-step work for one record — read the blueprint before anyone runs it</p></div></div><div class="card-body"><div class="prb-row"><div><strong>Receive Shipment</strong><small class="muted"> · Purchase Order · 5 stages, 13 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-receiving">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-receiving">Open in builder</button></div></div><div class="prb-row"><div><strong>Pick & Pack</strong><small class="muted"> · Sales Order · 5 stages, 13 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-pickpack">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-pickpack">Open in builder</button></div></div><div class="prb-row"><div><strong>Count</strong><small class="muted"> · Cycle Count · 5 stages, 7 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-count">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-count">Open in builder</button></div></div><div class="prb-row"><div><strong>Replenish</strong><small class="muted"> · Reorder Rule · 4 stages, 7 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-replenish">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-replenish">Open in builder</button></div></div><div class="prb-row"><div><strong>Supplier Check</strong><small class="muted"> · Supplier · 2 stages, 3 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-supplier-check">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-supplier-check">Open in builder</button></div></div><div class="prb-row"><div><strong>New lane</strong><small class="muted"> · Start from a blank definition</small></div><div class="actions"><button class="btn" data-lane-builder-new>New lane</button></div></div>${pickpackDueRows}<p class="muted" style="font-size:12px;margin-top:8px">The blueprint shows the lane definition only — stages, steps, run-data fields and mapped record fields. No run, no record data. Publish checks and a dry run live on the blueprint page too — the dry run simulates against a seed record and writes nothing.</p></div></section></div>${laneDraftSectionHtml()}<div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Approvals — needs your decision</h3><p class="card-desc">${pendingApprovals.length} pending</p></div></div><div class="card-body">${pendingApprovals.length?pendingApprovals.map(a=>`<div class="prb-row"><div><strong>${agentEsc(a.subjectType.replace('warehouse_','').replace(/_/g,' '))}</strong><small class="muted"> · ${demoDescribeApproval(a)}</small></div><div class="actions"><button class="btn btn-primary" data-wh-approve="${a.id}">Approve</button><button class="btn" data-wh-reject="${a.id}">Reject</button></div></div>`).join(''):'<p class="muted">Nothing pending — the Manager is all caught up.</p>'}<p class="muted" style="font-size:12px;margin-top:8px">Approving a count line posts a COUNT_ADJUSTMENT and updates Stock; rejecting posts nothing. Full inbox: AI Agents → Approvals.</p></div></section><section class="card"><div class="card-head panel-title"><div><h3>Needs attention — low & out of stock</h3><p class="card-desc">${k.outOfStock.length} out of stock · ${k.lowStock.length} low stock</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Product</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th></tr></thead><tbody>${attention.map(stockRow).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Receiving — due today</h3><p class="card-desc">${k.dueToday.length} purchase order${k.dueToday.length===1?'':'s'} expected ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.dueToday.length?k.dueToday.map(p=>{const sup=byId('supplier',p.supplier_id);const lines=(p.lines||[]).map(l=>`${prodById[l.product_id]?.sku||''} × ${l.qty_ordered}`).join(', ');return `<div class="prb-row"><strong><a class="cell-link" data-open-record="purchase_order:${p.id}">${p.po_number}</a></strong><small class="muted"> · ${sup?.name||''} · ${lines}</small><button class="btn btn-primary" data-lane-start="lane-wh-receiving:${p.id}">Start receiving lane</button></div>`}).join(''):'<div class="empty">Nothing due today.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Waves</h3><p class="card-desc">Batch picks in progress</p></div></div><div class="card-body">${Object.entries(k.waves).map(([w,v])=>`<div class="prb-row"><strong><a class="cell-link" data-wh-nav="pick_task">${w}</a></strong><small class="muted"> · ${v.orders.length} orders${v.held?` · ${v.held} task${v.held===1?'':'s'} held (waiting on stock)`:''} · ${v.tasks.map(t=>`<a class="cell-link" data-open-record="pick_task:${t.id}">${t.number||'Task'}</a>`).join(', ')}</small><div class="actions">${waveLaneButtons(v)}</div></div>`).join('')}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Reorder alerts</h3><p class="card-desc">${k.triggered.length} rules triggered ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.triggered.map(r=>{const p=prodById[r.product_id];const s=(data.stock||[]).find(x=>x.product_id===r.product_id);return `<div class="prb-row"><strong><a class="cell-link" data-open-record="product:${r.product_id}">${p?.sku||''}</a></strong><small class="muted"> · ${p?.name||''} · available ${s?s.on_hand-s.reserved:0} ≤ level ${r.reorder_level} · reorder ${r.reorder_qty} · <a class="cell-link" data-open-record="reorder_rule:${r.id}">rule ${r.number||''}</a></small></div>`}).join('')}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Orders by status</h3><p class="card-desc">${(data.sales_order||[]).length} open sales orders</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Orders</th></tr></thead><tbody>${['WAITING_STOCK','ALLOCATED','PICKING','PICKED','PACKED','SHIPPED'].map(s=>`<tr><td><a class="cell-link" data-wh-nav="sales_order">${s}</a></td><td>${k.soByStatus[s]||0}</td></tr>`).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Cycle count in progress</h3><p class="card-desc">${k.counting?'<a class="cell-link" data-open-record="cycle_count:'+k.counting.id+'">'+k.counting.count_number+'</a> · '+k.counting.scope+' · '+k.variances.length+' variances':'No count in progress'}</p></div></div><div class="card-body">${k.counting?`<div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>${k.variances.map(l=>{const p=prodById[l.product_id];return `<tr><td><a class="cell-link" data-open-record="product:${l.product_id}">${p?.sku||''}</a></td><td>${l.expected_qty}</td><td>${l.counted_qty}</td><td>${l.variance>0?'+':''}${l.variance}</td></tr>`}).join('')}</tbody></table></div><p class="muted" style="font-size:12px">No adjustment posted yet — decide each variance in Approvals below; approving posts the adjustment, rejecting posts nothing.</p>`:'<div class="empty">No count in progress.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Open tasks</h3><p class="card-desc">${openTasks.length} open</p></div></div><div class="card-body">${openTasks.length?openTasks.map(t=>`<div class="prb-row"><a class="cell-link" data-open-record="tasks:${t.id}">${agentEsc(t.title||'Task')}</a><small class="muted"> · due ${t.due||'—'}</small></div>`).join(''):'<p class="muted">No open tasks.</p>'}</div></section></div>`;
+ $('#view').innerHTML=`<div class="page-heading"><div><h2>Toronto Distribution Centre</h2><p>Friday, November 13, 2026 · Warehouse Manager: Sarah Chen · ${k.onHand} units on hand, ${k.reserved} reserved, ${k.available} available.</p></div></div><div class="kpi-grid">${card('sales_order','Fill rate',(k.fillRate*100).toFixed(1)+'%',k.shippedUnits+' of '+k.ordered+' units shipped →')}${card('shipment','Orders shipped today',k.shippedToday,k.shippedTodayParcels+' parcels · '+k.shippedUnits+' units →')}${card('purchase_order','Receiving backlog',k.openPOs.length,k.dueToday.length+' due today →')}${card('stock','Stockouts',k.outOfStock.length,k.lowStock.length+' low-stock SKUs →')}${card('stock','Inventory value (cost)',moneyCAD(k.valueCost),'At sale '+moneyCAD(k.valueSale)+' →')}${card('reorder_rule','Reorder rules triggered',k.triggered.length,k.triggered.length+' SKUs at or below level →')}</div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Process Lanes</h3><p class="card-desc">Guided, step-by-step work for one record — read the blueprint before anyone runs it</p></div></div><div class="card-body"><div class="prb-row"><div><strong>Receive Shipment</strong><small class="muted"> · Purchase Order · 5 stages, 13 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-receiving">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-receiving">Open in builder</button></div></div><div class="prb-row"><div><strong>Pick & Pack</strong><small class="muted"> · Sales Order · 5 stages, 13 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-pickpack">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-pickpack">Open in builder</button></div></div><div class="prb-row"><div><strong>Count</strong><small class="muted"> · Cycle Count · 5 stages, 7 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-count">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-count">Open in builder</button></div></div><div class="prb-row"><div><strong>Replenish</strong><small class="muted"> · Reorder Rule · 4 stages, 7 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-replenish">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-replenish">Open in builder</button></div></div><div class="prb-row"><div><strong>Supplier Check</strong><small class="muted"> · Supplier · 2 stages, 3 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-supplier-check">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-supplier-check">Open in builder</button></div></div><div class="prb-row"><div><strong>New lane</strong><small class="muted"> · Start from a blank definition</small></div><div class="actions"><button class="btn" data-lane-builder-new>New lane</button></div></div>${pickpackDueRows}<p class="muted" style="font-size:12px;margin-top:8px">The blueprint shows the lane definition only — stages, steps, run-data fields and mapped record fields. No run, no record data. Publish checks and a dry run live on the blueprint page too — the dry run simulates against a seed record and writes nothing.</p></div></section></div>${laneDraftSectionHtml()}<div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Approvals — needs your decision</h3><p class="card-desc">${pendingApprovals.length} pending</p></div></div><div class="card-body">${pendingApprovals.length?pendingApprovals.map(a=>`<div class="prb-row"><div><strong>${agentEsc(a.subjectType.replace('warehouse_','').replace(/_/g,' '))}</strong><small class="muted"> · ${demoDescribeApproval(a)}</small></div><div class="actions"><button class="btn btn-primary" data-wh-approve="${a.id}">Approve</button><button class="btn" data-wh-reject="${a.id}">Reject</button></div></div>`).join(''):'<p class="muted">Nothing pending — the Manager is all caught up.</p>'}<p class="muted" style="font-size:12px;margin-top:8px">Approving a count line posts a COUNT_ADJUSTMENT and updates Stock; rejecting posts nothing. Full inbox: AI Agents → Approvals.</p></div></section><section class="card"><div class="card-head panel-title"><div><h3>Needs attention — low & out of stock</h3><p class="card-desc">${k.outOfStock.length} out of stock · ${k.lowStock.length} low stock</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Product</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th></tr></thead><tbody>${attention.map(stockRow).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Receiving — due today</h3><p class="card-desc">${k.dueToday.length} purchase order${k.dueToday.length===1?'':'s'} expected ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.dueToday.length?k.dueToday.map(p=>{const sup=byId('supplier',p.supplier_id);const lines=(p.lines||[]).map(l=>`${prodById[l.product_id]?.sku||''} × ${l.qty_ordered}`).join(', ');return `<div class="prb-row"><strong><a class="cell-link" data-open-record="purchase_order:${p.id}">${p.po_number}</a></strong><small class="muted"> · ${sup?.name||''} · ${lines}</small><button class="btn btn-primary" data-lane-start="lane-wh-receiving:${p.id}">Start receiving lane</button></div>`}).join(''):'<div class="empty">Nothing due today.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Waves</h3><p class="card-desc">Batch picks in progress</p></div></div><div class="card-body">${Object.entries(k.waves).map(([w,v])=>`<div class="prb-row"><strong><a class="cell-link" data-wh-nav="pick_task">${w}</a></strong><small class="muted"> · ${v.orders.length} orders${v.held?` · ${v.held} task${v.held===1?'':'s'} held (waiting on stock)`:''} · ${v.tasks.map(t=>`<a class="cell-link" data-open-record="pick_task:${t.id}">${t.number||'Task'}</a>`).join(', ')}</small><div class="actions">${waveLaneButtons(v)}</div></div>`).join('')}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Reorder alerts</h3><p class="card-desc">${k.triggered.length} rules triggered ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.triggered.map(r=>{const p=prodById[r.product_id];const s=(data.stock||[]).find(x=>x.product_id===r.product_id);return `<div class="prb-row"><strong><a class="cell-link" data-open-record="product:${r.product_id}">${p?.sku||''}</a></strong><small class="muted"> · ${p?.name||''} · available ${s?s.on_hand-s.reserved:0} ≤ level ${r.reorder_level} · reorder ${r.reorder_qty} · <a class="cell-link" data-open-record="reorder_rule:${r.id}">rule ${r.number||''}</a></small></div>`}).join('')}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Orders by status</h3><p class="card-desc">${(data.sales_order||[]).length} open sales orders</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Orders</th></tr></thead><tbody>${['WAITING_STOCK','ALLOCATED','PICKING','PICKED','PACKED','SHIPPED'].map(s=>`<tr><td><a class="cell-link" data-wh-nav="sales_order">${s}</a></td><td>${k.soByStatus[s]||0}</td></tr>`).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Cycle count in progress</h3><p class="card-desc">${k.counting?'<a class="cell-link" data-open-record="cycle_count:'+k.counting.id+'">'+k.counting.count_number+'</a> · '+k.counting.scope+' · '+k.variances.length+' variances':'No count in progress'}</p></div></div><div class="card-body">${k.counting?`<div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>${k.variances.map(l=>{const p=prodById[l.product_id];return `<tr><td><a class="cell-link" data-open-record="product:${l.product_id}">${p?.sku||''}</a></td><td>${l.expected_qty}</td><td>${l.counted_qty}</td><td>${l.variance>0?'+':''}${l.variance}</td></tr>`}).join('')}</tbody></table></div><p class="muted" style="font-size:12px">No adjustment posted yet — decide each variance in Approvals below; approving posts the adjustment, rejecting posts nothing.</p>${(()=>{const cr=laneActiveRun('lane-wh-count',k.counting.id);return cr?`<div class="lane-actions" style="margin-top:10px"><button class="btn btn-primary" data-lane-open-run="${cr.id}">Open count lane run</button></div>`:`<div class="lane-actions" style="margin-top:10px"><button class="btn btn-primary" data-lane-start="lane-wh-count:${k.counting.id}">Start count lane</button></div>`;})()}`:'<div class="empty">No count in progress.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Open tasks</h3><p class="card-desc">${openTasks.length} open</p></div></div><div class="card-body">${openTasks.length?openTasks.map(t=>`<div class="prb-row"><a class="cell-link" data-open-record="tasks:${t.id}">${agentEsc(t.title||'Task')}</a><small class="muted"> · due ${t.due||'—'}</small></div>`).join(''):'<p class="muted">No open tasks.</p>'}</div></section></div>`;
  document.querySelectorAll('[data-wh-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.whNav;viewFilter=null;detailRecord=null;renderView()});
  wireCellLinks($('#view'));
  bindLaneDraftForm();
@@ -11099,11 +11147,11 @@ function laneBuilderPanelHtml(def){
    // Gap 15 (Q-33): per-item assignment on a repeating step.
    const assign=step.repeat_over.assign||null;
    const childFields=laneBuilderChildFields(lane);
-   h+=`<div class="field"><label>Per-item assignment <select class="select" data-lb-field="repeat_assign_by"><option value="" ${!assign?'selected':''}>Step role (default)</option><option value="child_field" ${assign&&assign.by==='child_field'?'selected':''}>Child field</option><option value="role" ${assign&&assign.by==='role'?'selected':''}>Role</option></select></label>${assign?` <label>Field <input class="input" data-lb-field="repeat_assign_field" value="${agentEsc(assign.field||'')}" placeholder="${assign.by==='role'?'role_wh_picker':'counted_by'}" aria-label="Assignment field"></label>`:''}</div>${childFields.length?`<p class="muted">Child fields on the anchor record: ${childFields.map(agentEsc).join(', ')}.</p>`:''}<p class="muted">The runner honors per-item assignment once WP-0710 lands — until then the step's role is the assignee.</p>`;
+   h+=`<div class="field"><label>Per-item assignment <select class="select" data-lb-field="repeat_assign_by"><option value="" ${!assign?'selected':''}>Step role (default)</option><option value="child_field" ${assign&&assign.by==='child_field'?'selected':''}>Child field</option><option value="role" ${assign&&assign.by==='role'?'selected':''}>Role</option></select></label>${assign?` <label>Field <input class="input" data-lb-field="repeat_assign_field" value="${agentEsc(assign.field||'')}" placeholder="${assign.by==='role'?'role_wh_picker':'counted_by'}" aria-label="Assignment field"></label>`:''}</div>${childFields.length?`<p class="muted">Child fields on the anchor record: ${childFields.map(agentEsc).join(', ')}.</p>`:''}<p class="muted">The runner honors per-item assignment since WP-0710: each line is worked by the person its assignment names.</p>`;
    // Gap 15 (Q-34): skip children with nothing to post.
    const skip=step.skip_when;
    if(!skip)h+=`<p><button type="button" class="btn" data-lb-skip-add="${agentEsc(stepKey)}">+ Skip condition</button> <span class="muted">Without one, this step posts for every child, including lines with nothing to post.</span></p>`;
-   else if(skip.field!==undefined)h+=`<div><h4>Skip children when</h4><div class="field"><input class="input" data-lb-field="skip_field" value="${agentEsc(skip.field||'')}" aria-label="Skip field" placeholder="$item.variance"><select class="select" data-lb-field="skip_operator" aria-label="Skip operator">${LANE_CONDITION_OPERATORS.map(o=>`<option value="${o}" ${skip.operator===o?'selected':''}>${o}</option>`).join('')}</select><input class="input" data-lb-field="skip_value" value="${agentEsc(skip.value===undefined?'':String(skip.value))}" aria-label="Skip value" placeholder="0"> <button type="button" class="btn" data-lb-skip-remove="${agentEsc(stepKey)}">Remove</button></div><p class="muted">The runner honors skip conditions once WP-0710 lands.</p></div>`;
+   else if(skip.field!==undefined)h+=`<div><h4>Skip children when</h4><div class="field"><input class="input" data-lb-field="skip_field" value="${agentEsc(skip.field||'')}" aria-label="Skip field" placeholder="$item.variance"><select class="select" data-lb-field="skip_operator" aria-label="Skip operator">${LANE_CONDITION_OPERATORS.map(o=>`<option value="${o}" ${skip.operator===o?'selected':''}>${o}</option>`).join('')}</select><input class="input" data-lb-field="skip_value" value="${agentEsc(skip.value===undefined?'':String(skip.value))}" aria-label="Skip value" placeholder="0"> <button type="button" class="btn" data-lb-skip-remove="${agentEsc(stepKey)}">Remove</button></div><p class="muted">The runner skips the lines the condition names.</p></div>`;
    else h+=`<p class="muted">Skip condition is a group (${agentEsc(laneDescribeCondition(skip))}) — edit it on desktop. <button type="button" class="btn" data-lb-skip-remove="${agentEsc(stepKey)}">Remove skip condition</button></p>`;
   }
  }
@@ -11183,14 +11231,14 @@ function laneBuilderPerLaneHtml(def){
    return `<tr><td>${agentEsc(prod.sku||line.product_id)}</td><td>${agentEsc(String(line.expected_qty??''))}</td><td>${agentEsc(String(line.counted_qty??''))}</td><td class="${v!==0?'lb-variance':''}">${v>0?'+'+v:String(v??'')}</td></tr>`;
   }).join('')}</tbody></table></div><p class="muted">Read-only preview of the seed record — counted quantities are edited as dry-run fixtures in the Dry run section below, not in this table.</p>`;
   if(assignStep){
-   h+=`<div><h4>Per-item assignment — ${agentEsc(assignStep.name)}</h4><div class="field"><label>Assign each line to <select class="select" data-lb-count-assign-by><option value="" ${!assign?'selected':''}>Step role (default)</option><option value="child_field" ${assign&&assign.by==='child_field'?'selected':''}>Child field</option><option value="role" ${assign&&assign.by==='role'?'selected':''}>Role</option></select></label>${assign?` <label>Field <input class="input" data-lb-count-assign-field value="${agentEsc(assign.field||'')}" placeholder="${assign.by==='role'?'role_wh_picker':'counted_by'}" aria-label="Assignment field"></label>`:''}</div><p class="muted">The runner honors per-item assignment once WP-0710 lands — until then the step's role is the assignee.</p></div>`;
+   h+=`<div><h4>Per-item assignment — ${agentEsc(assignStep.name)}</h4><div class="field"><label>Assign each line to <select class="select" data-lb-count-assign-by><option value="" ${!assign?'selected':''}>Step role (default)</option><option value="child_field" ${assign&&assign.by==='child_field'?'selected':''}>Child field</option><option value="role" ${assign&&assign.by==='role'?'selected':''}>Role</option></select></label>${assign?` <label>Field <input class="input" data-lb-count-assign-field value="${agentEsc(assign.field||'')}" placeholder="${assign.by==='role'?'role_wh_picker':'counted_by'}" aria-label="Assignment field"></label>`:''}</div><p class="muted">The runner honors per-item assignment since WP-0710: each line is worked by the person its assignment names.</p></div>`;
   }
   if(skipStep){
    h+='<div><h4>Skip lines with nothing to post</h4>';
    if(!skip)h+=`<p><button type="button" class="btn" data-lb-count-skip-add>+ Skip condition</button></p>`;
    else if(skip.field!==undefined)h+=`<div class="field"><input class="input" data-lb-count-skip-field value="${agentEsc(skip.field||'')}" aria-label="Skip field" placeholder="$item.variance"><select class="select" data-lb-count-skip-operator aria-label="Skip operator">${LANE_CONDITION_OPERATORS.map(o=>`<option value="${o}" ${skip.operator===o?'selected':''}>${o}</option>`).join('')}</select><input class="input" data-lb-count-skip-value value="${agentEsc(skip.value===undefined?'':String(skip.value))}" aria-label="Skip value" placeholder="0"> <button type="button" class="btn" data-lb-count-skip-remove>Remove</button></div><p>Skips lines where ${agentEsc(laneBuilderSkipDescribe(skip))} — those lines post nothing.</p>`;
    else h+=`<p class="muted">Skip condition is a group (${agentEsc(laneDescribeCondition(skip))}) — edit it on desktop. <button type="button" class="btn" data-lb-count-skip-remove>Remove skip condition</button></p>`;
-   h+='<p class="muted">The runner honors skip conditions once WP-0710 lands — the demo dry run does not enforce them yet.</p></div>';
+   h+='<p class="muted">The runner skips the lines the condition names.</p></div>';
   }
   h+=`${repeating.filter(step=>!step.skip_when).map(step=>`<p class="lb-gap">Repeating record step '${agentEsc(step.name)}' has no filter — it will post for every line, including the lines with nothing to post (zero variance).</p>`).join('')}</section>`;
   return h;
@@ -25015,6 +25063,7 @@ function demoDescribeApproval(a){
  if(a.subjectType==='warehouse_pick_shortfall')return `Shortfall on ${agentEsc(p.soNumber||'')} — ${agentEsc(p.sku||'')} × ${p.qtyOrdered} has ${p.qtyAvailable} available; confirm backorder?`;
  if(a.subjectType==='warehouse_receipt_discrepancy')return `Receipt discrepancy on ${agentEsc(p.poNumber||'')} — ${agentEsc(p.sku||'')} ordered ${p.qtyOrdered}, received ${p.qtyReceived}, rejected ${p.qtyRejected}; release put-away for the ${p.qtyReceived} good units?`;
  if(a.subjectType==='warehouse_pick_discrepancy')return `Pick discrepancy on ${agentEsc(p.soNumber||'')} — ${agentEsc(p.sku||'')} ordered ${p.qtyOrdered}, reserved ${p.qtyReserved}, picked ${p.qtyPicked}, damaged ${p.qtyDamaged}; approve a replacement pick?`;
+ if(a.subjectType==='warehouse_count_variance')return `Count variances on ${agentEsc(p.ccNumber||'')} — ${p.lines?p.lines.length:0} line${p.lines&&p.lines.length===1?'':'s'} with a variance (${(p.lines||[]).map(l=>`${agentEsc(l.sku)} ${l.variance>0?'+':''}${l.variance}`).join(', ')}); approve to post the adjustments?`;
  if(a.subjectType==='warehouse_draft_po')return `Draft PO for ${agentEsc(p.sku||'')} — order ${p.reorderQty} from ${agentEsc(p.supplierName||'')} (~$${Number(p.estCost||0).toFixed(2)} CAD)?`;
  return agentEsc(a.subjectType);
 }
@@ -25028,6 +25077,7 @@ function warehouseApprovalToast(id,approve){
  if(t==='warehouse_pick_shortfall')return approve?'Approved — backorder confirmed, customer notified':'Rejected — no backorder created';
  if(t==='warehouse_receipt_discrepancy'&&a.proposal&&a.proposal.laneRunId)return approve?'Approved — the lane run advanced to put-away':'Rejected — the lane run moved to the hold step, nothing posted';
  if(t==='warehouse_pick_discrepancy'&&a.proposal&&a.proposal.laneRunId)return approve?'Approved — the lane run returned to the pick step for a replacement':'Rejected — the lane run moved to the hold step, nothing posted';
+ if(t==='warehouse_count_variance'&&a.proposal&&a.proposal.laneRunId)return approve?'Approved — the lane run advanced to post adjustments':'Rejected — the lane run moved to the hold step, nothing posted';
  if(t==='warehouse_receipt_discrepancy')return approve?'Approved — put-away released for the good units':'Rejected — put-away stays on hold';
  if(t==='warehouse_draft_po')return approve?'Approved — draft purchase order created':'Rejected — no purchase order created';
  if(t==='pipeline_run'||t==='execution_graph_node')return approve?'Approved - the run resumed':'Rejected - the run ended';
@@ -25045,7 +25095,7 @@ function demoDecideApproval(id,approve){
   }
  }else if(a.subjectType==='execution_graph_node'){
   agentTeamResolveApproval(a.subjectId,approve,true);
- }else if((a.subjectType==='warehouse_receipt_discrepancy'||a.subjectType==='warehouse_pick_discrepancy')&&a.proposal&&a.proposal.laneRunId){
+ }else if((a.subjectType==='warehouse_receipt_discrepancy'||a.subjectType==='warehouse_pick_discrepancy'||a.subjectType==='warehouse_count_variance')&&a.proposal&&a.proposal.laneRunId){
   laneDecideApproval(a.proposal.laneRunId,approve);
  }else if(a.subjectType&&a.subjectType.startsWith('warehouse_')){
   warehouseApprovalEffect(a,approve);
@@ -26203,6 +26253,7 @@ function ensureWarehouseLaneData(){
  if(!data.laneDefinitions)data.laneDefinitions=[];
  if(!laneDef('lane-wh-receiving'))data.laneDefinitions.push(JSON.parse(JSON.stringify(LANE_WH_RECEIVING)));
  if(!laneDef('lane-wh-pickpack'))data.laneDefinitions.push(JSON.parse(JSON.stringify(LANE_WH_PICKPACK)));
+ if(!laneDef('lane-wh-count'))data.laneDefinitions.push(JSON.parse(JSON.stringify(LANE_WH_COUNT)));
  if(!laneDef('lane-wh-supplier-check'))data.laneDefinitions.push(JSON.parse(JSON.stringify(LANE_WH_SUPPLIER_CHECK)));
  if(!data.laneRuns)data.laneRuns=[];
  if(!data.laneRunSteps)data.laneRunSteps=[];
@@ -26428,7 +26479,44 @@ function laneStartRun(laneId, recordId){
 // Park the run on a step: a fresh attempt row, entered now. A check step is
 // evaluated at once (it never waits); an approval step creates its inbox
 // entry and the run waits on it.
+// ---- Stage conditions (WP-0710 AC-2) --------------------------------------
+// A stage's entry/skip conditions are evaluated once, on first entry to
+// the stage, against the live record and run data — the same evaluation
+// the dry run does. A skipped stage is recorded step by step in the audit
+// trail (status 'skipped', the condition as the reason) and the run moves
+// past it. Mirrors the engine's lane_stage_skipped audit entry.
+function laneStageGate(run, stage){
+ const def=laneDef(run.laneId);
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const ctx={record:po, runData:run.runData, item:null, perChild:lanePerChildMap(def)};
+ if(stage.skip_condition&&laneEvalConditionGroup(stage.skip_condition, ctx)){
+  return {skip:true, reason:`stage skipped (${laneDescribeCondition(stage.skip_condition)})`};
+ }
+ if(stage.entry_condition&&!laneEvalConditionGroup(stage.entry_condition, ctx)){
+  return {skip:true, reason:`stage entry condition not met (${laneDescribeCondition(stage.entry_condition)})`};
+ }
+ return null;
+}
 function laneEnterStep(run, stage, step){
+ // First entry to a stage: evaluate its gate before parking the run on
+ // the step. A stage the run already visited (its rows exist) is never
+ // re-gated — a branch back into it re-enters its steps, not the stage.
+ if(!laneStepsForRun(run.id).some(r=>r.stageId===stage.id)){
+  const gate=laneStageGate(run, stage);
+  if(gate&&gate.skip){
+   (stage.steps||[]).forEach(s=>{
+    laneRunSteps().push({id:'lstep-'+uid(), runId:run.id, stageId:stage.id, stepId:s.id,
+     status:'skipped', attempt:1, enteredAt:new Date().toISOString(),
+     completedAt:new Date().toISOString(), completedBy:'user-01', note:gate.reason, outcome:null, writes:[]});
+   });
+   save();
+   const ordered=laneOrderedSteps(laneDef(run.laneId));
+   const lastIdx=ordered.findIndex(o=>o.stage.id===stage.id&&o.step.id===stage.steps[stage.steps.length-1].id);
+   const next=ordered[lastIdx+1];
+   if(!next){ laneFinishRun(run, 'done'); return null; }
+   return laneEnterStep(run, next.stage, next.step);
+  }
+ }
  const rows=laneStepsForRun(run.id).filter(s=>s.stageId===stage.id&&s.stepId===step.id);
  const attempt=rows.length+1;
  const row={id:'lstep-'+uid(), runId:run.id, stageId:stage.id, stepId:step.id,
@@ -26445,6 +26533,25 @@ function laneEnterStep(run, stage, step){
 function laneCreateApproval(run, step){
  const def=laneDef(run.laneId);
  const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ // Count: the variances are the proposal — expected vs counted per line
+ // with a variance. The manager approves the whole count's variances
+ // (the run posts the adjustments) or rejects them (the run holds).
+ if(run.anchorObjectKey==='cycle_count'){
+  const varLines=(po.lines||[]).filter(l=>Number(l.variance||0)!==0);
+  ensureDemoApprovals();
+  const approval={
+   id:'apr-'+uid(), subjectType:'warehouse_count_variance', subjectId:po.id,
+   proposal:{
+    ccId:po.id, ccNumber:po.count_number,
+    lines:varLines.map(l=>{ const p=(data.product||[]).find(x=>x.id===l.product_id)||{}; return {lineId:l.id, productId:l.product_id, sku:p.sku||'', expectedQty:l.expected_qty, countedQty:l.counted_qty, variance:l.variance}; }),
+    laneRunId:run.id, laneStepId:step.id
+   },
+   status:'pending', requestedBy:'Count lane', createdAt:new Date().toISOString(), resolvedAt:null
+  };
+  data.aiApprovals.unshift(approval);
+  run.approvalId=approval.id;
+  return approval;
+ }
  // Pick & Pack: the discrepancy is a short pick or a damaged unit, not a
  // short receipt — same shape, different subject and quantities.
  if(run.anchorObjectKey==='sales_order'){
@@ -26697,6 +26804,129 @@ function laneDecideApproval(runId, approve){
 // values: non-repeat {fieldKey: value}; repeat {lineId: {fieldKey: value}}.
 // Validation runs before anything is written: a failure blocks the step
 // with its reason and writes nothing (AC-2).
+// A repeating form step is completed one item at a time (WP-0710 AC-1):
+// each item is its own entry with its own submit, recorded in
+// runData.__items.<stepId>.<itemId> — the same per-item state the engine
+// keeps. A submit writes only its own item's keys, so two people
+// completing different items never overwrite each other, and the step
+// completes only when every non-skipped item is done.
+function laneFormItemDone(run, step, lineId){
+ const doneMap=(run.runData&&run.runData.__items&&run.runData.__items[step.id])||{};
+ return !!doneMap[lineId];
+}
+function laneFormItemSkipped(run, step, line){
+ if(!line||!step.skip_when)return false;
+ const def=laneDef(run.laneId);
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ return laneEvalConditionGroup(step.skip_when,{record:po,runData:run.runData,item:line,itemId:line.id,perChild:lanePerChildMap(def)});
+}
+function laneFormStepCounts(run, step){
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const lines=laneRepeatItems(step, po);
+ let total=0, done=0;
+ for(const line of lines){
+  if(!line){ total++; done++; continue; }
+  if(laneFormItemSkipped(run, step, line))continue;
+  total++;
+  if(laneFormItemDone(run, step, line.id))done++;
+ }
+ return {done, total};
+}
+function laneFormStepItemsDone(run, step){
+ const c=laneFormStepCounts(run, step);
+ return c.done>=c.total;
+}
+// Validate one item's fields (required + integer + the step's own
+// validation rule) against the candidate state with its values applied.
+// Returns {ok} or {ok:false, message}.
+function laneValidateFormLine(run, step, line, vals){
+ const def=laneDef(run.laneId);
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const perChild=lanePerChildMap(def);
+ const lineId=line?line.id:null;
+ for(const field of (step.fields||[])){
+  const v=vals[field.key];
+  if(field.required&&(v===undefined||v===null||v==='')){
+   return {ok:false, message:`${field.label} is required${line?` for ${laneLineLabel(po,line)}`:''}.`};
+  }
+  if(field.type==='integer'&&v!==undefined&&v!==null&&v!==''&&(!Number.isInteger(Number(v))||Number(v)<0)){
+   return {ok:false, message:`${field.label} must be a whole number of 0 or more${line?` for ${laneLineLabel(po,line)}`:''}.`};
+  }
+ }
+ // Candidate state: the submitted values applied, for validation.
+ const candRunData=JSON.parse(JSON.stringify(run.runData||{}));
+ const candPo={...po, lines:(po.lines||[]).map(l=>({...l}))};
+ const candLine=line?candPo.lines.find(l=>l.id===lineId):null;
+ for(const field of (step.fields||[])){
+  const v=vals[field.key];
+  if(v===undefined)continue;
+  laneApplyBinding(candRunData, candLine, candPo, field.binds_to, v, perChild);
+ }
+ if(step.validation){
+  const ctx={record:candPo, runData:candRunData, item:candLine, itemId:lineId, perChild};
+  const check=laneEvalValidation(step.validation, ctx);
+  if(!check.ok)return {ok:false, message:check.message};
+ }
+ return {ok:true};
+}
+// Apply one item's fields for real. Returns the note fragment for it
+// ('' for a non-repeating step, whose note is the step-level fallback).
+function laneApplyFormLine(run, step, line, vals){
+ const def=laneDef(run.laneId);
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const perChild=lanePerChildMap(def);
+ const lineId=line?line.id:null;
+ const liveLine=line?(po.lines||[]).find(l=>l.id===lineId):null;
+ for(const field of (step.fields||[])){
+  const v=vals[field.key];
+  if(v===undefined)continue;
+  laneApplyBinding(run.runData, liveLine, po, field.binds_to, v, perChild);
+ }
+ if(!line)return '';
+ const l=(po.lines||[]).find(x=>x.id===line.id)||line;
+ const written=(step.fields||[]).filter(f=>vals[f.key]!==undefined&&vals[f.key]!==null&&vals[f.key]!=='').map(f=>`${f.label} ${vals[f.key]}`);
+ return `${laneLineLabel(po,l)}: ${written.length?written.join(', '):'no values entered'}`;
+}
+// Mark a form step complete once every item is done, and advance the run.
+// On a partial submit the row's note accumulates, so the audit trail shows
+// the step filling up one item at a time.
+function laneCompleteFormStepIfDone(run, step, notes){
+ const row=laneStepRow(run.id, run.currentStageId, step.id);
+ if(!laneFormStepItemsDone(run, step)){
+  if(row&&notes.length)row.note=notes.join('; ');
+  save();
+  return {stepDone:false};
+ }
+ if(row){
+  row.status='completed'; row.completedAt=new Date().toISOString(); row.completedBy='user-01';
+  row.note=notes.length?notes.join('; '):(step.fields||[]).length?'Values recorded in run data.':'Reviewed.';
+ }
+ if(step.ends_run){ if(row)row.outcome=step.ends_run.outcome; laneFinishRun(run, step.ends_run.outcome); }
+ else laneAdvanceRun(run);
+ return {stepDone:true};
+}
+// Submit ONE item of a repeating form step. Validates and writes only
+// that item, records it in runData.__items, and completes the step only
+// when every non-skipped item is done.
+function laneSubmitFormStepItem(run, step, lineId, vals){
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const line=(po.lines||[]).find(l=>l.id===lineId);
+ if(!line)return {ok:false, message:'Line not found.'};
+ if(laneFormItemSkipped(run, step, line))return {ok:false, message:'This line is skipped by the lane — nothing to enter.'};
+ if(laneFormItemDone(run, step, lineId))return {ok:false, message:'This line is already done.'};
+ const check=laneValidateFormLine(run, step, line, vals);
+ if(!check.ok)return {ok:false, message:check.message};
+ const note=laneApplyFormLine(run, step, line, vals);
+ if(!run.runData.__items)run.runData.__items={};
+ if(!run.runData.__items[step.id])run.runData.__items[step.id]={};
+ run.runData.__items[step.id][lineId]=true;
+ save();
+ const row=laneStepRow(run.id, run.currentStageId, step.id);
+ const prior=row&&row.note?[row.note]:[];
+ const res=laneCompleteFormStepIfDone(run, step, [...prior, note]);
+ const counts=laneFormStepCounts(run, step);
+ return {ok:true, stepDone:res.stepDone, doneCount:counts.done, totalCount:counts.total};
+}
 function laneSubmitFormStep(run, step, values){
  const def=laneDef(run.laneId);
  const po=byId(run.anchorObjectKey, run.anchorRecordId);
@@ -26710,58 +26940,34 @@ function laneSubmitFormStep(run, step, values){
   return {ok:true};
  }
  const lines=laneRepeatItems(step, po);
- for(const line of lines){
+ // A repeating step's "Complete step" completes every open item at once.
+ // Items already done — or skipped by skip_when — are left alone, and
+ // validation runs on the open items before anything is written, so a
+ // failure blocks the step and writes nothing.
+ const openLines=lines.filter(line=>!line||(!laneFormItemDone(run, step, line.id)&&!laneFormItemSkipped(run, step, line)));
+ for(const line of openLines){
   const lineId=line?line.id:null;
   const vals=line?((values||{})[lineId]||{}):(values||{});
-  for(const field of (step.fields||[])){
-   const v=vals[field.key];
-   if(field.required&&(v===undefined||v===null||v==='')){
-    return {ok:false, message:`${field.label} is required${line?` for ${laneLineLabel(po,line)}`:''}.`};
-   }
-   if(field.type==='integer'&&v!==undefined&&v!==null&&v!==''&&(!Number.isInteger(Number(v))||Number(v)<0)){
-    return {ok:false, message:`${field.label} must be a whole number of 0 or more${line?` for ${laneLineLabel(po,line)}`:''}.`};
-   }
-  }
-  // Candidate state: the submitted values applied, for validation.
-  const candRunData=JSON.parse(JSON.stringify(run.runData||{}));
-  const candPo={...po, lines:(po.lines||[]).map(l=>({...l}))};
-  const candLine=line?candPo.lines.find(l=>l.id===lineId):null;
-  for(const field of (step.fields||[])){
-   const v=vals[field.key];
-   if(v===undefined)continue;
-   laneApplyBinding(candRunData, candLine, candPo, field.binds_to, v, perChild);
-  }
-  if(step.validation){
-   const ctx={record:candPo, runData:candRunData, item:candLine, itemId:lineId, perChild};
-   const check=laneEvalValidation(step.validation, ctx);
-   if(!check.ok)return {ok:false, message:check.message};
-  }
+  const check=laneValidateFormLine(run, step, line, vals);
+  if(!check.ok)return {ok:false, message:check.message};
  }
- // Valid: apply the bindings for real.
+ // Valid: apply the bindings for real, one item at a time.
  const notes=[];
- for(const line of lines){
+ for(const line of openLines){
   const lineId=line?line.id:null;
   const vals=line?((values||{})[lineId]||{}):(values||{});
-  const liveLine=line?(po.lines||[]).find(l=>l.id===lineId):null;
-  for(const field of (step.fields||[])){
-   const v=vals[field.key];
-   if(v===undefined)continue;
-   laneApplyBinding(run.runData, liveLine, po, field.binds_to, v, perChild);
-  }
+  const note=laneApplyFormLine(run, step, line, vals);
+  if(note)notes.push(note);
   if(line){
-   const l=(po.lines||[]).find(x=>x.id===line.id)||line;
-   const written=(step.fields||[]).filter(f=>vals[f.key]!==undefined&&vals[f.key]!==null&&vals[f.key]!=='').map(f=>`${f.label} ${vals[f.key]}`);
-   notes.push(`${laneLineLabel(po,l)}: ${written.length?written.join(', '):'no values entered'}`);
+   if(!run.runData.__items)run.runData.__items={};
+   if(!run.runData.__items[step.id])run.runData.__items[step.id]={};
+   run.runData.__items[step.id][line.id]=true;
   }
  }
- const row=laneStepRow(run.id, run.currentStageId, step.id);
- if(row){
-  row.status='completed'; row.completedAt=new Date().toISOString(); row.completedBy='user-01';
-  row.note=notes.length?notes.join('; '):(step.fields||[]).length?'Values recorded in run data.':'Reviewed.';
- }
- if(step.ends_run){ row.outcome=step.ends_run.outcome; laneFinishRun(run, step.ends_run.outcome); }
- else laneAdvanceRun(run);
- return {ok:true};
+ save();
+ const res=laneCompleteFormStepIfDone(run, step, notes);
+ const counts=laneFormStepCounts(run, step);
+ return {ok:true, stepDone:res.stepDone, doneCount:counts.done, totalCount:counts.total};
 }
 // One field binding. binds_to is run_data.<key> (a per_child map entry when
 // the definition declares the field per_child) or record.<field> or
@@ -26789,25 +26995,37 @@ function laneApplyBinding(runData, line, po, bindsTo, value, perChildMap){
 }
 function laneLineLabel(po, line){
  const prod=(data.product||[]).find(p=>p.id===line.product_id)||{};
+ const sku=prod.sku||line.product_id;
+ // A cycle-count line carries expected/counted, not an ordered quantity.
+ if(line.qty_ordered===undefined)return `${sku} (expected ${line.expected_qty}, counted ${line.counted_qty})`;
  // Sales-order lines carry pick state; purchase-order lines do not.
  const picked=line.qty_picked!==undefined?`, picked ${line.qty_picked}`:'';
- return `${prod.sku||line.product_id} (ordered ${line.qty_ordered}${picked})`;
+ return `${sku} (ordered ${line.qty_ordered}${picked})`;
 }
 // A record step: execute its writes, all-or-nothing per line, then advance.
 // A write that already posted (same move, same quantity) is not posted
 // again — the demo's repeat-safety for a retry or a double click.
+// A line matching the step's skip_when (WP-0710 AC-1, Q-34) is skipped:
+// it posts nothing, and the step's note says how many lines were skipped
+// and why.
 function laneCompleteRecordStep(run, step){
+ const def=laneDef(run.laneId);
  const po=byId(run.anchorObjectKey, run.anchorRecordId);
  const lines=laneRepeatItems(step, po);
  const summaries=[];
+ let skipped=0;
  for(const line of lines){
+  if(line&&step.skip_when&&laneEvalConditionGroup(step.skip_when,{record:po,runData:run.runData,item:line,itemId:line.id,perChild:lanePerChildMap(def)})){
+   skipped++;
+   continue;
+  }
   summaries.push(...laneExecuteWrites(run, step, line?{item:line, itemId:line.id}:null));
  }
  const row=laneStepRow(run.id, run.currentStageId, step.id);
  if(row){
   row.status='completed'; row.completedAt=new Date().toISOString(); row.completedBy='user-01';
   row.writes=summaries;
-  row.note=summaries.length?summaries.join('; '):'Nothing to post.';
+  row.note=(summaries.length?summaries.join('; '):'Nothing to post.')+(skipped?` Skipped ${skipped} line${skipped===1?'':'s'} with nothing to post (${laneDescribeCondition(step.skip_when)}).`:'');
  }
  if(step.ends_run){ row.outcome=step.ends_run.outcome; laneFinishRun(run, step.ends_run.outcome); }
  else laneAdvanceRun(run);
@@ -26847,6 +27065,7 @@ const laneActionTypes={
  'picking.set_status': (inputs, run, step)=>laneSetPickingStatus(inputs, run, step),
  'shipment.create': (inputs, run, step)=>laneCreateShipment(inputs, run, step),
  'sales_order.ship': (inputs, run, step)=>laneShipSalesOrder(inputs, run, step),
+ 'cycle_count.set_status': (inputs, run, step)=>laneSetCcStatus(inputs, run, step),
  'run_data.set': (inputs, run, step)=>laneSetRunData(inputs, run, step)
 };
 function laneSetRunData(inputs, run){
@@ -26875,7 +27094,13 @@ function lanePostStockMove(inputs, run){
   qty=qty-startPicked-alreadyPosted;
   if(!(qty>0))return `No PICK move for ${sku} — already picked before this run.`;
  }
- if(!(qty>0))return `No ${inputs.move_type} move for ${sku} — received 0.`;
+ // A count adjustment is the variance: negative is a real downward
+ // adjustment (the standalone count approval posts it the same way), so
+ // only a zero quantity is nothing to post. Every other move type posts
+ // only a positive quantity.
+ if(inputs.move_type==='COUNT_ADJUSTMENT'){
+  if(qty===0)return `No COUNT_ADJUSTMENT move for ${sku} — no variance.`;
+ }else if(!(qty>0))return `No ${inputs.move_type} move for ${sku} — received 0.`;
  // Repeat-safe: the same move for the same reference never posts twice.
  // The key is the business fact (type + product + reference + quantity):
  // the bin is where the goods sit, not whether they moved.
@@ -26914,6 +27139,20 @@ function lanePostStockMove(inputs, run){
   else if(Number(stock.on_hand||0)-Number(stock.reserved||0)<=Number(prod.reorder_level||0))stock.status='LOW_STOCK';
   else stock.status='IN_STOCK';
  }
+ // A count adjustment moves on hand by the variance: a negative variance
+ // takes stock off the shelf, a positive one puts it back. Same effect as
+ // the standalone count approval, which posts the variance the same way.
+ if(inputs.move_type==='COUNT_ADJUSTMENT'){
+  let stock=(data.stock||[]).find(s=>s.product_id===inputs.product_id&&s.location_id===inputs.to_location);
+  if(!stock){
+   stock={id:'stock-wh-'+inputs.product_id+'-'+inputs.to_location, number:'STK-'+sku, name:(prod.name||sku)+' @ '+laneLocationCode(inputs.to_location), status:'IN_STOCK', owner:'Sarah Chen', notes:'', product_id:inputs.product_id, location_id:inputs.to_location, lot_id:stockForLot?stockForLot.lot_id||null:null, on_hand:0, reserved:0};
+   data.stock.push(stock);
+  }
+  stock.on_hand=Math.max(0,Number(stock.on_hand||0)+qty);
+  if(Number(stock.on_hand||0)===0)stock.status='OUT_OF_STOCK';
+  else if(Number(stock.on_hand||0)-Number(stock.reserved||0)<=Number(prod.reorder_level||0))stock.status='LOW_STOCK';
+  else stock.status='IN_STOCK';
+ }
  // SHIP removes goods from the warehouse: on hand falls and the
  // reservation is released. Available is recomputed, never written — for
  // a fully-reserved order it does not change.
@@ -26942,6 +27181,13 @@ function laneSetPoStatus(inputs, run, step){
  po.status=inputs.status;
  laneFirePoWorkflows(po, before, step.replaces);
  return `PO status → ${inputs.status}`;
+}
+function laneSetCcStatus(inputs, run, step){
+ const cc=byId(run.anchorObjectKey, run.anchorRecordId);
+ const before={...cc};
+ cc.status=inputs.status;
+ laneFireWorkflows('cycle_count', cc, before, step.replaces);
+ return `Count status → ${inputs.status}`;
 }
 function laneCloseReceipt(inputs, run, step){
  const po=byId(run.anchorObjectKey, run.anchorRecordId);
@@ -27069,8 +27315,9 @@ function renderLaneRunner(){
  const finished=['completed','completed_partial','cancelled'].includes(run.status);
  const supplier=(data.supplier||[]).find(s=>s.id===po.supplier_id)||{};
  const isSO=run.anchorObjectKey==='sales_order';
- const recNumber=po.po_number||po.so_number||'';
- const recName=isSO?((data.customer||[]).find(c=>c.id===po.customer_id)||{}).name||'':supplier.name||'';
+ const isCC=run.anchorObjectKey==='cycle_count';
+ const recNumber=po.po_number||po.so_number||po.count_number||'';
+ const recName=isSO?((data.customer||[]).find(c=>c.id===po.customer_id)||{}).name||'':isCC?(po.scope||''):(supplier.name||'');
  const picking=isSO?(data.picking||[]).find(pk=>pk.source_order_id===po.id):null;
  const pickTask=isSO&&picking?(data.pick_task||[]).find(t=>(t.picking_ids||[]).includes(picking.id)):null;
  const viewStep=laneViewStep&&laneFindStep(def, laneViewStep.stageId, laneViewStep.stepId);
@@ -27078,10 +27325,13 @@ function renderLaneRunner(){
  const showRow=showStep?laneStepRow(run.id, showStep.stage.id, showStep.step.id):null;
  const isViewingBack=!!viewStep;
  const prevStep=!finished?lanePrevCompletedStep(run):null;
- // Stage bar: every stage, current highlighted, done checked.
+ // Stage bar: every stage, current highlighted, done checked, skipped muted.
  const stageBar=stages.map((s,i)=>{
-  const cls=i<curStageIdx||finished?'done':i===curStageIdx?'current':'';
-  return `<div class="lane-stage ${cls}"><span class="lane-stage-num">${i<curStageIdx||finished?'✓':i+1}</span><span class="lane-stage-name">${agentEsc(s.name)}</span></div>`;
+  const stageRows=steps.filter(r=>r.stageId===s.id);
+  const skipped=stageRows.length>0&&stageRows.every(r=>r.status==='skipped');
+  const cls=skipped?'skipped':i<curStageIdx||finished?'done':i===curStageIdx?'current':'';
+  const mark=skipped?'—':i<curStageIdx||finished?'✓':i+1;
+  return `<div class="lane-stage ${cls}"><span class="lane-stage-num">${mark}</span><span class="lane-stage-name">${agentEsc(s.name)}</span></div>`;
  }).join('<div class="lane-stage-sep">›</div>');
  // Step list for the current stage.
  const stageSteps=cur?cur.stage.steps||[]:[];
@@ -27098,6 +27348,7 @@ function renderLaneRunner(){
   const prod=(data.product||[]).find(p=>p.id===l.product_id)||{};
   const stock=(data.stock||[]).find(s=>s.product_id===l.product_id);
   if(isSO)return `<tr><td>${agentEsc(prod.sku||l.product_id)}</td><td>${agentEsc(prod.name||'')}</td><td class="num">${l.qty_ordered}</td><td class="num">${l.qty_reserved}</td><td class="num">${l.qty_picked}</td><td class="num">${l.qty_packed}</td><td class="num">${l.qty_shipped}</td><td class="num">${stock?stock.on_hand:'—'}</td></tr>`;
+  if(isCC)return `<tr><td>${agentEsc(prod.sku||l.product_id)}</td><td>${agentEsc(prod.name||'')}</td><td class="num">${l.expected_qty}</td><td class="num">${l.counted_qty}</td><td class="num">${l.variance>0?'+':''}${l.variance}</td><td class="num">${stock?stock.on_hand:'—'}</td></tr>`;
   return `<tr><td>${agentEsc(prod.sku||l.product_id)}</td><td>${agentEsc(prod.name||'')}</td><td class="num">${l.qty_ordered}</td><td class="num">${l.qty_received}</td><td class="num">${l.qty_rejected}</td><td class="num">${stock?stock.on_hand:'—'}</td></tr>`;
  }).join('');
  const sideKv=isSO
@@ -27107,12 +27358,19 @@ function renderLaneRunner(){
      <div class="kv"><span>Ship via</span><b>${agentEsc((po.ship_method||'')+(po.carrier?' · '+po.carrier:''))}</b></div>
      ${picking?`<div class="kv"><span>Pick task</span><b>${agentEsc(picking.wave_id||'')}${pickTask?` · route ${agentEsc(pickTask.route_sequence||'')}`:''}</b></div>`:''}
      <div class="kv"><span>Total</span><b>${moneyCAD(po.total||0)}</b></div>`
+  :isCC
+  ?`<div class="kv"><span>Status</span><b>${agentEsc(po.status)}</b></div>
+     <div class="kv"><span>Count date</span><b>${agentEsc(po.count_date||'')}</b></div>
+     <div class="kv"><span>Scope</span><b>${agentEsc(po.scope||'')}</b></div>
+     <div class="kv"><span>Counted by</span><b>${agentEsc(laneActorName(po.counted_by||''))}</b></div>`
   :`<div class="kv"><span>Status</span><b>${agentEsc(po.status)}</b></div>
      <div class="kv"><span>Ordered</span><b>${agentEsc(po.order_date||'')}</b></div>
      <div class="kv"><span>Expected</span><b>${agentEsc(po.expected_date||'')}</b></div>
      <div class="kv"><span>Total</span><b>${moneyCAD(po.total||0)}</b></div>`;
  const sideHead=isSO
   ?'<tr><th>SKU</th><th>Item</th><th class="num">Ordered</th><th class="num">Reserved</th><th class="num">Picked</th><th class="num">Packed</th><th class="num">Shipped</th><th class="num">On hand</th></tr>'
+  :isCC
+  ?'<tr><th>SKU</th><th>Item</th><th class="num">Expected</th><th class="num">Counted</th><th class="num">Variance</th><th class="num">On hand</th></tr>'
   :'<tr><th>SKU</th><th>Item</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Rejected</th><th class="num">On hand</th></tr>';
  // Audit trail: every step attempt + the run's own events.
  const audit=steps.slice().sort((a,b)=>String(a.enteredAt).localeCompare(String(b.enteredAt))).map(r=>{
@@ -27171,6 +27429,38 @@ function renderLaneRunner(){
 }
 // One step's work area. The runner collects the values, the lane module
 // validates and writes; the screen never writes directly.
+// Who one item of a repeating step is assigned to (WP-0710 AC-1, Q-33):
+// by child_field, the assignee is read off the child record; by role, it
+// is the step's role. Returns a display name, or null when unassigned.
+function laneItemAssignee(run, step, line){
+ const assign=step.repeat_over&&step.repeat_over.assign;
+ if(!assign||!line)return null;
+ if(assign.by==='child_field'){
+  const id=line[assign.field];
+  if(!id)return null;
+  const user=(data.demo_user||[]).find(u=>u.id===id);
+  if(user)return user.name;
+  const role=(data.roles||[]).find(r=>r.id===id);
+  if(role)return role.name;
+  return id;
+ }
+ if(assign.by==='role'&&step.role)return laneRoleLabel(step.role);
+ return null;
+}
+// The values an item already holds, as a one-line summary for a done item.
+function laneItemValuesSummary(run, step, line){
+ const po=byId(run.anchorObjectKey, run.anchorRecordId);
+ const parts=(step.fields||[]).map(field=>{
+  let v=laneStoredFieldValue(run, field, line.id);
+  if((v===undefined||v===null||v==='')&&field.binds_to&&field.binds_to.startsWith('record.lines[].')){
+   v=line[field.binds_to.slice('record.lines[].'.length)];
+  }else if((v===undefined||v===null||v==='')&&field.binds_to&&field.binds_to.startsWith('record.')){
+   v=po[field.binds_to.slice('record.'.length)];
+  }
+  return v!==undefined&&v!==null&&v!==''?`${field.label} ${v}`:null;
+ }).filter(Boolean);
+ return parts.length?parts.join(', '):'no values entered';
+}
 function laneRunnerStepHtml(run, stage, step, row, isViewingBack){
  const def=laneDef(run.laneId);
  const po=byId(run.anchorObjectKey, run.anchorRecordId);
@@ -27179,13 +27469,23 @@ function laneRunnerStepHtml(run, stage, step, row, isViewingBack){
  const lines=laneRepeatItems(step, po);
  let body='';
  if(step.kind==='form'){
+  const isRepeat=!!step.repeat_over;
   const fieldsHtml=lines.map(line=>{
    const lineId=line?line.id:null;
    const legend=line?`<div class="lane-line-head">${agentEsc(laneLineLabel(po,line))}</div>`:'';
+   const assignee=isRepeat&&line?laneItemAssignee(run, step, line):null;
+   const assigneeHtml=assignee?`<div class="lane-line-assignee">Assigned to: <b>${agentEsc(assignee)}</b></div>`:'';
+   if(isRepeat&&line&&laneFormItemSkipped(run, step, line)){
+    return `<div class="lane-line-group lane-line-skipped">${legend}${assigneeHtml}<div class="lane-line-done">Skipped — ${agentEsc(laneDescribeCondition(step.skip_when))}</div></div>`;
+   }
+   if(isRepeat&&line&&laneFormItemDone(run, step, line.id)){
+    return `<div class="lane-line-group lane-line-done-group">${legend}${assigneeHtml}<div class="lane-line-done">✓ Done — ${agentEsc(laneItemValuesSummary(run, step, line))}</div></div>`;
+   }
    const fields=(step.fields||[]).map(field=>{
     return laneFieldInputHtml(run, field, lineId, step);
    }).join('');
-   return `<div class="lane-line-group">${legend}${fields}</div>`;
+   const itemBtn=isRepeat&&line?`<div class="lane-actions"><button class="btn btn-secondary" data-lane-complete-item="${agentEsc(line.id)}" ${isViewingBack?'disabled':''}>Mark done</button></div>`:'';
+   return `<div class="lane-line-group">${legend}${assigneeHtml}${fields}${itemBtn}</div>`;
   }).join('');
   const assistance=step.assistance?`<p class="lane-assist">Suggested by ${agentEsc(laneAgentName(step.assistance.agent))} — confirm or change the values. The suggestion is recorded, not applied by the agent.</p>`:'';
   // A child-lane step starts another lane and waits: no form to fill. While
@@ -27209,16 +27509,24 @@ function laneRunnerStepHtml(run, stage, step, row, isViewingBack){
   const apr=(data.aiApprovals||[]).find(a=>a.id===run.approvalId)||null;
   const proposalLines=(apr&&apr.proposal&&apr.proposal.lines)||[];
   const isPick=apr&&apr.proposal&&apr.proposal.qtyPicked!==undefined;
-  const rows=isPick
+  const isCount=apr&&apr.subjectType==='warehouse_count_variance';
+  const rows=isCount
+   ?proposalLines.map(l=>`<tr><td>${agentEsc(l.sku)}</td><td class="num">${l.expectedQty}</td><td class="num">${l.countedQty}</td><td class="num">${l.variance>0?'+':''}${l.variance}</td></tr>`).join('')
+   :isPick
    ?proposalLines.map(l=>`<tr><td>${agentEsc(l.sku)}</td><td class="num">${l.qtyOrdered}</td><td class="num">${l.qtyReserved}</td><td class="num">${l.qtyPicked}</td><td class="num">${l.qtyDamaged}</td><td>${agentEsc(l.reason||'')}</td></tr>`).join('')
    :proposalLines.map(l=>`<tr><td>${agentEsc(l.sku)}</td><td class="num">${l.qtyOrdered}</td><td class="num">${l.qtyReceived}</td><td class="num">${l.qtyRejected}</td><td>${agentEsc(l.reason||'')}</td></tr>`).join('');
-  const head=isPick
+  const head=isCount
+   ?'<tr><th>SKU</th><th class="num">Expected</th><th class="num">Counted</th><th class="num">Variance</th></tr>'
+   :isPick
    ?'<tr><th>SKU</th><th class="num">Ordered</th><th class="num">Reserved</th><th class="num">Picked</th><th class="num">Damaged</th><th>Reason</th></tr>'
    :'<tr><th>SKU</th><th class="num">Ordered</th><th class="num">Received</th><th class="num">Rejected</th><th>Reason</th></tr>';
-  const note=isPick
+  const note=isCount
+   ?'Approving posts the guarded write (count status → APPROVED) and continues to post the adjustments. Rejecting posts nothing and goes to the hold step.'
+   :isPick
    ?'Approving re-opens the picking as In progress and returns the run to the pick step for a replacement. Rejecting posts nothing and goes to the hold step.'
    :'Approving posts the guarded write (PO status → PARTIALLY_RECEIVED) and continues to put-away. Rejecting posts nothing and goes to the hold step.';
-  const approveLabel=isPick?'Approve — pick a replacement':'Approve — put away '+(apr?agentEsc(String(apr.proposal.qtyReceived||'')):'')+' × '+(apr?agentEsc(apr.proposal.sku||''):'');
+  const approveLabel=isCount?'Approve — post adjustments'
+   :isPick?'Approve — pick a replacement':'Approve — put away '+(apr?agentEsc(String(apr.proposal.qtyReceived||'')):'')+' × '+(apr?agentEsc(apr.proposal.sku||''):'');
   body=`<p>${agentEsc(step.description||'')}</p>
    <div class="lane-po-lines-wrap"><table class="tbl"><thead>${head}</thead><tbody>${rows}</tbody></table></div>
    <p class="muted">${note}</p>
@@ -27318,6 +27626,18 @@ function laneCollectStepValues(step){
  });
  return values;
 }
+// Collect one item's values for a repeating form step, from the inputs
+// tagged with that item's id.
+function laneCollectStepItemValues(step, lineId){
+ const values={};
+ document.querySelectorAll('[data-lane-field]').forEach(el=>{
+  const raw=el.dataset.laneField;
+  if(!raw.startsWith(lineId+':'))return;
+  const fieldKey=raw.slice(lineId.length+1);
+  values[fieldKey]=laneFieldValue(step, fieldKey, el.value);
+ });
+ return values;
+}
 function laneFieldValue(step, fieldKey, v){
  const field=(step.fields||[]).find(f=>f.key===fieldKey);
  if(field&&field.type==='integer')return v===''?null:Number(v);
@@ -27332,7 +27652,7 @@ function laneWireRunner(run){
    const values=laneCollectStepValues(cur.step);
    const res=laneSubmitFormStep(run, cur.step, values);
    if(!res.ok){ const err=byIdDom('laneStepError'); if(err)err.textContent=res.message; return; }
-   toast('Step complete — '+cur.step.name);
+   toast(res.stepDone===false?`${res.doneCount} of ${res.totalCount} lines done — ${cur.step.name}`:'Step complete — '+cur.step.name);
   }else if(cur.step.kind==='record'){
    laneCompleteRecordStep(run, cur.step);
    toast('Step complete — '+cur.step.name);
@@ -27340,6 +27660,21 @@ function laneWireRunner(run){
   laneViewStep=null;
   renderView();
  };
+ // One item of a repeating form step, completed on its own (WP-0710 AC-1):
+ // the button lives in that item's group and submits only that item.
+ document.querySelectorAll('[data-lane-complete-item]').forEach(b=>{
+  b.onclick=()=>{
+   const cur=laneCurrentStep(run);
+   if(!cur)return;
+   const lineId=b.dataset.laneCompleteItem;
+   const values=laneCollectStepItemValues(cur.step, lineId);
+   const res=laneSubmitFormStepItem(run, cur.step, lineId, values);
+   if(!res.ok){ const err=byIdDom('laneStepError'); if(err)err.textContent=res.message; return; }
+   toast(res.stepDone?'Step complete — '+cur.step.name:`Line done — ${res.doneCount} of ${res.totalCount} lines done`);
+   laneViewStep=null;
+   renderView();
+  };
+ });
  const approveBtn=byIdDom('laneApproveBtn');
  if(approveBtn)approveBtn.onclick=()=>{
   if(run.approvalId)demoDecideApproval(run.approvalId, true);
@@ -27417,7 +27752,11 @@ function laneRecordSectionHtml(key,id){
   const startLabel=def.lane.id==='lane-wh-receiving'?'Start receiving lane':'Start '+def.lane.name+' lane';
   return `<section class="card" style="margin-bottom:18px"><div class="card-head"><h3>Process Lane — ${agentEsc(def.lane.name)}</h3><p class="card-desc">No run yet for this order.</p></div><div class="card-body"><button class="btn btn-primary" data-lane-start="${def.lane.id}:${id}">${agentEsc(startLabel)}</button></div></section>`;
  }
- return '';
+ // The start condition fails: say so on the record, with the reason —
+ // a refusal that stays visible, not a toast that disappears (WP-0710
+ // AC-3). No run is created.
+ const recLabel=r.po_number||r.so_number||r.count_number||r.number||r.name||id;
+ return `<section class="card" style="margin-bottom:18px"><div class="card-head"><h3>Process Lane — ${agentEsc(def.lane.name)}</h3><p class="card-desc">This lane cannot start on ${agentEsc(recLabel)}.</p></div><div class="card-body"><p class="muted">Its start condition is not met: ${agentEsc(laneDescribeCondition(def.lane.start_condition))} — this record is ${agentEsc(r.status)}.</p></div></section>`;
 }
 // The Process Lanes section of a record's Object 360 inspector (REQ-LANE-015):
 // every run on this record, its label, status and audit trail.
@@ -28028,9 +28367,9 @@ function roadmapPage(){
    'Run last, after every other epic in this review - packaging has nothing stable to package until Agents are versioned (first epic) and the components it packages actually exist.',
    [['Issue #172','https://github.com/vikram2409-eng/Lanesra-OS/issues/172']]],
   ['Process Lanes (Phase 7): guided, step-by-step work for one record','proceed',
-   'A Workflow fires on an event and an Agent Team runs a graph, but neither walks a person through a business process for one record - receive this shipment, onboard this hire, close this claim - step by step, with the right person asked at the right moment and every write governed. A Process Lane is that missing shape: a named process on one object, ordered stages and five step kinds (form, record, check, approval, agent), defined as data and compiled to the same execution graph the runtime already runs. The foundation is in: the lane model and definition schema, the demo\'s Receive Shipment lane, the core storage, lifecycle and compile - a published lane compiles to a graph and a run keeps the version it started with - and a read-only blueprint view of any lane, in the desktop app, Team Workspace and the online demo. Form steps now wait for the assigned person and keep what they enter, and record and check steps do real work: a record step posts its writes through governed Action Types (Business Rules and access apply, all-or-nothing, never double-posted), and a check step takes its pass or fail branch and shows the reason. Approval steps wait in the inbox and route the run down their declared branch; a waiting step can be handed to another role and a run cancelled with its writes left in place; and a lane whose hold or rejection branch has no way out cannot be published. The runner screen now walks a run end to end in the desktop app and Team Workspace: a stage bar, the current stage\'s steps, the current step\'s work, the anchor record and what the run has written, with Back and Complete step - and a run\'s history in Object 360. A step can also hand part of the job to a child lane on a related record and wait for it, nested up to three levels deep (the depth-3 limit stops a runaway), with cancel-or-keep for the child when the parent is cancelled. Lanes are now authored on a visual canvas too (WP-0718): stages as chevrons, steps as cards, branches drawn as arrows, a nested condition builder, a reads/writes map, an approval-writes view, an Action-Type picker and the publish checks live while editing — the same definition format, in the desktop app, Team Workspace and the online demo.',
+   'A Workflow fires on an event and an Agent Team runs a graph, but neither walks a person through a business process for one record - receive this shipment, onboard this hire, close this claim - step by step, with the right person asked at the right moment and every write governed. A Process Lane is that missing shape: a named process on one object, ordered stages and five step kinds (form, record, check, approval, agent), defined as data and compiled to the same execution graph the runtime already runs. The foundation is in: the lane model and definition schema, the demo\'s Receive Shipment lane, the core storage, lifecycle and compile - a published lane compiles to a graph and a run keeps the version it started with - and a read-only blueprint view of any lane, in the desktop app, Team Workspace and the online demo. Form steps now wait for the assigned person and keep what they enter, and record and check steps do real work: a record step posts its writes through governed Action Types (Business Rules and access apply, all-or-nothing, never double-posted), and a check step takes its pass or fail branch and shows the reason. Approval steps wait in the inbox and route the run down their declared branch; a waiting step can be handed to another role and a run cancelled with its writes left in place; and a lane whose hold or rejection branch has no way out cannot be published. The runner screen now walks a run end to end in the desktop app and Team Workspace: a stage bar, the current stage\'s steps, the current step\'s work, the anchor record and what the run has written, with Back and Complete step - and a run\'s history in Object 360. A step can also hand part of the job to a child lane on a related record and wait for it, nested up to three levels deep (the depth-3 limit stops a runaway), with cancel-or-keep for the child when the parent is cancelled. Lanes are now authored on a visual canvas too (WP-0718): stages as chevrons, steps as cards, branches drawn as arrows, a nested condition builder, a reads/writes map, an approval-writes view, an Action-Type picker and the publish checks live while editing — the same definition format, in the desktop app, Team Workspace and the online demo. Repeating steps now work one item at a time — each line marked done separately with its own assignee — a stage with a skip or entry condition is skipped when the condition says so, a lane cannot start on a record that fails its start condition, and a record step posts only for the lines its skip filter leaves (WP-0710).',
    ['One active run per lane per record, with declared exclusions, so two lanes can never fight over the same record','A run keeps its version - publishing v2 never moves a v1 run','Every step compiles to exactly one graph node, so lanes share the runtime\'s durability, checkpointing, traces and audit instead of a second engine','Describe a process: the Admin Assistant drafts a lane from a plain description (WP-0715) - always a draft, never published, validated against the schema before it is stored'],
-   ['The visual lane builder (WP-0718) is the other visible half: stages as chevrons, steps as cards, branches drawn as arrows, a nested condition builder, a reads/writes map, an approval-writes view, an Action-Type picker and the publish checks live while editing — the same definition format, in the desktop app, Team Workspace and the online demo — now with run-data field editing, step and stage delete, an object picker, dry-run fixtures, a role picker and a replaces editor, plus per-item assignment, skip filters and resolve-from-latest-record on the schema (Q-33/Q-34/Q-35, accepted 2026-11-15)','A record step posts through Action Types defined on its object; a lane that names an Action Type the workspace has not defined is refused at run time, and per-item writes in a repeating step wait for WP-0710'],
+   ['The visual lane builder (WP-0718) is the other visible half: stages as chevrons, steps as cards, branches drawn as arrows, a nested condition builder, a reads/writes map, an approval-writes view, an Action-Type picker and the publish checks live while editing — the same definition format, in the desktop app, Team Workspace and the online demo — now with run-data field editing, step and stage delete, an object picker, dry-run fixtures, a role picker and a replaces editor, plus per-item assignment, skip filters and resolve-from-latest-record on the schema (Q-33/Q-34/Q-35, accepted 2026-11-15) — and the runner honors per-item assignment and skip filters since WP-0710','A record step posts through Action Types defined on its object; a lane that names an Action Type the workspace has not defined is refused at run time'],
    'Next: approvals and branches inside the runner (WP-0720 - today a run that reaches one shows "continue in the approvals inbox").',
    [['Process Lanes help','/help/process-lanes']]],
   ['AI Agent Platform v2: sandboxed browser/code tools, channel adapters &amp; an Agent Optimizer','hold',
@@ -28161,7 +28500,8 @@ function bindRoadmapSearch(){
 }
 function releasesPage(){document.title='Releases — Lanesra OS';
  setPageMeta('The full Lanesra OS changelog - every shipped release across the desktop app, the online demo and this website, compiled directly from the working codebase. See also the desktop-only installer tags on GitHub, cut less often than this list.');
- const releases=[['v0.99.10','November 2026','Process Lanes: the builder closes its gaps',['The visual lane builder now covers the pieces the first version left out (desktop app, Team Workspace and the online demo). Run-data fields are declared in the builder — key, type, required — beside the plumbing table, so a field a step reads is no longer a publish refusal with no remedy; steps and stages delete with a confirm; a new lane picks its object from the workspace\'s objects, and a lane with no object cannot publish; a step\'s role is picked from the workspace\'s roles, and a write\'s inputs are filled in in the builder. The dry run takes fixture values — the values a person would type, and the anchor record picked from the lane\'s real records — so a warehouse lane can dry-run from the builder, and its error copy names the step and the fix instead of saying the dry run is not available yet.','Three schema additions the owner accepted 2026-11-15 are authored in the builder: a repeating step\'s per-item assignment (<code>repeat_over.assign</code>) and skip filter (<code>skip_when</code>), and a form field\'s <code>resolve</code> from the latest record — the Count lane\'s per-item counters and zero-variance skip, the Replenish lane\'s supplier from the product\'s most recent purchase order. The runner honors <code>assign</code> and <code>skip_when</code> once WP-0710 lands, and runtime support for <code>resolve</code> is a follow-up; the builder says so where each field appears. See <a href="/help/process-lanes">Process Lanes</a>.']],
+ const releases=[['v0.99.11','November 2026','Process Lanes: per-item work, stage conditions and start conditions',['The online demo runner now works a repeating step one item at a time. On the warehouse Count lane each count line is marked done separately, shows who it is assigned to (per-item assignment from the line\'s own <code>counted_by</code> field), and the step completes only when every line that is not skipped is done. A stage with a skip or entry condition is skipped when the condition says so — the Post adjustments stage is skipped outright on a count with no variance, and the audit trail says why — and a lane cannot start on a record that fails its start condition, with the record page saying so in plain words. Record steps skip the lines their skip filter names, so the Count lane posts adjustments only for the lines with a variance. The engine side (WP-0710 AC-1..3) shipped in the desktop app and Team Workspace first; this release is the demo layer. See <a href="/help/process-lanes">Process Lanes</a>.']],
+  ['v0.99.10','November 2026','Process Lanes: the builder closes its gaps',['The visual lane builder now covers the pieces the first version left out (desktop app, Team Workspace and the online demo). Run-data fields are declared in the builder — key, type, required — beside the plumbing table, so a field a step reads is no longer a publish refusal with no remedy; steps and stages delete with a confirm; a new lane picks its object from the workspace\'s objects, and a lane with no object cannot publish; a step\'s role is picked from the workspace\'s roles, and a write\'s inputs are filled in in the builder. The dry run takes fixture values — the values a person would type, and the anchor record picked from the lane\'s real records — so a warehouse lane can dry-run from the builder, and its error copy names the step and the fix instead of saying the dry run is not available yet.','Three schema additions the owner accepted 2026-11-15 are authored in the builder: a repeating step\'s per-item assignment (<code>repeat_over.assign</code>) and skip filter (<code>skip_when</code>), and a form field\'s <code>resolve</code> from the latest record — the Count lane\'s per-item counters and zero-variance skip, the Replenish lane\'s supplier from the product\'s most recent purchase order. The runner honors <code>assign</code> and <code>skip_when</code> once WP-0710 lands, and runtime support for <code>resolve</code> is a follow-up; the builder says so where each field appears. See <a href="/help/process-lanes">Process Lanes</a>.']],
  ['v0.99.9','November 2026','Process Lanes: visual lane builder',['A Process Lane can now be authored on a <b>visual canvas</b> instead of written as data (work package WP-0718) in the desktop app and Team Workspace, and on the online demo. Stages are <b>chevrons</b> and steps are <b>cards</b> showing kind, name, role and writes in one line, reordered by drag; <b>branches are arrows</b> drawn from a check or approval step to its target step or end marker, labelled pass / fail or approve / reject, and every outcome needs its arrow — an empty slot is a visible gap and a publish failure. A lane built in the builder is the <b>same definition</b> as one written as data, so a built lane and a written lane are the same lane.','The builder shows the hard parts while editing: a <b>condition builder</b> for nested any/all groups whose references link to the step that sets them; a <b>reads/writes map</b> of which run-data fields each step reads and writes, and an <b>approval-writes view</b> showing what posts on approve and where the run goes on reject; an <b>Action-Type picker</b> from the adopted catalog (a provisional type is marked and can never publish); and the <b>publish checks live</b> — every check shown with its step and named reason, publish disabled until every REFUSE check passes. A live preview runs the dry run against the seed record from inside the builder, and the builder is <b>keyboard operable</b>. Each warehouse lane gets its own surface: the damage check, the count\'s expected-vs-counted table, and the draft-order preview before it is created. See <a href="/help/process-lanes">Process Lanes</a>.']],
   ['v0.99.8','November 2026','Process Lanes: child lanes',['A Process Lane step can now start <b>another lane</b> on a related record and wait for it (work package WP-0716) in the desktop app and Team Workspace, and on the online demo. Put a <b>child lane</b> on a step — the lane to run and the related record it runs on — and when the run reaches the step it starts that lane and parks, showing <b>waiting on &lt;lane&gt; — &lt;stage&gt;</b> until the child finishes; then the parent records the child\'s outcome and carries on. A child that finishes at once never makes the parent wait.','Child lanes nest up to <b>three levels deep</b>: a run already three deep is refused with a readable reason — the limit and the chain of lanes — so a cycle can never run away. <b>Cancelling</b> a parent that waits on a child asks whether to cancel the child too or keep it running; a cancelled child hands its parent the outcome <b>cancelled</b> and the parent moves on. See <a href="/help/process-lanes">Process Lanes</a>.']],
   ['v0.99.7','November 2026','Process Lanes: dry run and publish checks',['A Process Lane can now be proved safe before it publishes (work package WP-0714) in the desktop app and Team Workspace, and on the online demo. A <b>dry run</b> walks the lane against a seed record with the fixture values a person would type and writes nothing — it reports every step executed or skipped, every check passed, failed or <b>unevaluated (needs fixture)</b>, the branches taken, every write it would post with its resolved inputs, and the outcome it would end with against the expected outcome. A line that would post a zero-quantity write is flagged — <b>would skip &lt;n&gt; children with nothing to post</b> — instead of posting it.','Before a lane publishes it must pass its <b>publish checks</b> (P-01..P-16), listed on the lane\'s blueprint page with a named reason per failure: definition shape and roles, branches that resolve and have a way out, every check declaring both outcomes, references that name declared fields, replaced workflows that exist, and Action Types that are adopted rather than provisional. A refusal blocks publish and the report lists every refusal at once; a warning does not. On the demo the five warehouse lanes cannot publish yet — every warehouse Action Type is provisional, so P-12 refuses each one by name — and the blueprint page says so instead of hiding it. See <a href="/help/process-lanes">Process Lanes</a>.']],
@@ -29107,8 +29447,8 @@ docker exec lanesra cat /data/setup-token</code></pre><p>Paste that token into t
    blurb:'A guided, step-by-step process for one record — stages, steps and a runner screen that walks a person through the work, posting real writes at each step. Previewed on the warehouse demo with the Receive Shipment lane.',
    topics:[
     {slug:'process-lanes',title:'Process Lanes: a guided run for one record',
-     summary:'What a lane is, the runner screen that walks it, how to set one up step by step, the visual lane builder that authors one on a canvas, the dry run and publish checks that prove a lane is safe to publish, how to walk the Receive Shipment lane on the warehouse demo, where a lane starts, and what it writes — plus what is still coming.',
-     wps:'WP-0702, WP-0703, WP-0704, WP-0705, WP-0706, WP-0707, WP-0712, WP-0714, WP-0715, WP-0716, WP-0718',
+     summary:'What a lane is, the runner screen that walks it, how to set one up step by step, the visual lane builder that authors one on a canvas, the dry run and publish checks that prove a lane is safe to publish, how to walk the Receive Shipment and Count lanes on the warehouse demo, how a repeating step is worked one item at a time, how a stage can be skipped and a lane refused on its own conditions, where a lane starts, and what it writes — plus what is still coming.',
+     wps:'WP-0702, WP-0703, WP-0704, WP-0705, WP-0706, WP-0707, WP-0710, WP-0712, WP-0714, WP-0715, WP-0716, WP-0718',
      sections:[
       {heading:'What a Process Lane is',bodyHtml:`<p>A <b>Process Lane</b> is a definition for one kind of work on one record: a set of <b>stages</b>, each holding <b>steps</b> in order. A <b>run</b> is one live execution of that definition for one record — the <b>anchor record</b> — and the <b>runner</b> is the one screen that walks a person through it: a stage bar across the top, the current stage's steps on the left, the current step's work in the middle, the anchor record and everything the run has written on the right, and an audit trail underneath. One lane has at most one active run per record; starting again on the same record reopens the run where it left off.</p><p>There are five kinds of step. A <b>form</b> step asks a person to enter values (a date, a quantity, a bin). A <b>record</b> step posts a governed write — a stock move, a status change — through the same Action Types a direct edit uses. A <b>check</b> step runs a rule on its own and follows the branch its result names. An <b>approval</b> step waits for a person to approve or reject. An <b>agent</b> step lets a named AI agent propose values or act, within that agent's own scope. A step that is not done yet is locked until the lane reaches it; a finished step can be reviewed with Back without changing the run.</p>`},
       {heading:'The runner screen',bodyHtml:`<p>The <b>runner</b> is the one screen a person works on (desktop app and Team Workspace, WP-0707): a <b>stage bar</b> across the top showing every stage — done stages ticked, the current one highlighted — the <b>step list</b> for the current stage on the left, the <b>current step's work</b> in the middle, and on the right a summary of the <b>anchor record</b> and of <b>what this run has written</b>, with the <b>audit trail</b> underneath. Every step shows its kind (form, record, check, approval, agent) and the role it waits on. A run is labelled by its record, lane and stage — for example "PO-2026-001 · Receive Shipment · stage 2 of 5" — so it is always clear where the run is.</p><p>Work the steps in order: fill in a form step and click <b>Complete step</b>; a record step names the writes it will post and completes with <b>Post and complete step</b>; a check step runs on its own and shows whether it passed or failed and why. <b>Back</b> reviews a finished step without changing the run, and <b>Back to current step</b> returns to the work in hand. An optional step can be skipped with a recorded reason. On a phone the same parts stack in the same order.</p><p>In this first cut a run that reaches an <b>approval</b> step — or a branch the runner does not draw yet — shows a plain <b>"continue in the approvals inbox"</b> state instead of the step's work: approvals are decided in the inbox, and the full approval and branch screens follow in the next work package. A run's history lives on its record too: <b>Object 360</b> lists every run on the record with its lane, stage, step and status, and each run's audit trail lists every advance and every write with who did it and when.</p>`},
@@ -29116,16 +29456,18 @@ docker exec lanesra cat /data/setup-token</code></pre><p>Paste that token into t
       {heading:'Dry run and publish checks',bodyHtml:`<p>Before a lane publishes, prove it on sample data. Both live on the lane's <b>blueprint page</b> — open any lane's blueprint from the warehouse demo dashboard or from a draft — never in the draft panel, which drafts and never publishes.</p><p><b>Dry run.</b> A dry run walks the lane against a <b>seed record</b> (PO-2026-001 for Receive Shipment, CC-2026-001 for Count) with the <b>fixture values</b> a person would type — carrier, delivery-note number, quantities per line — and shows the whole path: the start condition, each stage and step executed or skipped (and why), each check passed, failed or <b>unevaluated (needs fixture)</b> when a fixture it depends on was not supplied, the branches taken, every write it would post with its resolved inputs per line, and the outcome it would end with, compared with the <b>expected outcome</b> you name. It <b>writes nothing</b>: no StockMove, no status change, no run is started, and the seed record is unchanged. A line that would post a zero-quantity write is flagged — <b>would skip &lt;n&gt; children with nothing to post</b> — instead of posting it: the Count lane's two zero-variance lines on CC-2026-001 are the example. At an approval step the dry run takes the manager decision you pick (approve or reject) and follows that branch. A lane whose start condition is not met on the record reports <b>would refuse to start</b> instead of walking: every seeded reorder rule has <i>triggered: false</i>, so a Replenish dry run refuses to start.</p><p><b>Publish checks (P-01..P-16).</b> The blueprint page lists every check with its step, its status and its named reason. P-01..P-08 are the definition's shape (id, stages, roles, branches, writes, conditions, run-data fields); P-09 requires every check to declare both a pass and a fail outcome, every approval both approve and reject, every branch a way out, and every step a path to the end; P-10 warns when a check is not the last step of its stage, because the runner takes the next step in definition order on pass; P-11 refuses a reference to a run-data, record or child field that is not declared; P-12 refuses a provisional Action Type; P-13 refuses a <i>replaces</i> entry that names no real workflow action; P-14 warns when a run-data field is used as a type it is not; P-15 applies the reference rule to the start condition; P-16 requires a draft version to publish. A warning never blocks publish; a refusal does, and the report lists every refusal at once so they can all be fixed together.</p><p><b>The five warehouse lanes cannot publish yet.</b> The demo has no adopted Action Type catalog, so every warehouse Action Type is provisional and P-12 refuses each one by name. That is the correct outcome, shown on the blueprint page rather than hidden: the lanes run and dry-run on the demo, and they publish once their Action Types are adopted.</p><p><b>Where it lives.</b> The dry run and publish checks are on the blueprint page in the desktop app, Team Workspace and the online demo. The desktop and Team Workspace check against the workspace's own adopted Action Types and workflows; the demo checks against its own seed data and has no adopted catalog, so P-12 refuses there until the catalog exists.</p>`},
       {heading:'Try it: the Receive Shipment lane',bodyHtml:`<p>The warehouse demo ships one lane, <b>Receive Shipment</b>, for purchase orders. To walk it: open the <a href="/demo/warehouse">warehouse demo</a>, and on the dashboard card <b>Receiving — due today</b> click <b>Start receiving lane</b> on <b>PO-2026-001</b> (Kiln &amp; Clay Co., 40 × HG-1001 and 30 × HG-1002).</p><ol><li><b>Stage 1, Verify:</b> confirm the arrival (the received date must match the order's expected date — the lane blocks the step and says why if it does not), then match the delivery note line by line. The Receiving Agent suggests each line's quantity; confirm or change it.</li><li><b>Stage 2, Record receipt:</b> enter the received and rejected quantity for each line. Entering more received plus rejected than ordered blocks the step with the reason shown and writes nothing. The lane then checks the lines itself: fully received with nothing rejected passes; anything short or rejected fails and sends the run to the manager.</li><li><b>Stage 3, Stage &amp; put away:</b> pick a staging bin, post the receipt moves, confirm each line's put-away bin (the product's preferred bin is suggested), then post the put-away moves.</li><li><b>Stage 4, Confirm:</b> review the summary, then close the order. The lane sets the order to RECEIVED and notifies the Warehouse Manager.</li></ol><p>End state for PO-2026-001: status RECEIVED, stock on hand 88 for HG-1001 and 52 for HG-1002, and four new stock moves (two RECEIPT, two PUTAWAY). Every step's write is listed on the runner under <b>What this run has written</b>.</p>`},
       {heading:'The discrepancy branch — PO-2026-005',bodyHtml:`<p>The demo seeds a second run, already waiting for the manager: <b>PO-2026-005</b> arrived with 18 of 30 units received and 2 rejected as damaged, so the check step failed and the run is parked at the <b>review-discrepancy</b> step. Open it from the purchase order's own record page (<b>Open lane run</b>) or decide it from the dashboard's Approvals card.</p><p><b>Approving</b> posts the guarded write — the order stays PARTIALLY_RECEIVED — and the run continues to put-away. Only the put-away move posts for this order: the receipt move for the 18 good units (MV-2026-015) already posted before the run reached the manager. <b>Rejecting</b> posts nothing and moves the run to the hold step, which ends the run with the outcome <b>held</b>. A held run writes nothing further; the way out is a new run once the supplier or the manager resolves the discrepancy.</p>`},
+      {heading:'Try it: the Count lane',bodyHtml:`<p>The <b>Count lane</b> is the worked example for per-item work and stage conditions (WP-0710). Start it from the dashboard's <b>Cycle count in progress</b> card, or from a cycle count's own record page — the lane runs on <b>CC-2026-001</b>, the count in progress, and on <b>CC-2026-011</b>, a count with no variance at all.</p><p><b>Stage 1, Count the lines:</b> five lines, each assigned to Emily Zhao — the per-item assignment comes from the line's own <code>counted_by</code> field. Each line is marked done on its own, with its counted quantity already filled in; the step completes only when every line that is not skipped is done, and a line you have finished stays visible with its values. <b>Stage 2, Review the variances:</b> the check passes only when every line's variance is zero. CC-2026-001 has variances, so the check fails and the run waits for the manager in <b>Stage 3, Hold review</b> — approving sets the count to APPROVED and the run moves on. <b>Stage 4, Post adjustments:</b> the record step posts an adjustment only for the three lines with a variance; the two zero-variance lines are skipped and the audit trail says so. <b>Stage 5, Close the count</b> finishes the run.</p><p>Run the same lane on <b>CC-2026-011</b> and the shape changes: both lines counted exactly what was expected, the check passes, and <b>Post adjustments is skipped outright</b> — the stage bar marks it skipped and the audit trail records <code>stage skipped ($record.status equals \"COUNTING\")</code> — because nothing was approved and there is nothing to post. The run closes straight away.</p><p>Try the refusal, too: open <b>CC-2026-002</b>, a count that is already APPROVED, and the Count card on its record page says plainly, <i>This lane cannot start on CC-2026-002. Its start condition is not met: $record.status equals \"COUNTING\" — this record is APPROVED.</i></p>`},
       {heading:'Where to find a lane',bodyHtml:`<p>In the desktop app and Team Workspace, a lane starts from the record itself: open the record and click <b>Start lane run</b> in its header — or start from the record's row in its list. When a run is already active on that record the button reads <b>Open lane run</b> instead. In the warehouse demo a lane is reachable from four places: the dashboard's <b>Receiving — due today</b> card, the purchase order's record page (<b>Start receiving lane</b> or <b>Open lane run</b>), the Receiving Agent's row under <b>Admin → AI Agent Foundry → AI Agents</b> (<b>Receive Shipment lane</b>), and the record's <b>Object 360</b> view, which lists the run's stage, step, status and audit trail. A run can be <b>paused</b> and resumed at the same step; pausing changes nothing that is already written.</p>`},
       {heading:'What a lane writes — and what it never does',bodyHtml:`<p>Every write a lane makes is real: a stock move is a stock move, a status change is a status change, and the order, stock and move records show it. Each step's writes post all-or-nothing, and never repeat — a move that already posted is not posted again, so retrying a step or double-clicking cannot duplicate it. Workflows still fire on a lane's writes, except for the exact actions a step declares it replaces: closing PO-2026-001 does not create the duplicate put-away task the ordinary RECEIVED workflow would, because the lane's own put-away steps already do that work. Every advance and every write is audited with who did it and when, and <b>Reset demo</b> restores the seed — runs are cleared and the lane definition stays.</p>`},
       {heading:'The blueprint view: read a lane before running it',bodyHtml:`<p>Every lane has a read-only <b>blueprint</b> page - <b>Process Lanes</b> in the sidebar, and <b>View blueprint</b> on the warehouse demo's dashboard - showing the lane's purpose, its stages as chevrons with each step's kind, role and writes, the run-data fields it collects, and the record fields its steps map to, including every branch and where each outcome goes. The same page in the desktop app, Team Workspace and the online demo shows the same lane, from the same definition.</p><p>The blueprint carries the definition only: no run, no record values, so anyone who may run the lane can read it - a Viewer reads exactly what an Administrator reads. <b>Print / Save as PDF</b> prints that same page through the browser's print dialog, so the export is the view, not a second rendering of it.</p>`},
      {heading:'Describe a process: the assistant drafts a lane',bodyHtml:`<p>An Administrator can describe a process in plain words - <i>receive a purchase order at the Toronto warehouse, verify the delivery, record what arrived, stage the goods and confirm the order</i> - and the <b>Admin Assistant drafts a lane</b> from it: ordered stages, the steps in each stage, and the data fields the steps collect. The draft is produced by the workspace's own model through a versioned catalog prompt, and it is validated against the lane schema before it is stored - a draft that fails validation is refused and nothing is stored.</p><p>The result is <b>always a draft</b>, version 1, and the assistant <b>cannot publish a lane</b>: there is no publish path in the draft operation at all, and a model reply that claims otherwise is stored as a draft anyway. Publishing stays a separate action by a person, from the blueprint view or the lane commands.</p><p>A draft is deliberately narrow: <b>form steps</b> for work a person does, and <b>check steps</b> only where the description states something to verify. Record and approval steps need governed writes that do not exist yet, and agent steps need a named agent, so a person adds those kinds when refining the draft - in the blueprint view (WP-0712), which is where a drafted lane opens for review.</p><p>The online demo shows the same behaviour on the warehouse sample data: describe the receiving process in the <b>Process Lanes</b> panel on the warehouse dashboard and a draft appears there, always a draft, never published. The demo drafts deterministically from your words - it has no live model call - while the desktop and Team Workspace editions call the workspace's own model through the same service.</p>`},
      {heading:'How a person does a step',bodyHtml:`<p>When a run reaches a <b>form step</b>, it waits for a person — the run sits in <b>waiting for a person</b> and holds nothing open in the background, so it survives closing the app and comes back to the same step. The step is assigned to a <b>role</b>: whoever holds that role fills in the step's fields and completes it; anyone else sees the step and <b>who it is waiting on</b> but cannot complete it, and a field they are not allowed to read is not shown to them.</p><p>What a person enters is kept, not lost. Each field is stored where the step says — as part of the run's own <b>run data</b>, or written straight onto the record. A <b>required</b> field must be filled, and a step can carry a check (for example "the received date must be the expected date") that has to pass before the run moves on; until it does, the step stays put and explains why, and nothing is written. The time a step spent waiting for its person is recorded, so a run's history shows how long each step took. <em>(Desktop and Team Workspace, WP-0704. The online demo already walks the same steps on sample data.)</em></p>`},
      {heading:'What record and check steps do',bodyHtml:`<p>Not every step waits for a person. A <b>record step</b> posts real writes to the record — a status change, a field update — and a <b>check step</b> decides which way the run goes next. You set them up in the lane definition: a record step lists its <b>writes</b>, each naming an <b>Action Type</b> on the lane's object (the same named, governed writes a button or a workflow uses) and the values to pass it; a check step carries a condition and a message.</p><p>A record step's writes are <b>real and safe</b> (desktop and Team Workspace, WP-0705). Every write goes through the same checked path a direct edit uses, so <b>Business Rules and access still apply</b> — a rule that would block the save blocks the step and shows its message, and nothing is written. A step's writes are <b>all-or-nothing</b>: if one fails part-way, none of them are kept. And they <b>never repeat</b> — retrying a step, or resuming a run after the app closed mid-step, applies each write exactly once, so a record is never double-posted.</p><p>A <b>check step</b> runs its condition and takes the <b>pass</b> or <b>fail</b> branch the lane declares; when it fails, the run shows the check's <b>reason</b> so it is clear why it stopped or branched. Steps are <b>required</b> by default and must be completed; an <b>optional</b> step can be <b>skipped</b>, and the skip records who did it, when and why.</p>`},
+     {heading:'Per-item work, stage conditions and start conditions',bodyHtml:`<p>A repeating step is worked <b>one item at a time</b>. The runner shows one entry per child record — each line of a count, each line of a purchase order — and each entry is completed on its own, with a <b>Mark done</b> button beside it. A step completes only when every entry that is not skipped is done; entries already finished stay visible with the values entered, so the work so far is never lost. Two people can complete different items of the same step at the same time without overwriting each other — the engine enforces that, in the desktop app and Team Workspace as well as the demo.</p><p>Each item can have its own assignee. <code>repeat_over.assign</code> names a child field holding the assignee — the Count lane reads each line's <code>counted_by</code> — or a role, and the runner shows who each line is assigned to. A step can also name a <b>skip filter</b> (<code>skip_when</code>): items matching it are skipped and shown as skipped, never posted. The Count lane skips zero-variance lines when it posts adjustments, so only the lines with a real variance move stock.</p><p>A stage can carry an <b>entry condition</b> or a <b>skip condition</b>. When a run reaches such a stage, the condition is read against the live record: a stage whose skip condition holds is skipped, and a stage whose entry condition does not hold is skipped — either way the stage bar marks it skipped and the audit trail records the stage and the condition that decided it. The Count lane's Post adjustments stage is skipped while the count is still COUNTING, which is exactly the no-variance path: nothing was approved, so there is nothing to post.</p><p>A lane can also carry a <b>start condition</b> on the record it runs on. A lane cannot start on a record that fails it, and the refusal is not a bare error: the record page says which lane, what the condition is, and what the record actually is — <i>This lane cannot start on CC-2026-002. Its start condition is not met: $record.status equals \"COUNTING\" — this record is APPROVED.</i></p>`},
      {heading:'Approvals, branches, handoff and cancel',bodyHtml:`<p>Not every lane is a straight line (desktop and Team Workspace, WP-0706). An <b>approval step</b> waits in the <b>approvals inbox</b>: a person approves or rejects it, and the run follows the <b>branch</b> the lane declares for that outcome — one way on approval, another on rejection (a hold step, a recount, a return to an earlier stage). You declare each branch in the lane with a target step or an end; a lane whose <b>hold or rejection branch has no way out</b> — a path that never reaches the end — <b>cannot be published</b>, and the error names the step so you can fix it.</p><p>A waiting step can be <b>handed off</b> to a different role: whoever holds the new role can then act and the previous role no longer can, the run keeps waiting on the same step, and the handoff is recorded (who, from which role, to which, and why). A run can be <b>cancelled</b> at any point; anything it already wrote stays in place — a cancel never undoes a posted write — and the cancellation is recorded in the audit trail alongside what was posted. Only <b>one run of a lane is active on a record at a time</b>: starting again returns you to the open run, and a lane can declare that it <b>excludes</b> another so the two never run on the same record at once.</p>`},
      {heading:'Child lanes: hand part of the job to another lane',bodyHtml:`<p>A step can hand part of the job to <b>another lane</b> and wait for it (desktop, Team Workspace and the online demo, WP-0716). You set this up with a <b>child lane</b> on a step: name the lane to run and the <b>related record</b> it runs on (a field on this run's record — for example the supplier on a purchase order). When the run reaches the step, it starts that lane on the related record and <b>waits</b>: the runner shows <b>waiting on &lt;lane&gt; — &lt;stage&gt;</b> so you can see where the child has reached. When the child finishes — completed, held, failed or cancelled — the parent records the outcome and carries on past the step. A child that finishes at once never makes the parent wait.</p><p>Child lanes can nest up to <b>three levels deep</b>; a run already three deep cannot start another child, and the step says so with a readable reason (the limit and the chain of lanes) instead of looping forever. <b>Cancelling</b> a parent that is waiting on a child asks whether to <b>cancel the child too</b> or <b>keep it running</b>: cancel and both stop; keep and the child finishes on its own, with nothing to hand back to the cancelled parent. A cancelled child hands its parent the outcome <b>cancelled</b> and the parent moves on.</p>`},
-     {heading:'Visual lane builder',bodyHtml:`<p>Since WP-0718 a lane is authored on a <b>visual canvas</b> instead of written as JSON (desktop app, Team Workspace and the online demo). <b>Stages are chevrons</b> and <b>steps are cards</b> inside them, showing kind, name, role and writes in one line, with the order number on each card; stages and steps reorder by drag. <b>Branches are arrows</b> drawn from a check or approval step to the target step — or to an end marker labelled with its outcome — so you see where each arrow lands instead of holding stage order in your head. A lane built in the builder is the <b>same definition</b> as one written as data: there is no builder-only format, and a built lane round-trips to the same data.</p><p><b>Set one up, step by step.</b></p><ol><li><b>Open the builder.</b> From a lane's <b>blueprint page</b> — <b>Process Lanes</b> in the sidebar — edit the draft on its canvas; on the warehouse demo the same builder works on the sample lanes. A draft stays a draft until a person publishes it.</li><li><b>Lay out stages and steps.</b> Add a stage chevron, add step cards, drag them into order. Each step's panel sets its kind (form, record, check, approval, agent), the role that does it — and, for a record step, the writes it posts; for a check step, the condition and its pass and fail branches.</li><li><b>Draw the branches.</b> Drag an arrow from a check step (pass / fail) or an approval step (approve / reject) to its target step or end marker. Every outcome needs its arrow: an empty slot is a visible gap on the canvas and the lane cannot publish. A check that is not the last step of its stage shows a warning naming the step that would run on pass, with a one-click fix to move the check to the end of the stage.</li><li><b>Build conditions without JSON.</b> The condition builder nests any/all groups as indented rows — field / operator / value, with the operators from the schema — and each <code>$run_data</code> reference is a chip that jumps to the step that sets it. A reference no step sets is flagged at once.</li><li><b>Check the plumbing.</b> Each step card shows what it reads and what it writes, and the lane-level table shows every run-data field against every step — read, write, or both — so the flag a check depends on and the approval that sets it are visibly connected. A reference to a field the lane does not declare cannot be entered.</li><li><b>Pick writes from the catalog.</b> The Action-Type picker offers the adopted Action Types with their inputs, filled from the field picker (<code>$record</code>, <code>$run_data</code>, <code>$item</code>, literals); each input shows the value it will carry for the seed record. A provisional type is shown struck-through and the lane cannot publish until the catalog adopts it. An approval step's panel shows its writes and what happens on each branch — approve posts them and the run continues here; reject goes here and they do not post.</li><li><b>Watch the publish checks live, then publish.</b> Every check (P-01..P-16) is listed with its step and named reason as you edit, and the failing step's card is marked. Publish stays disabled until every REFUSE check passes — warnings do not block — and the button names the first failing check. Preview first: the dry run walks the lane against the seed record from inside the builder, showing the stages visited, checks passed or failed, and the writes it would post. Publish from the blueprint page; a run keeps the version it started with.</li></ol><p><b>One surface per lane.</b> Receive Shipment's live preview runs against PO-2026-001 with its two lines, so you see the quantities the steps will post. Pick &amp; Pack gets the damage check's condition builder, the reads/writes map for the <code>damage_approved</code> flag, and a "what does this step post?" preview of the StockMoves per line. Count gets a per-line table — expected vs counted vs variance, with the variance highlighted — and its approval shows the whole count's variances at once, with a warning when a repeating record step has no filter. Replenish lets you pick a related record (the supplier) from the product instead of typing an id, previews the draft purchase order — supplier, product, quantity, total — before it is created, and says plainly what happens on reject: the draft stays DRAFT, nothing is submitted.</p><p><b>Keyboard.</b> Every canvas action — select a step, move it, draw an arrow, open a step panel — has a keyboard equivalent; the canvas is not a pointer-only surface.</p>`},
-     {heading:'Builder additions: fields, delete, fixtures and the new schema fields',bodyHtml:`<p>The builder gained the pieces the first version left out (desktop app, Team Workspace and the online demo). <b>Run-data fields</b> are now declared in the builder itself: beside the plumbing table, add a field with its key, type and whether it is required — a field a step reads must be declared there first, or the publish check refuses it. <b>Steps and stages can be deleted</b>, with a confirm; deleting a stage deletes its steps. Deleting a step also removes the branches that pointed at it, and the builder says how many went. A <b>new lane picks its object</b> from the workspace's objects instead of starting with none — and a lane with no object cannot publish. A step's <b>role is picked</b> from the workspace's roles, not typed freehand; a role that does not exist is refused with a named reason. A record or approval step's <b>write inputs are filled in</b> in the builder (name and value, editable), and a step's <b>replaces</b> entry — the workflow and action index it replaces — can be added and edited, so the workflow wiring is done in the builder instead of by hand-editing the definition.</p><p><b>Dry-run fixtures</b> are filled in before the dry run: the values a person would type for each required run-data field, and the anchor record picked from the lane's real records — so a warehouse lane can dry-run, and a check no longer reports 'unevaluated (needs fixture)' with no way to supply the value. The dry run's error copy now says what is wrong and where to fix it, instead of saying the dry run is not available yet. A branch can no longer point at its own step: the step itself is left out of the branch-target lists, and a branch that would loop back on its own step is refused.</p><p><b>Three new schema fields</b> (accepted by the owner 2026-11-15) are authored in the builder. On a repeating step, <code>repeat_over.assign</code> names a different assignee per item — a child field holding the assignee, or the step's role — and <code>skip_when</code> states which children to skip, for example the Count lane's zero-variance lines. On a form field, <code>resolve</code> suggests a value from the latest record — the Replenish lane's supplier, taken from the product's most recent purchase order, which the manager confirms or overrides; on the demo the supplier select now lists suppliers, not reorder rules. Two honest limits: the runner honors <code>assign</code> and <code>skip_when</code> only once WP-0710 lands, and runtime support for <code>resolve</code> is a follow-up — the builder says so where each field appears. The Count lane's per-line quantities are now edited as dry-run fixtures for the count step — the table itself is a read-only preview of the seed record, and the fixture values feed the next dry run rather than changing the stored lane.</p>`},
+     {heading:'Visual lane builder',bodyHtml:`<p>Since WP-0718 a lane is authored on a <b>visual canvas</b> instead of written as JSON (desktop app, Team Workspace and the online demo). <b>Stages are chevrons</b> and <b>steps are cards</b> inside them, showing kind, name, role and writes in one line, with the order number on each card; stages and steps reorder by drag. <b>Branches are arrows</b> drawn from a check or approval step to the target step — or to an end marker labelled with its outcome — so you see where each arrow lands instead of holding stage order in your head. A lane built in the builder is the <b>same definition</b> as one written as data: there is no builder-only format, and a built lane round-trips to the same data.</p><p><b>Set one up, step by step.</b></p><ol><li><b>Open the builder.</b> From a lane's <b>blueprint page</b> — <b>Process Lanes</b> in the sidebar — edit the draft on its canvas; on the warehouse demo the same builder works on the sample lanes. A draft stays a draft until a person publishes it.</li><li><b>Lay out stages and steps.</b> Add a stage chevron, add step cards, drag them into order. Each step's panel sets its kind (form, record, check, approval, agent), the role that does it — and, for a record step, the writes it posts; for a check step, the condition and its pass and fail branches.</li><li><b>Draw the branches.</b> Drag an arrow from a check step (pass / fail) or an approval step (approve / reject) to its target step or end marker. Every outcome needs its arrow: an empty slot is a visible gap on the canvas and the lane cannot publish. A check that is not the last step of its stage shows a warning naming the step that would run on pass, with a one-click fix to move the check to the end of the stage.</li><li><b>Build conditions without JSON.</b> The condition builder nests any/all groups as indented rows — field / operator / value, with the operators from the schema — and each <code>$run_data</code> reference is a chip that jumps to the step that sets it. A reference no step sets is flagged at once.</li><li><b>Check the plumbing.</b> Each step card shows what it reads and what it writes, and the lane-level table shows every run-data field against every step — read, write, or both — so the flag a check depends on and the approval that sets it are visibly connected. A reference to a field the lane does not declare cannot be entered.</li><li><b>Pick writes from the catalog.</b> The Action-Type picker offers the adopted Action Types with their inputs, filled from the field picker (<code>$record</code>, <code>$run_data</code>, <code>$item</code>, literals); each input shows the value it will carry for the seed record. A provisional type is shown struck-through and the lane cannot publish until the catalog adopts it. An approval step's panel shows its writes and what happens on each branch — approve posts them and the run continues here; reject goes here and they do not post.</li><li><b>Watch the publish checks live, then publish.</b> Every check (P-01..P-16) is listed with its step and named reason as you edit, and the failing step's card is marked. Publish stays disabled until every REFUSE check passes — warnings do not block — and the button names the first failing check. Preview first: the dry run walks the lane against the seed record from inside the builder, showing the stages visited, checks passed or failed, and the writes it would post. Publish from the blueprint page; a run keeps the version it started with.</li></ol><p><b>One surface per lane.</b> Receive Shipment's live preview runs against PO-2026-001 with its two lines, so you see the quantities the steps will post. Pick &amp; Pack gets the damage check's condition builder, the reads/writes map for the <code>damage_approved</code> flag, and a "what does this step post?" preview of the StockMoves per line. Count gets a per-line table — expected vs counted vs variance, with the variance highlighted — and its approval shows the whole count's variances at once; its post step skips the zero-variance lines, so only real variances move stock, and a repeating record step without a filter still warns. Replenish lets you pick a related record (the supplier) from the product instead of typing an id, previews the draft purchase order — supplier, product, quantity, total — before it is created, and says plainly what happens on reject: the draft stays DRAFT, nothing is submitted.</p><p><b>Keyboard.</b> Every canvas action — select a step, move it, draw an arrow, open a step panel — has a keyboard equivalent; the canvas is not a pointer-only surface.</p>`},
+     {heading:'Builder additions: fields, delete, fixtures and the new schema fields',bodyHtml:`<p>The builder gained the pieces the first version left out (desktop app, Team Workspace and the online demo). <b>Run-data fields</b> are now declared in the builder itself: beside the plumbing table, add a field with its key, type and whether it is required — a field a step reads must be declared there first, or the publish check refuses it. <b>Steps and stages can be deleted</b>, with a confirm; deleting a stage deletes its steps. Deleting a step also removes the branches that pointed at it, and the builder says how many went. A <b>new lane picks its object</b> from the workspace's objects instead of starting with none — and a lane with no object cannot publish. A step's <b>role is picked</b> from the workspace's roles, not typed freehand; a role that does not exist is refused with a named reason. A record or approval step's <b>write inputs are filled in</b> in the builder (name and value, editable), and a step's <b>replaces</b> entry — the workflow and action index it replaces — can be added and edited, so the workflow wiring is done in the builder instead of by hand-editing the definition.</p><p><b>Dry-run fixtures</b> are filled in before the dry run: the values a person would type for each required run-data field, and the anchor record picked from the lane's real records — so a warehouse lane can dry-run, and a check no longer reports 'unevaluated (needs fixture)' with no way to supply the value. The dry run's error copy now says what is wrong and where to fix it, instead of saying the dry run is not available yet. A branch can no longer point at its own step: the step itself is left out of the branch-target lists, and a branch that would loop back on its own step is refused.</p><p><b>Three new schema fields</b> (accepted by the owner 2026-11-15) are authored in the builder. On a repeating step, <code>repeat_over.assign</code> names a different assignee per item — a child field holding the assignee, or the step's role — and <code>skip_when</code> states which children to skip, for example the Count lane's zero-variance lines. On a form field, <code>resolve</code> suggests a value from the latest record — the Replenish lane's supplier, taken from the product's most recent purchase order, which the manager confirms or overrides; on the demo the supplier select now lists suppliers, not reorder rules. One honest limit remains: runtime support for <code>resolve</code> is a follow-up — the builder says so where the field appears. The runner honors <code>assign</code> and <code>skip_when</code> since WP-0710. The Count lane's per-line quantities are now edited as dry-run fixtures for the count step — the table itself is a read-only preview of the seed record, and the fixture values feed the next dry run rather than changing the stored lane.</p>`},
     {heading:'What is still coming',bodyHtml:`<p>The runner screen now walks a run end to end in the desktop app and Team Workspace (WP-0707) — the stage bar, step list, current step's work, record and writes summaries, Back and Complete step — and the online demo's runner matches it part for part and word for word (the demo still decides approvals inline and still has Pause/Resume, which the desktop runner gains in the next work package). What is still coming: approval and branch screens inside the runner — today a run that reaches one shows "continue in the approvals inbox". The visual lane builder is covered in its own section above (WP-0718). The Receiving Agent's suggestions are prefilled values a person confirms or changes — the agent never completes a step on its own.</p>`},
      ]},
    ]},

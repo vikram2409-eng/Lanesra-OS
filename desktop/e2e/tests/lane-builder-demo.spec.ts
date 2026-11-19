@@ -235,7 +235,7 @@ test('AC-5: Pick & Pack shows the nested condition builder and the per-line Stoc
   await expect(perLane).toContainText('× 2');
 });
 
-test('AC-5: Count shows expected/counted/variance per line, the whole-count approval, and the no-filter warning', async ({ page }) => {
+test('AC-5: Count shows expected/counted/variance per line, the whole-count approval, and the skip filter', async ({ page }) => {
   await openBuilder(page, 'lane-wh-count');
   await expect(page.locator('.lb-step-card')).toHaveCount(7);
   const perLane = page.locator('#laneBuilderPerLane');
@@ -246,10 +246,10 @@ test('AC-5: Count shows expected/counted/variance per line, the whole-count appr
   await expect(perLane).toContainText('+1');
   // The approval sees the whole count at once, not one line at a time.
   await expect(perLane).toContainText('whole count');
-  // The repeating record step has no filter (Q-34 case): it posts for
-  // every line, including the zero-variance ones.
-  await expect(perLane).toContainText('has no filter');
-  await expect(perLane).toContainText('zero variance');
+  // The repeating record step ships with its skip filter (WP-0710): the
+  // zero-variance lines post nothing, so no no-filter warning shows.
+  await expect(perLane).toContainText('Skips lines where $item.variance equals 0');
+  await expect(perLane).not.toContainText('has no filter');
 });
 
 test('AC-5: Replenish previews the draft PO and states the reject behaviour', async ({ page }) => {
@@ -400,11 +400,18 @@ test('Covers: REQ-LANE-024 (WP-0718 AC-5): Count assignment and skip filter writ
   await expect(perLane.locator('table input')).toHaveCount(0);
   await expect(perLane).toContainText('Read-only preview');
   await expect(perLane).toContainText('dry-run fixtures');
-  // Assignment: a child field on the repeating form step.
+  // Assignment: the lane ships with a child-field assignment (WP-0710);
+  // the controls show it, and re-entering the same values writes through.
+  await expect(perLane.locator('[data-lb-count-assign-by]')).toHaveValue('child_field');
+  await expect(perLane.locator('[data-lb-count-assign-field]')).toHaveValue('counted_by');
   await perLane.locator('[data-lb-count-assign-by]').selectOption('child_field');
   await perLane.locator('[data-lb-count-assign-field]').fill('counted_by');
   await page.keyboard.press('Tab');
-  // Skip: zero-variance lines on the repeating record step.
+  // Skip: the lane ships with its zero-variance filter. Removing it brings
+  // back the no-filter warning; re-adding it restores the filter.
+  await expect(perLane).toContainText('Skips lines where $item.variance equals 0');
+  await page.click('[data-lb-count-skip-remove]');
+  await expect(perLane).toContainText('has no filter');
   await page.click('[data-lb-count-skip-add]');
   await perLane.locator('[data-lb-count-skip-field]').fill('$item.variance');
   await page.keyboard.press('Tab');

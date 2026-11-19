@@ -1,0 +1,44 @@
+[
+  {
+    "owner": "vikram2409-eng",
+    "repo": "Lanesra-OS",
+    "branch": "wp/WP-0710-demo-and-docs-r2",
+    "source_dir": "~/workspace/lanesra-build/wp0710-finish-r2",
+    "commit_sha": "9dbc5d08a8e851d879d62ea1002db48c3b8a9dc4",
+    "paths": [
+      "desktop/e2e/tests/lane-builder-demo.spec.ts"
+    ]
+  },
+  {
+    "owner": "vikram2409-eng",
+    "repo": "Lanesra-OS",
+    "branch": "wp/WP-0710-demo-and-docs-r2",
+    "source_dir": "~/workspace/lanesra-build/wp0710-finish-r2",
+    "commit_sha": "8e3e95626d6811759012801ae9308cdafe4e92f3",
+    "paths": [
+      "app.js",
+      "styles.css",
+      "llms.txt",
+      "llms-full.txt",
+      "program/STATUS.md",
+      "program/spec/schemas/examples/lane-wh-count.json",
+      "program/tools/test_lane_definition_in_demo.py",
+      "program/work/P7/WP-0710-repeat-over-child-records-and-stage-and-start-conditions.md",
+      "program/log/2026/11/18-muse-WP-0710-finish.md",
+      "desktop/e2e/tests/lane-wh-count.spec.ts",
+      "desktop/e2e/tests/lane-publish-dryrun.spec.ts",
+      "desktop/server/tests/process_lane_http.rs"
+    ]
+  },
+  {
+    "owner": "vikram2409-eng",
+    "repo": "Lanesra-OS",
+    "branch": "wp/WP-0710-demo-and-docs-r2",
+    "source_dir": "~/workspace/lanesra-build/wp0710-finish-r2",
+    "commit_sha": "d52935f796e268cc4401868fabb31d1d70ea1343",
+    "paths": [
+      "program/work/P7/WP-0710-repeat-over-child-records-and-stage-and-start-conditions.md",
+      "program/STATUS.md"
+    ]
+  }
+]
