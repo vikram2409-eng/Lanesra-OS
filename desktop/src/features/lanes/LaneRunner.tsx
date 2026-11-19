@@ -27,6 +27,9 @@ import { api } from "../../lib/api";
 import type {
   FormFieldView,
   LaneDefinition,
+  LaneRunAttachmentView,
+  LaneRunNoteView,
+  LaneRunReassignCandidateView,
   LaneRunView,
   LaneStep,
   LaneStepProgress,
@@ -261,6 +264,196 @@ function StepForm({
   );
 }
 
+/**
+ * WP-0711 (REQ-LANE-018): the actions available at any point of a run -
+ * add a note, attach a file, reassign the current step. Each is audited,
+ * and the audit trail card below the run shows them. The card sits under
+ * the current step's work, so it is reachable from every step.
+ */
+function AnytimeActions({
+  run,
+  onAddNote,
+  onAttachFile,
+  onReassign,
+  onDownloadAttachment,
+}: {
+  run: LaneRunView;
+  onAddNote?: (body: string) => void | Promise<void>;
+  onAttachFile?: (fileName: string, mimeType: string | undefined, contentBase64: string) => void | Promise<void>;
+  onReassign?: (toUserId: string, reason: string) => void | Promise<void>;
+  onDownloadAttachment?: (attachment: LaneRunAttachmentView) => void | Promise<void>;
+}) {
+  const [noteText, setNoteText] = useState("");
+  const [reassignTo, setReassignTo] = useState("");
+  const [reassignReason, setReassignReason] = useState("");
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  if (!onAddNote && !onAttachFile && !onReassign && !onDownloadAttachment) return null;
+  const candidates: LaneRunReassignCandidateView[] = run.reassign_candidates ?? [];
+  const isActive = run.status === "waiting_person";
+
+  async function addNote() {
+    const body = noteText.trim();
+    if (!body || !onAddNote) return;
+    setBusy(true);
+    try {
+      await onAddNote(body);
+      setNoteText("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function attachFile(file: File) {
+    if (!onAttachFile) return;
+    setFileError(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result ?? "");
+      const base64 = dataUrl.includes(",") ? dataUrl.split(",").slice(1).join(",") : "";
+      if (!base64) {
+        setFileError("Could not read that file.");
+        return;
+      }
+      void onAttachFile(file.name, file.type || undefined, base64);
+    };
+    reader.onerror = () => setFileError("Could not read that file.");
+    reader.readAsDataURL(file);
+  }
+
+  async function reassign() {
+    if (!reassignTo.trim() || !reassignReason.trim() || !onReassign) return;
+    setBusy(true);
+    try {
+      await onReassign(reassignTo, reassignReason.trim());
+      setReassignTo("");
+      setReassignReason("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="card" role="group" aria-label="Notes, attachments and reassign">
+      <h3 style={{ marginTop: 0 }}>Notes, attachments and reassign</h3>
+      <p style={{ color: "var(--text-muted)" }}>
+        Available at any point of this run. Every note, file and reassignment is written to the audit trail.
+      </p>
+      {onAddNote && (
+        <div style={{ marginBottom: 12 }}>
+          <label htmlFor="lane-note-text" style={{ display: "block", marginBottom: 4 }}>
+            Add a note
+          </label>
+          <textarea
+            id="lane-note-text"
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            rows={2}
+            style={{ width: "100%" }}
+            placeholder="A note for anyone working this run"
+          />
+          <button className="btn" type="button" onClick={() => void addNote()} disabled={busy || !noteText.trim()}>
+            Add note
+          </button>
+        </div>
+      )}
+      {onAttachFile && (
+        <div style={{ marginBottom: 12 }}>
+          <label htmlFor="lane-attach-file" style={{ display: "block", marginBottom: 4 }}>
+            Attach a file
+          </label>
+          <input
+            id="lane-attach-file"
+            type="file"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) attachFile(file);
+              e.target.value = "";
+            }}
+          />
+          {fileError && (
+            <p role="alert" style={{ color: "var(--danger, #b91c1c)" }}>
+              {fileError}
+            </p>
+          )}
+        </div>
+      )}
+      {onReassign && isActive && candidates.length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <label htmlFor="lane-reassign-to" style={{ display: "block", marginBottom: 4 }}>
+            Reassign this step
+          </label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <select id="lane-reassign-to" value={reassignTo} onChange={(e) => setReassignTo(e.target.value)}>
+              <option value="">Choose a person…</option>
+              {candidates.map((c) => (
+                <option key={c.user_id} value={c.user_id}>
+                  {c.display_name}
+                </option>
+              ))}
+            </select>
+            <input
+              aria-label="Reason for reassigning"
+              value={reassignReason}
+              onChange={(e) => setReassignReason(e.target.value)}
+              placeholder="Why is this step moving?"
+              style={{ flex: 1, minWidth: 180 }}
+            />
+            <button
+              className="btn"
+              type="button"
+              onClick={() => void reassign()}
+              disabled={busy || !reassignTo || !reassignReason.trim()}
+            >
+              Reassign
+            </button>
+          </div>
+          <p style={{ color: "var(--text-muted)", fontSize: 12 }}>
+            Only people who hold this step&apos;s role can take it. A later handoff clears the reassignment.
+          </p>
+        </div>
+      )}
+      {(run.notes ?? []).length > 0 && (
+        <div style={{ marginBottom: 12 }}>
+          <h4 style={{ marginBottom: 4 }}>Notes</h4>
+          <ul style={{ margin: 0, paddingLeft: 20 }}>
+            {(run.notes ?? []).map((n: LaneRunNoteView) => (
+              <li key={n.id}>
+                {n.body}{" "}
+                <span style={{ color: "var(--text-muted)" }}>
+                  — {n.author_display_name ?? "Someone"} · {new Date(n.created_at).toLocaleString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {(run.attachments ?? []).length > 0 && (
+        <div>
+          <h4 style={{ marginBottom: 4 }}>Attached files</h4>
+          <ul style={{ margin: 0, paddingLeft: 20 }}>
+            {(run.attachments ?? []).map((a: LaneRunAttachmentView) => (
+              <li key={a.id}>
+                {a.file_name}{" "}
+                <span style={{ color: "var(--text-muted)" }}>
+                  ({a.size_bytes != null ? `${Math.round(a.size_bytes / 1024)} KB` : "unknown size"} ·{" "}
+                  {new Date(a.created_at).toLocaleString()})
+                </span>{" "}
+                {onDownloadAttachment && (
+                  <button className="btn" type="button" onClick={() => void onDownloadAttachment(a)}>
+                    Download
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function LaneRunnerView({
   run,
   blueprint,
@@ -268,6 +461,10 @@ export function LaneRunnerView({
   recordSummary,
   onSubmit,
   onSkip,
+  onAddNote,
+  onAttachFile,
+  onReassign,
+  onDownloadAttachment,
   onClose,
 }: {
   run: LaneRunView;
@@ -276,6 +473,10 @@ export function LaneRunnerView({
   recordSummary?: RecordSummaryRow[];
   onSubmit: (values: Record<string, unknown>) => void | Promise<void>;
   onSkip?: (reason: string) => void | Promise<void>;
+  onAddNote?: (body: string) => void | Promise<void>;
+  onAttachFile?: (fileName: string, mimeType: string | undefined, contentBase64: string) => void | Promise<void>;
+  onReassign?: (toUserId: string, reason: string) => void | Promise<void>;
+  onDownloadAttachment?: (attachment: LaneRunAttachmentView) => void | Promise<void>;
   onClose?: () => void;
 }) {
   const stages = stagesFor(run, blueprint);
@@ -528,7 +729,16 @@ export function LaneRunnerView({
           </p>
         </div>
 
-        <div className="lane-runner-main">{workArea()}</div>
+        <div className="lane-runner-main">
+          {workArea()}
+          <AnytimeActions
+            run={run}
+            onAddNote={onAddNote}
+            onAttachFile={onAttachFile}
+            onReassign={onReassign}
+            onDownloadAttachment={onDownloadAttachment}
+          />
+        </div>
 
         <div className="lane-runner-side">
           <div className="card">
@@ -575,6 +785,18 @@ export function LaneRunnerView({
               </ul>
             ) : (
               <p style={{ color: "var(--text-muted)" }}>Nothing yet.</p>
+            )}
+            {(run.events ?? []).length > 0 && (
+              <>
+                <h4 style={{ marginBottom: 4 }}>Notes, files and reassignments</h4>
+                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                  {(run.events ?? []).map((e, i) => (
+                    <li key={`${e.event_type}-${i}`}>
+                      {e.summary} · {new Date(e.occurred_at).toLocaleString()}
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </div>
         </div>
@@ -641,6 +863,22 @@ export function LaneRunnerPage({
     mutationFn: (reason: string) => api.skipLaneStep(runId, reason),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["laneRunView", runId] }),
   });
+  // WP-0711: the anytime actions invalidate the same run view, so the
+  // note, file and reassignment show up the moment they land.
+  const addNote = useMutation({
+    mutationFn: (body: string) => api.addLaneRunNote(runId, body),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["laneRunView", runId] }),
+  });
+  const attachFile = useMutation({
+    mutationFn: (input: { fileName: string; mimeType: string | undefined; contentBase64: string }) =>
+      api.attachLaneRunFile(runId, input.fileName, input.mimeType, input.contentBase64),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["laneRunView", runId] }),
+  });
+  const reassign = useMutation({
+    mutationFn: (input: { toUserId: string; reason: string }) =>
+      api.reassignLaneRunStep(runId, input.toUserId, input.reason),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["laneRunView", runId] }),
+  });
 
   async function handleSubmit(values: Record<string, unknown>) {
     setError(null);
@@ -657,6 +895,42 @@ export function LaneRunnerPage({
       await skip.mutateAsync(reason);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not skip this step");
+    }
+  }
+
+  async function handleAddNote(body: string) {
+    setError(null);
+    try {
+      await addNote.mutateAsync(body);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not add this note");
+    }
+  }
+
+  async function handleAttachFile(fileName: string, mimeType: string | undefined, contentBase64: string) {
+    setError(null);
+    try {
+      await attachFile.mutateAsync({ fileName, mimeType, contentBase64 });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not attach this file");
+    }
+  }
+
+  async function handleReassign(toUserId: string, reason: string) {
+    setError(null);
+    try {
+      await reassign.mutateAsync({ toUserId, reason });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reassign this step");
+    }
+  }
+
+  async function handleDownloadAttachment(attachment: LaneRunAttachmentView) {
+    setError(null);
+    try {
+      await api.downloadLaneRunAttachment(runId, attachment);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not download this file");
     }
   }
 
@@ -693,6 +967,10 @@ export function LaneRunnerPage({
         recordSummary={recordSummary}
         onSubmit={handleSubmit}
         onSkip={handleSkip}
+        onAddNote={handleAddNote}
+        onAttachFile={handleAttachFile}
+        onReassign={handleReassign}
+        onDownloadAttachment={handleDownloadAttachment}
         onClose={onClose}
       />
     </>

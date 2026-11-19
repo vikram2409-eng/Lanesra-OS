@@ -8,7 +8,8 @@
  * tests pin the HTTP transport: the command name, the HTTP path and the
  * request body. The Tauri command names are the same strings.
  *
- * Covers: REQ-LANE-014 (WP-0707 AC-1), REQ-LANE-015 (WP-0707 AC-3).
+ * Covers: REQ-LANE-014 (WP-0707 AC-1), REQ-LANE-015 (WP-0707 AC-3),
+ * REQ-LANE-018 (WP-0711 AC-1, AC-2).
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -128,5 +129,42 @@ describe("lane-run api wrappers (HTTP transport)", () => {
     vi.stubGlobal("fetch", fetchMock);
     await expect(api.startLaneRun("lane-wh-receiving", "po-1")).rejects.toBeInstanceOf(ApiError);
     await expect(api.startLaneRun("lane-wh-receiving", "po-1")).rejects.toThrow(/already has an active run/);
+  });
+
+  it("addLaneRunNote posts the note body to the async admin route", async () => {
+    // Covers: REQ-LANE-018 (WP-0711 AC-1)
+    const { calls, fetchMock } = mockFetch();
+    fetchMock.nextData = { id: "note-1", body: "Checked the count." };
+    await api.addLaneRunNote("run-1", "Checked the count.");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/admin/process-lane-runs/run-1/note");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(bodyOf(calls[0])).toEqual({ body: "Checked the count." });
+  });
+
+  it("attachLaneRunFile posts the file as base64 to the async admin route", async () => {
+    // Covers: REQ-LANE-018 (WP-0711 AC-1)
+    const { calls, fetchMock } = mockFetch();
+    fetchMock.nextData = { id: "att-1", file_name: "count-sheet.txt" };
+    await api.attachLaneRunFile("run-1", "count-sheet.txt", "text/plain", "Y291bnQgc2hlZXQ=");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/admin/process-lane-runs/run-1/attachment");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(bodyOf(calls[0])).toEqual({
+      file_name: "count-sheet.txt",
+      mime_type: "text/plain",
+      content_base64: "Y291bnQgc2hlZXQ=",
+    });
+  });
+
+  it("reassignLaneRunStep posts the person and reason to the async admin route", async () => {
+    // Covers: REQ-LANE-018 (WP-0711 AC-2)
+    const { calls, fetchMock } = mockFetch();
+    fetchMock.nextData = { id: "run-1", status: "waiting_person" };
+    await api.reassignLaneRunStep("run-1", "user-casey", "Casey is on shift");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/admin/process-lane-runs/run-1/reassign");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(bodyOf(calls[0])).toEqual({ to_user_id: "user-casey", reason: "Casey is on shift" });
   });
 });

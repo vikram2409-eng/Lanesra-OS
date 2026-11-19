@@ -1,0 +1,25 @@
+[
+ {
+  "owner": "vikram2409-eng",
+  "repo": "Lanesra-OS",
+  "branch": "wp/WP-0711-notes-attachments-reassign",
+  "source_dir": "~/workspace/lanesra-build/wp0711",
+  "commit_sha": "bb6561cd413e5c30e6f59fc86e5ba84c9e1b4474",
+  "paths": [
+   "program/STATUS.md",
+   "program/work/P7/WP-0711-notes-attachments-and-reassign-at-any-point.md",
+   "program/work/P6/WP-0653-online-demo-agent-foundry-create-observe-improve.md"
+  ]
+ },
+ {
+  "owner": "vikram2409-eng",
+  "repo": "Lanesra-OS",
+  "branch": "wp/WP-0711-notes-attachments-reassign",
+  "source_dir": "~/workspace/lanesra-build/wp0711",
+  "commit_sha": "05e4edcd2c2123e366deb721f655aaa39109d571",
+  "paths": [
+   "program/STATUS.md",
+   "program/work/P7/WP-0711-notes-attachments-and-reassign-at-any-point.md"
+  ]
+ }
+]

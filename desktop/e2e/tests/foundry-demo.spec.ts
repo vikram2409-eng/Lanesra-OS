@@ -12,7 +12,7 @@ import path from 'node:path';
  * zero-dependency static server (desktop/e2e/static-site-server.mjs) on
  * port 4179 and drives /demo/foundry through it. Each test gets a fresh
  * browser context, so localStorage (the demo store) starts from the seed.
- * Untested locally — see CI.
+ * Run locally 2026-11-18: 7/7 pass.
  */
 
 const STATIC_PORT = 4179;

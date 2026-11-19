@@ -588,3 +588,105 @@ describe("LaneRunnerPage", () => {
     expect(await screen.findByText(/Could not load this run/)).toBeInTheDocument();
   });
 });
+
+describe("LaneRunnerView anytime actions (WP-0711)", () => {
+  // Covers: REQ-LANE-018 (WP-0711 AC-1, AC-2, AC-3)
+  function anytimeView(): LaneRunView {
+    return runView({
+      notes: [
+        {
+          id: "note-1",
+          run_id: "run-1",
+          step_id: "confirm-arrival",
+          author_user_id: "user-casey",
+          author_display_name: "Casey Counter",
+          body: "Checked the count against the pick list.",
+          created_at: "2026-11-18T10:00:00Z",
+        },
+      ],
+      attachments: [
+        {
+          id: "att-1",
+          run_id: "run-1",
+          file_name: "count-sheet.txt",
+          mime_type: "text/plain",
+          size_bytes: 2048,
+          created_at: "2026-11-18T10:05:00Z",
+        },
+      ],
+      events: [
+        {
+          event_type: "lane_run_note_added",
+          summary: "Added a note to run run-1 (step confirm-arrival)",
+          user_id: "user-casey",
+          occurred_at: "2026-11-18T10:00:00Z",
+        },
+        {
+          event_type: "lane_step_reassigned",
+          summary: "Reassigned step confirm-arrival to Casey Counter",
+          user_id: "user-admin",
+          occurred_at: "2026-11-18T10:10:00Z",
+        },
+      ],
+      reassign_candidates: [
+        { user_id: "user-casey", display_name: "Casey Counter" },
+        { user_id: "user-robin", display_name: "Robin Receiver" },
+      ],
+    });
+  }
+
+  it("shows notes, attached files and the audit events on the run", () => {
+    // Covers: REQ-LANE-018 (WP-0711 AC-1)
+    renderView(anytimeView(), { onAddNote: vi.fn(), onAttachFile: vi.fn(), onReassign: vi.fn(), onDownloadAttachment: vi.fn() });
+    const card = screen.getByRole("group", { name: "Notes, attachments and reassign" });
+    expect(card.textContent).toContain("Checked the count against the pick list.");
+    expect(card.textContent).toContain("Casey Counter");
+    expect(card.textContent).toContain("count-sheet.txt");
+    const trail = screen.getByRole("group", { name: "Audit trail" });
+    expect(trail.textContent).toContain("Added a note to run run-1");
+    expect(trail.textContent).toContain("Reassigned step confirm-arrival to Casey Counter");
+  });
+
+  it("adding a note calls back with the entered text", async () => {
+    // Covers: REQ-LANE-018 (WP-0711 AC-1)
+    const onAddNote = vi.fn();
+    renderView(anytimeView(), { onAddNote });
+    fireEvent.change(screen.getByLabelText("Add a note"), { target: { value: "Pallet 3 is short two units." } });
+    fireEvent.click(screen.getByRole("button", { name: "Add note" }));
+    await waitFor(() => expect(onAddNote).toHaveBeenCalledWith("Pallet 3 is short two units."));
+  });
+
+  it("attaching a file calls back with its name, type and base64 content", async () => {
+    // Covers: REQ-LANE-018 (WP-0711 AC-1)
+    const onAttachFile = vi.fn();
+    renderView(anytimeView(), { onAttachFile });
+    const file = new File(["count sheet"], "count-sheet.txt", { type: "text/plain" });
+    fireEvent.change(screen.getByLabelText("Attach a file"), { target: { files: [file] } });
+    await waitFor(() =>
+      expect(onAttachFile).toHaveBeenCalledWith("count-sheet.txt", "text/plain", "Y291bnQgc2hlZXQ="),
+    );
+  });
+
+  it("reassign lists the role holders and calls back with the person and reason", async () => {
+    // Covers: REQ-LANE-018 (WP-0711 AC-2)
+    const onReassign = vi.fn();
+    renderView(anytimeView(), { onReassign });
+    const select = screen.getByLabelText("Reassign this step") as HTMLSelectElement;
+    expect(select.textContent).toContain("Casey Counter");
+    expect(select.textContent).toContain("Robin Receiver");
+    fireEvent.change(select, { target: { value: "user-casey" } });
+    fireEvent.change(screen.getByLabelText("Reason for reassigning"), { target: { value: "Casey is on shift" } });
+    fireEvent.click(screen.getByRole("button", { name: "Reassign" }));
+    await waitFor(() => expect(onReassign).toHaveBeenCalledWith("user-casey", "Casey is on shift"));
+  });
+
+  it("downloading an attachment calls back with that file", () => {
+    // Covers: REQ-LANE-018 (WP-0711 AC-3)
+    const onDownloadAttachment = vi.fn();
+    renderView(anytimeView(), { onDownloadAttachment });
+    fireEvent.click(screen.getByRole("button", { name: "Download" }));
+    expect(onDownloadAttachment).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "att-1", file_name: "count-sheet.txt" }),
+    );
+  });
+});
