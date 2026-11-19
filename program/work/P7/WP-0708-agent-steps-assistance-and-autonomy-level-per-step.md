@@ -3,7 +3,7 @@ id: WP-0708
 title: Agent steps, assistance and autonomy level per step
 phase: 7
 epic: E7.4 Agents in lanes
-status: in_progress
+status: in_review
 owner: claude
 planned_for: claude
 depends_on: [WP-0707]
@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
 branch: wp/WP-0708-agent-steps-assistance-autonomy
-pr: 
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/799
 updated: 2026-11-19
 ---
 
