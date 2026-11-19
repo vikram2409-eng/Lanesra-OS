@@ -79,6 +79,7 @@ Lanesra OS is a free, open-source, self-hostable, AI-native business application
 - Product: https://lanesraos.com/
 - Platform (build apps): https://lanesraos.com/platform
 - Agent Foundry (create agents): https://lanesraos.com/agent-foundry
+- Agent Foundry demo (Create / Observe / Improve): https://lanesraos.com/demo/foundry — the Foundry re-presented as a guided demo: Agents, Models, Services, Tools, Knowledge, Memory, Guardrails, Orchestration, Monitor, Traces, Data, Evaluations and Optimization, with the Optimization hero iterating a candidate from a 0.71 baseline to a 0.82 kept score. Help: https://lanesraos.com/help/agent-foundry-demo
 - Orchestration: https://lanesraos.com/product/orchestration
 - Developers: https://lanesraos.com/developers
 - APIs: https://lanesraos.com/developers/apis
