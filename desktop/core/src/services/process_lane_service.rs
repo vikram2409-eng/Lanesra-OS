@@ -2946,13 +2946,18 @@ async fn generate_propose_values(
         .map(|(k, v)| format!("- {k}: {v}"))
         .collect::<Vec<_>>()
         .join("\n");
-    let prompt = format!(
-        "You are assisting a person completing the step \"{}\". Propose a value \
-for each of these fields, as a single JSON object mapping the field key to the \
-proposed value. Use only these keys: {}.\n\nFields:\n{}\n\nRecord context:\n{}\n\n\
-Respond with only the JSON object, nothing else.",
-        step.name, keys, field_lines, context_lines
-    );
+    // The instructions to the model live in the prompt catalog (ADR-0011), not
+    // inline here; we only supply the per-run variables.
+    let (prompt, _used) = crate::prompts::render_active(
+        "assistant/assist-step",
+        &[
+            ("step_name", step.name.as_str()),
+            ("field_keys", &keys),
+            ("fields", &field_lines),
+            ("record_context", &context_lines),
+        ],
+    )
+    .map_err(|e| classified_validation("lane_assist_prompt", e))?;
     let memory_context = crate::models::ai_memory::AgentMemoryContext {
         session_key: None,
         run_id: Some(run.id.clone()),
