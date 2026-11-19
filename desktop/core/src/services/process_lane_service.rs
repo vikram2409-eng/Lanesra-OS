@@ -64,8 +64,8 @@ use crate::models::process_lane::{
     ProcessLane, ProcessLaneVersion, StepValidation, LANE_REPEAT_MAX_ITERATIONS,
 };
 use crate::repositories::{
-    ai_agent_repo, audit_repo, custom_field_repo, execution_graph_repo, graph_run_repo,
-    process_lane_repo,
+    ai_agent_repo, ai_approval_repo, audit_repo, custom_field_repo, execution_graph_repo,
+    graph_run_repo, process_lane_repo,
 };
 use crate::services::{
     access_role_service, access_service, builtin_field_service, chat_service, custom_field_service,
@@ -1446,50 +1446,127 @@ fn drive_child_lanes<'a>(
                         }
                     }
                 }
-                // WP-0708 (REQ-LANE-016): an assisted "propose" step gets an
-                // agent proposal generated once, the first time the run parks
-                // on it, and stored for the person to confirm or override. The
-                // proposal never writes - only the person's submit does. A
-                // generation failure is swallowed: assistance offers, it never
+                // WP-0708 (REQ-LANE-016): an assisted step - the agent proposes
+                // values for it, once, the first time the run parks on it. What
+                // happens next is the autonomy dial: "propose" leaves the
+                // proposal for the person to confirm or override (the proposal
+                // never writes); "auto" applies it straight away; "approve"
+                // holds it in the approvals inbox until a person decides. A
+                // generation failure is swallowed - assistance offers, it never
                 // blocks the step.
                 if let Some((_node, step)) = current_human_step(conn, &run)
                     .ok()
-                    .filter(|(_, s)| propose_agent_name(s).is_some())
+                    .filter(|(_, s)| assist_agent(s).is_some())
                 {
-                    let has_proposal = run_data_of(&run)
+                    let (autonomy, _agent) =
+                        assist_agent(&step).expect("filtered to assisted steps");
+                    let autonomy = autonomy.to_string();
+                    let existing = run_data_of(&run)
                         .get("__proposal")
                         .and_then(|v| v.get(&step.id))
-                        .is_some();
-                    if !has_proposal {
-                        if let Ok(Some(values)) = generate_propose_values(
-                            conn,
-                            workspace_id,
-                            master_key,
-                            &run,
-                            &step,
-                            actor,
-                        )
-                        .await
-                        {
-                            let mut all = run_data_of(&run)
-                                .get("__proposal")
-                                .and_then(|v| v.as_object().cloned())
-                                .unwrap_or_default();
-                            all.insert(
-                                step.id.clone(),
-                                json!({
-                                    "values": Value::Object(values),
-                                    "agent": step.assistance.as_ref().and_then(|a| a.agent.clone()),
-                                    "autonomy": step.assistance.as_ref().map(|a| a.autonomy.clone()),
-                                    "at": now_iso(),
-                                }),
-                            );
-                            patch_run_data(conn, &run, &[("__proposal", Value::Object(all))])?;
+                        .and_then(|p| p.get("values"))
+                        .and_then(|v| v.as_object().cloned());
+                    let proposed = match existing {
+                        Some(v) => Some(v),
+                        None => {
+                            let generated = generate_propose_values(
+                                conn,
+                                workspace_id,
+                                master_key,
+                                &run,
+                                &step,
+                                actor,
+                            )
+                            .await
+                            .ok()
+                            .flatten();
+                            if let Some(values) = &generated {
+                                let mut all = run_data_of(&run)
+                                    .get("__proposal")
+                                    .and_then(|v| v.as_object().cloned())
+                                    .unwrap_or_default();
+                                all.insert(
+                                    step.id.clone(),
+                                    json!({
+                                        "values": Value::Object(values.clone()),
+                                        "agent": step.assistance.as_ref().and_then(|a| a.agent.clone()),
+                                        "autonomy": autonomy,
+                                        "at": now_iso(),
+                                    }),
+                                );
+                                patch_run_data(conn, &run, &[("__proposal", Value::Object(all))])?;
+                            }
+                            generated
+                        }
+                    };
+                    if let Some(values) = proposed {
+                        match autonomy.as_str() {
+                            // "auto": the agent does it. Apply the proposal
+                            // through the same governed write path a submit uses
+                            // (actor None - the lane's autonomy config, not a
+                            // held role, authorizes it) and let the run advance.
+                            "auto" => {
+                                return submit_person_step(
+                                    conn,
+                                    workspace_id,
+                                    master_key,
+                                    run_id,
+                                    &values,
+                                    None,
+                                )
+                                .await;
+                            }
+                            // "approve": the agent's write waits in the
+                            // approvals inbox. Create the approval once; the run
+                            // stays waiting_person until `resolve_assist_approval`
+                            // approves (applies) or rejects (leaves it to a
+                            // person).
+                            "approve" => {
+                                let has_pending = run_data_of(&run)
+                                    .get("__assist_approval")
+                                    .and_then(|v| v.get(&step.id))
+                                    .is_some();
+                                if !has_pending {
+                                    let approval = ai_approval_repo::create(
+                                        conn,
+                                        workspace_id,
+                                        &crate::models::ai_approval::AiApprovalInput {
+                                            subject_type: "lane_assist".into(),
+                                            subject_id: run_id.to_string(),
+                                            proposal: json!({
+                                                "step_id": step.id,
+                                                "values": Value::Object(values),
+                                            }),
+                                        },
+                                        actor,
+                                    )?;
+                                    // Re-read so this patch merges onto the
+                                    // run data the proposal was just written to,
+                                    // not the stale in-memory copy.
+                                    let fresh = graph_run_repo::get_run(conn, run_id)?
+                                        .ok_or_else(|| AppError::NotFound("Run".into()))?;
+                                    let mut all = run_data_of(&fresh)
+                                        .get("__assist_approval")
+                                        .and_then(|v| v.as_object().cloned())
+                                        .unwrap_or_default();
+                                    all.insert(step.id.clone(), json!(approval.id));
+                                    patch_run_data(
+                                        conn,
+                                        &fresh,
+                                        &[("__assist_approval", Value::Object(all))],
+                                    )?;
+                                }
+                            }
+                            // "propose": nothing more - the person confirms.
+                            _ => {}
                         }
                     }
                 }
             }
-            return Ok(run);
+            // Return a fresh copy so any run-data the waiting_person handling
+            // just wrote (an agent proposal, a held approval) is reflected.
+            return graph_run_repo::get_run(conn, run_id)?
+                .ok_or_else(|| AppError::NotFound("Run".into()));
         }
         graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))
     })
@@ -2803,13 +2880,15 @@ fn resolve_assist_agent(
         .find(|a| a.name == name))
 }
 
-/// Whether a step is a "propose"-level assisted form step (an agent proposes,
-/// a person confirms). Returns the agent name when so.
-fn propose_agent_name(step: &LaneStep) -> Option<&str> {
+/// An agent-driven assisted step: its autonomy level (`propose` / `approve` /
+/// `auto`) and the agent's name. `None` for an unassisted step or the "person"
+/// level (no agent).
+fn assist_agent(step: &LaneStep) -> Option<(&str, &str)> {
     let a = step.assistance.as_ref()?;
-    (a.autonomy == "propose")
-        .then_some(a.agent.as_deref())
-        .flatten()
+    if a.autonomy == "person" {
+        return None;
+    }
+    Some((a.autonomy.as_str(), a.agent.as_deref()?))
 }
 
 /// Generates the agent's proposed values for an assisted form step (WP-0708
@@ -2828,7 +2907,7 @@ async fn generate_propose_values(
     step: &LaneStep,
     actor_user_id: Option<&str>,
 ) -> AppResult<Option<Map<String, Value>>> {
-    let Some(agent_name) = propose_agent_name(step) else {
+    let Some((_autonomy, agent_name)) = assist_agent(step) else {
         return Ok(None);
     };
     let fields = step.fields.clone().unwrap_or_default();
@@ -3286,6 +3365,73 @@ pub async fn resolve_lane_approval(
     // WP-0716: an approval that advances onto a child step starts the child;
     // for a child run it may finish and resume the parent.
     drive_child_lanes(conn, workspace_id, master_key, &advanced.id, actor_user_id).await
+}
+
+/// WP-0708 (REQ-LANE-016, AC-2): resolves the agent's proposed write that is
+/// waiting in the approvals inbox for a run's current step at autonomy
+/// "approve". Approving applies the proposed values through the same governed
+/// write path a person's submit uses and advances the run; rejecting discards
+/// the hold and leaves the step for a person to complete (the proposal stays
+/// visible for them). Only valid while the run waits on a step that has a
+/// pending agent-proposal approval.
+pub async fn resolve_assist_approval(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    run_id: &str,
+    approve: bool,
+    notes: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> AppResult<GraphRun> {
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.workspace_id != workspace_id {
+        return Err(AppError::NotFound("Run".into()));
+    }
+    if run.status != "waiting_person" {
+        return Err(classified_validation(
+            "validation.state",
+            format!("run is '{}', not waiting on a person", run.status),
+        ));
+    }
+    let (_node, step) = current_human_step(conn, &run)?;
+    let pending_id = run_data_of(&run)
+        .get("__assist_approval")
+        .and_then(|v| v.get(&step.id))
+        .and_then(|v| v.as_str().map(String::from))
+        .ok_or_else(|| {
+            classified_validation(
+                "validation.state",
+                "this step has no agent proposal waiting for approval",
+            )
+        })?;
+    // Clear the pending marker and resolve the inbox entry.
+    let mut all = run_data_of(&run)
+        .get("__assist_approval")
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    all.remove(&step.id);
+    patch_run_data(conn, &run, &[("__assist_approval", Value::Object(all))])?;
+    ai_approval_repo::resolve(
+        conn,
+        &pending_id,
+        if approve { "approved" } else { "rejected" },
+        actor_user_id,
+        notes,
+    )?;
+    if !approve {
+        // The agent's proposal is declined; the step reverts to a plain
+        // waiting_person step for a person to complete.
+        return graph_run_repo::get_run(conn, run_id)?
+            .ok_or_else(|| AppError::NotFound("Run".into()));
+    }
+    let values = run_data_of(&run)
+        .get("__proposal")
+        .and_then(|v| v.get(&step.id))
+        .and_then(|p| p.get("values"))
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    submit_person_step(conn, workspace_id, master_key, run_id, &values, None).await
 }
 
 /// WP-0706 (REQ-LANE-010, AC-4): cancels a lane run. The writes it already

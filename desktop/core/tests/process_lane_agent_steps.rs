@@ -172,18 +172,21 @@ fn make_widget(conn: &rusqlite::Connection, ws: &str, admin: &str, name: &str) -
     .id
 }
 
-fn publish_assisted_lane(conn: &rusqlite::Connection, ws: &str, admin: &str) {
+/// Publishes a one-step lane whose form step is assisted at the given autonomy
+/// level by the `Assistant` agent, writing `tracking_in` onto `record.tracking`.
+fn publish_assisted_lane(conn: &rusqlite::Connection, ws: &str, admin: &str, autonomy: &str) {
+    let lane_id = format!("lane-{autonomy}");
     let lane = json!({
         "format_version": "1.0.0",
         "lane": {
-            "id": "lane-assist", "name": "Assist", "object_key": "widget",
+            "id": lane_id, "name": "Assist", "object_key": "widget",
             "version": 1, "status": "published",
             "run_data": {"fields": []},
             "stages": [{
                 "id": "do", "name": "Do", "steps": [{
                     "id": "fill", "name": "Fill", "kind": "form",
                     "role": "r", "required": true,
-                    "assistance": {"autonomy": "propose", "agent": "Assistant"},
+                    "assistance": {"autonomy": autonomy, "agent": "Assistant"},
                     "fields": [{
                         "key": "tracking_in", "label": "Tracking", "type": "string",
                         "binds_to": "record.tracking", "required": false
@@ -193,7 +196,7 @@ fn publish_assisted_lane(conn: &rusqlite::Connection, ws: &str, admin: &str) {
         }
     });
     process_lane_service::import_lane_definition(conn, ws, &lane.to_string(), Some(admin)).unwrap();
-    process_lane_service::publish_lane(conn, ws, "lane-assist", Some(admin)).unwrap();
+    process_lane_service::publish_lane(conn, ws, &lane_id, Some(admin)).unwrap();
 }
 
 fn tracking(conn: &rusqlite::Connection, record: &str) -> Option<String> {
@@ -233,7 +236,7 @@ async fn an_assisted_step_proposes_values_and_writes_only_when_the_person_confir
     let (conn, ws, admin) = setup();
     seed_object(&conn, &ws, &admin);
     make_agent(&conn, &ws, &admin);
-    publish_assisted_lane(&conn, &ws, &admin);
+    publish_assisted_lane(&conn, &ws, &admin, "propose");
     let widget = make_widget(&conn, &ws, &admin, "W1");
 
     // The agent will propose tracking_in = "ACME".
@@ -243,7 +246,7 @@ async fn an_assisted_step_proposes_values_and_writes_only_when_the_person_confir
         &conn,
         &ws,
         &KEY,
-        "lane-assist",
+        "lane-propose",
         &widget,
         Some(&admin),
     )
@@ -299,7 +302,7 @@ async fn overriding_an_agent_proposal_is_recorded_in_the_override_rate() {
     let (conn, ws, admin) = setup();
     seed_object(&conn, &ws, &admin);
     make_agent(&conn, &ws, &admin);
-    publish_assisted_lane(&conn, &ws, &admin);
+    publish_assisted_lane(&conn, &ws, &admin, "propose");
     let widget = make_widget(&conn, &ws, &admin, "W2");
 
     script_proposal(r#"{"tracking_in": "ACME"}"#);
@@ -307,7 +310,7 @@ async fn overriding_an_agent_proposal_is_recorded_in_the_override_rate() {
         &conn,
         &ws,
         &KEY,
-        "lane-assist",
+        "lane-propose",
         &widget,
         Some(&admin),
     )
@@ -332,4 +335,87 @@ async fn overriding_an_agent_proposal_is_recorded_in_the_override_rate() {
     assert_eq!(stats[0].proposed, 1);
     assert_eq!(stats[0].overridden, 1);
     assert_eq!(stats[0].override_rate, 1.0);
+}
+
+// --------------------------------------------------------------------------
+// AC-2: at "does it" (auto) the agent completes the step through the governed
+// write path; at "does it with approval" the write waits in the approvals
+// inbox until a person decides.
+// --------------------------------------------------------------------------
+
+// Covers: REQ-LANE-016 (WP-0708 AC-2)
+#[tokio::test]
+async fn at_autonomy_auto_the_agent_does_the_step_itself() {
+    let (conn, ws, admin) = setup();
+    seed_object(&conn, &ws, &admin);
+    make_agent(&conn, &ws, &admin);
+    publish_assisted_lane(&conn, &ws, &admin, "auto");
+    let widget = make_widget(&conn, &ws, &admin, "W3");
+
+    script_proposal(r#"{"tracking_in": "AUTO"}"#);
+    let run =
+        process_lane_service::start_lane_run(&conn, &ws, &KEY, "lane-auto", &widget, Some(&admin))
+            .await
+            .unwrap();
+
+    // No person submitted - the agent did the step itself and the run finished.
+    assert_eq!(
+        run.status, "completed",
+        "at autonomy auto the agent completes the step with no person"
+    );
+    assert_eq!(tracking(&conn, &widget).as_deref(), Some("AUTO"));
+    let stats = process_lane_service::assist_stats(&conn, &ws, &run.id).unwrap();
+    assert_eq!(stats[0].proposed, 1);
+    assert_eq!(stats[0].overridden, 0);
+}
+
+// Covers: REQ-LANE-016 (WP-0708 AC-2)
+#[tokio::test]
+async fn at_autonomy_approve_the_write_waits_in_the_inbox_until_approved() {
+    let (conn, ws, admin) = setup();
+    seed_object(&conn, &ws, &admin);
+    make_agent(&conn, &ws, &admin);
+    publish_assisted_lane(&conn, &ws, &admin, "approve");
+    let widget = make_widget(&conn, &ws, &admin, "W4");
+
+    script_proposal(r#"{"tracking_in": "APPROVED"}"#);
+    let run = process_lane_service::start_lane_run(
+        &conn,
+        &ws,
+        &KEY,
+        "lane-approve",
+        &widget,
+        Some(&admin),
+    )
+    .await
+    .unwrap();
+
+    // The agent proposed, but the write waits: the run is still open, nothing
+    // is written, and the proposal is held in the approvals inbox.
+    assert_eq!(run.status, "waiting_person");
+    assert_eq!(tracking(&conn, &widget), None);
+    let rd: Value = serde_json::from_str(run.run_data_json.as_deref().unwrap_or("{}")).unwrap();
+    assert!(
+        rd.get("__assist_approval")
+            .and_then(|v| v.get("fill"))
+            .and_then(|v| v.as_str())
+            .is_some(),
+        "the agent's write is held in the approvals inbox"
+    );
+
+    // Approving applies the agent's proposed value through the governed path
+    // and advances the run to completion.
+    let after = process_lane_service::resolve_assist_approval(
+        &conn,
+        &ws,
+        &KEY,
+        &run.id,
+        true,
+        None,
+        Some(&admin),
+    )
+    .await
+    .unwrap();
+    assert_eq!(after.status, "completed");
+    assert_eq!(tracking(&conn, &widget).as_deref(), Some("APPROVED"));
 }
