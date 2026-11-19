@@ -13,7 +13,7 @@
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
 | 5 · Platform and ecosystem | 42 | 0 | 0 | 0 | 0 | 42 | 0 / 140 | `░░░░░░░░░░` 0% |
 | 6 · Admin console and Experience Studio | 33 | 0 | 1 | 0 | 0 | 32 | 0 / 102 | `░░░░░░░░░░` 0% |
-| 7 · Process Lanes | 21 | 13 | 2 | 0 | 0 | 6 | 39 / 61 | `██████░░░░` 64% |
+| 7 · Process Lanes | 21 | 13 | 3 | 0 | 0 | 5 | 39 / 61 | `██████░░░░` 64% |
 | v2 · Open interop | 1 | 0 | 0 | 0 | 0 | 1 | 0 / 4 | `░░░░░░░░░░` 0% |
 
 ## Edition coverage
@@ -33,6 +33,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
 | [WP-0653](work/P6/WP-0653-online-demo-agent-foundry-create-observe-improve.md) | Online demo: Agent Foundry (Create / Observe / Improve) | in_review | claude | `claude/agent-foundry-demo` | 790 |
+| [WP-0708](work/P7/WP-0708-agent-steps-assistance-and-autonomy-level-per-step.md) | Agent steps, assistance and autonomy level per step | in_progress | claude | `wp/WP-0708-agent-steps-assistance-autonomy` | - |
 | [WP-0709](work/P7/WP-0709-lanes-and-workflows-declared-replacement-and-starting-a-lane.md) | Lanes and workflows: declared replacement, and starting a lane from a workflow | in_review | claude | `wp/WP-0709-lanes-workflows-interplay` | 792 |
 | [WP-0710](work/P7/WP-0710-repeat-over-child-records-and-stage-and-start-conditions.md) | Repeat over child records, and stage and start conditions | in_review | claude | `wp/WP-0710-per-item-assignment-runtime` | 789 |
 
@@ -341,7 +342,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0705](work/P7/WP-0705-record-and-check-steps-real-atomic-repeat-safe-writes.md) | Record and check steps: real, atomic, repeat-safe writes | E7.2 Steps and rules | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0703, WP-0141 |
 | [WP-0706](work/P7/WP-0706-approvals-branches-with-exits-pause-handoff-and-cancel.md) | Approvals, branches with exits, pause, handoff and cancel | E7.2 Steps and rules | ✅ done | L | ✓Desktop ✓Team Workspace | WP-0704 |
 | [WP-0707](work/P7/WP-0707-lane-runner-screen-entry-points-and-object-360.md) | Lane runner, first cut: the straight path on desktop and Team Workspace | E7.3 Runner and visibility | ✅ done | L | ✓Desktop ✓Team Workspace ✓Online demo | WP-0704, WP-0705 |
-| [WP-0708](work/P7/WP-0708-agent-steps-assistance-and-autonomy-level-per-step.md) | Agent steps, assistance and autonomy level per step | E7.4 Agents in lanes | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0707 |
+| [WP-0708](work/P7/WP-0708-agent-steps-assistance-and-autonomy-level-per-step.md) | Agent steps, assistance and autonomy level per step | E7.4 Agents in lanes | 🔨 in progress | L | ○Desktop ○Team Workspace ○Online demo | WP-0707 |
 | [WP-0709](work/P7/WP-0709-lanes-and-workflows-declared-replacement-and-starting-a-lane.md) | Lanes and workflows: declared replacement, and starting a lane from a workflow | E7.2 Steps and rules | 👀 in review | M | ○Desktop ○Team Workspace ○Online demo | WP-0705 |
 | [WP-0710](work/P7/WP-0710-repeat-over-child-records-and-stage-and-start-conditions.md) | Repeat over child records, and stage and start conditions | E7.2 Steps and rules | 👀 in review | M | ○Desktop ○Team Workspace ○Online demo | WP-0705 |
 | [WP-0711](work/P7/WP-0711-notes-attachments-and-reassign-at-any-point.md) | Notes, attachments and reassign at any point | E7.3 Runner and visibility | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0707 |

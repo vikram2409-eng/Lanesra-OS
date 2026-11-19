@@ -64,10 +64,11 @@ use crate::models::process_lane::{
     ProcessLane, ProcessLaneVersion, StepValidation, LANE_REPEAT_MAX_ITERATIONS,
 };
 use crate::repositories::{
-    audit_repo, custom_field_repo, execution_graph_repo, graph_run_repo, process_lane_repo,
+    ai_agent_repo, audit_repo, custom_field_repo, execution_graph_repo, graph_run_repo,
+    process_lane_repo,
 };
 use crate::services::{
-    access_role_service, access_service, builtin_field_service, custom_field_service,
+    access_role_service, access_service, builtin_field_service, chat_service, custom_field_service,
     custom_record_service, execution_graph_service, graph_runtime_service,
 };
 
@@ -1445,6 +1446,48 @@ fn drive_child_lanes<'a>(
                         }
                     }
                 }
+                // WP-0708 (REQ-LANE-016): an assisted "propose" step gets an
+                // agent proposal generated once, the first time the run parks
+                // on it, and stored for the person to confirm or override. The
+                // proposal never writes - only the person's submit does. A
+                // generation failure is swallowed: assistance offers, it never
+                // blocks the step.
+                if let Some((_node, step)) = current_human_step(conn, &run)
+                    .ok()
+                    .filter(|(_, s)| propose_agent_name(s).is_some())
+                {
+                    let has_proposal = run_data_of(&run)
+                        .get("__proposal")
+                        .and_then(|v| v.get(&step.id))
+                        .is_some();
+                    if !has_proposal {
+                        if let Ok(Some(values)) = generate_propose_values(
+                            conn,
+                            workspace_id,
+                            master_key,
+                            &run,
+                            &step,
+                            actor,
+                        )
+                        .await
+                        {
+                            let mut all = run_data_of(&run)
+                                .get("__proposal")
+                                .and_then(|v| v.as_object().cloned())
+                                .unwrap_or_default();
+                            all.insert(
+                                step.id.clone(),
+                                json!({
+                                    "values": Value::Object(values),
+                                    "agent": step.assistance.as_ref().and_then(|a| a.agent.clone()),
+                                    "autonomy": step.assistance.as_ref().map(|a| a.autonomy.clone()),
+                                    "at": now_iso(),
+                                }),
+                            );
+                            patch_run_data(conn, &run, &[("__proposal", Value::Object(all))])?;
+                        }
+                    }
+                }
             }
             return Ok(run);
         }
@@ -2042,6 +2085,16 @@ pub struct LaneStepView {
     /// administrator, or the step names no role).
     pub can_complete: bool,
     pub fields: Vec<FormFieldView>,
+    /// WP-0708 (REQ-LANE-016): at autonomy "propose", the agent's proposed
+    /// values for this step's fields, for the person to confirm or override.
+    /// None when the step is not an assisted propose step or no proposal has
+    /// been generated yet.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proposal: Option<Value>,
+    /// WP-0708: the assistance autonomy level on this step, when set
+    /// ("propose" / "approve" / "auto"); None for an unassisted step.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub autonomy: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2291,6 +2344,16 @@ pub fn get_run_view(
             .map(|f| field_view(f, &record_values, &run_data_obj, may_read_record))
             .collect();
 
+        // WP-0708: surface the agent's proposal (if one has been generated for
+        // this step) and the step's autonomy level, so the runner can show the
+        // proposed values for the person to confirm or override.
+        let proposal = run_data_obj
+            .get("__proposal")
+            .and_then(|v| v.get(&step.id))
+            .and_then(|p| p.get("values"))
+            .cloned();
+        let autonomy = step.assistance.as_ref().map(|a| a.autonomy.clone());
+
         Some(LaneStepView {
             stage_id,
             stage_name,
@@ -2300,6 +2363,8 @@ pub fn get_run_view(
             waiting_on: acting_role.clone(),
             can_complete,
             fields,
+            proposal,
+            autonomy,
         })
     } else {
         None
@@ -2709,6 +2774,252 @@ fn replaces_suppress_set(step: &LaneStep) -> std::collections::HashSet<(String, 
         .unwrap_or_default()
 }
 
+// ===========================================================================
+// WP-0708: assistance and autonomy per step (REQ-LANE-016).
+//
+// A form step can carry `assistance { autonomy, agent }`. At autonomy
+// "propose" the named agent proposes values for the step's fields; the person
+// sees the proposal and confirms or overrides it, and nothing is written until
+// they submit - the agent never writes at this level (AC-1). Whether each
+// proposed field was kept or overridden is recorded under run data
+// `__assist.<step_id>`, which feeds the per-step override rate (AC-4). The run
+// the agent proposes in is one a person started, and the proposal call runs
+// under that person's identity, so the agent reads nothing the person could
+// not (AC-3). "person" is no agent; "approve" (write waits in the approvals
+// inbox) and "auto" (write goes through the Tool-Call Firewall) are the higher
+// autonomy levels.
+// ===========================================================================
+
+/// The agent a step's assistance names, resolved by name among the
+/// workspace's active agents (lanes reference agents by name, for portability
+/// across workspaces, the same convention record steps use for Action Types).
+fn resolve_assist_agent(
+    conn: &Connection,
+    workspace_id: &str,
+    name: &str,
+) -> AppResult<Option<crate::models::ai_agent::AiAgentDefinition>> {
+    Ok(ai_agent_repo::list(conn, workspace_id, true)?
+        .into_iter()
+        .find(|a| a.name == name))
+}
+
+/// Whether a step is a "propose"-level assisted form step (an agent proposes,
+/// a person confirms). Returns the agent name when so.
+fn propose_agent_name(step: &LaneStep) -> Option<&str> {
+    let a = step.assistance.as_ref()?;
+    (a.autonomy == "propose")
+        .then_some(a.agent.as_deref())
+        .flatten()
+}
+
+/// Generates the agent's proposed values for an assisted form step (WP-0708
+/// AC-1). Builds a prompt from the step's fields and the anchor record's
+/// context, runs the named agent under `actor` (the person who owns the run,
+/// so the agent is bounded by their access - AC-3), and parses the reply as a
+/// JSON object of `{field_key: value}`, keeping only the step's declared
+/// fields. Returns `None` when the step is not an assisted propose step, the
+/// agent is unknown, or the reply is not usable - assistance never blocks the
+/// step, it only offers.
+async fn generate_propose_values(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    run: &GraphRun,
+    step: &LaneStep,
+    actor_user_id: Option<&str>,
+) -> AppResult<Option<Map<String, Value>>> {
+    let Some(agent_name) = propose_agent_name(step) else {
+        return Ok(None);
+    };
+    let fields = step.fields.clone().unwrap_or_default();
+    if fields.is_empty() {
+        return Ok(None);
+    }
+    let Some(agent) = resolve_assist_agent(conn, workspace_id, agent_name)? else {
+        return Ok(None);
+    };
+    let (Some(object_key), Some(record_id)) = (
+        run.anchor_object_key.as_deref(),
+        run.anchor_record_id.as_deref(),
+    ) else {
+        return Ok(None);
+    };
+    let run_data = run_data_of(run);
+    let ctx = run_condition_ctx(conn, object_key, record_id, &run_data)?;
+    let field_lines = fields
+        .iter()
+        .map(|f| format!("- {} ({}): {}", f.key, f.field_type, f.label))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let keys = fields
+        .iter()
+        .map(|f| f.key.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let context_lines = ctx
+        .iter()
+        .filter(|(k, _)| !k.starts_with("run_data."))
+        .map(|(k, v)| format!("- {k}: {v}"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let prompt = format!(
+        "You are assisting a person completing the step \"{}\". Propose a value \
+for each of these fields, as a single JSON object mapping the field key to the \
+proposed value. Use only these keys: {}.\n\nFields:\n{}\n\nRecord context:\n{}\n\n\
+Respond with only the JSON object, nothing else.",
+        step.name, keys, field_lines, context_lines
+    );
+    let memory_context = crate::models::ai_memory::AgentMemoryContext {
+        session_key: None,
+        run_id: Some(run.id.clone()),
+    };
+    let outcome = chat_service::run_agent_once_with_text(
+        conn,
+        workspace_id,
+        master_key,
+        actor_user_id,
+        &agent,
+        &prompt,
+        &memory_context,
+    )
+    .await?;
+    let declared: std::collections::HashSet<&str> = fields.iter().map(|f| f.key.as_str()).collect();
+    Ok(parse_json_object(&outcome.final_text).map(|obj| {
+        obj.into_iter()
+            .filter(|(k, _)| declared.contains(k.as_str()))
+            .collect()
+    }))
+}
+
+/// Pulls the first top-level JSON object out of a model reply (which may wrap
+/// it in prose or a ```json fence), by matching braces. `None` if there is no
+/// balanced object.
+fn parse_json_object(text: &str) -> Option<Map<String, Value>> {
+    let bytes = text.as_bytes();
+    let start = text.find('{')?;
+    let mut depth = 0i32;
+    let mut in_str = false;
+    let mut escaped = false;
+    for i in start..bytes.len() {
+        let c = bytes[i] as char;
+        if in_str {
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match c {
+            '"' => in_str = true,
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return serde_json::from_str::<Value>(&text[start..=i])
+                        .ok()
+                        .and_then(|v| v.as_object().cloned());
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Records, on the person's submit of an assisted step, which proposed fields
+/// they kept and which they overrode (WP-0708 AC-1/AC-4), under run data
+/// `__assist.<step_id>`. Only runs when a proposal was offered for the step.
+fn record_assist_outcome(
+    conn: &Connection,
+    run: &GraphRun,
+    step_id: &str,
+    proposed: &Map<String, Value>,
+    submitted: &Map<String, Value>,
+    actor_user_id: Option<&str>,
+) -> AppResult<()> {
+    let mut accepted = Vec::new();
+    let mut overridden = Vec::new();
+    for (key, proposed_value) in proposed {
+        match submitted.get(key) {
+            Some(v) if value_to_field_string(v) == value_to_field_string(proposed_value) => {
+                accepted.push(key.clone())
+            }
+            _ => overridden.push(key.clone()),
+        }
+    }
+    let entry = json!({
+        "agent_proposed": proposed.len(),
+        "accepted": accepted,
+        "overridden": overridden,
+        "by": actor_user_id,
+        "at": now_iso(),
+    });
+    let mut all = run_data_of(run)
+        .get("__assist")
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    all.insert(step_id.to_string(), entry);
+    patch_run_data(conn, run, &[("__assist", Value::Object(all))])
+}
+
+/// WP-0708 (REQ-LANE-016, AC-4): the per-step assist outcome on a run - how
+/// many fields the agent proposed and how many the person overrode, with the
+/// override rate - read from the `__assist` run data the submits recorded.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StepAssistStats {
+    pub step_id: String,
+    pub proposed: usize,
+    pub overridden: usize,
+    pub override_rate: f64,
+}
+
+/// Reports the override rate per assisted step of a run (WP-0708 AC-4).
+pub fn assist_stats(
+    conn: &Connection,
+    workspace_id: &str,
+    run_id: &str,
+) -> AppResult<Vec<StepAssistStats>> {
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.workspace_id != workspace_id {
+        return Err(AppError::NotFound("Run".into()));
+    }
+    let assist = run_data_of(&run)
+        .get("__assist")
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    let mut out: Vec<StepAssistStats> = assist
+        .into_iter()
+        .map(|(step_id, entry)| {
+            let proposed = entry
+                .get("agent_proposed")
+                .and_then(Value::as_u64)
+                .unwrap_or(0) as usize;
+            let overridden = entry
+                .get("overridden")
+                .and_then(|v| v.as_array())
+                .map(|a| a.len())
+                .unwrap_or(0);
+            let override_rate = if proposed > 0 {
+                overridden as f64 / proposed as f64
+            } else {
+                0.0
+            };
+            StepAssistStats {
+                step_id,
+                proposed,
+                overridden,
+                override_rate,
+            }
+        })
+        .collect();
+    out.sort_by(|a, b| a.step_id.cmp(&b.step_id));
+    Ok(out)
+}
+
 /// Submits the current human step of a `waiting_person` lane run
 /// (WP-0704). Validates the entered values against the step's fields and its
 /// `validation`, stores them (run-data fields on the run, record-bound
@@ -2848,6 +3159,22 @@ pub async fn submit_person_step(
     let run_data_json =
         serde_json::to_string(&Value::Object(run_data)).unwrap_or_else(|_| "{}".into());
     graph_run_repo::set_lane_anchor(conn, run_id, &object_key, &record_id, &run_data_json)?;
+
+    // WP-0708 (REQ-LANE-016): when the agent proposed values for this step,
+    // record which the person kept and which they overrode - the data the
+    // per-step override rate reads. The proposal never wrote anything; this
+    // submit did. Re-read the run so the record merges onto the run data just
+    // persisted, not a stale copy.
+    if let Some((fresh_run, proposed)) = graph_run_repo::get_run(conn, run_id)?.and_then(|r| {
+        run_data_of(&r)
+            .get("__proposal")
+            .and_then(|v| v.get(&step.id))
+            .and_then(|p| p.get("values"))
+            .and_then(|v| v.as_object().cloned())
+            .map(|obj| (r, obj))
+    }) {
+        record_assist_outcome(conn, &fresh_run, &step.id, &proposed, values, actor_user_id)?;
+    }
 
     // Complete the step's waiting row (its open interval is the wait time,
     // AC-4). The row was appended by the human_step node arm.
