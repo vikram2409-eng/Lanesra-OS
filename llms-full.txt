@@ -94,6 +94,7 @@ Customer records connect to contacts, opportunities, quotes, orders, invoices, c
 - https://lanesraos.com/
 - https://lanesraos.com/platform
 - https://lanesraos.com/demo
+- https://lanesraos.com/demo/foundry (Agent Foundry demo: Create / Observe / Improve - the Foundry re-presented as a guided demo, with the Optimization hero iterating a candidate from a 0.71 baseline to a 0.82 kept score; help at https://lanesraos.com/help/agent-foundry-demo)
 - https://lanesraos.com/roadmap (roadmap and backlog, merged into one page)
 - https://lanesraos.com/releases (formerly /changelog)
 - https://lanesraos.com/compare

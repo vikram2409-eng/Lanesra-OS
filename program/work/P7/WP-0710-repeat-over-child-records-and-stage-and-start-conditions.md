@@ -3,7 +3,7 @@ id: WP-0710
 title: Repeat over child records, and stage and start conditions
 phase: 7
 epic: E7.2 Steps and rules
-status: in_review
+status: done
 owner: muse
 planned_for: claude
 depends_on: [WP-0705]
