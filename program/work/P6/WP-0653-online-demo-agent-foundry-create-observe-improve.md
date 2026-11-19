@@ -3,7 +3,7 @@ id: WP-0653
 title: "Online demo: Agent Foundry (Create / Observe / Improve)"
 phase: 6
 epic: E6.6 Navigation and theme
-status: in_progress
+status: in_review
 owner: muse
 planned_for: muse
 depends_on: []
@@ -15,7 +15,7 @@ editions_reason: Owner decision - the online demo previews the Agent Foundry inf
 docs: []
 docs_reason: Online-demo presentation only. Each capability it surfaces (Agents, Models, Tools, Knowledge, Memory, Guardrails, Evaluations) already has its help; the cross-edition navigation help is written once in WP-0654 when the lens ships to desktop and Team Workspace.
 branch: wp/WP-0653-foundry-demo-finish
-pr: 790
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/797
 updated: 2026-11-18
 ---
 

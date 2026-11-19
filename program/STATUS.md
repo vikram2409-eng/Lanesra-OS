@@ -32,7 +32,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 
 | WP | Title | Status | Owner | Branch | PR |
 |---|---|---|---|---|---|
-| [WP-0653](work/P6/WP-0653-online-demo-agent-foundry-create-observe-improve.md) | Online demo: Agent Foundry (Create / Observe / Improve) | in_progress | muse | `wp/WP-0653-foundry-demo-finish` | 790 |
+| [WP-0653](work/P6/WP-0653-online-demo-agent-foundry-create-observe-improve.md) | Online demo: Agent Foundry (Create / Observe / Improve) | in_review | muse | `wp/WP-0653-foundry-demo-finish` | https://github.com/vikram2409-eng/Lanesra-OS/pull/797 |
 | [WP-0709](work/P7/WP-0709-lanes-and-workflows-declared-replacement-and-starting-a-lane.md) | Lanes and workflows: declared replacement, and starting a lane from a workflow | in_review | claude | `wp/WP-0709-lanes-workflows-interplay` | 792 |
 
 ## Ready to start (all dependencies done)
@@ -325,7 +325,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0650](work/P6/WP-0650-app-menu-editor-and-home-page-per-role.md) | App menu editor and home page per role | E6.6 Navigation and theme | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0615 |
 | [WP-0651](work/P6/WP-0651-themes-per-app-light-and-dark-pairs-component-styles.md) | Themes per app, light and dark pairs, component styles | E6.6 Navigation and theme | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0611 |
 | [WP-0652](work/P6/WP-0652-theme-on-print-pdf-and-system-email.md) | Theme on print, PDF and system email | E6.6 Navigation and theme | ⚪ proposed | M | ○Desktop ○Team Workspace | WP-0651 |
-| [WP-0653](work/P6/WP-0653-online-demo-agent-foundry-create-observe-improve.md) | Online demo: Agent Foundry (Create / Observe / Improve) | E6.6 Navigation and theme | 🔨 in progress | M | ✓Online demo | - |
+| [WP-0653](work/P6/WP-0653-online-demo-agent-foundry-create-observe-improve.md) | Online demo: Agent Foundry (Create / Observe / Improve) | E6.6 Navigation and theme | 👀 in review | M | ✓Online demo | - |
 | [WP-0654](work/P6/WP-0654-agent-foundry-lens-in-the-admin-console.md) | Agent Foundry lens in the admin console (desktop and Team Workspace) | E6.1 Admin console | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0601, WP-0653 |
 | [WP-0699](work/P6/WP-0699-phase-6-gate-findability-parity-and-help-complete.md) | Phase 6 gate: findability, parity and help complete | E6.7 Track gate | ⚪ proposed | M | — | WP-0606, WP-0607, WP-0608, WP-0613, WP-0614, WP-0632, WP-0650, WP-0651 |
 
