@@ -22,11 +22,12 @@ use lanesra_core::models::ai_agent::{AiAgentDefinition, AiAgentInput};
 use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
 use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
 use lanesra_core::models::custom_record::CustomRecordInput;
+use lanesra_core::models::user::NewUser;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::scripted_provider::{self, ScriptedResponse};
 use lanesra_core::services::{
     ai_agent_service, ai_provider_service, custom_field_service, custom_object_service,
-    custom_record_service, process_lane_service, workspace_service,
+    custom_record_service, process_lane_service, user_service, workspace_service,
 };
 
 const KEY: [u8; 32] = [121u8; 32];
@@ -418,4 +419,57 @@ async fn at_autonomy_approve_the_write_waits_in_the_inbox_until_approved() {
     .unwrap();
     assert_eq!(after.status, "completed");
     assert_eq!(tracking(&conn, &widget).as_deref(), Some("APPROVED"));
+}
+
+// --------------------------------------------------------------------------
+// AC-3: in a run a person started, the agent acts as that person - its reads
+// and writes are bounded by the starter's identity, not the agent's or an
+// administrator's (ADR-0024 §7).
+// --------------------------------------------------------------------------
+
+// Covers: REQ-LANE-011 (WP-0708 AC-3)
+#[tokio::test]
+async fn an_agent_step_acts_as_the_person_who_started_the_run() {
+    let (conn, ws, admin) = setup();
+    seed_object(&conn, &ws, &admin);
+    make_agent(&conn, &ws, &admin);
+    publish_assisted_lane(&conn, &ws, &admin, "auto");
+    let widget = make_widget(&conn, &ws, &admin, "W5");
+
+    // A specific non-admin person starts the run.
+    let alice = user_service::create(
+        &conn,
+        &ws,
+        &NewUser {
+            username: "alice".into(),
+            display_name: "Alice".into(),
+            password: "alice-password-123".into(),
+            roles: vec!["Manager".into()],
+        },
+        Some(&admin),
+    )
+    .unwrap();
+
+    script_proposal(r#"{"tracking_in": "AUTO"}"#);
+    let run = process_lane_service::start_lane_run(
+        &conn,
+        &ws,
+        &KEY,
+        "lane-auto",
+        &widget,
+        Some(&alice.id),
+    )
+    .await
+    .unwrap();
+    assert_eq!(run.status, "completed");
+    assert_eq!(tracking(&conn, &widget).as_deref(), Some("AUTO"));
+
+    // The agent applied the step acting AS Alice - its assist record is
+    // attributed to her, not to the agent or an administrator.
+    let rd: Value = serde_json::from_str(run.run_data_json.as_deref().unwrap_or("{}")).unwrap();
+    assert_eq!(
+        rd["__assist"]["fill"]["by"],
+        json!(alice.id),
+        "the agent step is attributed to the person who started the run"
+    );
 }

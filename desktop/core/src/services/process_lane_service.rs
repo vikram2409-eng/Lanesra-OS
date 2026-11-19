@@ -1506,13 +1506,18 @@ fn drive_child_lanes<'a>(
                             // (actor None - the lane's autonomy config, not a
                             // held role, authorizes it) and let the run advance.
                             "auto" => {
-                                return submit_person_step(
+                                // Apply under the run's actor (the person who
+                                // started it), bounding access to theirs
+                                // (ADR-0024 §7); the autonomy config, not a
+                                // held role, authorizes the write.
+                                return submit_person_step_impl(
                                     conn,
                                     workspace_id,
                                     master_key,
                                     run_id,
                                     &values,
-                                    None,
+                                    actor,
+                                    false,
                                 )
                                 .await;
                             }
@@ -3113,6 +3118,34 @@ pub async fn submit_person_step(
     values: &Map<String, Value>,
     actor_user_id: Option<&str>,
 ) -> AppResult<GraphRun> {
+    submit_person_step_impl(
+        conn,
+        workspace_id,
+        master_key,
+        run_id,
+        values,
+        actor_user_id,
+        true,
+    )
+    .await
+}
+
+/// The shared body of a form-step submit. `enforce_role` is true for a person
+/// completing their own step (the role gate applies); it is false when the
+/// lane itself applies an agent's write at autonomy "auto"/"approve" (WP-0708),
+/// where the step's autonomy config - not a held role - authorizes the write,
+/// though `actor_user_id` still bounds its access to the run starter's (ADR-0024
+/// §7: in a run a person started the agent acts as that person).
+#[allow(clippy::too_many_arguments)]
+async fn submit_person_step_impl(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    run_id: &str,
+    values: &Map<String, Value>,
+    actor_user_id: Option<&str>,
+    enforce_role: bool,
+) -> AppResult<GraphRun> {
     let run =
         graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
     if run.workspace_id != workspace_id {
@@ -3136,17 +3169,21 @@ pub async fn submit_person_step(
     let (node, step) = current_human_step(conn, &run)?;
 
     // REQ-LANE-011: only the step's role (or an admin) may complete it. A
-    // handoff (WP-0706) changes which role that is for this run.
-    let acting_role = effective_step_role(&run, &step);
-    if !actor_may_act(conn, actor_user_id, acting_role.as_deref())? {
-        return Err(AppError::classified(
-            ErrorClass::Validation,
-            "validation.permission",
-            format!(
-                "this step is waiting on {}; you cannot complete it",
-                acting_role.as_deref().unwrap_or("another role")
-            ),
-        ));
+    // handoff (WP-0706) changes which role that is for this run. An agent-
+    // applied write (WP-0708 auto/approve) skips this gate - the autonomy
+    // config authorizes it - but still writes under the starter's access.
+    if enforce_role {
+        let acting_role = effective_step_role(&run, &step);
+        if !actor_may_act(conn, actor_user_id, acting_role.as_deref())? {
+            return Err(AppError::classified(
+                ErrorClass::Validation,
+                "validation.permission",
+                format!(
+                    "this step is waiting on {}; you cannot complete it",
+                    acting_role.as_deref().unwrap_or("another role")
+                ),
+            ));
+        }
     }
 
     let form_fields = step.fields.clone().unwrap_or_default();
@@ -3431,7 +3468,18 @@ pub async fn resolve_assist_approval(
         .and_then(|p| p.get("values"))
         .and_then(|v| v.as_object().cloned())
         .unwrap_or_default();
-    submit_person_step(conn, workspace_id, master_key, run_id, &values, None).await
+    // Apply under the approving person's access, skipping the role gate - the
+    // approval they just granted authorizes the write (ADR-0024 §7).
+    submit_person_step_impl(
+        conn,
+        workspace_id,
+        master_key,
+        run_id,
+        &values,
+        actor_user_id,
+        false,
+    )
+    .await
 }
 
 /// WP-0706 (REQ-LANE-010, AC-4): cancels a lane run. The writes it already
