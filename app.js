@@ -9861,6 +9861,44 @@ function bindHomeCodeTabs(){
   };
  });
 }
+function bindHomeVideoCarousel(root){
+ const car=root.querySelector('#heroCarousel');
+ if(!car)return;
+ const slides=Array.prototype.slice.call(car.querySelectorAll('.hero-slide'));
+ if(!slides.length)return;
+ const dotsWrap=car.querySelector('#heroCarouselDots');
+ const label=root.querySelector('#heroCarouselLabel');
+ const sound=car.querySelector('#heroCarouselSound');
+ let idx=slides.findIndex(s=>s.classList.contains('active')); if(idx<0)idx=0;
+ let muted=true;
+ const vid=s=>s.querySelector('video');
+ function ensureSrc(s){const v=vid(s);if(!v)return;const src=v.querySelector('source[data-src]');if(src){src.src=src.getAttribute('data-src');src.removeAttribute('data-src');v.load();}}
+ function show(n){
+  n=(n+slides.length)%slides.length;
+  slides.forEach((s,i)=>{const v=vid(s);const on=i===n;s.classList.toggle('active',on);
+   if(!v)return;
+   if(on){ensureSrc(s);v.muted=muted;const p=v.play();if(p&&p.catch)p.catch(()=>{});}
+   else{try{v.pause();}catch(e){}}
+  });
+  idx=n;
+  if(label)label.textContent=slides[n].getAttribute('data-label')||'';
+  if(dotsWrap)Array.prototype.forEach.call(dotsWrap.children,(d,i)=>d.classList.toggle('active',i===n));
+ }
+ if(dotsWrap){
+  dotsWrap.innerHTML=slides.map((s,i)=>`<button type="button" class="hero-dot${i===idx?' active':''}" data-i="${i}" aria-label="Show ${(s.getAttribute('data-label')||'video').replace(/"/g,'')}"></button>`).join('');
+  dotsWrap.querySelectorAll('.hero-dot').forEach(d=>d.addEventListener('click',()=>show(Number(d.dataset.i))));
+ }
+ const prev=car.querySelector('#heroCarouselPrev'),next=car.querySelector('#heroCarouselNext');
+ if(prev)prev.addEventListener('click',()=>show(idx-1));
+ if(next)next.addEventListener('click',()=>show(idx+1));
+ if(sound)sound.addEventListener('click',()=>{
+  muted=!muted;const v=vid(slides[idx]);if(v)v.muted=muted;
+  sound.textContent=muted?'🔇':'🔊';
+  sound.setAttribute('aria-pressed',String(!muted));
+  sound.setAttribute('aria-label',muted?'Unmute video sound':'Mute video sound');
+ });
+ show(idx);
+}
 function bindHeroIntroSound(){
  const video=document.getElementById('heroIntroVideo'),btn=document.getElementById('heroIntroSoundBtn');
  if(!video||!btn)return;
@@ -30242,6 +30280,8 @@ function modernSitePage(pageId){
   });
     // Hero video sound toggle (homepage)
   bindHeroIntroSound();
+  // Hero video carousel (homepage)
+  bindHomeVideoCarousel(root);
   // Docs hub: search + browse categories
   if(pageId==='docs'){ bindDocsHubSearch(root); renderDocsBrowse(root); }
   bindAnalyticsClicks();
