@@ -35,7 +35,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0708](work/P7/WP-0708-agent-steps-assistance-and-autonomy-level-per-step.md) | Agent steps, assistance and autonomy level per step | in_review | claude | `wp/WP-0708-agent-steps-assistance-autonomy` | https://github.com/vikram2409-eng/Lanesra-OS/pull/799 |
 | [WP-0709](work/P7/WP-0709-lanes-and-workflows-declared-replacement-and-starting-a-lane.md) | Lanes and workflows: declared replacement, and starting a lane from a workflow | in_review | claude | `wp/WP-0709-lanes-workflows-interplay` | 792 |
 | [WP-0711](work/P7/WP-0711-notes-attachments-and-reassign-at-any-point.md) | Notes, attachments and reassign at any point | in_review | muse | `wp/WP-0711-notes-attachments-reassign` | https://github.com/vikram2409-eng/Lanesra-OS/pull/798 |
-| [WP-0721](work/P7/WP-0721-blueprint-view-redesign-visual-process-map.md) | Blueprint view redesign: a visual, modern process map of states and steps | in_progress | claude | `wp/WP-0721-blueprint-redesign` | - |
+| [WP-0721](work/P7/WP-0721-blueprint-view-redesign-visual-process-map.md) | Blueprint view redesign: a visual, modern process map of states and steps | in_review | claude | `wp/WP-0721-blueprint-redesign` | https://github.com/vikram2409-eng/Lanesra-OS/pull/805 |
 
 ## Ready to start (all dependencies done)
 
@@ -355,7 +355,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0718](work/P7/WP-0718-visual-lane-builder.md) | Visual lane builder | E7.5 Authoring | ✅ done | L | ✓Desktop ✓Team Workspace ✓Online demo | WP-0712, WP-0714 |
 | [WP-0719](work/P7/WP-0719-count-and-replenish-lanes-as-definitions-with-an-authoring-log.md) | Count and Replenish lanes as definitions, with an authoring log | E7.6 Shipped lanes | ✅ done | S | — | WP-0701 |
 | [WP-0720](work/P7/WP-0720-lane-runner-second-cut-approvals-branches-pause-and-handoff.md) | Lane runner, second cut: approvals, branches, pause and handoff | E7.3 Runner and visibility | ⚪ proposed | M | ○Desktop ○Team Workspace ○Online demo | WP-0707, WP-0706 |
-| [WP-0721](work/P7/WP-0721-blueprint-view-redesign-visual-process-map.md) | Blueprint view redesign: a visual, modern process map of states and steps | E7.5 Authoring | 🔨 in progress | M | ○Desktop ○Team Workspace ○Online demo | WP-0712 |
+| [WP-0721](work/P7/WP-0721-blueprint-view-redesign-visual-process-map.md) | Blueprint view redesign: a visual, modern process map of states and steps | E7.5 Authoring | 👀 in review | M | ○Desktop ○Team Workspace ○Online demo | WP-0712 |
 | [WP-0799](work/P7/WP-0799-phase-7-gate-process-lanes-ready.md) | Phase 7 gate: Process Lanes ready | E7.7 Track gate | ⚪ proposed | M | — | WP-0708, WP-0709, WP-0713, WP-0714, WP-0717, WP-0720 |
 
 ## Phase v2 · Open interop

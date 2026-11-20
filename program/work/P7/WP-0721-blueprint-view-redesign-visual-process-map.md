@@ -3,7 +3,7 @@ id: WP-0721
 title: "Blueprint view redesign: a visual, modern process map of states and steps"
 phase: 7
 epic: E7.5 Authoring
-status: in_progress
+status: in_review
 owner: claude
 planned_for: claude
 depends_on: [WP-0712]
@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
 branch: wp/WP-0721-blueprint-redesign
-pr:
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/805
 updated: 2026-11-20
 ---
 
