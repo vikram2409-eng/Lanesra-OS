@@ -5023,6 +5023,39 @@ export interface LaneStepView {
   check_reason?: string | null;
 }
 
+export interface LaneRunNoteView {
+  id: string;
+  run_id: string;
+  step_id: string | null;
+  author_user_id: string;
+  author_display_name?: string | null;
+  body: string;
+  created_at: string;
+}
+
+export interface LaneRunAttachmentView {
+  id: string;
+  run_id: string;
+  file_name: string;
+  mime_type: string | null;
+  size_bytes: number;
+  created_at: string;
+}
+
+/** One audited anytime action on a run (WP-0711): note added, file
+ * attached, step reassigned. */
+export interface LaneRunAuditEventView {
+  event_type: string;
+  summary: string;
+  user_id: string | null;
+  occurred_at: string;
+}
+
+export interface LaneRunReassignCandidateView {
+  user_id: string;
+  display_name: string;
+}
+
 export interface LaneRunView {
   run_id: string;
   status: string;
@@ -5043,6 +5076,14 @@ export interface LaneRunView {
   /** Plain words for what this run has written so far, in order. */
   writes?: string[] | null;
   waiting?: LaneRunWaiting | null;
+  /** Notes added to the run at any point (WP-0711 AC-1). */
+  notes?: LaneRunNoteView[] | null;
+  /** Files attached to the run at any point (WP-0711 AC-1, AC-3). */
+  attachments?: LaneRunAttachmentView[] | null;
+  /** Audited anytime actions, oldest first (WP-0711 AC-1). */
+  events?: LaneRunAuditEventView[] | null;
+  /** People who may take the current step (WP-0711 AC-2). */
+  reassign_candidates?: LaneRunReassignCandidateView[] | null;
 }
 
 /// One lane run on a record, as Object 360 lists it (WP-0707, REQ-LANE-015).

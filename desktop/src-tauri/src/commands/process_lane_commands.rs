@@ -15,6 +15,7 @@ use crate::commands::{current_actor, require_workspace_id};
 use crate::state::AppState;
 use lanesra_core::domain::AppResult;
 use lanesra_core::models::graph_run::GraphRun;
+use lanesra_core::models::lane_run_note::{LaneRunAttachment, LaneRunNote};
 use lanesra_core::models::process_lane::{ProcessLane, ProcessLaneVersion};
 use lanesra_core::services::process_lane_blueprint::{LaneBlueprint, LaneBlueprintSummary};
 use lanesra_core::services::process_lane_service::{LaneRunList, LaneRunView};
@@ -593,6 +594,101 @@ pub fn handoff_process_lane_step(
         &workspace_id,
         &run_id,
         &to_role,
+        &reason,
+        actor.as_deref(),
+    )
+}
+
+/// WP-0711 (REQ-LANE-018, AC-1): adds a note to a lane run at any point.
+#[tauri::command]
+pub fn add_lane_run_note(
+    state: State<AppState>,
+    run_id: String,
+    body: String,
+) -> AppResult<LaneRunNote> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    process_lane_service::add_lane_run_note(
+        &conn,
+        &workspace_id,
+        &run_id,
+        &body,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0711 (REQ-LANE-018, AC-1/AC-3): attaches a file to a lane run at any
+/// point. The content arrives base64; the bytes land under the data dir
+/// (the db file's parent).
+#[tauri::command]
+pub fn attach_lane_run_file(
+    state: State<AppState>,
+    run_id: String,
+    file_name: String,
+    mime_type: Option<String>,
+    content_base64: String,
+) -> AppResult<LaneRunAttachment> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    let data_dir = state
+        .db_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .ok_or_else(|| lanesra_core::domain::AppError::Validation("no data directory".into()))?;
+    process_lane_service::attach_lane_run_file(
+        &conn,
+        &workspace_id,
+        &data_dir,
+        &run_id,
+        &file_name,
+        mime_type.as_deref(),
+        &content_base64,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0711 (REQ-LANE-018, AC-3): reads one attachment's bytes through its
+/// run, for download. The read is run-scoped in the service.
+#[tauri::command]
+pub fn read_lane_run_attachment(
+    state: State<AppState>,
+    run_id: String,
+    attachment_id: String,
+) -> AppResult<(LaneRunAttachment, Vec<u8>)> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    let data_dir = state
+        .db_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .ok_or_else(|| lanesra_core::domain::AppError::Validation("no data directory".into()))?;
+    process_lane_service::read_lane_run_attachment(
+        &conn,
+        &workspace_id,
+        &data_dir,
+        &run_id,
+        &attachment_id,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// WP-0711 (REQ-LANE-018, AC-2): reassigns the current step of a lane run
+/// to one person who holds the step's role.
+#[tauri::command]
+pub fn reassign_lane_run_step(
+    state: State<'_, AppState>,
+    run_id: String,
+    to_user_id: String,
+    reason: String,
+) -> AppResult<GraphRun> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    let actor = current_actor(&state);
+    process_lane_service::reassign_lane_step(
+        &conn,
+        &workspace_id,
+        &run_id,
+        &to_user_id,
         &reason,
         actor.as_deref(),
     )

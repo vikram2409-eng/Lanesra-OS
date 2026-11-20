@@ -50,6 +50,8 @@ import type {
   LaneBlueprintSummary,
   LaneDefinition,
   LaneRunListItem,
+  LaneRunNoteView,
+  LaneRunAttachmentView,
   LaneRunView,
   PublishReport,
   ProcessLaneVersion,
@@ -626,6 +628,58 @@ export const api = {
       `/api/admin/process-lane-runs/${encodeURIComponent(runId)}/skip-step`,
       { reason },
     ),
+  // WP-0711: notes, attachments and reassign at any point of a run.
+  // Notes and reassign are JSON admin actions, like submit/skip above.
+  // Attachments carry base64 content through the same JSON route - the
+  // file bytes never travel as a form upload in either edition.
+  addLaneRunNote: (runId: string, body: string) =>
+    callAdminAction<LaneRunNoteView>(
+      "add_lane_run_note",
+      { runId, body },
+      "POST",
+      `/api/admin/process-lane-runs/${encodeURIComponent(runId)}/note`,
+      { body },
+    ),
+  attachLaneRunFile: (runId: string, fileName: string, mimeType: string | undefined, contentBase64: string) =>
+    callAdminAction<LaneRunAttachmentView>(
+      "attach_lane_run_file",
+      { runId, fileName, mimeType: mimeType ?? null, contentBase64 },
+      "POST",
+      `/api/admin/process-lane-runs/${encodeURIComponent(runId)}/attachment`,
+      { file_name: fileName, mime_type: mimeType ?? null, content_base64: contentBase64 },
+    ),
+  reassignLaneRunStep: (runId: string, toUserId: string, reason: string) =>
+    callAdminAction<GraphRun>(
+      "reassign_lane_run_step",
+      { runId, toUserId, reason },
+      "POST",
+      `/api/admin/process-lane-runs/${encodeURIComponent(runId)}/reassign`,
+      { to_user_id: toUserId, reason },
+    ),
+  // Downloading an attachment: on desktop the Tauri command returns the
+  // bytes, which are saved through a blob URL; on Team Workspace the
+  // browser opens the admin GET route directly (the session cookie
+  // authenticates it), so the file never passes through JS at all.
+  downloadLaneRunAttachment: async (runId: string, attachment: LaneRunAttachmentView) => {
+    if (isTauriRuntime()) {
+      const [, bytes] = await call<[LaneRunAttachmentView, number[]]>("read_lane_run_attachment", {
+        runId,
+        attachmentId: attachment.id,
+      });
+      const blob = new Blob([new Uint8Array(bytes)], { type: attachment.mime_type ?? "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = attachment.file_name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      window.open(
+        `/api/admin/process-lane-runs/${encodeURIComponent(runId)}/attachments/${encodeURIComponent(attachment.id)}`,
+        "_blank",
+      );
+    }
+  },
   // These may run agents, so on Team Workspace they are async admin actions
   // (`server/src/admin_actions.rs`), not `/api/invoke` commands.
   startGraphRun: (graphId: string, triggerInput: string) =>
