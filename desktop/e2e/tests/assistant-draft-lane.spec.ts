@@ -90,8 +90,12 @@ test('AC-5: describing the receiving process drafts a lane, always a draft', asy
   );
   await expect(page.locator('.page-heading')).toContainText('v1 · draft');
   await expect(page.locator('.page-heading')).toContainText('Runs on purchase_order');
-  await expect(page.getByText('Stage 1 of 4 — Verify')).toBeVisible();
-  await expect(page.getByText('Stage 4 of 4 — Confirm')).toBeVisible();
+  // WP-0721: the blueprint is a visual process map — stages are state
+  // columns (State n / 4) with the stage name, not a "Stage n of 4" heading.
+  await expect(page.getByText('State 1 / 4')).toBeVisible();
+  await expect(page.getByText('State 4 / 4')).toBeVisible();
+  await expect(page.locator('.bp-stage-name').filter({ hasText: 'Verify' })).toBeVisible();
+  await expect(page.locator('.bp-stage-name').filter({ hasText: 'Confirm' })).toBeVisible();
   await expect(page.getByText('This blueprint shows the lane definition only')).toBeVisible();
   await expect(page.getByText('Print / Save as PDF')).toBeVisible();
 
