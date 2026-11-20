@@ -69,6 +69,14 @@ test('the warehouse dashboard links to the Receive Shipment blueprint', async ({
   await expect(page.locator('#view')).toContainText('fail → Hold & review · Review discrepancy');
   await expect(page.locator('#view')).toContainText('carrier');
   await expect(page.locator('#view')).toContainText('record.lines[].qty_received');
+  // WP-0721: the redesigned process map — a stage rail, one state column
+  // per stage, step kind chips, and branches drawn as connectors.
+  await expect(page.locator('#view .bp-rail')).toBeVisible();
+  await expect(page.locator('#view .bp-map .bp-stage')).toHaveCount(5);
+  await expect(page.locator('#view .bp-step')).toHaveCount(13);
+  await expect(page.locator('#view .bp-step-kind').first()).toBeVisible();
+  // At least one branch is drawn as a connector (arrow + labelled target).
+  expect(await page.locator('#view .bp-branch').count()).toBeGreaterThan(0);
   // The print button is present (the export itself is the browser print
   // dialog, which Playwright cannot drive - the button is the contract).
   await expect(page.locator('[data-lane-blueprint-print]')).toBeVisible();

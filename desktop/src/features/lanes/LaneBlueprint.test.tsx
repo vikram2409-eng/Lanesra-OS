@@ -10,6 +10,7 @@
  * data; see desktop/core/tests/process_lane_blueprint.rs).
  */
 import { render } from "@testing-library/react";
+import axe from "axe-core";
 import { describe, expect, it } from "vitest";
 
 import { LaneBlueprintView } from "./LaneBlueprint";
@@ -104,6 +105,14 @@ describe("LaneBlueprintView", () => {
     const first = render(<LaneBlueprintView blueprint={blueprint} />);
     const second = render(<LaneBlueprintView blueprint={blueprint} />);
     expect(first.container.innerHTML).toBe(second.container.innerHTML);
+  });
+
+  it("the redesigned process map has no axe accessibility violations", async () => {
+    // Covers: REQ-LANE-020 (WP-0721 AC-3): the visual process map stays
+    // accessible — landmark/list structure, labelled regions, no violations.
+    const { container } = render(<LaneBlueprintView blueprint={receiveShipmentBlueprint()} />);
+    const results = await axe.run(container);
+    expect(results.violations).toEqual([]);
   });
 
   it("matches the Receive Shipment blueprint snapshot", () => {

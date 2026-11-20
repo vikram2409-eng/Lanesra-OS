@@ -1,1144 +1,1628 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`LaneBlueprintView > matches the Receive Shipment blueprint snapshot 1`] = `
-<div>
-  <div
-    style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
+<div
+  class="bp-blueprint"
+>
+  <header
+    class="bp-header"
   >
-    <h2
-      style="margin: 0px;"
+    <div
+      class="bp-header-titles"
     >
-      Receive Shipment
-    </h2>
-    <span
-      class="badge"
-    >
-      v
-      1
-       · 
-      draft
-    </span>
-    <span
-      style="color: var(--text-muted);"
-    >
-      Runs on 
-      purchase_order
-    </span>
-  </div>
-  <p>
-    Receive a shipment for one purchase order: verify the delivery, record what arrived, stage and put away the stock, and close the order. One run per purchase order. The discrepancy branch sends a short or damaged receipt to the Warehouse Manager for review.
-  </p>
-  <p
-    style="color: var(--text-muted);"
-  >
-    Starts when 
-    $record.status equals "OPEN"
-    .
-  </p>
-  <h3>
-    Stages
-  </h3>
-  <div
-    aria-label="Stage order"
-    style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 16px;"
-  >
-    <span
-      style="display: flex; align-items: center; gap: 6px;"
-    >
+      <h2
+        class="bp-title"
+      >
+        Receive Shipment
+      </h2>
       <span
         class="badge"
       >
+        v
         1
-        . 
-        Verify
+         · 
+        draft
       </span>
-    </span>
-    <span
-      style="display: flex; align-items: center; gap: 6px;"
+      <span
+        class="bp-runs-on"
+      >
+        Runs on 
+        purchase_order
+      </span>
+    </div>
+    <p
+      class="bp-desc"
     >
-      <span
-        aria-hidden="true"
-      >
-        ›
-      </span>
-      <span
-        class="badge"
-      >
-        2
-        . 
-        Record receipt
-      </span>
-    </span>
-    <span
-      style="display: flex; align-items: center; gap: 6px;"
+      Receive a shipment for one purchase order: verify the delivery, record what arrived, stage and put away the stock, and close the order. One run per purchase order. The discrepancy branch sends a short or damaged receipt to the Warehouse Manager for review.
+    </p>
+    <p
+      class="bp-cond"
     >
-      <span
-        aria-hidden="true"
-      >
-        ›
-      </span>
-      <span
-        class="badge"
-      >
-        3
-        . 
-        Hold & review
-      </span>
-    </span>
-    <span
-      style="display: flex; align-items: center; gap: 6px;"
+      Starts when 
+      $record.status equals "OPEN"
+      .
+    </p>
+  </header>
+  <nav
+    aria-label="Stage order"
+    class="bp-rail"
+  >
+    <ol
+      class="bp-rail-list"
     >
-      <span
-        aria-hidden="true"
+      <li
+        class="bp-rail-item"
       >
-        ›
-      </span>
-      <span
-        class="badge"
+        <a
+          class="bp-rail-state"
+          href="#bp-stage-verify"
+        >
+          <span
+            class="bp-rail-num"
+          >
+            1
+          </span>
+          <span
+            class="bp-rail-name"
+          >
+            Verify
+          </span>
+        </a>
+        <span
+          aria-hidden="true"
+          class="bp-rail-arrow"
+        >
+          ›
+        </span>
+      </li>
+      <li
+        class="bp-rail-item"
       >
-        4
-        . 
-        Stage & put away
-      </span>
-    </span>
-    <span
-      style="display: flex; align-items: center; gap: 6px;"
+        <a
+          class="bp-rail-state"
+          href="#bp-stage-record-receipt"
+        >
+          <span
+            class="bp-rail-num"
+          >
+            2
+          </span>
+          <span
+            class="bp-rail-name"
+          >
+            Record receipt
+          </span>
+        </a>
+        <span
+          aria-hidden="true"
+          class="bp-rail-arrow"
+        >
+          ›
+        </span>
+      </li>
+      <li
+        class="bp-rail-item"
+      >
+        <a
+          class="bp-rail-state"
+          href="#bp-stage-hold-review"
+        >
+          <span
+            class="bp-rail-num"
+          >
+            3
+          </span>
+          <span
+            class="bp-rail-name"
+          >
+            Hold & review
+          </span>
+        </a>
+        <span
+          aria-hidden="true"
+          class="bp-rail-arrow"
+        >
+          ›
+        </span>
+      </li>
+      <li
+        class="bp-rail-item"
+      >
+        <a
+          class="bp-rail-state"
+          href="#bp-stage-stage-put-away"
+        >
+          <span
+            class="bp-rail-num"
+          >
+            4
+          </span>
+          <span
+            class="bp-rail-name"
+          >
+            Stage & put away
+          </span>
+        </a>
+        <span
+          aria-hidden="true"
+          class="bp-rail-arrow"
+        >
+          ›
+        </span>
+      </li>
+      <li
+        class="bp-rail-item"
+      >
+        <a
+          class="bp-rail-state"
+          href="#bp-stage-confirm"
+        >
+          <span
+            class="bp-rail-num"
+          >
+            5
+          </span>
+          <span
+            class="bp-rail-name"
+          >
+            Confirm
+          </span>
+        </a>
+      </li>
+    </ol>
+  </nav>
+  <div
+    class="bp-map"
+  >
+    <section
+      aria-label="Stage 1 of 5: Verify"
+      class="bp-stage"
+      id="bp-stage-verify"
     >
-      <span
-        aria-hidden="true"
+      <header
+        class="bp-stage-head"
       >
-        ›
-      </span>
-      <span
-        class="badge"
+        <span
+          class="bp-stage-num"
+        >
+          State 
+          1
+           / 
+          5
+        </span>
+        <h3
+          class="bp-stage-name"
+        >
+          Verify
+        </h3>
+      </header>
+      <ol
+        class="bp-steps"
       >
-        5
-        . 
-        Confirm
-      </span>
-    </span>
+        <li
+          class="bp-step bp-kind-form"
+        >
+          <div
+            class="bp-step-head"
+          >
+            <span
+              aria-hidden="true"
+              class="bp-step-icon"
+            >
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                height="15"
+                viewBox="0 0 16 16"
+                width="15"
+              >
+                <path
+                  d="M3.5 2h9v12h-9z M5.75 5.5h4.5 M5.75 8h4.5 M5.75 10.5h3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.2"
+                />
+              </svg>
+            </span>
+            <span
+              class="bp-step-kind"
+            >
+              Form
+            </span>
+            <strong
+              class="bp-step-name"
+            >
+              Confirm shipment arrived
+            </strong>
+            <span
+              class="bp-step-role"
+            >
+              role_wh_receiver
+            </span>
+          </div>
+          <p
+            class="bp-step-desc"
+          >
+            Confirm the truck and delivery: carrier, delivery-note number, received date.
+          </p>
+          <table
+            class="bp-step-table"
+          >
+            <thead>
+              <tr>
+                <th>
+                  Field
+                </th>
+                <th>
+                  Type
+                </th>
+                <th>
+                  Stored as
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  Carrier
+                   *
+                </td>
+                <td>
+                  string
+                </td>
+                <td>
+                  <code>
+                    run_data.carrier
+                  </code>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Delivery-note number
+                   *
+                </td>
+                <td>
+                  string
+                </td>
+                <td>
+                  <code>
+                    run_data.delivery_note_number
+                  </code>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Received date
+                   *
+                </td>
+                <td>
+                  date
+                </td>
+                <td>
+                  <code>
+                    run_data.received_date
+                  </code>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </li>
+        <li
+          class="bp-step bp-kind-form"
+        >
+          <div
+            class="bp-step-head"
+          >
+            <span
+              aria-hidden="true"
+              class="bp-step-icon"
+            >
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                height="15"
+                viewBox="0 0 16 16"
+                width="15"
+              >
+                <path
+                  d="M3.5 2h9v12h-9z M5.75 5.5h4.5 M5.75 8h4.5 M5.75 10.5h3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.2"
+                />
+              </svg>
+            </span>
+            <span
+              class="bp-step-kind"
+            >
+              Form
+            </span>
+            <strong
+              class="bp-step-name"
+            >
+              Match lines to the delivery note
+            </strong>
+            <span
+              class="bp-step-role"
+            >
+              role_wh_receiver
+            </span>
+          </div>
+          <p
+            class="bp-step-desc"
+          >
+            Match each order line to the delivery note: enter the quantity on the delivery note per line. The Receiving Agent proposes the match; the receiver confirms or overrides. Runs once per order line.
+          </p>
+          <p
+            class="bp-step-note"
+          >
+            Repeats once per 
+            lines
+            .
+          </p>
+          <p
+            class="bp-step-note"
+          >
+            Agent assistance: 
+            propose
+             (wh-agt-receiving)
+          </p>
+          <table
+            class="bp-step-table"
+          >
+            <thead>
+              <tr>
+                <th>
+                  Field
+                </th>
+                <th>
+                  Type
+                </th>
+                <th>
+                  Stored as
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  Delivery-note quantity
+                   *
+                </td>
+                <td>
+                  integer
+                </td>
+                <td>
+                  <code>
+                    run_data.delivery_note_qty
+                  </code>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </li>
+        <li
+          class="bp-step bp-kind-form"
+        >
+          <div
+            class="bp-step-head"
+          >
+            <span
+              aria-hidden="true"
+              class="bp-step-icon"
+            >
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                height="15"
+                viewBox="0 0 16 16"
+                width="15"
+              >
+                <path
+                  d="M3.5 2h9v12h-9z M5.75 5.5h4.5 M5.75 8h4.5 M5.75 10.5h3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.2"
+                />
+              </svg>
+            </span>
+            <span
+              class="bp-step-kind"
+            >
+              Form
+            </span>
+            <strong
+              class="bp-step-name"
+            >
+              Verify the supplier
+            </strong>
+            <span
+              class="bp-step-role"
+            >
+              role_wh_receiver
+            </span>
+          </div>
+          <p
+            class="bp-step-desc"
+          >
+            Hand the supplier check to the Supplier Check lane: it runs on this PO's supplier (Kiln & Clay Co.) and the run waits until it finishes. The parent records the outcome and carries on.
+          </p>
+          <p
+            class="bp-step-note"
+          >
+            Starts lane 
+            lane-wh-supplier-check
+             on 
+            $record.supplier_id
+            .
+          </p>
+        </li>
+      </ol>
+    </section>
+    <section
+      aria-label="Stage 2 of 5: Record receipt"
+      class="bp-stage"
+      id="bp-stage-record-receipt"
+    >
+      <header
+        class="bp-stage-head"
+      >
+        <span
+          class="bp-stage-num"
+        >
+          State 
+          2
+           / 
+          5
+        </span>
+        <h3
+          class="bp-stage-name"
+        >
+          Record receipt
+        </h3>
+      </header>
+      <ol
+        class="bp-steps"
+      >
+        <li
+          class="bp-step bp-kind-form"
+        >
+          <div
+            class="bp-step-head"
+          >
+            <span
+              aria-hidden="true"
+              class="bp-step-icon"
+            >
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                height="15"
+                viewBox="0 0 16 16"
+                width="15"
+              >
+                <path
+                  d="M3.5 2h9v12h-9z M5.75 5.5h4.5 M5.75 8h4.5 M5.75 10.5h3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.2"
+                />
+              </svg>
+            </span>
+            <span
+              class="bp-step-kind"
+            >
+              Form
+            </span>
+            <strong
+              class="bp-step-name"
+            >
+              Enter received quantities
+            </strong>
+            <span
+              class="bp-step-role"
+            >
+              role_wh_receiver
+            </span>
+          </div>
+          <p
+            class="bp-step-desc"
+          >
+            Per line: quantity received, quantity rejected and the rejection reason. The quantities are written to the PO lines; the reason is stored in run data. Runs once per order line.
+          </p>
+          <p
+            class="bp-step-note"
+          >
+            Repeats once per 
+            lines
+            .
+          </p>
+          <table
+            class="bp-step-table"
+          >
+            <thead>
+              <tr>
+                <th>
+                  Field
+                </th>
+                <th>
+                  Type
+                </th>
+                <th>
+                  Stored as
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  Quantity received
+                   *
+                </td>
+                <td>
+                  integer
+                </td>
+                <td>
+                  <code>
+                    record.lines[].qty_received
+                  </code>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Quantity rejected
+                   *
+                </td>
+                <td>
+                  integer
+                </td>
+                <td>
+                  <code>
+                    record.lines[].qty_rejected
+                  </code>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Rejection reason
+                </td>
+                <td>
+                  string
+                </td>
+                <td>
+                  <code>
+                    run_data.rejection_reason
+                  </code>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </li>
+        <li
+          class="bp-step bp-kind-check"
+        >
+          <div
+            class="bp-step-head"
+          >
+            <span
+              aria-hidden="true"
+              class="bp-step-icon"
+            >
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                height="15"
+                viewBox="0 0 16 16"
+                width="15"
+              >
+                <path
+                  d="M8 1.5 14.5 8 8 14.5 1.5 8Z M5.4 8l1.8 1.8L10.6 6.4"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.2"
+                />
+              </svg>
+            </span>
+            <span
+              class="bp-step-kind"
+            >
+              Check
+            </span>
+            <strong
+              class="bp-step-name"
+            >
+              Discrepancy check
+            </strong>
+          </div>
+          <p
+            class="bp-step-desc"
+          >
+            Automatic check: every line fully received. If any line is short or rejected, the run branches to manager review instead of continuing to put-away.
+          </p>
+          <p
+            class="bp-step-fact"
+          >
+            Checks: 
+            A line is short or has rejected units.
+             (
+            per_item
+            , all
+            )
+          </p>
+          <ul
+            aria-label="Branches from Discrepancy check"
+            class="bp-branches"
+          >
+            <li
+              class="bp-branch"
+            >
+              <svg
+                aria-hidden="true"
+                class="bp-branch-arrow"
+                focusable="false"
+                height="12"
+                viewBox="0 0 26 12"
+                width="26"
+              >
+                <path
+                  d="M0 6h20M16.5 1.5 21 6l-4.5 4.5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.4"
+                />
+              </svg>
+              <span
+                class="bp-branch-label"
+              >
+                pass
+                 → 
+                Stage & put away · Stage the goods
+              </span>
+            </li>
+            <li
+              class="bp-branch"
+            >
+              <svg
+                aria-hidden="true"
+                class="bp-branch-arrow"
+                focusable="false"
+                height="12"
+                viewBox="0 0 26 12"
+                width="26"
+              >
+                <path
+                  d="M0 6h20M16.5 1.5 21 6l-4.5 4.5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.4"
+                />
+              </svg>
+              <span
+                class="bp-branch-label"
+              >
+                fail
+                 → 
+                Hold & review · Review discrepancy
+              </span>
+            </li>
+          </ul>
+        </li>
+      </ol>
+    </section>
+    <section
+      aria-label="Stage 3 of 5: Hold & review"
+      class="bp-stage"
+      id="bp-stage-hold-review"
+    >
+      <header
+        class="bp-stage-head"
+      >
+        <span
+          class="bp-stage-num"
+        >
+          State 
+          3
+           / 
+          5
+        </span>
+        <h3
+          class="bp-stage-name"
+        >
+          Hold & review
+        </h3>
+      </header>
+      <ol
+        class="bp-steps"
+      >
+        <li
+          class="bp-step bp-kind-approval"
+        >
+          <div
+            class="bp-step-head"
+          >
+            <span
+              aria-hidden="true"
+              class="bp-step-icon"
+            >
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                height="15"
+                viewBox="0 0 16 16"
+                width="15"
+              >
+                <path
+                  d="M8 1.4l5.4 2v3.9c0 3.5-2.6 5.5-5.4 6.9-2.8-1.4-5.4-3.4-5.4-6.9V3.4Z M5.6 8l1.6 1.6 3.3-3.3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.2"
+                />
+              </svg>
+            </span>
+            <span
+              class="bp-step-kind"
+            >
+              Approval
+            </span>
+            <strong
+              class="bp-step-name"
+            >
+              Review discrepancy
+            </strong>
+            <span
+              class="bp-step-role"
+            >
+              role_wh_warehouse_manager
+            </span>
+          </div>
+          <p
+            class="bp-step-desc"
+          >
+            The Warehouse Manager sees per-line ordered vs received vs rejected, with the receiver's note. Approve: continue to Stage 3 with the adjusted quantities; the PO becomes PARTIALLY_RECEIVED. Reject: the run goes to the hold step; no receipt is posted for the disputed lines.
+          </p>
+          <div
+            class="bp-step-block"
+          >
+            <span
+              class="bp-step-block-label"
+            >
+              Writes
+            </span>
+            <ul
+              class="bp-step-list"
+            >
+              <li>
+                <code>
+                  purchase_order.set_status
+                </code>
+                <span>
+                   
+                  · 
+                  status
+                  : 
+                  <code>
+                    "PARTIALLY_RECEIVED"
+                  </code>
+                </span>
+              </li>
+            </ul>
+          </div>
+          <ul
+            aria-label="Branches from Review discrepancy"
+            class="bp-branches"
+          >
+            <li
+              class="bp-branch"
+            >
+              <svg
+                aria-hidden="true"
+                class="bp-branch-arrow"
+                focusable="false"
+                height="12"
+                viewBox="0 0 26 12"
+                width="26"
+              >
+                <path
+                  d="M0 6h20M16.5 1.5 21 6l-4.5 4.5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.4"
+                />
+              </svg>
+              <span
+                class="bp-branch-label"
+              >
+                approved
+                 → 
+                Stage & put away · Stage the goods
+              </span>
+            </li>
+            <li
+              class="bp-branch"
+            >
+              <svg
+                aria-hidden="true"
+                class="bp-branch-arrow"
+                focusable="false"
+                height="12"
+                viewBox="0 0 26 12"
+                width="26"
+              >
+                <path
+                  d="M0 6h20M16.5 1.5 21 6l-4.5 4.5"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.4"
+                />
+              </svg>
+              <span
+                class="bp-branch-label"
+              >
+                rejected
+                 → 
+                Hold & review · Record hold
+              </span>
+            </li>
+          </ul>
+          <p
+            class="bp-step-note"
+          >
+            Replaces workflow 
+            wf-wh-07
+            , action 
+            0
+            .
+          </p>
+        </li>
+        <li
+          class="bp-step bp-kind-form"
+        >
+          <div
+            class="bp-step-head"
+          >
+            <span
+              aria-hidden="true"
+              class="bp-step-icon"
+            >
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                height="15"
+                viewBox="0 0 16 16"
+                width="15"
+              >
+                <path
+                  d="M3.5 2h9v12h-9z M5.75 5.5h4.5 M5.75 8h4.5 M5.75 10.5h3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.2"
+                />
+              </svg>
+            </span>
+            <span
+              class="bp-step-kind"
+            >
+              Form
+            </span>
+            <strong
+              class="bp-step-name"
+            >
+              Record hold
+            </strong>
+            <span
+              class="bp-step-role"
+            >
+              role_wh_warehouse_manager
+            </span>
+          </div>
+          <p
+            class="bp-step-desc"
+          >
+            Record why the receipt is held. Completing this step ends the run as held. Put-away never happens for the disputed lines. Resuming the receipt is a new run on the same PO.
+          </p>
+          <table
+            class="bp-step-table"
+          >
+            <thead>
+              <tr>
+                <th>
+                  Field
+                </th>
+                <th>
+                  Type
+                </th>
+                <th>
+                  Stored as
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  Hold reason
+                   *
+                </td>
+                <td>
+                  string
+                </td>
+                <td>
+                  <code>
+                    run_data.hold_reason
+                  </code>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p
+            class="bp-step-fact bp-step-end"
+          >
+            Ends the run with outcome 
+            held
+            .
+          </p>
+        </li>
+      </ol>
+    </section>
+    <section
+      aria-label="Stage 4 of 5: Stage & put away"
+      class="bp-stage"
+      id="bp-stage-stage-put-away"
+    >
+      <header
+        class="bp-stage-head"
+      >
+        <span
+          class="bp-stage-num"
+        >
+          State 
+          4
+           / 
+          5
+        </span>
+        <h3
+          class="bp-stage-name"
+        >
+          Stage & put away
+        </h3>
+      </header>
+      <ol
+        class="bp-steps"
+      >
+        <li
+          class="bp-step bp-kind-form"
+        >
+          <div
+            class="bp-step-head"
+          >
+            <span
+              aria-hidden="true"
+              class="bp-step-icon"
+            >
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                height="15"
+                viewBox="0 0 16 16"
+                width="15"
+              >
+                <path
+                  d="M3.5 2h9v12h-9z M5.75 5.5h4.5 M5.75 8h4.5 M5.75 10.5h3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.2"
+                />
+              </svg>
+            </span>
+            <span
+              class="bp-step-kind"
+            >
+              Form
+            </span>
+            <strong
+              class="bp-step-name"
+            >
+              Stage the goods
+            </strong>
+            <span
+              class="bp-step-role"
+            >
+              role_wh_receiver
+            </span>
+          </div>
+          <p
+            class="bp-step-desc"
+          >
+            Assign a receiving bin for the staged goods: RCV-01 or RCV-02. The Receiving Agent proposes the bin; the receiver confirms or overrides.
+          </p>
+          <p
+            class="bp-step-note"
+          >
+            Agent assistance: 
+            propose
+             (wh-agt-receiving)
+          </p>
+          <table
+            class="bp-step-table"
+          >
+            <thead>
+              <tr>
+                <th>
+                  Field
+                </th>
+                <th>
+                  Type
+                </th>
+                <th>
+                  Stored as
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  Staging bin
+                   *
+                </td>
+                <td>
+                  string
+                </td>
+                <td>
+                  <code>
+                    run_data.staging_bin
+                  </code>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </li>
+        <li
+          class="bp-step bp-kind-record"
+        >
+          <div
+            class="bp-step-head"
+          >
+            <span
+              aria-hidden="true"
+              class="bp-step-icon"
+            >
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                height="15"
+                viewBox="0 0 16 16"
+                width="15"
+              >
+                <path
+                  d="M8 2.2c2.76 0 5 .8 5 1.8s-2.24 1.8-5 1.8-5-.8-5-1.8 2.24-1.8 5-1.8Z M3 4v8c0 1 2.24 1.8 5 1.8s5-.8 5-1.8V4"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.2"
+                />
+              </svg>
+            </span>
+            <span
+              class="bp-step-kind"
+            >
+              Record
+            </span>
+            <strong
+              class="bp-step-name"
+            >
+              Post receipt moves
+            </strong>
+            <span
+              class="bp-step-role"
+            >
+              role_wh_receiver
+            </span>
+          </div>
+          <p
+            class="bp-step-desc"
+          >
+            Post a RECEIPT StockMove per order line (MV-2026-016, MV-2026-017 for PO-2026-001). Runs once per order line. The move number is assigned by the Action Type; the ledger is append-only.
+          </p>
+          <p
+            class="bp-step-note"
+          >
+            Repeats once per 
+            lines
+            .
+          </p>
+          <div
+            class="bp-step-block"
+          >
+            <span
+              class="bp-step-block-label"
+            >
+              Writes
+            </span>
+            <ul
+              class="bp-step-list"
+            >
+              <li>
+                <code>
+                  warehouse.post_stock_move
+                </code>
+                <span>
+                   
+                  · 
+                  from_location
+                  : 
+                  <code>
+                    null
+                  </code>
+                </span>
+                <span>
+                   
+                  · 
+                  move_type
+                  : 
+                  <code>
+                    "RECEIPT"
+                  </code>
+                </span>
+                <span>
+                   
+                  · 
+                  product_id
+                  : 
+                  <code>
+                    "$item.product_id"
+                  </code>
+                </span>
+                <span>
+                   
+                  · 
+                  quantity
+                  : 
+                  <code>
+                    "$item.qty_received"
+                  </code>
+                </span>
+                <span>
+                   
+                  · 
+                  reference_id
+                  : 
+                  <code>
+                    "$record.id"
+                  </code>
+                </span>
+                <span>
+                   
+                  · 
+                  to_location
+                  : 
+                  <code>
+                    "$run_data.staging_bin"
+                  </code>
+                </span>
+              </li>
+            </ul>
+          </div>
+        </li>
+        <li
+          class="bp-step bp-kind-form"
+        >
+          <div
+            class="bp-step-head"
+          >
+            <span
+              aria-hidden="true"
+              class="bp-step-icon"
+            >
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                height="15"
+                viewBox="0 0 16 16"
+                width="15"
+              >
+                <path
+                  d="M3.5 2h9v12h-9z M5.75 5.5h4.5 M5.75 8h4.5 M5.75 10.5h3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.2"
+                />
+              </svg>
+            </span>
+            <span
+              class="bp-step-kind"
+            >
+              Form
+            </span>
+            <strong
+              class="bp-step-name"
+            >
+              Confirm put-away
+            </strong>
+            <span
+              class="bp-step-role"
+            >
+              role_wh_receiver
+            </span>
+          </div>
+          <p
+            class="bp-step-desc"
+          >
+            Confirm the put-away bin per line, suggested by the Receiving Agent from the product's preferred bin (HG-1001 and HG-1002 both go to A-01-03). Runs once per order line.
+          </p>
+          <p
+            class="bp-step-note"
+          >
+            Repeats once per 
+            lines
+            .
+          </p>
+          <p
+            class="bp-step-note"
+          >
+            Agent assistance: 
+            propose
+             (wh-agt-receiving)
+          </p>
+          <table
+            class="bp-step-table"
+          >
+            <thead>
+              <tr>
+                <th>
+                  Field
+                </th>
+                <th>
+                  Type
+                </th>
+                <th>
+                  Stored as
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  Put-away bin
+                   *
+                </td>
+                <td>
+                  string
+                </td>
+                <td>
+                  <code>
+                    run_data.putaway_bin
+                  </code>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </li>
+        <li
+          class="bp-step bp-kind-record"
+        >
+          <div
+            class="bp-step-head"
+          >
+            <span
+              aria-hidden="true"
+              class="bp-step-icon"
+            >
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                height="15"
+                viewBox="0 0 16 16"
+                width="15"
+              >
+                <path
+                  d="M8 2.2c2.76 0 5 .8 5 1.8s-2.24 1.8-5 1.8-5-.8-5-1.8 2.24-1.8 5-1.8Z M3 4v8c0 1 2.24 1.8 5 1.8s5-.8 5-1.8V4"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.2"
+                />
+              </svg>
+            </span>
+            <span
+              class="bp-step-kind"
+            >
+              Record
+            </span>
+            <strong
+              class="bp-step-name"
+            >
+              Post put-away moves
+            </strong>
+            <span
+              class="bp-step-role"
+            >
+              role_wh_receiver
+            </span>
+          </div>
+          <p
+            class="bp-step-desc"
+          >
+            Post a PUTAWAY StockMove per order line (MV-2026-018, MV-2026-019 for PO-2026-001) and update stock on hand (48 to 88 for HG-1001, 22 to 52 for HG-1002). Runs once per order line. Available is recomputed, never written.
+          </p>
+          <p
+            class="bp-step-note"
+          >
+            Repeats once per 
+            lines
+            .
+          </p>
+          <div
+            class="bp-step-block"
+          >
+            <span
+              class="bp-step-block-label"
+            >
+              Writes
+            </span>
+            <ul
+              class="bp-step-list"
+            >
+              <li>
+                <code>
+                  warehouse.post_stock_move
+                </code>
+                <span>
+                   
+                  · 
+                  from_location
+                  : 
+                  <code>
+                    "$run_data.staging_bin"
+                  </code>
+                </span>
+                <span>
+                   
+                  · 
+                  move_type
+                  : 
+                  <code>
+                    "PUTAWAY"
+                  </code>
+                </span>
+                <span>
+                   
+                  · 
+                  product_id
+                  : 
+                  <code>
+                    "$item.product_id"
+                  </code>
+                </span>
+                <span>
+                   
+                  · 
+                  quantity
+                  : 
+                  <code>
+                    "$item.qty_received"
+                  </code>
+                </span>
+                <span>
+                   
+                  · 
+                  reference_id
+                  : 
+                  <code>
+                    "$record.id"
+                  </code>
+                </span>
+                <span>
+                   
+                  · 
+                  to_location
+                  : 
+                  <code>
+                    "$run_data.putaway_bin"
+                  </code>
+                </span>
+              </li>
+            </ul>
+          </div>
+        </li>
+      </ol>
+    </section>
+    <section
+      aria-label="Stage 5 of 5: Confirm"
+      class="bp-stage"
+      id="bp-stage-confirm"
+    >
+      <header
+        class="bp-stage-head"
+      >
+        <span
+          class="bp-stage-num"
+        >
+          State 
+          5
+           / 
+          5
+        </span>
+        <h3
+          class="bp-stage-name"
+        >
+          Confirm
+        </h3>
+      </header>
+      <ol
+        class="bp-steps"
+      >
+        <li
+          class="bp-step bp-kind-form"
+        >
+          <div
+            class="bp-step-head"
+          >
+            <span
+              aria-hidden="true"
+              class="bp-step-icon"
+            >
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                height="15"
+                viewBox="0 0 16 16"
+                width="15"
+              >
+                <path
+                  d="M3.5 2h9v12h-9z M5.75 5.5h4.5 M5.75 8h4.5 M5.75 10.5h3"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.2"
+                />
+              </svg>
+            </span>
+            <span
+              class="bp-step-kind"
+            >
+              Form
+            </span>
+            <strong
+              class="bp-step-name"
+            >
+              Review summary
+            </strong>
+            <span
+              class="bp-step-role"
+            >
+              role_wh_receiver
+            </span>
+          </div>
+          <p
+            class="bp-step-desc"
+          >
+            Read-only summary of the run: what was received, staged and put away, and the new on-hand quantities (88 / 52 for PO-2026-001). No fields to fill; completing the step moves on.
+          </p>
+        </li>
+        <li
+          class="bp-step bp-kind-record"
+        >
+          <div
+            class="bp-step-head"
+          >
+            <span
+              aria-hidden="true"
+              class="bp-step-icon"
+            >
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                height="15"
+                viewBox="0 0 16 16"
+                width="15"
+              >
+                <path
+                  d="M8 2.2c2.76 0 5 .8 5 1.8s-2.24 1.8-5 1.8-5-.8-5-1.8 2.24-1.8 5-1.8Z M3 4v8c0 1 2.24 1.8 5 1.8s5-.8 5-1.8V4"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.2"
+                />
+              </svg>
+            </span>
+            <span
+              class="bp-step-kind"
+            >
+              Record
+            </span>
+            <strong
+              class="bp-step-name"
+            >
+              Close the PO
+            </strong>
+            <span
+              class="bp-step-role"
+            >
+              role_wh_receiver
+            </span>
+          </div>
+          <p
+            class="bp-step-desc"
+          >
+            Close the receipt. The Action Type closes the PO as RECEIVED when every line is fully received, or PARTIALLY_RECEIVED when the run took the discrepancy branch. The Warehouse Manager is notified automatically. This step replaces the wf-wh-01 put-away task: put-away already happened in Stage 3, so no duplicate task is created. The workflow stays the fallback for a PO that becomes RECEIVED outside a lane.
+          </p>
+          <div
+            class="bp-step-block"
+          >
+            <span
+              class="bp-step-block-label"
+            >
+              Writes
+            </span>
+            <ul
+              class="bp-step-list"
+            >
+              <li>
+                <code>
+                  purchase_order.close_receipt
+                </code>
+                <span>
+                   
+                  · 
+                  purchase_order_id
+                  : 
+                  <code>
+                    "$record.id"
+                  </code>
+                </span>
+              </li>
+            </ul>
+          </div>
+          <p
+            class="bp-step-note"
+          >
+            Notifies 
+            role_wh_warehouse_manager
+            : 
+            PO-2026-001 received: 40 x HG-1001, 30 x HG-1002. Stock on hand 88 / 52.
+          </p>
+          <p
+            class="bp-step-note"
+          >
+            Replaces workflow 
+            wf-wh-01
+            , action 
+            0
+            .
+          </p>
+        </li>
+      </ol>
+    </section>
   </div>
-  <section
-    style="margin-bottom: 20px;"
-  >
-    <h3
-      style="margin-bottom: 4px;"
-    >
-      Stage 
-      1
-       of 
-      5
-       — 
-      Verify
-    </h3>
-    <div
-      class="card"
-      style="margin-bottom: 12px;"
-    >
-      <div
-        style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
-      >
-        <span
-          class="badge"
-        >
-          Form
-        </span>
-        <strong>
-          Confirm shipment arrived
-        </strong>
-        <span
-          style="color: var(--text-muted);"
-        >
-          · 
-          role_wh_receiver
-        </span>
-      </div>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        Confirm the truck and delivery: carrier, delivery-note number, received date.
-      </p>
-      <table
-        style="margin-top: 8px;"
-      >
-        <thead>
-          <tr>
-            <th>
-              Field
-            </th>
-            <th>
-              Type
-            </th>
-            <th>
-              Stored as
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              Carrier
-               *
-            </td>
-            <td>
-              string
-            </td>
-            <td>
-              <code>
-                run_data.carrier
-              </code>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              Delivery-note number
-               *
-            </td>
-            <td>
-              string
-            </td>
-            <td>
-              <code>
-                run_data.delivery_note_number
-              </code>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              Received date
-               *
-            </td>
-            <td>
-              date
-            </td>
-            <td>
-              <code>
-                run_data.received_date
-              </code>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <div
-      class="card"
-      style="margin-bottom: 12px;"
-    >
-      <div
-        style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
-      >
-        <span
-          class="badge"
-        >
-          Form
-        </span>
-        <strong>
-          Match lines to the delivery note
-        </strong>
-        <span
-          style="color: var(--text-muted);"
-        >
-          · 
-          role_wh_receiver
-        </span>
-      </div>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        Match each order line to the delivery note: enter the quantity on the delivery note per line. The Receiving Agent proposes the match; the receiver confirms or overrides. Runs once per order line.
-      </p>
-      <p
-        style="margin: 8px 0px 0px; color: var(--text-muted);"
-      >
-        Repeats once per 
-        lines
-        .
-      </p>
-      <p
-        style="margin: 8px 0px 0px; color: var(--text-muted);"
-      >
-        Agent assistance: 
-        propose
-         (wh-agt-receiving)
-      </p>
-      <table
-        style="margin-top: 8px;"
-      >
-        <thead>
-          <tr>
-            <th>
-              Field
-            </th>
-            <th>
-              Type
-            </th>
-            <th>
-              Stored as
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              Delivery-note quantity
-               *
-            </td>
-            <td>
-              integer
-            </td>
-            <td>
-              <code>
-                run_data.delivery_note_qty
-              </code>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <div
-      class="card"
-      style="margin-bottom: 12px;"
-    >
-      <div
-        style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
-      >
-        <span
-          class="badge"
-        >
-          Form
-        </span>
-        <strong>
-          Verify the supplier
-        </strong>
-        <span
-          style="color: var(--text-muted);"
-        >
-          · 
-          role_wh_receiver
-        </span>
-      </div>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        Hand the supplier check to the Supplier Check lane: it runs on this PO's supplier (Kiln & Clay Co.) and the run waits until it finishes. The parent records the outcome and carries on.
-      </p>
-      <p
-        style="margin: 8px 0px 0px; color: var(--text-muted);"
-      >
-        Starts lane 
-        lane-wh-supplier-check
-         on 
-        $record.supplier_id
-        .
-      </p>
-    </div>
-  </section>
-  <section
-    style="margin-bottom: 20px;"
-  >
-    <h3
-      style="margin-bottom: 4px;"
-    >
-      Stage 
-      2
-       of 
-      5
-       — 
-      Record receipt
-    </h3>
-    <div
-      class="card"
-      style="margin-bottom: 12px;"
-    >
-      <div
-        style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
-      >
-        <span
-          class="badge"
-        >
-          Form
-        </span>
-        <strong>
-          Enter received quantities
-        </strong>
-        <span
-          style="color: var(--text-muted);"
-        >
-          · 
-          role_wh_receiver
-        </span>
-      </div>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        Per line: quantity received, quantity rejected and the rejection reason. The quantities are written to the PO lines; the reason is stored in run data. Runs once per order line.
-      </p>
-      <p
-        style="margin: 8px 0px 0px; color: var(--text-muted);"
-      >
-        Repeats once per 
-        lines
-        .
-      </p>
-      <table
-        style="margin-top: 8px;"
-      >
-        <thead>
-          <tr>
-            <th>
-              Field
-            </th>
-            <th>
-              Type
-            </th>
-            <th>
-              Stored as
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              Quantity received
-               *
-            </td>
-            <td>
-              integer
-            </td>
-            <td>
-              <code>
-                record.lines[].qty_received
-              </code>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              Quantity rejected
-               *
-            </td>
-            <td>
-              integer
-            </td>
-            <td>
-              <code>
-                record.lines[].qty_rejected
-              </code>
-            </td>
-          </tr>
-          <tr>
-            <td>
-              Rejection reason
-            </td>
-            <td>
-              string
-            </td>
-            <td>
-              <code>
-                run_data.rejection_reason
-              </code>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <div
-      class="card"
-      style="margin-bottom: 12px;"
-    >
-      <div
-        style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
-      >
-        <span
-          class="badge"
-        >
-          Check
-        </span>
-        <strong>
-          Discrepancy check
-        </strong>
-      </div>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        Automatic check: every line fully received. If any line is short or rejected, the run branches to manager review instead of continuing to put-away.
-      </p>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        Checks: 
-        A line is short or has rejected units.
-         (
-        per_item
-        , all
-        )
-      </p>
-      <div
-        style="margin-top: 8px;"
-      >
-        <strong>
-          Branches
-        </strong>
-        <ul
-          style="margin: 4px 0px 0px; padding-left: 20px;"
-        >
-          <li>
-            pass
-             → 
-            Stage & put away · Stage the goods
-          </li>
-          <li>
-            fail
-             → 
-            Hold & review · Review discrepancy
-          </li>
-        </ul>
-      </div>
-    </div>
-  </section>
-  <section
-    style="margin-bottom: 20px;"
-  >
-    <h3
-      style="margin-bottom: 4px;"
-    >
-      Stage 
-      3
-       of 
-      5
-       — 
-      Hold & review
-    </h3>
-    <div
-      class="card"
-      style="margin-bottom: 12px;"
-    >
-      <div
-        style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
-      >
-        <span
-          class="badge"
-        >
-          Approval
-        </span>
-        <strong>
-          Review discrepancy
-        </strong>
-        <span
-          style="color: var(--text-muted);"
-        >
-          · 
-          role_wh_warehouse_manager
-        </span>
-      </div>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        The Warehouse Manager sees per-line ordered vs received vs rejected, with the receiver's note. Approve: continue to Stage 3 with the adjusted quantities; the PO becomes PARTIALLY_RECEIVED. Reject: the run goes to the hold step; no receipt is posted for the disputed lines.
-      </p>
-      <div
-        style="margin-top: 8px;"
-      >
-        <strong>
-          Writes
-        </strong>
-        <ul
-          style="margin: 4px 0px 0px; padding-left: 20px;"
-        >
-          <li>
-            <code>
-              purchase_order.set_status
-            </code>
-            <span>
-               
-              · 
-              status
-              : 
-              <code>
-                "PARTIALLY_RECEIVED"
-              </code>
-            </span>
-          </li>
-        </ul>
-      </div>
-      <div
-        style="margin-top: 8px;"
-      >
-        <strong>
-          Branches
-        </strong>
-        <ul
-          style="margin: 4px 0px 0px; padding-left: 20px;"
-        >
-          <li>
-            approved
-             → 
-            Stage & put away · Stage the goods
-          </li>
-          <li>
-            rejected
-             → 
-            Hold & review · Record hold
-          </li>
-        </ul>
-      </div>
-      <p
-        style="margin: 8px 0px 0px; color: var(--text-muted);"
-      >
-        Replaces workflow 
-        wf-wh-07
-        , action 
-        0
-        .
-      </p>
-    </div>
-    <div
-      class="card"
-      style="margin-bottom: 12px;"
-    >
-      <div
-        style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
-      >
-        <span
-          class="badge"
-        >
-          Form
-        </span>
-        <strong>
-          Record hold
-        </strong>
-        <span
-          style="color: var(--text-muted);"
-        >
-          · 
-          role_wh_warehouse_manager
-        </span>
-      </div>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        Record why the receipt is held. Completing this step ends the run as held. Put-away never happens for the disputed lines. Resuming the receipt is a new run on the same PO.
-      </p>
-      <table
-        style="margin-top: 8px;"
-      >
-        <thead>
-          <tr>
-            <th>
-              Field
-            </th>
-            <th>
-              Type
-            </th>
-            <th>
-              Stored as
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              Hold reason
-               *
-            </td>
-            <td>
-              string
-            </td>
-            <td>
-              <code>
-                run_data.hold_reason
-              </code>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        Ends the run with outcome 
-        held
-        .
-      </p>
-    </div>
-  </section>
-  <section
-    style="margin-bottom: 20px;"
-  >
-    <h3
-      style="margin-bottom: 4px;"
-    >
-      Stage 
-      4
-       of 
-      5
-       — 
-      Stage & put away
-    </h3>
-    <div
-      class="card"
-      style="margin-bottom: 12px;"
-    >
-      <div
-        style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
-      >
-        <span
-          class="badge"
-        >
-          Form
-        </span>
-        <strong>
-          Stage the goods
-        </strong>
-        <span
-          style="color: var(--text-muted);"
-        >
-          · 
-          role_wh_receiver
-        </span>
-      </div>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        Assign a receiving bin for the staged goods: RCV-01 or RCV-02. The Receiving Agent proposes the bin; the receiver confirms or overrides.
-      </p>
-      <p
-        style="margin: 8px 0px 0px; color: var(--text-muted);"
-      >
-        Agent assistance: 
-        propose
-         (wh-agt-receiving)
-      </p>
-      <table
-        style="margin-top: 8px;"
-      >
-        <thead>
-          <tr>
-            <th>
-              Field
-            </th>
-            <th>
-              Type
-            </th>
-            <th>
-              Stored as
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              Staging bin
-               *
-            </td>
-            <td>
-              string
-            </td>
-            <td>
-              <code>
-                run_data.staging_bin
-              </code>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <div
-      class="card"
-      style="margin-bottom: 12px;"
-    >
-      <div
-        style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
-      >
-        <span
-          class="badge"
-        >
-          Record
-        </span>
-        <strong>
-          Post receipt moves
-        </strong>
-        <span
-          style="color: var(--text-muted);"
-        >
-          · 
-          role_wh_receiver
-        </span>
-      </div>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        Post a RECEIPT StockMove per order line (MV-2026-016, MV-2026-017 for PO-2026-001). Runs once per order line. The move number is assigned by the Action Type; the ledger is append-only.
-      </p>
-      <p
-        style="margin: 8px 0px 0px; color: var(--text-muted);"
-      >
-        Repeats once per 
-        lines
-        .
-      </p>
-      <div
-        style="margin-top: 8px;"
-      >
-        <strong>
-          Writes
-        </strong>
-        <ul
-          style="margin: 4px 0px 0px; padding-left: 20px;"
-        >
-          <li>
-            <code>
-              warehouse.post_stock_move
-            </code>
-            <span>
-               
-              · 
-              from_location
-              : 
-              <code>
-                null
-              </code>
-            </span>
-            <span>
-               
-              · 
-              move_type
-              : 
-              <code>
-                "RECEIPT"
-              </code>
-            </span>
-            <span>
-               
-              · 
-              product_id
-              : 
-              <code>
-                "$item.product_id"
-              </code>
-            </span>
-            <span>
-               
-              · 
-              quantity
-              : 
-              <code>
-                "$item.qty_received"
-              </code>
-            </span>
-            <span>
-               
-              · 
-              reference_id
-              : 
-              <code>
-                "$record.id"
-              </code>
-            </span>
-            <span>
-               
-              · 
-              to_location
-              : 
-              <code>
-                "$run_data.staging_bin"
-              </code>
-            </span>
-          </li>
-        </ul>
-      </div>
-    </div>
-    <div
-      class="card"
-      style="margin-bottom: 12px;"
-    >
-      <div
-        style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
-      >
-        <span
-          class="badge"
-        >
-          Form
-        </span>
-        <strong>
-          Confirm put-away
-        </strong>
-        <span
-          style="color: var(--text-muted);"
-        >
-          · 
-          role_wh_receiver
-        </span>
-      </div>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        Confirm the put-away bin per line, suggested by the Receiving Agent from the product's preferred bin (HG-1001 and HG-1002 both go to A-01-03). Runs once per order line.
-      </p>
-      <p
-        style="margin: 8px 0px 0px; color: var(--text-muted);"
-      >
-        Repeats once per 
-        lines
-        .
-      </p>
-      <p
-        style="margin: 8px 0px 0px; color: var(--text-muted);"
-      >
-        Agent assistance: 
-        propose
-         (wh-agt-receiving)
-      </p>
-      <table
-        style="margin-top: 8px;"
-      >
-        <thead>
-          <tr>
-            <th>
-              Field
-            </th>
-            <th>
-              Type
-            </th>
-            <th>
-              Stored as
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              Put-away bin
-               *
-            </td>
-            <td>
-              string
-            </td>
-            <td>
-              <code>
-                run_data.putaway_bin
-              </code>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <div
-      class="card"
-      style="margin-bottom: 12px;"
-    >
-      <div
-        style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
-      >
-        <span
-          class="badge"
-        >
-          Record
-        </span>
-        <strong>
-          Post put-away moves
-        </strong>
-        <span
-          style="color: var(--text-muted);"
-        >
-          · 
-          role_wh_receiver
-        </span>
-      </div>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        Post a PUTAWAY StockMove per order line (MV-2026-018, MV-2026-019 for PO-2026-001) and update stock on hand (48 to 88 for HG-1001, 22 to 52 for HG-1002). Runs once per order line. Available is recomputed, never written.
-      </p>
-      <p
-        style="margin: 8px 0px 0px; color: var(--text-muted);"
-      >
-        Repeats once per 
-        lines
-        .
-      </p>
-      <div
-        style="margin-top: 8px;"
-      >
-        <strong>
-          Writes
-        </strong>
-        <ul
-          style="margin: 4px 0px 0px; padding-left: 20px;"
-        >
-          <li>
-            <code>
-              warehouse.post_stock_move
-            </code>
-            <span>
-               
-              · 
-              from_location
-              : 
-              <code>
-                "$run_data.staging_bin"
-              </code>
-            </span>
-            <span>
-               
-              · 
-              move_type
-              : 
-              <code>
-                "PUTAWAY"
-              </code>
-            </span>
-            <span>
-               
-              · 
-              product_id
-              : 
-              <code>
-                "$item.product_id"
-              </code>
-            </span>
-            <span>
-               
-              · 
-              quantity
-              : 
-              <code>
-                "$item.qty_received"
-              </code>
-            </span>
-            <span>
-               
-              · 
-              reference_id
-              : 
-              <code>
-                "$record.id"
-              </code>
-            </span>
-            <span>
-               
-              · 
-              to_location
-              : 
-              <code>
-                "$run_data.putaway_bin"
-              </code>
-            </span>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </section>
-  <section
-    style="margin-bottom: 20px;"
-  >
-    <h3
-      style="margin-bottom: 4px;"
-    >
-      Stage 
-      5
-       of 
-      5
-       — 
-      Confirm
-    </h3>
-    <div
-      class="card"
-      style="margin-bottom: 12px;"
-    >
-      <div
-        style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
-      >
-        <span
-          class="badge"
-        >
-          Form
-        </span>
-        <strong>
-          Review summary
-        </strong>
-        <span
-          style="color: var(--text-muted);"
-        >
-          · 
-          role_wh_receiver
-        </span>
-      </div>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        Read-only summary of the run: what was received, staged and put away, and the new on-hand quantities (88 / 52 for PO-2026-001). No fields to fill; completing the step moves on.
-      </p>
-    </div>
-    <div
-      class="card"
-      style="margin-bottom: 12px;"
-    >
-      <div
-        style="display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;"
-      >
-        <span
-          class="badge"
-        >
-          Record
-        </span>
-        <strong>
-          Close the PO
-        </strong>
-        <span
-          style="color: var(--text-muted);"
-        >
-          · 
-          role_wh_receiver
-        </span>
-      </div>
-      <p
-        style="margin: 8px 0px 0px;"
-      >
-        Close the receipt. The Action Type closes the PO as RECEIVED when every line is fully received, or PARTIALLY_RECEIVED when the run took the discrepancy branch. The Warehouse Manager is notified automatically. This step replaces the wf-wh-01 put-away task: put-away already happened in Stage 3, so no duplicate task is created. The workflow stays the fallback for a PO that becomes RECEIVED outside a lane.
-      </p>
-      <div
-        style="margin-top: 8px;"
-      >
-        <strong>
-          Writes
-        </strong>
-        <ul
-          style="margin: 4px 0px 0px; padding-left: 20px;"
-        >
-          <li>
-            <code>
-              purchase_order.close_receipt
-            </code>
-            <span>
-               
-              · 
-              purchase_order_id
-              : 
-              <code>
-                "$record.id"
-              </code>
-            </span>
-          </li>
-        </ul>
-      </div>
-      <p
-        style="margin: 8px 0px 0px; color: var(--text-muted);"
-      >
-        Notifies 
-        role_wh_warehouse_manager
-        : 
-        PO-2026-001 received: 40 x HG-1001, 30 x HG-1002. Stock on hand 88 / 52.
-      </p>
-      <p
-        style="margin: 8px 0px 0px; color: var(--text-muted);"
-      >
-        Replaces workflow 
-        wf-wh-01
-        , action 
-        0
-        .
-      </p>
-    </div>
-  </section>
   <section
     style="margin-bottom: 20px;"
   >
