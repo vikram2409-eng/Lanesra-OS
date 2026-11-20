@@ -3,8 +3,8 @@ id: WP-0713
 title: Board by stage, "my steps" and lane timing
 phase: 7
 epic: E7.3 Runner and visibility
-status: proposed
-owner: unassigned
+status: in_progress
+owner: muse
 planned_for: muse
 depends_on: [WP-0707]
 requirements: [REQ-LANE-019]
@@ -12,9 +12,9 @@ estimate: L
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
-branch: 
+branch: wp/WP-0713-board-my-steps-timing
 pr: 
-updated: 2026-11-14
+updated: 2026-11-19
 ---
 
 # WP-0713 — Board by stage, "my steps" and lane timing
@@ -51,3 +51,17 @@ Answer "where is every order" and "what is waiting on me".
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+### 2026-11-19 muse (claim)
+- Claimed (branch `wp/WP-0713-board-my-steps-timing`). WP-0711 done-status
+  flip folds in here per the no-small-PRs rule.
+- Design read before building: REQ-LANE-019; SOLUTION-DESIGN §17 (Board by
+  stage shows where every record of a lane is; My steps lists the person's
+  lane steps with their approvals). Per-step entered/completed times already
+  exist on `ai_run_nodes` (`started_at` / `finished_at` + `stage_id`);
+  stage times derive from node rows — no new table needed for timing.
+  `list_runs_for_graph` and `list_lane_runs_for_record` exist; the board
+  needs a new per-lane runs query. WP-0620 (Board/Record list components)
+  is still proposed, NOT shipped, so the board/list UI is built here.
+  Open design point: the AC-1/AC-4 access filter ("only records the viewer
+  may read") — resolve against the record-level access rule at build time,
+  do not guess. Full notes: `~/workspace/lanesra-build/wp0713-design-notes.md`.
