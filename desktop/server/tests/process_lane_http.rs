@@ -3,6 +3,8 @@
 //! operations as the desktop Tauri commands, over the same service code.
 //! (WP-0710 AC-4) - the per-item submit runs over the admin route too, so
 //! the desktop and Team Workspace editions behave the same from the same code.
+//! (WP-0711 AC-4) - notes, attachments and reassign run over the admin
+//! routes too, and the run view over HTTP carries them.
 //! Import/publish/list/get go through the sync `/api/invoke` dispatcher;
 //! starting a run goes through the async admin route, which opens its own
 //! connection (hence the file-backed DB, as in `agent_v1.rs`).
@@ -12,12 +14,15 @@
 use std::net::SocketAddr;
 
 use lanesra_core::db::open_workspace_db;
+use lanesra_core::models::access_role::AccessRoleInput;
 use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
 use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
 use lanesra_core::models::custom_record::CustomRecordInput;
 use lanesra_core::models::relationship::RelationshipDefinitionInput;
+use lanesra_core::models::user::NewUser;
 use lanesra_core::services::{
-    custom_field_service, custom_object_service, custom_record_service, relationship_service,
+    access_role_service, custom_field_service, custom_object_service, custom_record_service,
+    relationship_service, user_service,
 };
 use lanesra_server::state::SharedState;
 use lanesra_server::{build_router, SecurityConfig, ServerState};
@@ -485,5 +490,247 @@ async fn per_item_submit_works_over_http_the_same_as_on_desktop() {
             .get("counted")
             .cloned();
         assert_eq!(got.as_deref(), Some(expected));
+    }
+}
+
+// --------------------------------------------------------------------------
+// WP-0711 AC-4: notes, attachments and reassign work over the Team
+// Workspace admin routes exactly as the desktop Tauri commands do - the
+// same service code, the same run view. The fixture mirrors the core test
+// (process_lane_anytime_actions.rs): one form step waiting on a role held
+// by one user.
+// --------------------------------------------------------------------------
+
+// Covers: REQ-LANE-018 (WP-0711 AC-4)
+#[tokio::test]
+async fn anytime_actions_work_over_http_the_same_as_on_desktop() {
+    let (addr, state, _dir) = spawn_file_backed_server().await;
+    let client = client_with_cookies();
+    let setup = first_run(&client, addr).await;
+    let workspace_id = setup["data"][0]["id"].as_str().unwrap().to_string();
+    let admin_id = setup["data"][1]["id"].as_str().unwrap().to_string();
+
+    // A batch record, a Counter role held by Casey, and an outsider (Ollie).
+    let (batch_id, role_id, casey_id, ollie_id) = {
+        let conn = state.conn.lock().unwrap();
+        custom_object_service::create_with_key(
+            &conn,
+            &workspace_id,
+            "batch",
+            &CustomObjectDefinitionInput {
+                singular_label: "Batch".into(),
+                plural_label: "Batches".into(),
+                icon: "▣".into(),
+                prefix: "BAT".into(),
+                digits: 6,
+            },
+            Some(&admin_id),
+        )
+        .unwrap();
+        let batch = custom_record_service::create(
+            &conn,
+            &workspace_id,
+            &CustomRecordInput {
+                object_key: "batch".into(),
+                primary_name: "BAT-1".into(),
+                status: "Active".into(),
+                owner_user_id: None,
+                notes: None,
+            },
+            Some(&admin_id),
+        )
+        .unwrap();
+        let role = access_role_service::create(
+            &conn,
+            &workspace_id,
+            &AccessRoleInput {
+                name: "Counter".into(),
+                description: "Counter role".into(),
+            },
+            Some(&admin_id),
+        )
+        .unwrap();
+        let make_user = |username: &str, display_name: &str| {
+            user_service::create(
+                &conn,
+                &workspace_id,
+                &NewUser {
+                    username: username.into(),
+                    display_name: display_name.into(),
+                    password: "correct horse battery staple".into(),
+                    roles: vec!["Sales".into()],
+                },
+                Some(&admin_id),
+            )
+            .unwrap()
+            .id
+        };
+        let casey = make_user("casey", "Casey Counter");
+        let ollie = make_user("ollie", "Ollie Outsider");
+        access_role_service::assign_to_user(&conn, &casey, &role.id, Some(&admin_id)).unwrap();
+        (batch.id, role.id, casey, ollie)
+    };
+
+    // One form step waiting on the Counter role, writing one run-data field.
+    let lane = json!({
+        "format_version": "1.0.0",
+        "lane": {
+            "id": "lane-simple", "name": "Simple", "object_key": "batch",
+            "version": 1, "status": "published",
+            "run_data": {"fields": [{"key": "note_text", "type": "string", "required": false}]},
+            "stages": [{
+                "id": "s1", "name": "Step one", "steps": [{
+                    "id": "fill", "name": "Fill", "kind": "form",
+                    "role": role_id, "required": true,
+                    "fields": [{
+                        "key": "note_text", "label": "Note text", "type": "string",
+                        "binds_to": "run_data.note_text", "required": true
+                    }]
+                }]
+            }]
+        }
+    });
+    let imported = invoke(
+        &client,
+        addr,
+        "import_process_lane",
+        json!({"definitionJson": lane.to_string()}),
+    )
+    .await;
+    assert_eq!(imported["data"]["lane_key"], "lane-simple");
+    let published = invoke(
+        &client,
+        addr,
+        "publish_process_lane",
+        json!({"laneKey": "lane-simple"}),
+    )
+    .await;
+    assert_eq!(
+        published["ok"], true,
+        "the form-only lane publishes: {}",
+        published
+    );
+
+    let run = client
+        .post(format!(
+            "http://{addr}/api/admin/process-lanes/lane-simple/runs"
+        ))
+        .json(&json!({"anchor_record_id": batch_id}))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert_eq!(run["ok"], true, "the run starts over HTTP: {}", run);
+    let run_id = run["data"]["id"].as_str().unwrap().to_string();
+    assert_eq!(run["data"]["status"], "waiting_person");
+
+    // A note over HTTP lands on the run and in its audit trail.
+    let noted = client
+        .post(format!(
+            "http://{addr}/api/admin/process-lane-runs/{run_id}/note"
+        ))
+        .json(&json!({"body": "Checked the count against the pick list."}))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert_eq!(noted["ok"], true, "the note posts: {}", noted);
+    assert_eq!(
+        noted["data"]["body"],
+        "Checked the count against the pick list."
+    );
+
+    // An attachment over HTTP lands with its bytes, downloadable through
+    // the run.
+    let attached = client
+        .post(format!(
+            "http://{addr}/api/admin/process-lane-runs/{run_id}/attachment"
+        ))
+        .json(&json!({
+            "file_name": "count-sheet.txt",
+            "mime_type": "text/plain",
+            "content_base64": "Y291bnQgc2hlZXQ=",
+        }))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert_eq!(attached["ok"], true, "the attachment posts: {}", attached);
+    let attachment_id = attached["data"]["id"].as_str().unwrap().to_string();
+    let downloaded = client
+        .get(format!(
+            "http://{addr}/api/admin/process-lane-runs/{run_id}/attachments/{attachment_id}"
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert!(downloaded.status().is_success());
+    assert_eq!(downloaded.bytes().await.unwrap().as_ref(), b"count sheet");
+
+    // Reassign over HTTP narrows the step to Casey; reassign to the
+    // outsider is refused.
+    let refused = client
+        .post(format!(
+            "http://{addr}/api/admin/process-lane-runs/{run_id}/reassign"
+        ))
+        .json(&json!({"to_user_id": ollie_id, "reason": "Ollie should cover"}))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert_eq!(refused["ok"], false, "the outsider cannot take the step");
+    let reassigned = client
+        .post(format!(
+            "http://{addr}/api/admin/process-lane-runs/{run_id}/reassign"
+        ))
+        .json(&json!({"to_user_id": casey_id, "reason": "Casey is on shift"}))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert_eq!(reassigned["ok"], true, "the reassign posts: {}", reassigned);
+    assert_eq!(reassigned["data"]["status"], "waiting_person");
+
+    // The run view over HTTP shows the note, the attachment, the audit
+    // events and the reassigned waiter - the same view the desktop shows.
+    let view = invoke(
+        &client,
+        addr,
+        "get_process_lane_run_view",
+        json!({"runId": run_id}),
+    )
+    .await;
+    assert_eq!(view["data"]["notes"].as_array().unwrap().len(), 1);
+    assert_eq!(view["data"]["attachments"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        view["data"]["current"]["waiting_on"], "Casey Counter",
+        "the view names the assignee: {}",
+        view["data"]["current"]
+    );
+    let event_types: Vec<&str> = view["data"]["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|e| e["event_type"].as_str())
+        .collect();
+    for expected in [
+        "lane_run_note_added",
+        "lane_run_attachment_added",
+        "lane_step_reassigned",
+    ] {
+        assert!(
+            event_types.contains(&expected),
+            "the audit trail carries {expected}: {event_types:?}"
+        );
     }
 }

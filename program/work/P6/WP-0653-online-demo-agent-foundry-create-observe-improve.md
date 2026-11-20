@@ -3,7 +3,7 @@ id: WP-0653
 title: "Online demo: Agent Foundry (Create / Observe / Improve)"
 phase: 6
 epic: E6.6 Navigation and theme
-status: in_review
+status: done
 owner: muse
 planned_for: muse
 depends_on: []

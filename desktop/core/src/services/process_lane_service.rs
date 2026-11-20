@@ -49,6 +49,7 @@ use std::collections::HashMap;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
+use sha2::{Digest, Sha256};
 
 use crate::domain::conditions::{condition_matches, CONDITION_OPERATORS};
 use crate::domain::ids::now_iso;
@@ -59,12 +60,14 @@ use crate::models::execution_graph::{
     ExecutionGraph, ExecutionGraphInput, GraphEdgeInput, GraphNodeInput,
 };
 use crate::models::graph_run::GraphRun;
+use crate::models::lane_run_note::{LaneRunAttachment, LaneRunNote};
 use crate::models::process_lane::{
     parse_definition, validate_definition, ConditionOrGroup, FormField, LaneDefinition, LaneStep,
     ProcessLane, ProcessLaneVersion, StepValidation, LANE_REPEAT_MAX_ITERATIONS,
 };
 use crate::repositories::{
-    audit_repo, custom_field_repo, execution_graph_repo, graph_run_repo, process_lane_repo,
+    attachment_repo, audit_repo, custom_field_repo, execution_graph_repo, graph_run_repo,
+    lane_run_note_repo, process_lane_repo, user_repo,
 };
 use crate::services::{
     access_role_service, access_service, builtin_field_service, custom_field_service,
@@ -1808,10 +1811,23 @@ pub async fn submit_person_step_item(
     }
 
     // The item's assignee (a child field) or the step's role may act on it.
+    // WP-0711: a step-level reassignment narrows the whole step to one
+    // person and wins over the item's assignee.
     let acting_role = assignee
         .clone()
         .or_else(|| effective_step_role(&run, &step));
-    if !actor_may_act(conn, actor_user_id, acting_role.as_deref())? {
+    if effective_step_assignee(&run, &step).is_some()
+        && !actor_may_act_on_step(conn, &run, &step, actor_user_id)?
+    {
+        return Err(AppError::classified(
+            ErrorClass::Validation,
+            "validation.permission",
+            "this step is reassigned to another person; you cannot complete it",
+        ));
+    }
+    if effective_step_assignee(&run, &step).is_none()
+        && !actor_may_act(conn, actor_user_id, acting_role.as_deref())?
+    {
         return Err(AppError::classified(
             ErrorClass::Validation,
             "validation.permission",
@@ -1962,6 +1978,16 @@ pub struct LaneRunView {
     pub steps: Vec<LaneStepProgress>,
     pub writes: Vec<String>,
     pub waiting: Option<LaneWaiting>,
+    /// WP-0711 (REQ-LANE-018): the run's notes, attachments and audit-trail
+    /// events, and the people its current step may be reassigned to.
+    #[serde(default)]
+    pub notes: Vec<LaneRunNote>,
+    #[serde(default)]
+    pub attachments: Vec<LaneRunAttachment>,
+    #[serde(default)]
+    pub events: Vec<LaneRunAuditEventView>,
+    #[serde(default)]
+    pub reassign_candidates: Vec<LaneRunReassignCandidate>,
     /// WP-0716: when this run waits on a child lane (`waiting_child`), the
     /// child it is waiting on and where that child has reached.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -2254,8 +2280,9 @@ pub fn get_run_view(
             .as_deref()
             .and_then(|sid| stage_name_for(conn, &run, sid));
         // WP-0706: a handoff can change who the step waits on for this run.
+        // WP-0711: a reassignment narrows it further, to one person.
         let acting_role = effective_step_role(&run, &step);
-        let can_complete = actor_may_act(conn, viewer_user_id, acting_role.as_deref())?;
+        let can_complete = actor_may_act_on_step(conn, &run, &step, viewer_user_id)?;
 
         // A record-bound field's value is shown only to a viewer who may
         // read the anchor record (REQ-LANE-011); run-data fields have no
@@ -2297,7 +2324,9 @@ pub fn get_run_view(
             step_id: step.id.clone(),
             step_name: step.name.clone(),
             role: step.role.clone(),
-            waiting_on: acting_role.clone(),
+            waiting_on: effective_step_assignee(&run, &step)
+                .and_then(|u| user_display_name(conn, &u).or(Some(u)))
+                .or(acting_role.clone()),
             can_complete,
             fields,
         })
@@ -2327,6 +2356,36 @@ pub fn get_run_view(
         writes: write_summaries_for_run(conn, &run, definition.as_ref())?,
         waiting: waiting_for_run(conn, &run, definition.as_ref())?,
         child: child_view_for(conn, &run)?,
+        // WP-0711 (REQ-LANE-018): the run's notes, attachments and
+        // audit-trail events (oldest first, matching the step rows), and
+        // the people the current step may be reassigned to. A note shows
+        // its author's display name, resolved here - never a user id.
+        notes: lane_run_note_repo::list_for_run(conn, &run.id)?
+            .into_iter()
+            .map(|mut note| {
+                note.author_display_name = note
+                    .author_user_id
+                    .as_deref()
+                    .and_then(|id| user_display_name(conn, id));
+                note
+            })
+            .collect(),
+        attachments: attachment_repo::list_for_run(conn, &run.id)?,
+        events: audit_repo::list_for_entity(conn, "lane_run", &run.id)?
+            .into_iter()
+            .rev()
+            .map(|e| LaneRunAuditEventView {
+                event_type: e.event_type,
+                summary: e.summary,
+                user_id: e.user_id,
+                occurred_at: e.occurred_at,
+            })
+            .collect(),
+        reassign_candidates: if run.status == "waiting_person" {
+            list_reassign_candidates(conn, workspace_id, &run.id)?
+        } else {
+            Vec::new()
+        },
     })
 }
 
@@ -2746,16 +2805,18 @@ pub async fn submit_person_step(
     let (node, step) = current_human_step(conn, &run)?;
 
     // REQ-LANE-011: only the step's role (or an admin) may complete it. A
-    // handoff (WP-0706) changes which role that is for this run.
+    // handoff (WP-0706) changes which role that is for this run; a
+    // reassignment (WP-0711) narrows it to one person.
     let acting_role = effective_step_role(&run, &step);
-    if !actor_may_act(conn, actor_user_id, acting_role.as_deref())? {
+    if !actor_may_act_on_step(conn, &run, &step, actor_user_id)? {
+        let waiting = effective_step_assignee(&run, &step)
+            .and_then(|u| user_display_name(conn, &u).or(Some(u)))
+            .or(acting_role.clone())
+            .unwrap_or_else(|| "another role".to_string());
         return Err(AppError::classified(
             ErrorClass::Validation,
             "validation.permission",
-            format!(
-                "this step is waiting on {}; you cannot complete it",
-                acting_role.as_deref().unwrap_or("another role")
-            ),
+            format!("this step is waiting on {waiting}; you cannot complete it"),
         ));
     }
 
@@ -3088,8 +3149,9 @@ pub fn handoff_step(
     }
     let (_node, step) = current_human_step(conn, &run)?;
     let from_role = effective_step_role(&run, &step);
-    // Only the current assignee (the role it waits on) or an admin may hand off.
-    if !actor_may_act(conn, actor_user_id, from_role.as_deref())? {
+    // Only the current assignee (the role it waits on, or the person it was
+    // reassigned to) or an admin may hand off.
+    if !actor_may_act_on_step(conn, &run, &step, actor_user_id)? {
         return Err(AppError::classified(
             ErrorClass::Validation,
             "validation.permission",
@@ -3117,6 +3179,14 @@ pub fn handoff_step(
         .unwrap_or_default();
     handoffs.insert(step.id.clone(), json!(to_role));
     run_data.insert("__handoffs".into(), Value::Object(handoffs));
+    // WP-0711: handing the step to a new role clears any person-level
+    // reassignment for it - the new role's holders wait now.
+    if let Some(assignees) = run_data
+        .get_mut("__assignees")
+        .and_then(|v| v.as_object_mut())
+    {
+        assignees.remove(&step.id);
+    }
     let run_data_json =
         serde_json::to_string(&Value::Object(run_data)).unwrap_or_else(|_| "{}".into());
     graph_run_repo::set_lane_anchor(conn, run_id, &object_key, &record_id, &run_data_json)?;
@@ -3137,6 +3207,447 @@ pub fn handoff_step(
         ),
     )?;
     graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))
+}
+
+// ===========================================================================
+// WP-0711: notes, attachments and reassign at any point (REQ-LANE-018).
+// ===========================================================================
+
+/// One audit-trail row for a lane run, as the runner shows it (WP-0711
+/// AC-1): the event, its summary, who did it, when. Oldest first, matching
+/// the step rows above it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaneRunAuditEventView {
+    pub event_type: String,
+    pub summary: String,
+    pub user_id: Option<String>,
+    pub occurred_at: String,
+}
+
+/// One person the current step may be reassigned to (WP-0711 AC-2): a user
+/// who holds the step's role, with their display name.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaneRunReassignCandidate {
+    pub user_id: String,
+    pub display_name: String,
+}
+
+/// The person a lane step is reassigned to, when one is set (WP-0711):
+/// run data under `__assignees.<step_id>`, mirroring the `__handoffs` map
+/// WP-0706 uses for roles. A handoff clears the entry for its step, so the
+/// new role's holders can act.
+fn effective_step_assignee(run: &GraphRun, step: &LaneStep) -> Option<String> {
+    run_data_map(run)
+        .get("__assignees")
+        .and_then(|a| a.get(&step.id))
+        .and_then(|x| x.as_str())
+        .map(String::from)
+}
+
+/// The run's run-data object, or empty when it is missing or malformed.
+fn run_data_map(run: &GraphRun) -> Map<String, Value> {
+    run.run_data_json
+        .as_deref()
+        .and_then(|s| serde_json::from_str::<Value>(s).ok())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default()
+}
+
+/// Whether `actor` may act on a step (WP-0711, REQ-LANE-018 AC-2). When the
+/// step is reassigned to one person, only that person (or an administrator)
+/// may act; otherwise the role rule from `actor_may_act` applies.
+fn actor_may_act_on_step(
+    conn: &Connection,
+    run: &GraphRun,
+    step: &LaneStep,
+    actor_user_id: Option<&str>,
+) -> AppResult<bool> {
+    if let Some(assignee) = effective_step_assignee(run, step) {
+        let Some(actor_id) = actor_user_id else {
+            // An unattributed/system caller is allowed, the same convention
+            // the access layer uses elsewhere.
+            return Ok(true);
+        };
+        if require_admin(conn, actor_user_id).is_ok() {
+            return Ok(true);
+        }
+        return Ok(actor_id == assignee);
+    }
+    actor_may_act(
+        conn,
+        actor_user_id,
+        effective_step_role(run, step).as_deref(),
+    )
+}
+
+fn user_display_name(conn: &Connection, user_id: &str) -> Option<String> {
+    user_repo::find_by_id(conn, user_id)
+        .ok()
+        .flatten()
+        .map(|u| u.display_name)
+}
+
+/// Loads a lane run in this workspace, or 404. Shared guard for the
+/// WP-0711 actions (a lane run is a run with an anchor record).
+fn lane_run_in_workspace(
+    conn: &Connection,
+    workspace_id: &str,
+    run_id: &str,
+) -> AppResult<GraphRun> {
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.workspace_id != workspace_id {
+        return Err(AppError::NotFound("Run".into()));
+    }
+    if run.anchor_object_key.is_none() || run.anchor_record_id.is_none() {
+        return Err(classified_validation(
+            "validation.state",
+            "this run is not a lane run (no anchor record)",
+        ));
+    }
+    Ok(run)
+}
+
+/// The step a note attaches to: the current human step when the run waits
+/// on one, else null (a run-level note - the run waits on an approval or a
+/// child lane).
+fn current_step_id_for_note(conn: &Connection, run: &GraphRun) -> AppResult<Option<String>> {
+    if run.status != "waiting_person" {
+        return Ok(None);
+    }
+    match current_human_step(conn, run) {
+        Ok((_node, step)) => Ok(Some(step.id)),
+        Err(_) => Ok(None),
+    }
+}
+
+/// A note is annotation, not step work: it is capped so one note cannot
+/// carry a document.
+const LANE_NOTE_MAX_CHARS: usize = 10_000;
+/// An attachment is a file, not a document store: 25 MB keeps the IPC and
+/// HTTP paths sane on both editions.
+const LANE_ATTACHMENT_MAX_BYTES: usize = 25 * 1024 * 1024;
+
+/// WP-0711 (REQ-LANE-018, AC-1): adds a note to a lane run at any point.
+/// Notes are for anyone who can see the run - they are annotation, not step
+/// completion, so there is no role gate - but the run must still be active:
+/// a finished run is closed and takes no more notes. The add is audited.
+pub fn add_lane_run_note(
+    conn: &Connection,
+    workspace_id: &str,
+    run_id: &str,
+    body: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<LaneRunNote> {
+    let run = lane_run_in_workspace(conn, workspace_id, run_id)?;
+    if crate::models::graph_run::is_terminal_status(&run.status) {
+        return Err(classified_validation(
+            "validation.state",
+            format!(
+                "run is '{}'; a finished run takes no more notes",
+                run.status
+            ),
+        ));
+    }
+    let body = body.trim();
+    if body.is_empty() {
+        return Err(classified_validation(
+            "validation.arguments",
+            "a note needs some text",
+        ));
+    }
+    if body.chars().count() > LANE_NOTE_MAX_CHARS {
+        return Err(classified_validation(
+            "validation.arguments",
+            format!("a note is at most {LANE_NOTE_MAX_CHARS} characters"),
+        ));
+    }
+    let step_id = current_step_id_for_note(conn, &run)?;
+    let mut note = lane_run_note_repo::create(
+        conn,
+        workspace_id,
+        run_id,
+        step_id.as_deref(),
+        actor_user_id,
+        body,
+    )?;
+    note.author_display_name = actor_user_id.and_then(|id| user_display_name(conn, id));
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "lane_run_note_added",
+        Some("lane_run"),
+        Some(run_id),
+        &format!(
+            "Added a note to run {run_id}{}",
+            step_id
+                .as_deref()
+                .map(|s| format!(" (step {s})"))
+                .unwrap_or_default()
+        ),
+        Some(&json!({"note_id": note.id, "step_id": step_id}).to_string()),
+    )?;
+    Ok(note)
+}
+
+/// WP-0711 (REQ-LANE-018, AC-1/AC-3): attaches a file to a lane run at any
+/// point. The content arrives base64 (the one shape both the Tauri command
+/// and the server route can carry); the bytes go under
+/// `<data_dir>/lane-attachments/<run_id>/` and the row in the 0001
+/// `attachments` table names them, so the file is visible only through its
+/// run (AC-3): `read_lane_run_attachment` is the only read path and it is
+/// run-scoped. The run must still be active.
+#[allow(clippy::too_many_arguments)]
+pub fn attach_lane_run_file(
+    conn: &Connection,
+    workspace_id: &str,
+    data_dir: &std::path::Path,
+    run_id: &str,
+    file_name: &str,
+    mime_type: Option<&str>,
+    content_base64: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<LaneRunAttachment> {
+    let run = lane_run_in_workspace(conn, workspace_id, run_id)?;
+    if crate::models::graph_run::is_terminal_status(&run.status) {
+        return Err(classified_validation(
+            "validation.state",
+            format!(
+                "run is '{}'; a finished run takes no more attachments",
+                run.status
+            ),
+        ));
+    }
+    if file_name.trim().is_empty()
+        || file_name.contains('/')
+        || file_name.contains('\\')
+        || file_name.contains("..")
+    {
+        return Err(classified_validation(
+            "validation.arguments",
+            "a file name is required and must not contain a path",
+        ));
+    }
+    let bytes = base64::Engine::decode(
+        &base64::engine::general_purpose::STANDARD,
+        content_base64.trim(),
+    )
+    .map_err(|_| {
+        classified_validation(
+            "validation.arguments",
+            "the file content is not valid base64",
+        )
+    })?;
+    if bytes.is_empty() {
+        return Err(classified_validation(
+            "validation.arguments",
+            "an attachment needs some content",
+        ));
+    }
+    if bytes.len() > LANE_ATTACHMENT_MAX_BYTES {
+        return Err(classified_validation(
+            "validation.arguments",
+            format!(
+                "an attachment is at most {} MB",
+                LANE_ATTACHMENT_MAX_BYTES / (1024 * 1024)
+            ),
+        ));
+    }
+    let id = crate::domain::ids::new_uuid();
+    let relative_path = format!("lane-attachments/{run_id}/{id}-{file_name}");
+    let target = data_dir.join(&relative_path);
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            classified_validation("validation.state", format!("could not store the file: {e}"))
+        })?;
+    }
+    std::fs::write(&target, &bytes).map_err(|e| {
+        classified_validation("validation.state", format!("could not store the file: {e}"))
+    })?;
+    let mut hasher = Sha256::new();
+    hasher.update(&bytes);
+    let checksum = format!("{:x}", hasher.finalize());
+    let attachment = attachment_repo::create(
+        conn,
+        workspace_id,
+        run_id,
+        file_name,
+        &relative_path,
+        mime_type.filter(|m| !m.trim().is_empty()),
+        bytes.len() as i64,
+        &checksum,
+        actor_user_id,
+    )?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "lane_run_attachment_added",
+        Some("lane_run"),
+        Some(run_id),
+        &format!("Attached '{file_name}' to run {run_id}"),
+        Some(&json!({"attachment_id": attachment.id, "file_name": file_name}).to_string()),
+    )?;
+    Ok(attachment)
+}
+
+/// WP-0711 (REQ-LANE-018, AC-3): reads one attachment's bytes through its
+/// run. The lookup is run-scoped (`get_for_run`), so an attachment cannot
+/// be reached from another run or on its own.
+pub fn read_lane_run_attachment(
+    conn: &Connection,
+    workspace_id: &str,
+    data_dir: &std::path::Path,
+    run_id: &str,
+    attachment_id: &str,
+    _viewer_user_id: Option<&str>,
+) -> AppResult<(LaneRunAttachment, Vec<u8>)> {
+    let _run = lane_run_in_workspace(conn, workspace_id, run_id)?;
+    let attachment = attachment_repo::get_for_run(conn, run_id, attachment_id)?
+        .ok_or_else(|| AppError::NotFound("Attachment".into()))?;
+    let bytes = std::fs::read(data_dir.join(&attachment.relative_path))
+        .map_err(|_| AppError::NotFound("Attachment file".into()))?;
+    Ok((attachment, bytes))
+}
+
+/// WP-0711 (REQ-LANE-018, AC-2): reassigns the current step of a
+/// `waiting_person` lane run to one person. Unlike `handoff_step` (WP-0706),
+/// which changes the ROLE the step waits on, this narrows the waiter to a
+/// single person who holds the step's effective role - stored in run data
+/// under `__assignees.<step_id>`. Only the current assignee (or an
+/// administrator) may reassign. The reassignment is audited.
+pub fn reassign_lane_step(
+    conn: &Connection,
+    workspace_id: &str,
+    run_id: &str,
+    to_user_id: &str,
+    reason: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<GraphRun> {
+    let run = lane_run_in_workspace(conn, workspace_id, run_id)?;
+    if run.status != "waiting_person" {
+        return Err(classified_validation(
+            "validation.state",
+            format!("run is '{}', not waiting on a person", run.status),
+        ));
+    }
+    let (_node, step) = current_human_step(conn, &run)?;
+    if !actor_may_act_on_step(conn, &run, &step, actor_user_id)? {
+        return Err(AppError::classified(
+            ErrorClass::Validation,
+            "validation.permission",
+            "only the current assignee or an administrator can reassign this step",
+        ));
+    }
+    if reason.trim().is_empty() {
+        return Err(classified_validation(
+            "validation.arguments",
+            "a reason is required to reassign a step",
+        ));
+    }
+    let role = effective_step_role(&run, &step);
+    match &role {
+        Some(role_id) => {
+            let holders = access_role_service::list_assignee_user_ids(conn, role_id)?;
+            let is_admin = require_admin(conn, Some(to_user_id)).is_ok();
+            if !holders.iter().any(|u| u == to_user_id) && !is_admin {
+                return Err(classified_validation(
+                    "validation.arguments",
+                    format!("'{to_user_id}' does not hold the step's role '{role_id}'"),
+                ));
+            }
+        }
+        None => {
+            if user_repo::find_by_id(conn, to_user_id)?.is_none() {
+                return Err(classified_validation(
+                    "validation.arguments",
+                    format!("'{to_user_id}' is not a user in this workspace"),
+                ));
+            }
+        }
+    }
+    let from_assignee = effective_step_assignee(&run, &step);
+    if from_assignee.as_deref() == Some(to_user_id) {
+        return Err(classified_validation(
+            "validation.arguments",
+            "the step is already assigned to that person",
+        ));
+    }
+    let (object_key, record_id) = match (&run.anchor_object_key, &run.anchor_record_id) {
+        (Some(o), Some(r)) => (o.clone(), r.clone()),
+        _ => {
+            return Err(classified_validation(
+                "validation.state",
+                "this run is not a lane run (no anchor record)",
+            ))
+        }
+    };
+    let mut run_data = run_data_map(&run);
+    let mut assignees = run_data
+        .get("__assignees")
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default();
+    assignees.insert(step.id.clone(), json!(to_user_id));
+    run_data.insert("__assignees".into(), Value::Object(assignees));
+    let run_data_json =
+        serde_json::to_string(&Value::Object(run_data)).unwrap_or_else(|_| "{}".into());
+    graph_run_repo::set_lane_anchor(conn, run_id, &object_key, &record_id, &run_data_json)?;
+    let to_name = user_display_name(conn, to_user_id).unwrap_or_else(|| to_user_id.to_string());
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "lane_step_reassigned",
+        Some("lane_run"),
+        Some(run_id),
+        &format!(
+            "Reassigned step '{}' of run {run_id} to {to_name}: {}",
+            step.id,
+            reason.trim()
+        ),
+        Some(
+            &json!({"step_id": step.id, "from_assignee": from_assignee, "from_role": role, "to_user_id": to_user_id, "reason": reason.trim()}).to_string(),
+        ),
+    )?;
+    graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))
+}
+
+/// WP-0711 (REQ-LANE-018, AC-2): the people the current step may be
+/// reassigned to - the holders of its effective role, or every user in the
+/// workspace when the step names no role. Administrators can always act,
+/// but they are candidates only when they hold the role: reassign respects
+/// the step's role.
+pub fn list_reassign_candidates(
+    conn: &Connection,
+    workspace_id: &str,
+    run_id: &str,
+) -> AppResult<Vec<LaneRunReassignCandidate>> {
+    let run = lane_run_in_workspace(conn, workspace_id, run_id)?;
+    if run.status != "waiting_person" {
+        return Err(classified_validation(
+            "validation.state",
+            format!("run is '{}', not waiting on a person", run.status),
+        ));
+    }
+    let (_node, step) = current_human_step(conn, &run)?;
+    let user_ids = match effective_step_role(&run, &step) {
+        Some(role_id) => access_role_service::list_assignee_user_ids(conn, &role_id)?,
+        None => user_repo::list(conn, workspace_id)?
+            .into_iter()
+            .map(|u| u.id)
+            .collect(),
+    };
+    let mut candidates = Vec::new();
+    for user_id in user_ids {
+        if let Some(name) = user_display_name(conn, &user_id) {
+            candidates.push(LaneRunReassignCandidate {
+                user_id,
+                display_name: name,
+            });
+        }
+    }
+    Ok(candidates)
 }
 
 /// Skips the current form step of a lane run (WP-0705, REQ-LANE-007). Only an
@@ -3166,16 +3677,18 @@ pub async fn skip_step(
     let (node, step) = current_human_step(conn, &run)?;
 
     // Same role gate as completing it (REQ-LANE-011); a handoff (WP-0706) can
-    // change which role that is for this run.
+    // change which role that is for this run; a reassignment (WP-0711) can
+    // narrow it to one person.
     let acting_role = effective_step_role(&run, &step);
-    if !actor_may_act(conn, actor_user_id, acting_role.as_deref())? {
+    if !actor_may_act_on_step(conn, &run, &step, actor_user_id)? {
+        let waiting = effective_step_assignee(&run, &step)
+            .and_then(|u| user_display_name(conn, &u).or(Some(u)))
+            .or(acting_role.clone())
+            .unwrap_or_else(|| "another role".to_string());
         return Err(AppError::classified(
             ErrorClass::Validation,
             "validation.permission",
-            format!(
-                "this step is waiting on {}; you cannot skip it",
-                acting_role.as_deref().unwrap_or("another role")
-            ),
+            format!("this step is waiting on {waiting}; you cannot skip it"),
         ));
     }
 

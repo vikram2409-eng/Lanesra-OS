@@ -37,6 +37,7 @@ pub mod graph_run;
 pub mod industry_package;
 pub mod integration;
 pub mod invoice;
+pub mod lane_run_note;
 pub mod numbering_override;
 pub mod ontology;
 pub mod opportunity;

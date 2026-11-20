@@ -16,7 +16,7 @@ import path from 'node:path';
  * assistant-draft-lane), 4174 (warehouse-lane-blueprint), 4175
  * (lane-publish-dryrun), 4176 (lane-wh-child), 4177 (lane-builder-demo,
  * warehouse-lane-mobile).
- * Untested locally — see CI.
+ * Run locally 2026-11-18: 4/4 pass.
  */
 
 const STATIC_PORT = 4178;

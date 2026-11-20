@@ -24,8 +24,10 @@
 use std::future::Future;
 use std::path::PathBuf;
 
+use axum::body::Body;
 use axum::extract::{Path, State};
-use axum::http::StatusCode;
+use axum::http::{header, StatusCode};
+use axum::response::Response;
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use axum_extra::extract::cookie::CookieJar;
@@ -123,6 +125,22 @@ pub fn router() -> Router<SharedState> {
         .route(
             "/api/admin/process-lane-runs/:id/handoff",
             post(handoff_process_lane_step_admin),
+        )
+        .route(
+            "/api/admin/process-lane-runs/:id/note",
+            post(add_lane_run_note_admin),
+        )
+        .route(
+            "/api/admin/process-lane-runs/:id/attachment",
+            post(attach_lane_run_file_admin),
+        )
+        .route(
+            "/api/admin/process-lane-runs/:id/attachments/:attachment_id",
+            get(download_lane_run_attachment_admin),
+        )
+        .route(
+            "/api/admin/process-lane-runs/:id/reassign",
+            post(reassign_lane_run_step_admin),
         )
         .route(
             "/api/admin/execution-graph-runs/:id/resume",
@@ -744,6 +762,146 @@ async fn handoff_process_lane_step_admin(
             &workspace_id,
             &id,
             &body.to_role,
+            &body.reason,
+            Some(&actor),
+        )
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+/// WP-0711 (REQ-LANE-018, AC-1): adds a note to a lane run at any point.
+#[derive(Debug, Deserialize)]
+struct AddLaneRunNoteBody {
+    #[serde(default)]
+    body: String,
+}
+
+async fn add_lane_run_note_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(body): Json<AddLaneRunNoteBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, _master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::add_lane_run_note(&conn, &workspace_id, &id, &body.body, Some(&actor))
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+/// WP-0711 (REQ-LANE-018, AC-1/AC-3): attaches a file (base64 content) to a
+/// lane run at any point.
+#[derive(Debug, Deserialize)]
+struct AttachLaneRunFileBody {
+    #[serde(default)]
+    file_name: String,
+    #[serde(default)]
+    mime_type: Option<String>,
+    #[serde(default)]
+    content_base64: String,
+}
+
+async fn attach_lane_run_file_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(body): Json<AttachLaneRunFileBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, _master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data_dir = db_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .ok_or_else(|| err_json(StatusCode::INTERNAL_SERVER_ERROR, "no data directory"))?;
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::attach_lane_run_file(
+            &conn,
+            &workspace_id,
+            &data_dir,
+            &id,
+            &body.file_name,
+            body.mime_type.as_deref(),
+            &body.content_base64,
+            Some(&actor),
+        )
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+/// WP-0711 (REQ-LANE-018, AC-3): downloads one attachment's bytes through
+/// its run. The read is run-scoped in the service.
+async fn download_lane_run_attachment_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path((id, attachment_id)): Path<(String, String)>,
+) -> Result<Response, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, _master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data_dir = db_path
+        .parent()
+        .map(|p| p.to_path_buf())
+        .ok_or_else(|| err_json(StatusCode::INTERNAL_SERVER_ERROR, "no data directory"))?;
+    let (attachment, bytes) = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::read_lane_run_attachment(
+            &conn,
+            &workspace_id,
+            &data_dir,
+            &id,
+            &attachment_id,
+            Some(&actor),
+        )
+    })
+    .await?;
+    Response::builder()
+        .header(
+            header::CONTENT_TYPE,
+            attachment
+                .mime_type
+                .as_deref()
+                .unwrap_or("application/octet-stream"),
+        )
+        .header(
+            header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", attachment.file_name),
+        )
+        .body(Body::from(bytes))
+        .map_err(|e| err_json(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))
+}
+
+/// WP-0711 (REQ-LANE-018, AC-2): reassigns the current step of a lane run
+/// to one person who holds the step's role.
+#[derive(Debug, Deserialize)]
+struct ReassignLaneRunStepBody {
+    #[serde(default)]
+    to_user_id: String,
+    #[serde(default)]
+    reason: String,
+}
+
+async fn reassign_lane_run_step_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(body): Json<ReassignLaneRunStepBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, _master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::reassign_lane_step(
+            &conn,
+            &workspace_id,
+            &id,
+            &body.to_user_id,
             &body.reason,
             Some(&actor),
         )
