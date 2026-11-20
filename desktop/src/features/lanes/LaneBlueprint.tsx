@@ -26,6 +26,36 @@ function stepKindLabel(kind: string): string {
   return STEP_KIND_LABELS[kind] ?? kind;
 }
 
+/// A small, decorative glyph per step kind (form / record / check /
+/// approval / agent) so a reader tells the kinds apart at a glance by
+/// icon as well as colour (WP-0721 AC-2). Icons are aria-hidden; the kind
+/// label text carries the meaning for a screen reader.
+const STEP_KIND_ICON_PATH: Record<string, string> = {
+  form: "M3.5 2h9v12h-9z M5.75 5.5h4.5 M5.75 8h4.5 M5.75 10.5h3",
+  record:
+    "M8 2.2c2.76 0 5 .8 5 1.8s-2.24 1.8-5 1.8-5-.8-5-1.8 2.24-1.8 5-1.8Z M3 4v8c0 1 2.24 1.8 5 1.8s5-.8 5-1.8V4",
+  check: "M8 1.5 14.5 8 8 14.5 1.5 8Z M5.4 8l1.8 1.8L10.6 6.4",
+  approval: "M8 1.4l5.4 2v3.9c0 3.5-2.6 5.5-5.4 6.9-2.8-1.4-5.4-3.4-5.4-6.9V3.4Z M5.6 8l1.6 1.6 3.3-3.3",
+  agent: "M8 1.4l1.7 4L14 5.7l-3.3 2.6 1 4.3L8 10.4l-3.7 2.2 1-4.3L2 5.7l4.3-.3Z",
+};
+
+function KindIcon({ kind }: { kind: string }) {
+  const d = STEP_KIND_ICON_PATH[kind];
+  if (!d) return null;
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+      <path
+        d={d}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 /// One condition (or group) in plain words, so the blueprint says when a
 /// lane starts and when a stage applies instead of showing raw JSON.
 function describeCondition(condition: unknown): string {
@@ -60,35 +90,40 @@ function branchTargetLabel(
   return `${branch.target.stage} · ${branch.target.step}`;
 }
 
+/// One step, drawn as a card in the process map: a coloured kind strip
+/// with an icon and the kind + role, then the step's facts, and each
+/// branch / way-out drawn as a connector to its target (WP-0721 AC-1,
+/// AC-2). Every textual fact WP-0712 surfaced is kept verbatim.
 function StepDetail({ step, definition }: { step: LaneStep; definition: LaneDefinition }) {
   return (
-    <div className="card" style={{ marginBottom: 12 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-        <span className="badge">{stepKindLabel(step.kind)}</span>
-        <strong>{step.name}</strong>
-        {step.role && <span style={{ color: "var(--text-muted)" }}>· {step.role}</span>}
-        {step.required === false && <span style={{ color: "var(--text-muted)" }}>· optional</span>}
+    <li className={`bp-step bp-kind-${step.kind}`}>
+      <div className="bp-step-head">
+        <span className="bp-step-icon" aria-hidden="true">
+          <KindIcon kind={step.kind} />
+        </span>
+        <span className="bp-step-kind">{stepKindLabel(step.kind)}</span>
+        <strong className="bp-step-name">{step.name}</strong>
+        {step.role && <span className="bp-step-role">{step.role}</span>}
+        {step.required === false && <span className="bp-step-flag">optional</span>}
       </div>
-      {step.description && <p style={{ margin: "8px 0 0" }}>{step.description}</p>}
+      {step.description && <p className="bp-step-desc">{step.description}</p>}
       {step.repeat_over && (
-        <p style={{ margin: "8px 0 0", color: "var(--text-muted)" }}>
-          Repeats once per {step.repeat_over.field}.
-        </p>
+        <p className="bp-step-note">Repeats once per {step.repeat_over.field}.</p>
       )}
       {step.assistance && (
-        <p style={{ margin: "8px 0 0", color: "var(--text-muted)" }}>
+        <p className="bp-step-note">
           Agent assistance: {step.assistance.autonomy}
           {step.assistance.agent ? ` (${step.assistance.agent})` : ""}
         </p>
       )}
       {step.check && (
-        <p style={{ margin: "8px 0 0" }}>
+        <p className="bp-step-fact">
           Checks: {step.check.message} ({step.check.scope}
           {step.check.aggregate ? `, ${step.check.aggregate}` : ""})
         </p>
       )}
       {step.fields && step.fields.length > 0 && (
-        <table style={{ marginTop: 8 }}>
+        <table className="bp-step-table">
           <thead>
             <tr>
               <th>Field</th>
@@ -113,9 +148,9 @@ function StepDetail({ step, definition }: { step: LaneStep; definition: LaneDefi
         </table>
       )}
       {step.writes && step.writes.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          <strong>Writes</strong>
-          <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
+        <div className="bp-step-block">
+          <span className="bp-step-block-label">Writes</span>
+          <ul className="bp-step-list">
             {step.writes.map((w, i) => (
               <li key={i}>
                 <code>{w.action_type}</code>
@@ -131,38 +166,56 @@ function StepDetail({ step, definition }: { step: LaneStep; definition: LaneDefi
         </div>
       )}
       {step.branches && step.branches.length > 0 && (
-        <div style={{ marginTop: 8 }}>
-          <strong>Branches</strong>
-          <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
-            {step.branches.map((b, i) => (
-              <li key={i}>
+        <ul className="bp-branches" aria-label={`Branches from ${step.name}`}>
+          {step.branches.map((b, i) => (
+            <li key={i} className={`bp-branch${b.end ? " bp-branch-end" : ""}`}>
+              <svg
+                className="bp-branch-arrow"
+                viewBox="0 0 26 12"
+                width="26"
+                height="12"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <path
+                  d="M0 6h20M16.5 1.5 21 6l-4.5 4.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span className="bp-branch-label">
                 {b.on} → {branchTargetLabel(b, definition)}
-              </li>
-            ))}
-          </ul>
-        </div>
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
       {step.ends_run && (
-        <p style={{ margin: "8px 0 0" }}>Ends the run with outcome {step.ends_run.outcome}.</p>
+        <p className="bp-step-fact bp-step-end">
+          Ends the run with outcome {step.ends_run.outcome}.
+        </p>
       )}
       {step.notify &&
         step.notify.map((n, i) => (
-          <p key={i} style={{ margin: "8px 0 0", color: "var(--text-muted)" }}>
+          <p key={i} className="bp-step-note">
             Notifies {n.to_role}: {n.message}
           </p>
         ))}
       {step.replaces &&
         step.replaces.map((r, i) => (
-          <p key={i} style={{ margin: "8px 0 0", color: "var(--text-muted)" }}>
+          <p key={i} className="bp-step-note">
             Replaces workflow {r.workflow_id}, action {r.action_index}.
           </p>
         ))}
       {step.child_lane && (
-        <p style={{ margin: "8px 0 0", color: "var(--text-muted)" }}>
+        <p className="bp-step-note">
           Starts lane {step.child_lane.lane_id} on {step.child_lane.anchor_record}.
         </p>
       )}
-    </div>
+    </li>
   );
 }
 
@@ -184,59 +237,70 @@ export function LaneBlueprintView({ blueprint }: { blueprint: LaneBlueprint }) {
   const startCondition = describeCondition(definition.start_condition);
 
   return (
-    <div>
-      <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
-        <h2 style={{ margin: 0 }}>{definition.name}</h2>
-        <span className="badge">
-          v{blueprint.version} · {blueprint.status}
-        </span>
-        <span style={{ color: "var(--text-muted)" }}>Runs on {definition.object_key}</span>
-      </div>
-      {definition.description && <p>{definition.description}</p>}
-      {startCondition && (
-        <p style={{ color: "var(--text-muted)" }}>Starts when {startCondition}.</p>
-      )}
-      {definition.excludes && definition.excludes.length > 0 && (
-        <p style={{ color: "var(--text-muted)" }}>
-          Never runs at the same time as: {definition.excludes.join(", ")}.
-        </p>
-      )}
-
-      <h3>Stages</h3>
-      <div
-        style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 16 }}
-        aria-label="Stage order"
-      >
-        {definition.stages.map((stage, i) => (
-          <span key={stage.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            {i > 0 && <span aria-hidden="true">›</span>}
-            <span className="badge">
-              {i + 1}. {stage.name}
-            </span>
+    <div className="bp-blueprint">
+      <header className="bp-header">
+        <div className="bp-header-titles">
+          <h2 className="bp-title">{definition.name}</h2>
+          <span className="badge">
+            v{blueprint.version} · {blueprint.status}
           </span>
-        ))}
-      </div>
+          <span className="bp-runs-on">Runs on {definition.object_key}</span>
+        </div>
+        {definition.description && <p className="bp-desc">{definition.description}</p>}
+        {startCondition && <p className="bp-cond">Starts when {startCondition}.</p>}
+        {definition.excludes && definition.excludes.length > 0 && (
+          <p className="bp-cond">
+            Never runs at the same time as: {definition.excludes.join(", ")}.
+          </p>
+        )}
+      </header>
 
-      {definition.stages.map((stage, i) => {
-        const entry = describeCondition(stage.entry_condition);
-        const skip = describeCondition(stage.skip_condition);
-        return (
-          <section key={stage.id} style={{ marginBottom: 20 }}>
-            <h3 style={{ marginBottom: 4 }}>
-              Stage {i + 1} of {definition.stages.length} — {stage.name}
-            </h3>
-            {entry && (
-              <p style={{ margin: "0 0 8px", color: "var(--text-muted)" }}>Runs when {entry}.</p>
-            )}
-            {skip && (
-              <p style={{ margin: "0 0 8px", color: "var(--text-muted)" }}>Skipped when {skip}.</p>
-            )}
-            {stage.steps.map((step) => (
-              <StepDetail key={step.id} step={step} definition={definition} />
-            ))}
-          </section>
-        );
-      })}
+      <nav className="bp-rail" aria-label="Stage order">
+        <ol className="bp-rail-list">
+          {definition.stages.map((stage, i) => (
+            <li key={stage.id} className="bp-rail-item">
+              <a className="bp-rail-state" href={`#bp-stage-${stage.id}`}>
+                <span className="bp-rail-num">{i + 1}</span>
+                <span className="bp-rail-name">{stage.name}</span>
+              </a>
+              {i < definition.stages.length - 1 && (
+                <span className="bp-rail-arrow" aria-hidden="true">
+                  ›
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+      </nav>
+
+      <div className="bp-map">
+        {definition.stages.map((stage, i) => {
+          const entry = describeCondition(stage.entry_condition);
+          const skip = describeCondition(stage.skip_condition);
+          return (
+            <section
+              key={stage.id}
+              id={`bp-stage-${stage.id}`}
+              className="bp-stage"
+              aria-label={`Stage ${i + 1} of ${definition.stages.length}: ${stage.name}`}
+            >
+              <header className="bp-stage-head">
+                <span className="bp-stage-num">
+                  State {i + 1} / {definition.stages.length}
+                </span>
+                <h3 className="bp-stage-name">{stage.name}</h3>
+                {entry && <p className="bp-stage-cond">Runs when {entry}.</p>}
+                {skip && <p className="bp-stage-cond bp-stage-skip">Skipped when {skip}.</p>}
+              </header>
+              <ol className="bp-steps">
+                {stage.steps.map((step) => (
+                  <StepDetail key={step.id} step={step} definition={definition} />
+                ))}
+              </ol>
+            </section>
+          );
+        })}
+      </div>
 
       {definition.run_data && definition.run_data.fields.length > 0 && (
         <section style={{ marginBottom: 20 }}>

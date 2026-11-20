@@ -3,18 +3,18 @@ id: WP-0721
 title: "Blueprint view redesign: a visual, modern process map of states and steps"
 phase: 7
 epic: E7.5 Authoring
-status: proposed
-owner: unassigned
-planned_for: muse
+status: in_progress
+owner: claude
+planned_for: claude
 depends_on: [WP-0712]
 requirements: [REQ-LANE-020]
 estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
-branch:
+branch: wp/WP-0721-blueprint-redesign
 pr:
-updated: 2026-11-18
+updated: 2026-11-20
 ---
 
 # WP-0721 — Blueprint view redesign: a visual, modern process map of states and steps
@@ -54,20 +54,20 @@ picture of it.
 
 ## Acceptance criteria
 
-- [ ] AC-1: The Blueprint renders as a process map - stages shown as distinct,
+- [x] AC-1: The Blueprint renders as a process map - stages shown as distinct,
   ordered states with their steps grouped inside each - visually modern and
   appealing (Pega-Blueprint-level), from the same lane data WP-0712 reads.
-- [ ] AC-2: Each step shows its kind and role distinctly (icon + colour), and
+- [x] AC-2: Each step shows its kind and role distinctly (icon + colour), and
   every branch/skip path and declared way out of a hold is drawn as a
   connector, not only named in text.
-- [ ] AC-3: The redesign is accessible - readable by a screen reader, WCAG AA
+- [x] AC-3: The redesign is accessible - readable by a screen reader, WCAG AA
   colour contrast, full keyboard navigation - and renders correctly in light
   and dark theme and at phone width (no horizontal page scroll).
-- [ ] AC-4: Desktop and Team Workspace show the same redesigned Blueprint from
+- [x] AC-4: Desktop and Team Workspace show the same redesigned Blueprint from
   the same code; the WP-0712 export still works.
-- [ ] AC-5: The online demo (`app.js`) shows the same redesigned Blueprint on
+- [x] AC-5: The online demo (`app.js`) shows the same redesigned Blueprint on
   the warehouse sample lane; demo E2E covers it.
-- [ ] AC-6: Website help (`/help/process-lanes`) and `llms.txt`,
+- [x] AC-6: Website help (`/help/process-lanes`) and `llms.txt`,
   `llms-full.txt`, the Releases page and the Roadmap page are updated.
 
 ## Test plan
@@ -94,3 +94,25 @@ picture of it.
   (visually appealing, modern, Pega-Blueprint-style process map of states and
   steps) as a tracked WP rather than an informal order. UI work, muse's lane;
   sequenced before WP-0720. Proposed, awaiting muse.
+- 2026-11-20 claude: Built the redesign (owner reassigned it to claude). The
+  shared `LaneBlueprintView` (desktop + Team Workspace) and the demo's
+  `renderLaneBlueprint`/`laneBlueprintStepHtml` now draw a visual process map:
+  a stage **rail of states** across the top (numbered, linking to each state),
+  then each stage as a **state column** of step cards. Each step card has a
+  coloured kind strip + an icon per kind (form/record/check/approval/agent,
+  `KindIcon` / `laneKindIcon`, same SVG paths both sides) and a role chip; each
+  branch / way-out is **drawn as a connector** (arrow glyph + a colour-coded
+  target pill) while keeping the exact `on → target` text WP-0712's tests
+  assert. New `.bp-*` CSS in `desktop/src/styles.css` and `styles.css` (token
+  driven, so light + dark both theme; `@media(max-width:760px)` collapses the
+  map to one column and the print block flattens it top-to-bottom for the
+  export). AC-1/AC-2 (map, kind icon+colour, drawn connectors); AC-3 (axe test
+  green; WCAG tokens; keyboardable rail links; verified no horizontal page
+  overflow at 360/390/768px); AC-4 (one React component for desktop +
+  workspace; PrintOverlay export unchanged); AC-5 (demo render + strengthened
+  `warehouse-lane-blueprint.spec.ts`); AC-6 (help article, llms.txt,
+  llms-full.txt, Releases v0.99.14, Roadmap). Local: Vitest 222 passed (incl.
+  the new axe test; snapshot regenerated); `tsc` + `vite build` clean; demo
+  blueprint renders 5 stages / 13 steps / 4 connectors via the environment's
+  Chromium (the pinned e2e browser is CI-only). Opening the PR; status to
+  in_review once it is linked.

@@ -2669,3 +2669,63 @@ sidebar, topbar, demo banner, bottom nav and toasts stay on screen. */
 .lb-plumbing th,.lb-plumbing td{text-align:center}
 .lb-plumbing td:first-child,.lb-plumbing td:nth-child(2){text-align:left}
 @media(max-width:900px){.lb-layout{grid-template-columns:1fr}.lb-cond-row{margin-left:8px}}
+
+/* Lane Blueprint — visual process map (WP-0721, REQ-LANE-020). Demo mirror
+   of desktop/src/styles.css; uses the app token set (--brand/--panel/
+   --muted/--line). A Pega-Blueprint-style process map: a rail of states,
+   each stage a column of step cards, step kind by icon+colour, branches
+   drawn as connectors. Light/dark via tokens; one column at phone width. */
+.bp-blueprint{--bp-kind:var(--brand)}
+.bp-rail{margin:0 0 20px;overflow-x:auto;padding-bottom:4px}
+.bp-rail-list{display:flex;align-items:center;gap:2px;list-style:none;margin:0;padding:0}
+.bp-rail-item{display:flex;align-items:center}
+.bp-rail-state{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;padding:7px 13px 7px 8px;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--text);text-decoration:none;font-size:13px;transition:border-color .15s}
+.bp-rail-state:hover{border-color:var(--brand)}
+.bp-rail-state:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.bp-rail-num{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--brand);color:var(--primary-foreground,#fff);font-size:12px;font-weight:700}
+.bp-rail-name{font-weight:600}
+.bp-rail-arrow{color:var(--muted);padding:0 4px;font-size:18px}
+.bp-map{display:flex;gap:16px;align-items:flex-start;overflow-x:auto;padding:2px 2px 12px}
+.bp-stage{flex:0 0 clamp(260px,25vw,330px);display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:0 1px 2px rgba(16,24,40,.04);position:relative}
+.bp-stage::before{content:"";display:block;height:4px;border-radius:14px 14px 0 0;background:linear-gradient(90deg,var(--brand),color-mix(in srgb,var(--brand) 45%,transparent))}
+.bp-stage:not(:last-child)::after{content:"›";position:absolute;right:-14px;top:26px;z-index:1;color:var(--muted);font-size:22px;line-height:1}
+.bp-stage-head{padding:12px 14px 6px}
+.bp-stage-num{display:inline-block;font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--brand)}
+.bp-stage-name{margin:3px 0 0;font-size:16px}
+.bp-stage-cond{margin:6px 0 0;font-size:12.5px;color:var(--muted)}
+.bp-stage-skip::before{content:"⤼ "}
+.bp-steps{list-style:none;margin:0;padding:10px 14px 14px;display:flex;flex-direction:column;gap:12px;position:relative}
+.bp-step{--bp-kind:var(--brand);position:relative;border:1px solid var(--line);border-left:3px solid var(--bp-kind);border-radius:10px;background:var(--bg);padding:10px 12px}
+.bp-step+.bp-step::before{content:"";position:absolute;top:-9px;left:16px;width:2px;height:8px;background:var(--line)}
+.bp-kind-form{--bp-kind:#4f7cff}
+.bp-kind-record{--bp-kind:#0d9488}
+.bp-kind-check{--bp-kind:#d97706}
+.bp-kind-approval{--bp-kind:#8b5cf6}
+.bp-kind-agent{--bp-kind:#db2777}
+.bp-step-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.bp-step-icon{display:inline-grid;place-items:center;color:var(--bp-kind)}
+.bp-step-kind{font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--bp-kind);padding:2px 7px;border-radius:999px;background:color-mix(in srgb,var(--bp-kind) 14%,transparent)}
+.bp-step-name{flex:1 1 auto;min-width:0;font-size:14px}
+.bp-step-role{font-size:11px;color:var(--muted);padding:2px 7px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+.bp-step-flag{font-size:11px;color:var(--muted);font-style:italic}
+.bp-step-desc,.bp-step-fact{margin:8px 0 0;font-size:13px}
+.bp-step-note{margin:8px 0 0;font-size:12.5px;color:var(--muted)}
+.bp-step-end{font-weight:600}
+.bp-step-table{margin:8px 0 0;font-size:12.5px;width:100%}
+.bp-step-table th{font-size:11px;color:var(--muted);font-weight:600;text-align:left}
+.bp-step-block{margin:8px 0 0}
+.bp-step-block-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+.bp-step-list{margin:4px 0 0;padding-left:18px;font-size:12.5px}
+.bp-branches{list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.bp-branch{display:flex;align-items:center;gap:7px;font-size:12.5px}
+.bp-branch-arrow{flex:0 0 auto;color:var(--brand)}
+.bp-branch-label{display:inline-block;padding:3px 9px;border-radius:8px;background:color-mix(in srgb,var(--brand) 12%,transparent);border:1px solid color-mix(in srgb,var(--brand) 35%,transparent);color:var(--text)}
+.bp-branch-end .bp-branch-arrow{color:var(--muted)}
+.bp-branch-end .bp-branch-label{background:color-mix(in srgb,var(--muted) 12%,transparent);border-color:var(--line)}
+@media(max-width:760px){.bp-map{flex-direction:column;overflow-x:visible}.bp-stage{flex:1 1 auto;width:100%}.bp-stage:not(:last-child)::after{content:"↓";right:auto;left:26px;top:auto;bottom:-20px}}
+@media print{.bp-map{flex-direction:column;overflow:visible}.bp-stage{flex:1 1 auto;width:100%;break-inside:avoid}.bp-stage:not(:last-child)::after{content:none}.bp-step{break-inside:avoid}}
+/* WP-0721: keep long codes/labels from forcing horizontal page scroll at phone width. */
+.bp-step{min-width:0}
+.bp-step-table{word-break:break-word}
+.bp-step code{overflow-wrap:anywhere}
+.bp-branch-label{overflow-wrap:anywhere}
