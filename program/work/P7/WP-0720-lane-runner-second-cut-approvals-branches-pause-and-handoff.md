@@ -3,8 +3,8 @@ id: WP-0720
 title: Lane runner, second cut: approvals, branches, pause and handoff
 phase: 7
 epic: E7.3 Runner and visibility
-status: proposed
-owner: unassigned
+status: in_progress
+owner: claude
 planned_for: claude
 depends_on: [WP-0707, WP-0706]
 requirements: [REQ-LANE-014, REQ-LANE-012, REQ-LANE-009]
@@ -12,9 +12,9 @@ estimate: M
 editions: [desktop, workspace, demo]
 delivered: []
 docs: [process-lanes]
-branch: 
-pr: 
-updated: 2026-11-14
+branch: wp/WP-0720-runner-second-cut-engine
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/807
+updated: 2026-11-21
 ---
 
 # WP-0720 — Lane runner, second cut: approvals, branches, pause and handoff
@@ -53,3 +53,4 @@ Finish the runner for everything that is not the straight path, so a discrepancy
 ## Progress log
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
+- 2026-11-21 claude: Engine half of the runner's second cut landed (the owner assigned it to claude; muse builds the runner UI — AC-1, AC-3, AC-4 — on top). New service functions in `process_lane_service` for the run-level actions the UI calls: `pause_run(conn, ws, run_id, reason, actor) -> GraphRun` (waiting_person → paused, same step, audited `lane_run_paused`); `resume_paused_run(conn, ws, run_id, actor)` (paused → waiting_person, audited `lane_run_resumed`); and `reopen_step(conn, ws, mk, run_id, step_id, reason, actor)` (async — jumps the run back to an earlier **completed** step **in the current stage** via `graph_runtime_service::resume_lane_run_at_node`, re-parks waiting_person there, audited `lane_run_step_reopened`). **Signature note for muse:** pause/resume are **sync and take no master_key** (pure status transitions), reopen is **async with master_key** — a small refinement of the contract I shared. Each is gated to the current step's assignee (role or reassigned person) or an Administrator, and **reopening across a posted governed write is refused** (a posted write is never un-done — same invariant as cancel). Cancel-with-posted-writes is the existing `cancel_lane_run`. State machine: ADR-0007 §3 amended with `waiting_person ↔ paused` (run_state.rs + the run_state_machine oracle, 31 → 33 legal transitions). Tests: new `core/tests/process_lane_pause_reopen.rs` (4) — pause/resume keep the step and are audited; reopen goes back and re-walks; reopen refused across a posted write; only the assignee/admin may act. Local: 4 passed; adjacent lane suites green (human_step 5, branches 5, writes 6, runner 5, child 5, run_state_machine 6); clippy + fmt clean. Next, muse: the runner UI for approvals/branches/pause/resume/handoff/reopen/cancel (AC-1, AC-3), demo parity (AC-4), docs (AC-6) — calling these functions. The Tauri commands + HTTP routes + TS client wrappers for pause/resume/reopen are the thin glue to add alongside the UI.

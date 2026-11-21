@@ -51,6 +51,8 @@ fn adr_allows(from: &str, to: &str) -> bool {
             | ("waiting_approval", "failed")
             | ("waiting_person", "waiting_child")
             | ("waiting_child", "waiting_person")
+            | ("waiting_person", "paused")
+            | ("paused", "waiting_person")
     ) || (from_waiting && (to == "queued" || to == "cancelled"))
 }
 
@@ -134,9 +136,10 @@ fn ac2_the_guard_allows_exactly_the_adr_transitions_for_every_pair() {
         }
     }
     // 2 from queued, 10 from running, 1 approval rejection, the two
-    // waiting_person <-> waiting_child moves (WP-0716), and 2 (queued,
-    // cancelled) from each of the eight waiting-or-paused statuses.
-    assert_eq!(allowed, 2 + 10 + 1 + 2 + 8 * 2);
+    // waiting_person <-> waiting_child moves (WP-0716), the two
+    // waiting_person <-> paused moves (WP-0720), and 2 (queued, cancelled)
+    // from each of the eight waiting-or-paused statuses.
+    assert_eq!(allowed, 2 + 10 + 1 + 2 + 2 + 8 * 2);
     assert_eq!(RUN_STATUSES.len() * RUN_STATUSES.len(), 196);
 }
 

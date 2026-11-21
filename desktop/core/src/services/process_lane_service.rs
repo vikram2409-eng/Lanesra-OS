@@ -3735,6 +3735,280 @@ pub fn handoff_step(
 }
 
 // ===========================================================================
+// WP-0720: pause, resume and reopen on the runner (REQ-LANE-012). Cancel with
+// the list of posted writes is `cancel_lane_run` (above); these three are the
+// rest of the second-cut runner's run-level actions the UI calls. Each takes
+// the usual lane-service shape and returns the updated run; the runner
+// re-reads it with `get_run_view`.
+// ===========================================================================
+
+/// WP-0720 (REQ-LANE-012): pause a run a person is working. A paused run is
+/// parked exactly where it was - same current step, nothing written - and the
+/// pause is recorded in the run's trail. Only the current step's assignee (its
+/// role, or the person it was reassigned to) or an Administrator may pause.
+pub fn pause_run(
+    conn: &Connection,
+    workspace_id: &str,
+    run_id: &str,
+    reason: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> AppResult<GraphRun> {
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.workspace_id != workspace_id {
+        return Err(AppError::NotFound("Run".into()));
+    }
+    if run.status != "waiting_person" {
+        return Err(classified_validation(
+            "validation.state",
+            format!("run is '{}', not waiting on a person", run.status),
+        ));
+    }
+    let (_node, step) = current_human_step(conn, &run)?;
+    if !actor_may_act_on_step(conn, &run, &step, actor_user_id)? {
+        return Err(AppError::classified(
+            ErrorClass::Validation,
+            "validation.permission",
+            "only the current assignee or an administrator can pause this run",
+        ));
+    }
+    crate::services::run_state::transition(conn, run_id, "waiting_person", "paused", None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "lane_run_paused",
+        Some("lane_run"),
+        Some(run_id),
+        &format!(
+            "Paused run {run_id} at step '{}'{}",
+            step.id,
+            reason.map(|r| format!(": {r}")).unwrap_or_default()
+        ),
+        Some(&json!({"step_id": step.id, "reason": reason}).to_string()),
+    )?;
+    graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))
+}
+
+/// WP-0720 (REQ-LANE-012): resume a paused run back to the step it was paused
+/// on, so the person carries on where they left off. Audited. Only the step's
+/// assignee or an Administrator may resume.
+pub fn resume_paused_run(
+    conn: &Connection,
+    workspace_id: &str,
+    run_id: &str,
+    actor_user_id: Option<&str>,
+) -> AppResult<GraphRun> {
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.workspace_id != workspace_id {
+        return Err(AppError::NotFound("Run".into()));
+    }
+    if run.status != "paused" {
+        return Err(classified_validation(
+            "validation.state",
+            format!("run is '{}', not paused", run.status),
+        ));
+    }
+    // The current node is still the human step it was paused on, so the same
+    // role/assignee check applies even while the run status is `paused`.
+    let (_node, step) = current_human_step(conn, &run)?;
+    if !actor_may_act_on_step(conn, &run, &step, actor_user_id)? {
+        return Err(AppError::classified(
+            ErrorClass::Validation,
+            "validation.permission",
+            "only the current assignee or an administrator can resume this run",
+        ));
+    }
+    crate::services::run_state::transition(conn, run_id, "paused", "waiting_person", None)?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "lane_run_resumed",
+        Some("lane_run"),
+        Some(run_id),
+        &format!("Resumed run {run_id} at step '{}'", step.id),
+        Some(&json!({"step_id": step.id}).to_string()),
+    )?;
+    graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))
+}
+
+/// WP-0720 (REQ-LANE-012): reopen an earlier, already-completed step in the
+/// current stage, so the person can redo it and re-walk forward. Reopening is
+/// refused across a governed write already posted - a posted write is never
+/// un-done (the same invariant as cancel), so a step whose own write, or a
+/// write of a step between it and the current one, has posted cannot be
+/// reopened. Only the current step's assignee or an Administrator may reopen.
+pub async fn reopen_step(
+    conn: &Connection,
+    workspace_id: &str,
+    master_key: &[u8; 32],
+    run_id: &str,
+    step_id: &str,
+    reason: Option<&str>,
+    actor_user_id: Option<&str>,
+) -> AppResult<GraphRun> {
+    let run =
+        graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))?;
+    if run.workspace_id != workspace_id {
+        return Err(AppError::NotFound("Run".into()));
+    }
+    if run.status != "waiting_person" {
+        return Err(classified_validation(
+            "validation.state",
+            format!("run is '{}', not waiting on a person", run.status),
+        ));
+    }
+    let (current_node, current_step) = current_human_step(conn, &run)?;
+    if !actor_may_act_on_step(conn, &run, &current_step, actor_user_id)? {
+        return Err(AppError::classified(
+            ErrorClass::Validation,
+            "validation.permission",
+            "only the current assignee or an administrator can reopen a step",
+        ));
+    }
+    let definition = lane_definition_for_run(conn, &run)?.ok_or_else(|| {
+        classified_validation(
+            "validation.state",
+            "the lane definition for this run cannot be read",
+        )
+    })?;
+    // A step can only be reopened within the stage the run is in now.
+    let current_stage_id = serde_json::from_str::<Value>(&current_node.config_json)
+        .ok()
+        .and_then(|c| {
+            c.get("lane_stage_id")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        })
+        .ok_or_else(|| {
+            classified_validation("validation.state", "the current step has no stage")
+        })?;
+    let stage = definition
+        .stages
+        .iter()
+        .find(|s| s.id == current_stage_id)
+        .ok_or_else(|| {
+            classified_validation(
+                "validation.state",
+                "the current stage is not in the definition",
+            )
+        })?;
+    let target_idx = stage.steps.iter().position(|s| s.id == step_id);
+    let current_idx = stage.steps.iter().position(|s| s.id == current_step.id);
+    let (target_idx, current_idx) = match (target_idx, current_idx) {
+        (Some(t), Some(c)) => (t, c),
+        _ => {
+            return Err(classified_validation(
+                "validation.arguments",
+                format!("step '{step_id}' is not a step in the current stage"),
+            ))
+        }
+    };
+    if target_idx >= current_idx {
+        return Err(classified_validation(
+            "validation.arguments",
+            "a step can only be reopened back to an earlier step in the current stage",
+        ));
+    }
+    let graph = execution_graph_repo::get(conn, &run.graph_id)?
+        .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+    let mut step_node: HashMap<String, String> = HashMap::new();
+    let mut node_step: HashMap<String, String> = HashMap::new();
+    for node in &graph.nodes {
+        if let Ok(Value::Object(cfg)) = serde_json::from_str::<Value>(&node.config_json) {
+            if let Some(Value::String(sid)) = cfg.get("lane_step_id") {
+                step_node.insert(sid.clone(), node.id.clone());
+                node_step.insert(node.id.clone(), sid.clone());
+            }
+        }
+    }
+    let target_node_id = step_node.get(step_id).cloned().ok_or_else(|| {
+        classified_validation(
+            "validation.state",
+            "the step has no node in the run's graph",
+        )
+    })?;
+    let mut latest: HashMap<&str, &crate::models::graph_run::RunNode> = HashMap::new();
+    for row in &run.nodes {
+        let e = latest.entry(row.node_id.as_str()).or_insert(row);
+        if row.attempt > e.attempt {
+            *e = row;
+        }
+    }
+    let target_done = latest
+        .get(target_node_id.as_str())
+        .map(|r| matches!(r.status.as_str(), "completed" | "completed_partial"))
+        .unwrap_or(false);
+    if !target_done {
+        return Err(classified_validation(
+            "validation.state",
+            format!("step '{step_id}' has not been completed, so it cannot be reopened"),
+        ));
+    }
+    // A governed write cannot be un-done: refuse if the target step, or any
+    // step between it and the current one, has already posted one.
+    let posted_steps: std::collections::HashSet<&str> = run
+        .nodes
+        .iter()
+        .filter(|n| n.node_type == "action" && n.status == "completed")
+        .filter(|n| {
+            n.output_json
+                .as_deref()
+                .and_then(|s| serde_json::from_str::<Value>(s).ok())
+                .and_then(|o| o.get("applied").cloned())
+                .map(|a| match a {
+                    Value::Array(items) => !items.is_empty(),
+                    Value::Null => false,
+                    _ => true,
+                })
+                .unwrap_or(false)
+        })
+        .filter_map(|n| node_step.get(n.node_id.as_str()).map(|s| s.as_str()))
+        .collect();
+    for s in &stage.steps[target_idx..current_idx] {
+        if posted_steps.contains(s.id.as_str()) {
+            return Err(classified_validation(
+                "validation.state",
+                format!(
+                    "step '{}' already posted a write, which cannot be un-done; reopening past it is refused",
+                    s.id
+                ),
+            ));
+        }
+    }
+    // Jump the run back to the target step; the runtime re-parks it there in
+    // `waiting_person`, and the person re-walks the stage forward from it.
+    graph_runtime_service::resume_lane_run_at_node(
+        conn,
+        workspace_id,
+        master_key,
+        run_id,
+        &target_node_id,
+        actor_user_id,
+    )
+    .await?;
+    audit_repo::record(
+        conn,
+        workspace_id,
+        actor_user_id,
+        "lane_run_step_reopened",
+        Some("lane_run"),
+        Some(run_id),
+        &format!(
+            "Reopened step '{step_id}' of run {run_id}{}",
+            reason.map(|r| format!(": {r}")).unwrap_or_default()
+        ),
+        Some(
+            &json!({"step_id": step_id, "from_step": current_step.id, "reason": reason})
+                .to_string(),
+        ),
+    )?;
+    graph_run_repo::get_run(conn, run_id)?.ok_or_else(|| AppError::NotFound("Run".into()))
+}
+
+// ===========================================================================
 // WP-0711: notes, attachments and reassign at any point (REQ-LANE-018).
 // ===========================================================================
 
