@@ -44,6 +44,11 @@ pub fn is_legal(from: &str, to: &str) -> bool {
         // `(waiting, queued|cancelled)` arm below covers resume and cancel.
         ("waiting_person", "waiting_child") => true,
         ("waiting_child", "waiting_person") => true,
+        // WP-0720 (REQ-LANE-012): a person can pause a run they are working
+        // and resume it to the same step. `paused` is otherwise reached only
+        // from `running`; these two amend ADR-0007 §3 for the lane runner.
+        ("waiting_person", "paused") => true,
+        ("paused", "waiting_person") => true,
         (from, "queued" | "cancelled") => is_waiting_status(from),
         _ => false,
     }
