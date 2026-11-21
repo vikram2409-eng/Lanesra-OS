@@ -18,7 +18,9 @@ use lanesra_core::models::graph_run::GraphRun;
 use lanesra_core::models::lane_run_note::{LaneRunAttachment, LaneRunNote};
 use lanesra_core::models::process_lane::{ProcessLane, ProcessLaneVersion};
 use lanesra_core::services::process_lane_blueprint::{LaneBlueprint, LaneBlueprintSummary};
-use lanesra_core::services::process_lane_service::{LaneRunList, LaneRunView};
+use lanesra_core::services::process_lane_service::{
+    LaneBoard, LaneBoardItem, LaneRunList, LaneRunView, LaneTiming, MySteps,
+};
 use lanesra_core::services::{process_lane_blueprint, process_lane_service};
 use serde_json::{Map, Value};
 
@@ -691,5 +693,55 @@ pub fn reassign_lane_run_step(
         &to_user_id,
         &reason,
         actor.as_deref(),
+    )
+}
+
+/// The board of a lane (WP-0713 AC-1, REQ-LANE-019): its active runs in
+/// their stages, only records the signed-in person may read.
+#[tauri::command]
+pub fn list_lane_board(state: State<'_, AppState>, lane_key: String) -> AppResult<LaneBoard> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    process_lane_service::list_lane_board(
+        &conn,
+        &workspace_id,
+        &lane_key,
+        current_actor(&state).as_deref(),
+    )
+}
+
+/// The signed-in person's lane steps and approvals together, oldest first
+/// (WP-0713 AC-2, REQ-LANE-019).
+#[tauri::command]
+pub fn list_my_lane_steps(state: State<'_, AppState>) -> AppResult<MySteps> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    process_lane_service::list_my_steps(&conn, &workspace_id, current_actor(&state).as_deref())
+}
+
+/// A lane's timing figures (WP-0713 AC-3, REQ-LANE-019): time per stage,
+/// completion rate and rework, from the recorded timestamps.
+#[tauri::command]
+pub fn get_lane_timing(state: State<'_, AppState>, lane_key: String) -> AppResult<LaneTiming> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    process_lane_service::lane_timing(&conn, &workspace_id, &lane_key)
+}
+
+/// The ageing view of a lane (WP-0713 AC-4, REQ-LANE-019): its active
+/// runs, longest in their current stage first, only records the
+/// signed-in person may read.
+#[tauri::command]
+pub fn list_lane_ageing(
+    state: State<'_, AppState>,
+    lane_key: String,
+) -> AppResult<Vec<LaneBoardItem>> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    process_lane_service::list_lane_ageing(
+        &conn,
+        &workspace_id,
+        &lane_key,
+        current_actor(&state).as_deref(),
     )
 }

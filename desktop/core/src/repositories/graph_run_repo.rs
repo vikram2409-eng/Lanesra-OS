@@ -116,6 +116,23 @@ pub fn list_runs_for_graph(
     rows.into_iter().map(|r| hydrate(conn, r)).collect()
 }
 
+/// Every lane run in the workspace (WP-0713, REQ-LANE-019): all runs whose
+/// graph's `source_kind` is `lane`, across lanes, newest first. "My steps"
+/// reads from here; rows are not hydrated.
+pub fn list_lane_runs(conn: &Connection, workspace_id: &str) -> rusqlite::Result<Vec<GraphRun>> {
+    let mut stmt = conn.prepare(
+        "SELECT r.* FROM ai_runs r
+          JOIN ai_execution_graphs g ON g.id = r.graph_id
+         WHERE r.workspace_id = ?1
+           AND g.source_kind = 'lane'
+         ORDER BY r.started_at DESC",
+    )?;
+    let rows: Vec<GraphRun> = stmt
+        .query_map([workspace_id], map_run_row)?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(rows)
+}
+
 /// Every lane run anchored to one record (WP-0707, REQ-LANE-015): all runs
 /// across lanes, newest first. A run is a lane run when its graph's
 /// `source_kind` is `lane`; the anchor is the run's own
@@ -142,6 +159,30 @@ pub fn list_lane_runs_for_record(
             rusqlite::params![workspace_id, object_key, record_id],
             map_run_row,
         )?
+        .collect::<rusqlite::Result<_>>()?;
+    Ok(rows)
+}
+
+/// Every run of one lane (WP-0713, REQ-LANE-019): all runs whose graph's
+/// `source_kind` is `lane` and whose `source_id` is this lane at any
+/// version (`{lane_id}@v{n}`, ADR-0024 §1), newest first. The board,
+/// timing and ageing views read from here; rows are not hydrated.
+pub fn list_lane_runs_for_lane(
+    conn: &Connection,
+    workspace_id: &str,
+    lane_key: &str,
+) -> rusqlite::Result<Vec<GraphRun>> {
+    let pattern = format!("{lane_key}@v%");
+    let mut stmt = conn.prepare(
+        "SELECT r.* FROM ai_runs r
+          JOIN ai_execution_graphs g ON g.id = r.graph_id
+         WHERE r.workspace_id = ?1
+           AND g.source_kind = 'lane'
+           AND g.source_id LIKE ?2
+         ORDER BY r.started_at DESC",
+    )?;
+    let rows: Vec<GraphRun> = stmt
+        .query_map(rusqlite::params![workspace_id, pattern], map_run_row)?
         .collect::<rusqlite::Result<_>>()?;
     Ok(rows)
 }
