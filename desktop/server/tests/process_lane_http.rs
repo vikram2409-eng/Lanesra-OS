@@ -5,6 +5,9 @@
 //! the desktop and Team Workspace editions behave the same from the same code.
 //! (WP-0711 AC-4) - notes, attachments and reassign run over the admin
 //! routes too, and the run view over HTTP carries them.
+//! (WP-0713 AC-5) - the board, my-steps, timing and ageing reads run over
+//! the admin routes too, from the same service code as the desktop
+//! Tauri commands.
 //! Import/publish/list/get go through the sync `/api/invoke` dispatcher;
 //! starting a run goes through the async admin route, which opens its own
 //! connection (hence the file-backed DB, as in `agent_v1.rs`).
@@ -733,4 +736,147 @@ async fn anytime_actions_work_over_http_the_same_as_on_desktop() {
             "the audit trail carries {expected}: {event_types:?}"
         );
     }
+}
+
+// --------------------------------------------------------------------------
+// WP-0713 AC-5: the board, my-steps, timing and ageing reads run over the
+// Team Workspace admin routes exactly as the desktop Tauri commands do -
+// the same service code, the same figures. The check-only lane's run
+// completes immediately, so the board and ageing views are empty by
+// design (they list active runs only) while timing counts the run.
+// --------------------------------------------------------------------------
+
+// Covers: REQ-LANE-019 (WP-0713 AC-5)
+#[tokio::test]
+async fn lane_board_my_steps_timing_ageing_work_over_http() {
+    let (addr, state, _dir) = spawn_file_backed_server().await;
+    let client = client_with_cookies();
+    let setup = first_run(&client, addr).await;
+    let workspace_id = setup["data"][0]["id"].as_str().unwrap().to_string();
+    let admin_id = setup["data"][1]["id"].as_str().unwrap().to_string();
+
+    let record_id = {
+        let conn = state.conn.lock().unwrap();
+        let object = custom_object_service::create_with_key(
+            &conn,
+            &workspace_id,
+            "purchase_order",
+            &CustomObjectDefinitionInput {
+                singular_label: "Purchase Order".into(),
+                plural_label: "Purchase Orders".into(),
+                icon: "▣".into(),
+                prefix: "PO".into(),
+                digits: 6,
+            },
+            Some(&admin_id),
+        )
+        .unwrap();
+        custom_record_service::create(
+            &conn,
+            &workspace_id,
+            &CustomRecordInput {
+                object_key: object.key.clone(),
+                primary_name: "PO-2026-001".into(),
+                status: "Active".into(),
+                owner_user_id: None,
+                notes: None,
+            },
+            Some(&admin_id),
+        )
+        .unwrap()
+        .id
+    };
+    invoke(
+        &client,
+        addr,
+        "import_process_lane",
+        json!({"definitionJson": check_only_lane_json(1)}),
+    )
+    .await;
+    let published = invoke(
+        &client,
+        addr,
+        "publish_process_lane",
+        json!({"laneKey": "lane-check-only"}),
+    )
+    .await;
+    assert_eq!(published["ok"], true);
+    let run = client
+        .post(format!(
+            "http://{addr}/api/admin/process-lanes/lane-check-only/runs"
+        ))
+        .json(&json!({"anchor_record_id": record_id}))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert_eq!(run["ok"], true);
+    assert_eq!(run["data"]["status"], "completed");
+
+    async fn get_admin(client: &reqwest::Client, addr: SocketAddr, path: &str) -> Value {
+        client
+            .get(format!("http://{addr}{path}"))
+            .send()
+            .await
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap()
+    }
+
+    // Board: the lane's one stage, no active runs - the completed run is
+    // excluded by design.
+    let board = get_admin(
+        &client,
+        addr,
+        "/api/admin/process-lanes/lane-check-only/board",
+    )
+    .await;
+    assert_eq!(board["ok"], true);
+    assert_eq!(board["data"]["lane_id"], "lane-check-only");
+    assert_eq!(board["data"]["stages"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        board["data"]["stages"][0]["stage_id"], "verify",
+        "board stage: {board}"
+    );
+    assert_eq!(
+        board["data"]["stages"][0]["runs"].as_array().unwrap().len(),
+        0
+    );
+
+    // My steps: nothing waiting on the completed run.
+    let mine = get_admin(&client, addr, "/api/admin/process-lanes/my-steps").await;
+    assert_eq!(mine["ok"], true);
+    assert_eq!(mine["data"]["items"].as_array().unwrap().len(), 0);
+
+    // Timing: the one run completed, and the verify stage carries it.
+    let timing = get_admin(
+        &client,
+        addr,
+        "/api/admin/process-lanes/lane-check-only/timing",
+    )
+    .await;
+    assert_eq!(timing["ok"], true);
+    assert_eq!(timing["data"]["total_runs"], 1);
+    assert_eq!(timing["data"]["completed_runs"], 1);
+    assert_eq!(timing["data"]["completion_rate"], 1.0);
+    assert_eq!(timing["data"]["stages"].as_array().unwrap().len(), 1);
+    assert_eq!(timing["data"]["stages"][0]["stage_id"], "verify");
+    assert_eq!(timing["data"]["stages"][0]["runs_completed"], 1);
+    assert!(
+        timing["data"]["stages"][0]["avg_seconds"].is_number(),
+        "avg_seconds present: {timing}"
+    );
+
+    // Ageing: no active runs to age.
+    let ageing = get_admin(
+        &client,
+        addr,
+        "/api/admin/process-lanes/lane-check-only/ageing",
+    )
+    .await;
+    assert_eq!(ageing["ok"], true);
+    assert_eq!(ageing["data"].as_array().unwrap().len(), 0);
 }

@@ -143,6 +143,22 @@ pub fn router() -> Router<SharedState> {
             post(reassign_lane_run_step_admin),
         )
         .route(
+            "/api/admin/process-lanes/:lane_key/board",
+            get(list_lane_board_admin),
+        )
+        .route(
+            "/api/admin/process-lanes/my-steps",
+            get(list_my_lane_steps_admin),
+        )
+        .route(
+            "/api/admin/process-lanes/:lane_key/timing",
+            get(get_lane_timing_admin),
+        )
+        .route(
+            "/api/admin/process-lanes/:lane_key/ageing",
+            get(list_lane_ageing_admin),
+        )
+        .route(
             "/api/admin/execution-graph-runs/:id/resume",
             post(resume_graph_run_admin),
         )
@@ -905,6 +921,80 @@ async fn reassign_lane_run_step_admin(
             &body.reason,
             Some(&actor),
         )
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+/// WP-0713 (REQ-LANE-019, AC-1): the board of a lane - its active runs in
+/// their stages, only records the signed-in person may read.
+async fn list_lane_board_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(lane_key): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, _master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::list_lane_board(&conn, &workspace_id, &lane_key, Some(&actor))
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+/// WP-0713 (REQ-LANE-019, AC-2): the signed-in person's lane steps and
+/// approvals together, oldest first.
+async fn list_my_lane_steps_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, _master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::list_my_steps(&conn, &workspace_id, Some(&actor))
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+/// WP-0713 (REQ-LANE-019, AC-3): a lane's timing figures - time per
+/// stage, completion rate and rework, from the recorded timestamps.
+async fn get_lane_timing_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(lane_key): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    // Timing is a lane-wide aggregate, not viewer-filtered, but the route
+    // still requires an authenticated workspace member.
+    let (workspace_id, _actor, _master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::lane_timing(&conn, &workspace_id, &lane_key)
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+/// WP-0713 (REQ-LANE-019, AC-4): the ageing view of a lane - its active
+/// runs, longest in their current stage first, only records the
+/// signed-in person may read.
+async fn list_lane_ageing_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(lane_key): Path<String>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, _master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::list_lane_ageing(&conn, &workspace_id, &lane_key, Some(&actor))
     })
     .await?;
     Ok(Json(
