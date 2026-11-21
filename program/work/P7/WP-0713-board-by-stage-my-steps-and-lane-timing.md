@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: [desktop, workspace, demo]
 docs: [process-lanes]
 branch: wp/WP-0713-board-my-steps-timing-r3
-pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/801
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/806
 updated: 2026-11-20
 ---
 
