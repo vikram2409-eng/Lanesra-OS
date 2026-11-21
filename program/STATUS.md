@@ -34,7 +34,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 |---|---|---|---|---|---|
 | [WP-0708](work/P7/WP-0708-agent-steps-assistance-and-autonomy-level-per-step.md) | Agent steps, assistance and autonomy level per step | in_review | claude | `wp/WP-0708-agent-steps-assistance-autonomy` | https://github.com/vikram2409-eng/Lanesra-OS/pull/799 |
 | [WP-0709](work/P7/WP-0709-lanes-and-workflows-declared-replacement-and-starting-a-lane.md) | Lanes and workflows: declared replacement, and starting a lane from a workflow | in_review | claude | `wp/WP-0709-lanes-workflows-interplay` | 792 |
-| [WP-0713](work/P7/WP-0713-board-by-stage-my-steps-and-lane-timing.md) | Board by stage, "my steps" and lane timing | in_review | muse | `wp/WP-0713-board-my-steps-timing-r3` | https://github.com/vikram2409-eng/Lanesra-OS/pull/801 |
+| [WP-0713](work/P7/WP-0713-board-by-stage-my-steps-and-lane-timing.md) | Board by stage, "my steps" and lane timing | in_review | muse | `wp/WP-0713-board-my-steps-timing-r3` | https://github.com/vikram2409-eng/Lanesra-OS/pull/806 |
 | [WP-0721](work/P7/WP-0721-blueprint-view-redesign-visual-process-map.md) | Blueprint view redesign: a visual, modern process map of states and steps | in_review | claude | `wp/WP-0721-blueprint-redesign` | https://github.com/vikram2409-eng/Lanesra-OS/pull/805 |
 
 ## Ready to start (all dependencies done)
