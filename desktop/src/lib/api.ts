@@ -48,11 +48,15 @@ import type {
   GraphRun,
   LaneBlueprint,
   LaneBlueprintSummary,
+  LaneBoard,
+  LaneBoardItem,
   LaneDefinition,
   LaneRunListItem,
   LaneRunNoteView,
   LaneRunAttachmentView,
   LaneRunView,
+  LaneTiming,
+  MySteps,
   PublishReport,
   ProcessLaneVersion,
   DryRunFixtures,
@@ -604,6 +608,14 @@ export const api = {
     const res = await call<{ runs: LaneRunListItem[] }>("list_lane_runs_for_record", { objectKey, recordId });
     return res.runs;
   },
+  // WP-0713: board by stage, "my steps", lane timing, ageing
+  // (REQ-LANE-019). Sync `call`s over the Tauri commands of the same
+  // names; the Team Workspace server exposes the same reads over its
+  // admin GET routes (see process_lane_http.rs, AC-5).
+  listLaneBoard: (laneKey: string) => call<LaneBoard>("list_lane_board", { laneKey }),
+  listMyLaneSteps: () => call<MySteps>("list_my_lane_steps", {}),
+  getLaneTiming: (laneKey: string) => call<LaneTiming>("get_lane_timing", { laneKey }),
+  listLaneAgeing: (laneKey: string) => call<LaneBoardItem[]>("list_lane_ageing", { laneKey }),
   startLaneRun: (laneKey: string, anchorRecordId: string) =>
     callAdminAction<GraphRun>(
       "start_process_lane_run",
