@@ -1710,6 +1710,62 @@ const warehouseSeed = {
      "unit_cost": 68.0
     }
    ]
+  },
+  {
+   "number": "PO-2026-013",
+   "name": "PO-2026-013 — Northern Linen Mills",
+   "status": "OPEN",
+   "owner": "Sarah Chen",
+   "notes": "",
+   "id": "po-2026-013",
+   "po_number": "PO-2026-013",
+   "supplier_id": "sup-02",
+   "warehouse_id": "wh1",
+   "order_date": "2026-11-07",
+   "expected_date": "2026-11-13",
+   "total": 1740,
+   "lines": [
+    {
+     "id": "pol-013-1",
+     "product_id": "prod-hg-1004",
+     "qty_ordered": 24,
+     "qty_received": 0,
+     "qty_rejected": 0,
+     "unit_cost": 44.0
+    },
+    {
+     "id": "pol-013-2",
+     "product_id": "prod-hg-1011",
+     "qty_ordered": 12,
+     "qty_received": 0,
+     "qty_rejected": 0,
+     "unit_cost": 57.0
+    }
+   ]
+  },
+  {
+   "number": "PO-2026-014",
+   "name": "PO-2026-014 — ForgeLine Cookware",
+   "status": "OPEN",
+   "owner": "Sarah Chen",
+   "notes": "",
+   "id": "po-2026-014",
+   "po_number": "PO-2026-014",
+   "supplier_id": "sup-03",
+   "warehouse_id": "wh1",
+   "order_date": "2026-11-08",
+   "expected_date": "2026-11-13",
+   "total": 1360,
+   "lines": [
+    {
+     "id": "pol-014-1",
+     "product_id": "prod-hg-1007",
+     "qty_ordered": 20,
+     "qty_received": 0,
+     "qty_rejected": 0,
+     "unit_cost": 68.0
+    }
+   ]
   }
  ],
  "sales_order": [
@@ -2254,6 +2310,71 @@ const warehouseSeed = {
      "qty_ordered": 4,
      "qty_reserved": 0,
      "qty_picked": 0,
+     "qty_packed": 0,
+     "qty_shipped": 0
+    }
+   ]
+  },
+  {
+   "number": "SO-2026-016",
+   "name": "SO-2026-016 — Urban Nest Interiors",
+   "status": "ALLOCATED",
+   "owner": "Sarah Chen",
+   "notes": "",
+   "id": "so-2026-016",
+   "so_number": "SO-2026-016",
+   "customer_id": "cust-03",
+   "warehouse_id": "wh1",
+   "order_date": "2026-11-11",
+   "required_ship_date": "2026-11-13",
+   "total": 612.0,
+   "ship_method": "Standard",
+   "carrier": "Purolator",
+   "tracking_number": null,
+   "lines": [
+    {
+     "id": "sol-016-1",
+     "product_id": "prod-hg-1006",
+     "qty_ordered": 6,
+     "qty_reserved": 6,
+     "qty_picked": 0,
+     "qty_packed": 0,
+     "qty_shipped": 0
+    },
+    {
+     "id": "sol-016-2",
+     "product_id": "prod-hg-1010",
+     "qty_ordered": 4,
+     "qty_reserved": 4,
+     "qty_picked": 0,
+     "qty_packed": 0,
+     "qty_shipped": 0
+    }
+   ]
+  },
+  {
+   "number": "SO-2026-017",
+   "name": "SO-2026-017 — Lakeshore Living",
+   "status": "PICKING",
+   "owner": "Sarah Chen",
+   "notes": "",
+   "id": "so-2026-017",
+   "so_number": "SO-2026-017",
+   "customer_id": "cust-04",
+   "warehouse_id": "wh1",
+   "order_date": "2026-11-10",
+   "required_ship_date": "2026-11-13",
+   "total": 388.0,
+   "ship_method": "Express",
+   "carrier": "FedEx",
+   "tracking_number": null,
+   "lines": [
+    {
+     "id": "sol-017-1",
+     "product_id": "prod-hg-1002",
+     "qty_ordered": 8,
+     "qty_reserved": 8,
+     "qty_picked": 3,
      "qty_packed": 0,
      "qty_shipped": 0
     }
@@ -10606,10 +10727,15 @@ function warehouseDashboard(){
  const attention=[...k.outOfStock,...k.lowStock];
  // Pick & Pack lane: the orders due today that can start (or resume) a run.
  const pickpackDue=(data.sales_order||[]).filter(s=>(s.status==='PICKING'||s.status==='ALLOCATED')&&s.required_ship_date===WAREHOUSE_TODAY);
- const pickpackDueRows=pickpackDue.map(so=>{
-  const run=laneActiveRun('lane-wh-pickpack',so.id);
+ // The dashboard now leads with the active work (lanes to resume/start,
+ // receiving, waves) right after the KPIs, then the blueprint section.
+ const LANE_NAMES={'lane-wh-receiving':'Receive Shipment','lane-wh-pickpack':'Pick & Pack','lane-wh-count':'Count','lane-wh-replenish':'Replenish','lane-wh-supplier-check':'Supplier Check'};
+ const activeRuns=(data.laneRuns||[]).filter(r=>!['completed','completed_partial','cancelled'].includes(r.status));
+ const runDisplay=r=>{const rec=byId(r.anchorObjectKey,r.anchorRecordId)||{};return rec.po_number||rec.so_number||rec.count_number||rec.number||rec.name||rec.primary_name||r.anchorRecordId||'';};
+ const activeRunRows=activeRuns.map(r=>`<div class="prb-row"><div><strong>${agentEsc(LANE_NAMES[r.laneId]||r.laneId)}</strong><small class="muted"> · ${agentEsc(runDisplay(r))} · ${agentEsc(r.status)}</small></div><div class="actions"><button class="btn btn-primary" data-lane-open-run="${r.id}">${r.laneId==='lane-wh-count'?'Open count run':'Resume lane'}</button></div></div>`).join('');
+ const pickpackStartRows=pickpackDue.filter(so=>!laneActiveRun('lane-wh-pickpack',so.id)).map(so=>{
   const cust=(data.customer||[]).find(c=>c.id===so.customer_id)||{};
-  return `<div class="prb-row"><div><strong>${agentEsc(so.so_number)}</strong><small class="muted"> · ${agentEsc(cust.name||'')} · ${agentEsc(so.status)} · due ${agentEsc(so.required_ship_date||'')}</small></div><div class="actions">${run?`<button class="btn btn-primary" data-lane-open-run="${run.id}">Resume lane</button>`:`<button class="btn btn-primary" data-lane-start="lane-wh-pickpack:${so.id}">Start pick & pack lane</button>`}</div></div>`;
+  return `<div class="prb-row"><div><strong>${agentEsc(so.so_number)}</strong><small class="muted"> · ${agentEsc(cust.name||'')} · ${agentEsc(so.status)} · due ${agentEsc(so.required_ship_date||'')}</small></div><div class="actions"><button class="btn btn-primary" data-lane-start="lane-wh-pickpack:${so.id}">Start pick &amp; pack lane</button></div></div>`;
  }).join('');
  const waveLaneButtons=v=>(v.orders||[]).map(oid=>{
   const so=byId('sales_order',oid);
@@ -10619,7 +10745,7 @@ function warehouseDashboard(){
   if(so.status==='PICKING'||so.status==='ALLOCATED')return ` <button class="btn" data-lane-start="lane-wh-pickpack:${oid}">Pick & pack ${agentEsc(so.so_number)}</button>`;
   return '';
  }).join('');
- $('#view').innerHTML=`<div class="page-heading"><div><h2>Toronto Distribution Centre</h2><p>Friday, November 13, 2026 · Warehouse Manager: Sarah Chen · ${k.onHand} units on hand, ${k.reserved} reserved, ${k.available} available.</p></div></div><div class="kpi-grid">${card('sales_order','Fill rate',(k.fillRate*100).toFixed(1)+'%',k.shippedUnits+' of '+k.ordered+' units shipped →')}${card('shipment','Orders shipped today',k.shippedToday,k.shippedTodayParcels+' parcels · '+k.shippedUnits+' units →')}${card('purchase_order','Receiving backlog',k.openPOs.length,k.dueToday.length+' due today →')}${card('stock','Stockouts',k.outOfStock.length,k.lowStock.length+' low-stock SKUs →')}${card('stock','Inventory value (cost)',moneyCAD(k.valueCost),'At sale '+moneyCAD(k.valueSale)+' →')}${card('reorder_rule','Reorder rules triggered',k.triggered.length,k.triggered.length+' SKUs at or below level →')}</div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Process Lanes</h3><p class="card-desc">Guided, step-by-step work for one record — read the blueprint before anyone runs it</p></div></div><div class="card-body"><div class="prb-row"><div><strong>Receive Shipment</strong><small class="muted"> · Purchase Order · 5 stages, 13 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-receiving">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-receiving">Open in builder</button></div></div><div class="prb-row"><div><strong>Pick & Pack</strong><small class="muted"> · Sales Order · 5 stages, 13 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-pickpack">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-pickpack">Open in builder</button></div></div><div class="prb-row"><div><strong>Count</strong><small class="muted"> · Cycle Count · 5 stages, 7 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-count">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-count">Open in builder</button></div></div><div class="prb-row"><div><strong>Replenish</strong><small class="muted"> · Reorder Rule · 4 stages, 7 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-replenish">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-replenish">Open in builder</button></div></div><div class="prb-row"><div><strong>Supplier Check</strong><small class="muted"> · Supplier · 2 stages, 3 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-supplier-check">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-supplier-check">Open in builder</button></div></div><div class="prb-row"><div><strong>New lane</strong><small class="muted"> · Start from a blank definition</small></div><div class="actions"><button class="btn" data-lane-builder-new>New lane</button></div></div>${pickpackDueRows}<p class="muted" style="font-size:12px;margin-top:8px">The blueprint shows the lane definition only — stages, steps, run-data fields and mapped record fields. No run, no record data. Publish checks and a dry run live on the blueprint page too — the dry run simulates against a seed record and writes nothing.</p></div></section></div>${laneDraftSectionHtml()}<div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Approvals — needs your decision</h3><p class="card-desc">${pendingApprovals.length} pending</p></div></div><div class="card-body">${pendingApprovals.length?pendingApprovals.map(a=>`<div class="prb-row"><div><strong>${agentEsc(a.subjectType.replace('warehouse_','').replace(/_/g,' '))}</strong><small class="muted"> · ${demoDescribeApproval(a)}</small></div><div class="actions"><button class="btn btn-primary" data-wh-approve="${a.id}">Approve</button><button class="btn" data-wh-reject="${a.id}">Reject</button></div></div>`).join(''):'<p class="muted">Nothing pending — the Manager is all caught up.</p>'}<p class="muted" style="font-size:12px;margin-top:8px">Approving a count line posts a COUNT_ADJUSTMENT and updates Stock; rejecting posts nothing. Full inbox: AI Agents → Approvals.</p></div></section><section class="card"><div class="card-head panel-title"><div><h3>Needs attention — low & out of stock</h3><p class="card-desc">${k.outOfStock.length} out of stock · ${k.lowStock.length} low stock</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Product</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th></tr></thead><tbody>${attention.map(stockRow).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Receiving — due today</h3><p class="card-desc">${k.dueToday.length} purchase order${k.dueToday.length===1?'':'s'} expected ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.dueToday.length?k.dueToday.map(p=>{const sup=byId('supplier',p.supplier_id);const lines=(p.lines||[]).map(l=>`${prodById[l.product_id]?.sku||''} × ${l.qty_ordered}`).join(', ');return `<div class="prb-row"><strong><a class="cell-link" data-open-record="purchase_order:${p.id}">${p.po_number}</a></strong><small class="muted"> · ${sup?.name||''} · ${lines}</small><button class="btn btn-primary" data-lane-start="lane-wh-receiving:${p.id}">Start receiving lane</button></div>`}).join(''):'<div class="empty">Nothing due today.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Waves</h3><p class="card-desc">Batch picks in progress</p></div></div><div class="card-body">${Object.entries(k.waves).map(([w,v])=>`<div class="prb-row"><strong><a class="cell-link" data-wh-nav="pick_task">${w}</a></strong><small class="muted"> · ${v.orders.length} orders${v.held?` · ${v.held} task${v.held===1?'':'s'} held (waiting on stock)`:''} · ${v.tasks.map(t=>`<a class="cell-link" data-open-record="pick_task:${t.id}">${t.number||'Task'}</a>`).join(', ')}</small><div class="actions">${waveLaneButtons(v)}</div></div>`).join('')}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Reorder alerts</h3><p class="card-desc">${k.triggered.length} rules triggered ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.triggered.map(r=>{const p=prodById[r.product_id];const s=(data.stock||[]).find(x=>x.product_id===r.product_id);return `<div class="prb-row"><strong><a class="cell-link" data-open-record="product:${r.product_id}">${p?.sku||''}</a></strong><small class="muted"> · ${p?.name||''} · available ${s?s.on_hand-s.reserved:0} ≤ level ${r.reorder_level} · reorder ${r.reorder_qty} · <a class="cell-link" data-open-record="reorder_rule:${r.id}">rule ${r.number||''}</a></small></div>`}).join('')}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Orders by status</h3><p class="card-desc">${(data.sales_order||[]).length} open sales orders</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Orders</th></tr></thead><tbody>${['WAITING_STOCK','ALLOCATED','PICKING','PICKED','PACKED','SHIPPED'].map(s=>`<tr><td><a class="cell-link" data-wh-nav="sales_order">${s}</a></td><td>${k.soByStatus[s]||0}</td></tr>`).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Cycle count in progress</h3><p class="card-desc">${k.counting?'<a class="cell-link" data-open-record="cycle_count:'+k.counting.id+'">'+k.counting.count_number+'</a> · '+k.counting.scope+' · '+k.variances.length+' variances':'No count in progress'}</p></div></div><div class="card-body">${k.counting?`<div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>${k.variances.map(l=>{const p=prodById[l.product_id];return `<tr><td><a class="cell-link" data-open-record="product:${l.product_id}">${p?.sku||''}</a></td><td>${l.expected_qty}</td><td>${l.counted_qty}</td><td>${l.variance>0?'+':''}${l.variance}</td></tr>`}).join('')}</tbody></table></div><p class="muted" style="font-size:12px">No adjustment posted yet — decide each variance in Approvals below; approving posts the adjustment, rejecting posts nothing.</p>${(()=>{const cr=laneActiveRun('lane-wh-count',k.counting.id);return cr?`<div class="lane-actions" style="margin-top:10px"><button class="btn btn-primary" data-lane-open-run="${cr.id}">Open count lane run</button></div>`:`<div class="lane-actions" style="margin-top:10px"><button class="btn btn-primary" data-lane-start="lane-wh-count:${k.counting.id}">Start count lane</button></div>`;})()}`:'<div class="empty">No count in progress.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Open tasks</h3><p class="card-desc">${openTasks.length} open</p></div></div><div class="card-body">${openTasks.length?openTasks.map(t=>`<div class="prb-row"><a class="cell-link" data-open-record="tasks:${t.id}">${agentEsc(t.title||'Task')}</a><small class="muted"> · due ${t.due||'—'}</small></div>`).join(''):'<p class="muted">No open tasks.</p>'}</div></section></div>`;
+ $('#view').innerHTML=`<div class="page-heading"><div><h2>Toronto Distribution Centre</h2><p>Friday, November 13, 2026 · Warehouse Manager: Sarah Chen · ${k.onHand} units on hand, ${k.reserved} reserved, ${k.available} available.</p></div></div><div class="kpi-grid">${card('sales_order','Fill rate',(k.fillRate*100).toFixed(1)+'%',k.shippedUnits+' of '+k.ordered+' units shipped →')}${card('shipment','Orders shipped today',k.shippedToday,k.shippedTodayParcels+' parcels · '+k.shippedUnits+' units →')}${card('purchase_order','Receiving backlog',k.openPOs.length,k.dueToday.length+' due today →')}${card('stock','Stockouts',k.outOfStock.length,k.lowStock.length+' low-stock SKUs →')}${card('stock','Inventory value (cost)',moneyCAD(k.valueCost),'At sale '+moneyCAD(k.valueSale)+' →')}${card('reorder_rule','Reorder rules triggered',k.triggered.length,k.triggered.length+' SKUs at or below level →')}</div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Lanes in progress</h3><p class="card-desc">Open runs — resume where the work left off</p></div></div><div class="card-body">${activeRunRows||'<p class="muted">No lanes running right now.</p>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Start a pick &amp; pack lane</h3><p class="card-desc">Orders allocated or picking, due ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${pickpackStartRows||'<p class="muted">Nothing to start right now.</p>'}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Receiving — due today</h3><p class="card-desc">${k.dueToday.length} purchase order${k.dueToday.length===1?'':'s'} expected ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.dueToday.length?k.dueToday.map(p=>{const sup=byId('supplier',p.supplier_id);const lines=(p.lines||[]).map(l=>`${prodById[l.product_id]?.sku||''} × ${l.qty_ordered}`).join(', ');return `<div class="prb-row"><strong><a class="cell-link" data-open-record="purchase_order:${p.id}">${p.po_number}</a></strong><small class="muted"> · ${sup?.name||''} · ${lines}</small><button class="btn btn-primary" data-lane-start="lane-wh-receiving:${p.id}">Start receiving lane</button></div>`}).join(''):'<div class="empty">Nothing due today.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Waves</h3><p class="card-desc">Batch picks in progress</p></div></div><div class="card-body">${Object.entries(k.waves).map(([w,v])=>`<div class="prb-row"><strong><a class="cell-link" data-wh-nav="pick_task">${w}</a></strong><small class="muted"> · ${v.orders.length} orders${v.held?` · ${v.held} task${v.held===1?'':'s'} held (waiting on stock)`:''} · ${v.tasks.map(t=>`<a class="cell-link" data-open-record="pick_task:${t.id}">${t.number||'Task'}</a>`).join(', ')}</small><div class="actions">${waveLaneButtons(v)}</div></div>`).join('')}</div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Process Lanes</h3><p class="card-desc">Guided, step-by-step work for one record — read the blueprint before anyone runs it</p></div></div><div class="card-body"><div class="prb-row"><div><strong>Receive Shipment</strong><small class="muted"> · Purchase Order · 5 stages, 13 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-receiving">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-receiving">Open in builder</button></div></div><div class="prb-row"><div><strong>Pick & Pack</strong><small class="muted"> · Sales Order · 5 stages, 13 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-pickpack">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-pickpack">Open in builder</button></div></div><div class="prb-row"><div><strong>Count</strong><small class="muted"> · Cycle Count · 5 stages, 7 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-count">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-count">Open in builder</button></div></div><div class="prb-row"><div><strong>Replenish</strong><small class="muted"> · Reorder Rule · 4 stages, 7 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-replenish">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-replenish">Open in builder</button></div></div><div class="prb-row"><div><strong>Supplier Check</strong><small class="muted"> · Supplier · 2 stages, 3 steps · Draft</small></div><div class="actions"><button class="btn" data-lane-blueprint="lane-wh-supplier-check">View blueprint</button> <button class="btn" data-lane-builder="lane-wh-supplier-check">Open in builder</button></div></div><div class="prb-row"><div><strong>New lane</strong><small class="muted"> · Start from a blank definition</small></div><div class="actions"><button class="btn" data-lane-builder-new>New lane</button></div></div><p class="muted" style="font-size:12px;margin-top:8px">The blueprint shows the lane definition only — stages, steps, run-data fields and mapped record fields. No run, no record data. Publish checks and a dry run live on the blueprint page too — the dry run simulates against a seed record and writes nothing.</p></div></section></div>${laneDraftSectionHtml()}<div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Approvals — needs your decision</h3><p class="card-desc">${pendingApprovals.length} pending</p></div></div><div class="card-body">${pendingApprovals.length?pendingApprovals.map(a=>`<div class="prb-row"><div><strong>${agentEsc(a.subjectType.replace('warehouse_','').replace(/_/g,' '))}</strong><small class="muted"> · ${demoDescribeApproval(a)}</small></div><div class="actions"><button class="btn btn-primary" data-wh-approve="${a.id}">Approve</button><button class="btn" data-wh-reject="${a.id}">Reject</button></div></div>`).join(''):'<p class="muted">Nothing pending — the Manager is all caught up.</p>'}<p class="muted" style="font-size:12px;margin-top:8px">Approving a count line posts a COUNT_ADJUSTMENT and updates Stock; rejecting posts nothing. Full inbox: AI Agents → Approvals.</p></div></section><section class="card"><div class="card-head panel-title"><div><h3>Needs attention — low & out of stock</h3><p class="card-desc">${k.outOfStock.length} out of stock · ${k.lowStock.length} low stock</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Product</th><th>On hand</th><th>Reserved</th><th>Available</th><th>Status</th></tr></thead><tbody>${attention.map(stockRow).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Reorder alerts</h3><p class="card-desc">${k.triggered.length} rules triggered ${WAREHOUSE_TODAY}</p></div></div><div class="card-body">${k.triggered.map(r=>{const p=prodById[r.product_id];const s=(data.stock||[]).find(x=>x.product_id===r.product_id);return `<div class="prb-row"><strong><a class="cell-link" data-open-record="product:${r.product_id}">${p?.sku||''}</a></strong><small class="muted"> · ${p?.name||''} · available ${s?s.on_hand-s.reserved:0} ≤ level ${r.reorder_level} · reorder ${r.reorder_qty} · <a class="cell-link" data-open-record="reorder_rule:${r.id}">rule ${r.number||''}</a></small></div>`}).join('')}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Orders by status</h3><p class="card-desc">${(data.sales_order||[]).length} open sales orders</p></div></div><div class="card-body"><div class="table-wrap"><table class="table"><thead><tr><th>Status</th><th>Orders</th></tr></thead><tbody>${['WAITING_STOCK','ALLOCATED','PICKING','PICKED','PACKED','SHIPPED'].map(s=>`<tr><td><a class="cell-link" data-wh-nav="sales_order">${s}</a></td><td>${k.soByStatus[s]||0}</td></tr>`).join('')}</tbody></table></div></div></section></div><div class="dash-grid"><section class="card"><div class="card-head panel-title"><div><h3>Cycle count in progress</h3><p class="card-desc">${k.counting?'<a class="cell-link" data-open-record="cycle_count:'+k.counting.id+'">'+k.counting.count_number+'</a> · '+k.counting.scope+' · '+k.variances.length+' variances':'No count in progress'}</p></div></div><div class="card-body">${k.counting?`<div class="table-wrap"><table class="table"><thead><tr><th>SKU</th><th>Expected</th><th>Counted</th><th>Variance</th></tr></thead><tbody>${k.variances.map(l=>{const p=prodById[l.product_id];return `<tr><td><a class="cell-link" data-open-record="product:${l.product_id}">${p?.sku||''}</a></td><td>${l.expected_qty}</td><td>${l.counted_qty}</td><td>${l.variance>0?'+':''}${l.variance}</td></tr>`}).join('')}</tbody></table></div><p class="muted" style="font-size:12px">No adjustment posted yet — decide each variance in Approvals below; approving posts the adjustment, rejecting posts nothing.</p>${(()=>{const cr=laneActiveRun('lane-wh-count',k.counting.id);return cr?`<div class="lane-actions" style="margin-top:10px"><button class="btn btn-primary" data-lane-open-run="${cr.id}">Open count lane run</button></div>`:`<div class="lane-actions" style="margin-top:10px"><button class="btn btn-primary" data-lane-start="lane-wh-count:${k.counting.id}">Start count lane</button></div>`;})()}`:'<div class="empty">No count in progress.</div>'}</div></section><section class="card"><div class="card-head panel-title"><div><h3>Open tasks</h3><p class="card-desc">${openTasks.length} open</p></div></div><div class="card-body">${openTasks.length?openTasks.map(t=>`<div class="prb-row"><a class="cell-link" data-open-record="tasks:${t.id}">${agentEsc(t.title||'Task')}</a><small class="muted"> · due ${t.due||'—'}</small></div>`).join(''):'<p class="muted">No open tasks.</p>'}</div></section></div>`;
  document.querySelectorAll('[data-wh-nav]').forEach(b=>b.onclick=()=>{current=b.dataset.whNav;viewFilter=null;detailRecord=null;renderView()});
  wireCellLinks($('#view'));
  bindLaneDraftForm();
