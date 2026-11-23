@@ -155,7 +155,7 @@ test('AC-2: a count with no variance skips Post adjustments and closes', async (
   // condition holds (the count is still COUNTING, so there is nothing to
   // post) — so the stage is skipped and the run lands on Close the count.
   await expectStep(page, 'Close the count');
-  await expect(page.locator('.lane-stage.skipped')).toContainText('Post adjustments');
+  await expect(page.locator('.lane-swim.skipped')).toContainText('Post adjustments');
   await expect(page.locator('.lane-audit')).toContainText('stage skipped ($record.status equals "COUNTING")');
 
   await completeStep(page);
