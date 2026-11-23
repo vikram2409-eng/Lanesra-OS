@@ -1328,6 +1328,9 @@ details.rm-cat .rm-cat-meta{display:flex;align-items:center;gap:10px}
 .prb-row:first-child{border-top:0}
 .prb-row:hover{background:color-mix(in srgb,var(--accent) 55%,transparent)}
 .prb-row[data-open-record]{cursor:pointer}
+/* Dashboard rows (e.g. Waves) can carry several action buttons — let them
+   wrap onto new lines instead of overflowing the card. */
+.prb-row .actions{flex-wrap:wrap;margin-top:var(--space-2)}
 
 
 /* ---- Sales pipeline kanban ---- */
@@ -2491,6 +2494,33 @@ body.has-demo-banner{padding-top:36px}
    Visual polish only — spacing, typography, card styling, stage/step
    hierarchy, form fields, record panel and audit trail. No logic, flow,
    statuses, gating or buttons change here. */
+/* WP-0720: runner stage map as swim lanes — each stage is a column that
+   carries its own steps, so stages and steps read together (Pega-style).
+   Replaces the old stage bar + separate current-stage step list. */
+.lane-swimlanes{display:flex;gap:16px;align-items:flex-start;overflow-x:auto;margin:16px 0 10px;padding:2px 2px 12px}
+.lane-swim{flex:0 0 clamp(230px,22vw,290px);display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:0 1px 2px rgba(16,24,40,.04);position:relative}
+.lane-swim::before{content:"";display:block;height:4px;border-radius:14px 14px 0 0;background:linear-gradient(90deg,var(--brand),color-mix(in srgb,var(--brand) 45%,transparent))}
+.lane-swim:not(:last-child)::after{content:"›";position:absolute;right:-15px;top:30px;z-index:1;color:var(--muted);font-size:22px;line-height:1}
+.lane-swim-head{display:flex;align-items:center;gap:9px;padding:11px 14px 10px;border-bottom:1px solid var(--line)}
+.lane-swim-name{font-size:15px;font-weight:700;letter-spacing:-.01em;line-height:1.3}
+.lane-swim-steps{display:flex;flex-direction:column;gap:7px;padding:9px}
+.lane-swim-empty{margin:4px 2px;font-size:12.5px}
+.lane-swim.current{border-color:var(--brand);box-shadow:0 0 0 1px var(--brand),0 2px 10px rgba(79,70,229,.12)}
+.lane-swim.current .lane-swim-head{background:color-mix(in srgb,var(--brand) 7%,var(--panel))}
+.lane-swim.current .lane-stage-num{background:var(--brand);border-color:var(--brand);color:#fff}
+.lane-swim.done .lane-swim-name{color:var(--success)}
+.lane-swim.done .lane-stage-num{border-color:var(--success);color:var(--success)}
+.lane-swim.skipped{border-style:dashed}
+.lane-swim.skipped .lane-swim-head{opacity:.75}
+.lane-swim.skipped .lane-stage-num{border-color:var(--muted);color:var(--muted)}
+.lane-swim .lane-step{padding:8px 10px}
+.lane-swim .lane-step.locked{color:var(--muted);opacity:.85}
+.lane-swim .lane-step.skipped{color:var(--muted)}
+.lane-step.viewing{outline:2px solid var(--brand);outline-offset:1px}
+.lane-swim-note{margin:0 0 18px;font-size:12.5px;display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;line-height:1.5}
+.lane-swim-key{font-weight:600;color:var(--text);white-space:nowrap}
+@media(max-width:860px){.lane-swimlanes{flex-direction:column;overflow-x:visible}.lane-swim{flex:1 1 auto;width:100%}.lane-swim:not(:last-child)::after{content:"↓";right:auto;left:28px;top:auto;bottom:-20px}}
+@media print{.lane-swimlanes{flex-direction:column;overflow:visible}.lane-swim{flex:1 1 auto;width:100%;break-inside:avoid}.lane-swim:not(:last-child)::after{content:none}}
 .lane-stages{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 0 20px}
 .lane-stage{display:flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--muted);font-size:13px;line-height:1.3}
 .lane-stage-name{white-space:nowrap}
@@ -2503,7 +2533,7 @@ body.has-demo-banner{padding-top:36px}
 .lane-stage.current .lane-stage-num{background:var(--brand);border-color:var(--brand);color:#fff}
 .lane-stage.done .lane-stage-num{border-color:var(--success);color:var(--success)}
 .lane-stage-sep{color:var(--muted)}
-.lane-layout{display:grid;grid-template-columns:220px minmax(0,1fr) 400px;gap:20px;align-items:start}
+.lane-layout{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:20px;align-items:start}
 .lane-steps{padding:18px}
 .lane-steps h4{margin:0 0 12px;font-size:14px;font-weight:700;letter-spacing:-.01em}
 .lane-step{display:flex;align-items:flex-start;flex-wrap:wrap;gap:4px 10px;width:100%;text-align:left;padding:10px 12px;border:1px solid transparent;border-radius:10px;background:none;cursor:pointer;color:var(--text)}

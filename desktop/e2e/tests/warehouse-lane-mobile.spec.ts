@@ -190,9 +190,9 @@ test('390px: the Pick & Pack runner fits, with gaps, and the step button is reac
 
   await noHorizontalOverflow(page, 390);
 
-  // Stage bar: the flex gap is live (was 0 while the rules were dead).
+  // Stage swim-lane header: the flex gap is live (num and name separated).
   const stageGap = await page.evaluate(() => {
-    const el = document.querySelector('.lane-stage') as HTMLElement;
+    const el = document.querySelector('.lane-swim-head') as HTMLElement;
     return { display: getComputedStyle(el).display, gap: parseFloat(getComputedStyle(el).gap) };
   });
   expect(stageGap.display).toBe('flex');
