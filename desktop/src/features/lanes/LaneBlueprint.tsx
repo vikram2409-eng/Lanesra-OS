@@ -13,6 +13,7 @@ import type {
   PublishReport,
 } from "../../lib/types";
 import { PrintOverlay } from "../../components/PrintOverlay";
+import { LaneBoardSection, MyLaneStepsSection } from "./LaneBoard";
 
 const STEP_KIND_LABELS: Record<string, string> = {
   form: "Form",
@@ -882,11 +883,14 @@ function DryRunSection({ blueprint }: { blueprint: LaneBlueprint }) {
 /// - the print export stays the definition only (WP-0712 AC-2).
 export function LaneBlueprintPage({
   onOpenInBuilder,
+  onOpenRun,
 }: {
   /// WP-0718: open the selected lane (or a blank lane for "New lane")
   /// in the visual builder. Absent when the page is rendered outside
   /// the app shell (existing tests render it bare).
   onOpenInBuilder?: (laneKey: string | null) => void;
+  /// WP-0713: open a lane run in the runner, from the board or my steps.
+  onOpenRun?: (runId: string, recordLabel: string) => void;
 } = {}) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
@@ -909,6 +913,10 @@ export function LaneBlueprintPage({
         A read-only blueprint of each lane - what it does, stage by stage, before anyone runs
         it. No record data is shown here.
       </p>
+
+      <div style={{ marginBottom: 16 }}>
+        <MyLaneStepsSection onOpenRun={onOpenRun} />
+      </div>
 
       {list.isLoading && <p>Loading lanes…</p>}
       {list.error && <p>Could not load lanes: {(list.error as Error).message}</p>}
@@ -973,6 +981,7 @@ export function LaneBlueprintPage({
             <PublishChecksSection blueprint={detail.data} />
             <DryRunSection blueprint={detail.data} />
           </div>
+          <LaneBoardSection laneKey={selected} onOpenRun={onOpenRun} />
           {printing && (
             <PrintOverlay onClose={() => setPrinting(false)}>
               <LaneBlueprintView blueprint={detail.data} />

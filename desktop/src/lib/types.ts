@@ -5100,6 +5100,81 @@ export interface LaneRunListItem {
   finished_at: string | null;
 }
 
+// WP-0713: board by stage, "my steps", lane timing, ageing (REQ-LANE-019).
+// Mirrors core::services::process_lane_service (LaneBoardItem,
+// LaneBoardStage, LaneBoard, MyStepItem, MySteps, LaneStageTiming,
+// LaneTiming) - snake_case, as the API returns it. `lane_id` is the
+// lane's key (e.g. "lane-wh-receiving"). Durations are seconds;
+// `seconds_in_stage` is measured at read time.
+
+export interface LaneBoardItem {
+  run_id: string;
+  lane_id: string;
+  lane_name: string;
+  anchor_object_key: string | null;
+  anchor_record_id: string | null;
+  anchor_label: string;
+  status: string;
+  current_stage_id: string | null;
+  current_stage_name: string | null;
+  current_step_id: string | null;
+  current_step_name: string | null;
+  started_at: string;
+  stage_entered_at: string | null;
+  seconds_in_stage: number;
+}
+
+export interface LaneBoardStage {
+  stage_id: string;
+  stage_name: string;
+  runs: LaneBoardItem[];
+}
+
+export interface LaneBoard {
+  lane_id: string;
+  lane_name: string;
+  stages: LaneBoardStage[];
+}
+
+export interface MyStepItem {
+  kind: string;
+  run_id: string;
+  lane_id: string;
+  lane_name: string;
+  anchor_object_key: string | null;
+  anchor_record_id: string | null;
+  anchor_label: string;
+  stage_id: string | null;
+  stage_name: string | null;
+  step_id: string;
+  step_name: string;
+  waiting_since: string;
+  approval_id: string | null;
+}
+
+export interface MySteps {
+  items: MyStepItem[];
+}
+
+export interface LaneStageTiming {
+  stage_id: string;
+  stage_name: string;
+  runs_entered: number;
+  runs_completed: number;
+  avg_seconds: number | null;
+  median_seconds: number | null;
+}
+
+export interface LaneTiming {
+  lane_id: string;
+  lane_name: string;
+  total_runs: number;
+  completed_runs: number;
+  completion_rate: number;
+  rework_steps: number;
+  stages: LaneStageTiming[];
+}
+
 // WP-0714: publish checks and the dry run (REQ-LANE-021). Mirrors the
 // Rust shapes in core::services::process_lane_publish (PublishReport,
 // PublishCheckEntry, DryRunReport et al) - snake_case, as the API returns
