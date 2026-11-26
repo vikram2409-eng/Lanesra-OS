@@ -13,7 +13,7 @@
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
 | 5 · Platform and ecosystem | 42 | 0 | 0 | 0 | 0 | 42 | 0 / 140 | `░░░░░░░░░░` 0% |
 | 6 · Admin console and Experience Studio | 33 | 1 | 0 | 0 | 0 | 32 | 2 / 102 | `░░░░░░░░░░` 2% |
-| 7 · Process Lanes | 22 | 14 | 5 | 0 | 0 | 3 | 41 / 63 | `██████░░░░` 65% |
+| 7 · Process Lanes | 22 | 15 | 5 | 0 | 0 | 2 | 43 / 63 | `██████░░░░` 68% |
 | v2 · Open interop | 1 | 0 | 0 | 0 | 0 | 1 | 0 / 4 | `░░░░░░░░░░` 0% |
 
 ## Edition coverage
@@ -22,9 +22,9 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 197 | 43 | 115 / 644 |
-| Team Workspace | 224 | 49 | 125 / 738 |
-| Online demo | 153 | 27 | 68 / 508 |
+| Desktop | 197 | 44 | 119 / 644 |
+| Team Workspace | 224 | 50 | 129 / 738 |
+| Online demo | 153 | 28 | 72 / 508 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
 
@@ -34,7 +34,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 |---|---|---|---|---|---|
 | [WP-0708](work/P7/WP-0708-agent-steps-assistance-and-autonomy-level-per-step.md) | Agent steps, assistance and autonomy level per step | in_review | claude | `wp/WP-0708-agent-steps-assistance-autonomy` | https://github.com/vikram2409-eng/Lanesra-OS/pull/799 |
 | [WP-0709](work/P7/WP-0709-lanes-and-workflows-declared-replacement-and-starting-a-lane.md) | Lanes and workflows: declared replacement, and starting a lane from a workflow | in_review | claude | `wp/WP-0709-lanes-workflows-interplay` | 792 |
-| [WP-0711](work/P7/WP-0711-notes-attachments-and-reassign-at-any-point.md) | Notes, attachments and reassign at any point | in_review | muse | `wp/WP-0711-notes-attachments-reassign` | https://github.com/vikram2409-eng/Lanesra-OS/pull/798 |
+| [WP-0713](work/P7/WP-0713-board-by-stage-my-steps-and-lane-timing.md) | Board by stage, "my steps" and lane timing | in_review | muse | `wp/WP-0713-board-my-steps-timing-r5` | https://github.com/vikram2409-eng/Lanesra-OS/pull/811 |
 | [WP-0720](work/P7/WP-0720-lane-runner-second-cut-approvals-branches-pause-and-handoff.md) | Lane runner, second cut: approvals, branches, pause and handoff | in_progress | claude | `wp/WP-0720-runner-second-cut-engine` | https://github.com/vikram2409-eng/Lanesra-OS/pull/807 |
 | [WP-0721](work/P7/WP-0721-blueprint-view-redesign-visual-process-map.md) | Blueprint view redesign: a visual, modern process map of states and steps | in_review | claude | `wp/WP-0721-blueprint-redesign` | https://github.com/vikram2409-eng/Lanesra-OS/pull/805 |
 
@@ -54,13 +54,13 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 |---|---|---|---|
 | claude | 18 | 52 | WP-0520, WP-0521, WP-0522, WP-0525, WP-0599, WP-0601, WP-0602, WP-0605, WP-0610, WP-0611, WP-0613, WP-0643, WP-0699, WP-0708, WP-0709, WP-0720, WP-0721, WP-0799 |
 | codex | 46 | 162 | WP-0015, WP-0102, WP-0103, WP-0104, WP-0105, WP-0146, WP-0194, WP-0195, WP-0196, WP-0197, WP-0501, WP-0502, WP-0503, WP-0504, WP-0505, WP-0510, WP-0511, WP-0512, WP-0513, WP-0530, WP-0533, WP-0540, WP-0550, WP-0551, WP-0552, WP-0553, WP-0560, WP-0572, WP-0574, WP-0580, WP-0581, WP-0582, WP-0583, WP-0585, WP-0612, WP-0614, WP-0615, WP-0620, WP-0622, WP-0623, WP-0624, WP-0640, WP-0641, WP-0642, WP-0650, WP-0654 |
-| muse | 29 | 80 | WP-0422, WP-0523, WP-0524, WP-0531, WP-0532, WP-0541, WP-0561, WP-0570, WP-0571, WP-0573, WP-0584, WP-0590, WP-0591, WP-0592, WP-0603, WP-0604, WP-0606, WP-0607, WP-0608, WP-0621, WP-0625, WP-0630, WP-0631, WP-0632, WP-0651, WP-0652, WP-0711, WP-0713, WP-0717 |
+| muse | 28 | 78 | WP-0422, WP-0523, WP-0524, WP-0531, WP-0532, WP-0541, WP-0561, WP-0570, WP-0571, WP-0573, WP-0584, WP-0590, WP-0591, WP-0592, WP-0603, WP-0604, WP-0606, WP-0607, WP-0608, WP-0621, WP-0625, WP-0630, WP-0631, WP-0632, WP-0651, WP-0652, WP-0713, WP-0717 |
 
 ## Requirement coverage
 
 - Spec requirements tracked: **352**
 - Mapped to a work package: **352**
-- Delivered (every mapped work package done): **75**
+- Delivered (every mapped work package done): **76**
 
 ## Phase 0 · Precursors
 
@@ -346,9 +346,9 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0708](work/P7/WP-0708-agent-steps-assistance-and-autonomy-level-per-step.md) | Agent steps, assistance and autonomy level per step | E7.4 Agents in lanes | 👀 in review | L | ○Desktop ○Team Workspace ○Online demo | WP-0707 |
 | [WP-0709](work/P7/WP-0709-lanes-and-workflows-declared-replacement-and-starting-a-lane.md) | Lanes and workflows: declared replacement, and starting a lane from a workflow | E7.2 Steps and rules | 👀 in review | M | ○Desktop ○Team Workspace ○Online demo | WP-0705 |
 | [WP-0710](work/P7/WP-0710-repeat-over-child-records-and-stage-and-start-conditions.md) | Repeat over child records, and stage and start conditions | E7.2 Steps and rules | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0705 |
-| [WP-0711](work/P7/WP-0711-notes-attachments-and-reassign-at-any-point.md) | Notes, attachments and reassign at any point | E7.3 Runner and visibility | 👀 in review | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0707 |
+| [WP-0711](work/P7/WP-0711-notes-attachments-and-reassign-at-any-point.md) | Notes, attachments and reassign at any point | E7.3 Runner and visibility | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0707 |
 | [WP-0712](work/P7/WP-0712-blueprint-view-and-export-of-a-lane.md) | Blueprint view and export of a lane | E7.5 Authoring | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0703 |
-| [WP-0713](work/P7/WP-0713-board-by-stage-my-steps-and-lane-timing.md) | Board by stage, "my steps" and lane timing | E7.3 Runner and visibility | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0707 |
+| [WP-0713](work/P7/WP-0713-board-by-stage-my-steps-and-lane-timing.md) | Board by stage, "my steps" and lane timing | E7.3 Runner and visibility | 👀 in review | L | ✓Desktop ✓Team Workspace ✓Online demo | WP-0707 |
 | [WP-0714](work/P7/WP-0714-dry-run-publish-checks-test-framework-and-solution-export.md) | Dry run, publish checks, test framework and Solution export | E7.5 Authoring | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0705, WP-0706 |
 | [WP-0715](work/P7/WP-0715-describe-a-process-the-admin-assistant-drafts-a-lane.md) | Describe a process: the Admin Assistant drafts a lane | E7.5 Authoring | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0703, WP-0712 |
 | [WP-0716](work/P7/WP-0716-child-lanes.md) | Child lanes | E7.2 Steps and rules | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0706 |

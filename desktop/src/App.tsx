@@ -246,7 +246,10 @@ function Ready({
           <AssistantPage user={user} onOpenAdminTab={(tab) => openAdminTab(tab as AdminTab)} />
         )}
         {section === "lanes" && (
-          <LaneBlueprintPage onOpenInBuilder={(laneKey) => setBuilderLane({ laneKey })} />
+          <LaneBlueprintPage
+            onOpenInBuilder={(laneKey) => setBuilderLane({ laneKey })}
+            onOpenRun={(runId, recordLabel) => setLaneRun({ runId, recordLabel })}
+          />
         )}
         {section === "admin" && <AdminPanel openAdminTab={pendingAdminTab} />}
         {section === "account" && <Account user={user} />}

@@ -46,6 +46,7 @@
 
 use std::collections::HashMap;
 
+use chrono::{DateTime, Utc};
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -59,7 +60,7 @@ use crate::models::custom_field::CustomFieldValues;
 use crate::models::execution_graph::{
     ExecutionGraph, ExecutionGraphInput, GraphEdgeInput, GraphNodeInput,
 };
-use crate::models::graph_run::GraphRun;
+use crate::models::graph_run::{is_terminal_status, GraphRun};
 use crate::models::lane_run_note::{LaneRunAttachment, LaneRunNote};
 use crate::models::process_lane::{
     parse_definition, validate_definition, ConditionOrGroup, FormField, LaneDefinition, LaneStep,
@@ -2657,6 +2658,659 @@ pub fn list_lane_runs_for_record(
         });
     }
     Ok(LaneRunList { runs })
+}
+
+// --- WP-0713: board by stage, "my steps", lane timing, ageing. ----------
+
+/// One active run as the board and the ageing view show it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaneBoardItem {
+    pub run_id: String,
+    pub lane_id: String,
+    pub lane_name: String,
+    pub anchor_object_key: Option<String>,
+    pub anchor_record_id: Option<String>,
+    pub anchor_label: String,
+    pub status: String,
+    pub current_stage_id: Option<String>,
+    pub current_stage_name: Option<String>,
+    pub current_step_id: Option<String>,
+    pub current_step_name: Option<String>,
+    pub started_at: String,
+    /// When the run entered its current stage (earliest node started_at in
+    /// that stage); None when the run has no current stage.
+    pub stage_entered_at: Option<String>,
+    /// Seconds in the current stage, measured at read time.
+    pub seconds_in_stage: f64,
+}
+
+/// One board column: a stage and the active runs currently in it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaneBoardStage {
+    pub stage_id: String,
+    pub stage_name: String,
+    pub runs: Vec<LaneBoardItem>,
+}
+
+/// The board for one lane: its stages in definition order, each with the
+/// active runs currently in that stage.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaneBoard {
+    pub lane_id: String,
+    pub lane_name: String,
+    pub stages: Vec<LaneBoardStage>,
+}
+
+/// One thing waiting on the signed-in person: a lane step or an approval.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MyStepItem {
+    /// `"step"` or `"approval"`.
+    pub kind: String,
+    pub run_id: String,
+    pub lane_id: String,
+    pub lane_name: String,
+    pub anchor_object_key: Option<String>,
+    pub anchor_record_id: Option<String>,
+    pub anchor_label: String,
+    pub stage_id: Option<String>,
+    pub stage_name: Option<String>,
+    pub step_id: String,
+    pub step_name: String,
+    /// When the wait started (the step node's started_at, or the
+    /// approval's created_at). The list is oldest first.
+    pub waiting_since: String,
+    /// Set on approval items.
+    pub approval_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MySteps {
+    pub items: Vec<MyStepItem>,
+}
+
+/// Time per stage for one lane, from the recorded node timestamps.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaneStageTiming {
+    pub stage_id: String,
+    pub stage_name: String,
+    /// Runs that entered the stage.
+    pub runs_entered: i64,
+    /// Runs whose stage has a duration (every node in it finished).
+    pub runs_completed: i64,
+    pub avg_seconds: Option<f64>,
+    pub median_seconds: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaneTiming {
+    pub lane_id: String,
+    pub lane_name: String,
+    pub total_runs: i64,
+    pub completed_runs: i64,
+    pub completion_rate: f64,
+    /// Node rows with attempt > 1 (a step reopened and worked again).
+    pub rework_steps: i64,
+    pub stages: Vec<LaneStageTiming>,
+}
+
+fn parse_timestamp(value: &str) -> Option<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(value)
+        .ok()
+        .map(|dt| dt.with_timezone(&Utc))
+}
+
+fn seconds_between(started_at: &str, finished_at: &str) -> Option<f64> {
+    let start = parse_timestamp(started_at)?;
+    let end = parse_timestamp(finished_at)?;
+    Some((end - start).num_milliseconds() as f64 / 1000.0)
+}
+
+/// The run's current position: stage id/name and step id/name, derived the
+/// same way `list_lane_runs_for_record` does it - the current graph node's
+/// config carries `lane_stage_id` / `lane_step_id`, resolved against the
+/// definition behind the run's graph.
+fn current_position(
+    conn: &Connection,
+    run: &GraphRun,
+) -> AppResult<(
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+)> {
+    let Some(node_id) = &run.current_node_id else {
+        return Ok((None, None, None, None));
+    };
+    let definition = lane_definition_for_run(conn, run)?;
+    let graph = execution_graph_repo::get(conn, &run.graph_id)?
+        .ok_or_else(|| AppError::NotFound("Execution graph".into()))?;
+    let Some(node) = graph.nodes.iter().find(|n| &n.id == node_id) else {
+        return Ok((None, None, None, None));
+    };
+    let config: Value = serde_json::from_str(&node.config_json).unwrap_or(Value::Null);
+    let stage_id = config
+        .get("lane_stage_id")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let step_id = config
+        .get("lane_step_id")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let stage_name = match (&stage_id, &definition) {
+        (Some(sid), Some(definition)) => definition
+            .stages
+            .iter()
+            .find(|s| &s.id == sid)
+            .map(|s| s.name.clone()),
+        _ => None,
+    };
+    let step_name = match (&step_id, &definition) {
+        (Some(sid), Some(definition)) => definition_step(definition, sid).map(|s| s.name.clone()),
+        _ => None,
+    };
+    Ok((stage_id, stage_name, step_id, step_name))
+}
+
+/// The stage each graph node belongs to, from the compiled nodes' configs
+/// (`lane_stage_id`, ADR-0024 §3). The run-node rows themselves carry a
+/// stage only for human steps (`set_run_node_stage`, WP-0704); every other
+/// lane node's stage lives only here, so stage timing resolves rows through
+/// this map instead of trusting the row's own column.
+fn node_stages(
+    conn: &Connection,
+    run: &GraphRun,
+) -> AppResult<std::collections::HashMap<String, String>> {
+    let mut stages = std::collections::HashMap::new();
+    let Some(graph) = execution_graph_repo::get(conn, &run.graph_id)? else {
+        return Ok(stages);
+    };
+    for node in graph.nodes {
+        let config: Value = serde_json::from_str(&node.config_json).unwrap_or(Value::Null);
+        if let Some(stage) = config.get("lane_stage_id").and_then(|v| v.as_str()) {
+            stages.insert(node.id, stage.to_string());
+        }
+    }
+    Ok(stages)
+}
+
+/// A node row's stage: its own column when set, else the compiled graph
+/// node's config (see `node_stages`).
+fn row_stage(
+    stages: &std::collections::HashMap<String, String>,
+    node: &crate::models::graph_run::RunNode,
+) -> Option<String> {
+    node.stage_id
+        .clone()
+        .or_else(|| stages.get(&node.node_id).cloned())
+}
+
+/// When the run entered a stage: the earliest started_at among its node
+/// rows in that stage. None when the run has no node in the stage.
+fn stage_entered_at(
+    conn: &Connection,
+    run: &GraphRun,
+    stage_id: &str,
+) -> AppResult<Option<String>> {
+    let stages = node_stages(conn, run)?;
+    let mut entered: Option<String> = None;
+    for node in graph_run_repo::list_run_nodes(conn, &run.id)? {
+        if row_stage(&stages, &node).as_deref() != Some(stage_id) {
+            continue;
+        }
+        if entered
+            .as_deref()
+            .is_none_or(|e| node.started_at.as_str() < e)
+        {
+            entered = Some(node.started_at.clone());
+        }
+    }
+    Ok(entered)
+}
+
+fn anchor_label(conn: &Connection, run: &GraphRun) -> String {
+    match &run.anchor_record_id {
+        Some(record_id) => custom_record_service::get(conn, record_id)
+            .ok()
+            .map(|r| r.primary_name)
+            .unwrap_or_else(|| record_id.clone()),
+        None => String::new(),
+    }
+}
+
+fn lane_name_for(conn: &Connection, workspace_id: &str, lane_key: &str) -> AppResult<String> {
+    Ok(
+        process_lane_repo::get_lane_by_key(conn, workspace_id, lane_key)?
+            .map(|lane| lane.name)
+            .unwrap_or_else(|| lane_key.to_string()),
+    )
+}
+
+/// The lane's runs the viewer may see: every run of the lane, narrowed to
+/// the ones whose anchor record the viewer's Read grant covers. The same
+/// rule `get_run_view` uses for one record (REQ-LANE-011), applied at list
+/// level through `access_service::filter_visible` - one evaluator, every
+/// caller. `viewer: None` is the system convention: nothing filtered out.
+fn visible_lane_runs(
+    conn: &Connection,
+    workspace_id: &str,
+    lane_key: &str,
+    viewer_user_id: Option<&str>,
+) -> AppResult<Vec<GraphRun>> {
+    let runs = graph_run_repo::list_lane_runs_for_lane(conn, workspace_id, lane_key)?;
+    let Some(viewer) = viewer_user_id else {
+        return Ok(runs);
+    };
+    // Group the anchor record ids by object key so each type's Read grant
+    // is resolved once, not once per run.
+    let mut by_object: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
+    for run in &runs {
+        if let (Some(object_key), Some(record_id)) = (&run.anchor_object_key, &run.anchor_record_id)
+        {
+            by_object
+                .entry(object_key.clone())
+                .or_default()
+                .push(record_id.clone());
+        }
+    }
+    let mut visible: std::collections::HashSet<(String, String)> = std::collections::HashSet::new();
+    for (object_key, ids) in &by_object {
+        for id in access_service::filter_visible(
+            conn,
+            Some(viewer),
+            object_key,
+            ids.iter().map(String::as_str),
+        )? {
+            visible.insert((object_key.clone(), id));
+        }
+    }
+    Ok(runs
+        .into_iter()
+        .filter(
+            |run| match (&run.anchor_object_key, &run.anchor_record_id) {
+                (Some(object_key), Some(record_id)) => {
+                    visible.contains(&(object_key.clone(), record_id.clone()))
+                }
+                // A lane run without an anchor has no record to filter on.
+                _ => true,
+            },
+        )
+        .collect())
+}
+
+fn board_item(
+    conn: &Connection,
+    run: &GraphRun,
+    lane_id: &str,
+    lane_name: &str,
+) -> AppResult<LaneBoardItem> {
+    let (stage_id, stage_name, step_id, step_name) = current_position(conn, run)?;
+    let stage_entered = match &stage_id {
+        Some(sid) => stage_entered_at(conn, run, sid)?,
+        None => None,
+    };
+    let seconds_in_stage = match &stage_entered {
+        Some(entered) => seconds_between(entered, &now_iso()).unwrap_or(0.0),
+        None => 0.0,
+    };
+    Ok(LaneBoardItem {
+        run_id: run.id.clone(),
+        lane_id: lane_id.to_string(),
+        lane_name: lane_name.to_string(),
+        anchor_object_key: run.anchor_object_key.clone(),
+        anchor_record_id: run.anchor_record_id.clone(),
+        anchor_label: anchor_label(conn, run),
+        status: run.status.clone(),
+        current_stage_id: stage_id,
+        current_stage_name: stage_name,
+        current_step_id: step_id,
+        current_step_name: step_name,
+        started_at: run.started_at.clone(),
+        stage_entered_at: stage_entered,
+        seconds_in_stage,
+    })
+}
+
+/// The board (WP-0713 AC-1): each active run in its stage, only records
+/// the viewer may read. Stages come from the lane's latest published
+/// definition, in definition order; a run whose stage is not in that
+/// version (an older run) lands in a trailing stage column named for its
+/// stage id.
+pub fn list_lane_board(
+    conn: &Connection,
+    workspace_id: &str,
+    lane_key: &str,
+    viewer_user_id: Option<&str>,
+) -> AppResult<LaneBoard> {
+    let lane_name = lane_name_for(conn, workspace_id, lane_key)?;
+    let runs = visible_lane_runs(conn, workspace_id, lane_key, viewer_user_id)?;
+    let mut stage_order: Vec<(String, String)> = Vec::new();
+    if let Some(lane) = process_lane_repo::get_lane_by_key(conn, workspace_id, lane_key)? {
+        if let Some(version) = process_lane_repo::latest_published_version(conn, &lane.id)? {
+            let definition = parse_definition(&version.definition_json)?.lane;
+            for stage in definition.stages {
+                stage_order.push((stage.id, stage.name));
+            }
+        }
+    }
+    let mut columns: Vec<LaneBoardStage> = stage_order
+        .iter()
+        .map(|(id, name)| LaneBoardStage {
+            stage_id: id.clone(),
+            stage_name: name.clone(),
+            runs: Vec::new(),
+        })
+        .collect();
+    for run in &runs {
+        if is_terminal_status(&run.status) {
+            continue;
+        }
+        let item = board_item(conn, run, lane_key, &lane_name)?;
+        let stage_id = item.current_stage_id.clone().unwrap_or_default();
+        let stage_name = item
+            .current_stage_name
+            .clone()
+            .unwrap_or_else(|| stage_id.clone());
+        match columns.iter_mut().find(|c| c.stage_id == stage_id) {
+            Some(column) => column.runs.push(item),
+            None => columns.push(LaneBoardStage {
+                stage_id,
+                stage_name,
+                runs: vec![item],
+            }),
+        }
+    }
+    Ok(LaneBoard {
+        lane_id: lane_key.to_string(),
+        lane_name,
+        stages: columns,
+    })
+}
+
+/// Whether the viewer may act on an approval step: they hold the step's
+/// role, or are an admin; a step with no role is open to anyone - the same
+/// convention `actor_may_act` uses.
+fn viewer_may_approve(
+    conn: &Connection,
+    viewer_user_id: Option<&str>,
+    step: &LaneStep,
+) -> AppResult<bool> {
+    let Some(viewer) = viewer_user_id else {
+        return Ok(true);
+    };
+    if super::user_service::require_admin(conn, Some(viewer)).is_ok() {
+        return Ok(true);
+    }
+    let Some(role) = &step.role else {
+        return Ok(true);
+    };
+    Ok(access_role_service::list_roles_for_user(conn, viewer)?
+        .iter()
+        .any(|r| &r.id == role))
+}
+
+/// "My steps" (WP-0713 AC-2): the signed-in person's waiting lane steps
+/// and approvals together, oldest first. A step item is a run waiting on a
+/// person the viewer may act for (`actor_may_act_on_step`, so a reassigned
+/// step shows only for its assignee); an approval item is a run waiting on
+/// an approval whose step role the viewer holds. `viewer: None` lists
+/// everything waiting, system-wide.
+pub fn list_my_steps(
+    conn: &Connection,
+    workspace_id: &str,
+    viewer_user_id: Option<&str>,
+) -> AppResult<MySteps> {
+    let mut items: Vec<MyStepItem> = Vec::new();
+    let runs = graph_run_repo::list_lane_runs(conn, workspace_id)?;
+    for run in &runs {
+        let definition = lane_definition_for_run(conn, run)?;
+        let Some(definition) = definition else {
+            continue;
+        };
+        if run.status == "waiting_person" {
+            let Ok((node, step)) = current_human_step(conn, run) else {
+                continue;
+            };
+            if !actor_may_act_on_step(conn, run, &step, viewer_user_id)? {
+                continue;
+            }
+            let waiting_since = graph_run_repo::list_run_nodes(conn, &run.id)?
+                .into_iter()
+                .filter(|n| n.node_id == node.id)
+                .map(|n| n.started_at)
+                .min()
+                .unwrap_or_else(|| run.started_at.clone());
+            let config: Value = serde_json::from_str(&node.config_json).unwrap_or(Value::Null);
+            let stage_id = config
+                .get("lane_stage_id")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let stage_name = stage_id.as_deref().and_then(|sid| {
+                definition
+                    .stages
+                    .iter()
+                    .find(|s| s.id == sid)
+                    .map(|s| s.name.clone())
+            });
+            items.push(MyStepItem {
+                kind: "step".to_string(),
+                run_id: run.id.clone(),
+                lane_id: definition.id.clone(),
+                lane_name: definition.name.clone(),
+                anchor_object_key: run.anchor_object_key.clone(),
+                anchor_record_id: run.anchor_record_id.clone(),
+                anchor_label: anchor_label(conn, run),
+                stage_id,
+                stage_name,
+                step_id: step.id.clone(),
+                step_name: step.name.clone(),
+                waiting_since,
+                approval_id: None,
+            });
+        } else if run.status == "waiting_approval" {
+            let Some(approval_id) = &run.pending_approval_id else {
+                continue;
+            };
+            let Some(approval) = ai_approval_repo::get(conn, approval_id)? else {
+                continue;
+            };
+            let (stage_id, stage_name, step_id, step_name) = current_position(conn, run)?;
+            let Some(step_id) = step_id else { continue };
+            let Some(step) = definition_step(&definition, &step_id) else {
+                continue;
+            };
+            if !viewer_may_approve(conn, viewer_user_id, step)? {
+                continue;
+            }
+            items.push(MyStepItem {
+                kind: "approval".to_string(),
+                run_id: run.id.clone(),
+                lane_id: definition.id.clone(),
+                lane_name: definition.name.clone(),
+                anchor_object_key: run.anchor_object_key.clone(),
+                anchor_record_id: run.anchor_record_id.clone(),
+                anchor_label: anchor_label(conn, run),
+                stage_id,
+                stage_name,
+                step_id: step.id.clone(),
+                step_name: step_name.unwrap_or_else(|| step.name.clone()),
+                waiting_since: approval.created_at.clone(),
+                approval_id: Some(approval.id.clone()),
+            });
+        }
+    }
+    items.sort_by(|a, b| a.waiting_since.cmp(&b.waiting_since));
+    Ok(MySteps { items })
+}
+
+/// Lane timing (WP-0713 AC-3): time per stage, completion rate and rework,
+/// all computed from the recorded node timestamps. A stage's duration for
+/// one run is last finished_at minus first started_at among that stage's
+/// nodes, and only counts when every node in the stage has finished;
+/// rework is the count of node rows with attempt > 1.
+pub fn lane_timing(conn: &Connection, workspace_id: &str, lane_key: &str) -> AppResult<LaneTiming> {
+    let lane_name = lane_name_for(conn, workspace_id, lane_key)?;
+    let runs = graph_run_repo::list_lane_runs_for_lane(conn, workspace_id, lane_key)?;
+    let total_runs = runs.len() as i64;
+    let completed_runs = runs
+        .iter()
+        .filter(|r| r.status == "completed" || r.status == "completed_partial")
+        .count() as i64;
+    let mut stage_durations: std::collections::BTreeMap<String, Vec<f64>> =
+        std::collections::BTreeMap::new();
+    let mut stage_names: std::collections::BTreeMap<String, String> =
+        std::collections::BTreeMap::new();
+    let mut stage_entered: std::collections::BTreeMap<String, i64> =
+        std::collections::BTreeMap::new();
+    let mut rework_steps: i64 = 0;
+    for run in &runs {
+        let nodes = graph_run_repo::list_run_nodes(conn, &run.id)?;
+        // When the run entered each stage: the earliest started_at among
+        // that stage's node rows. A stage's duration is entered -> left,
+        // where "left" is the next stage's entered time, or the run's
+        // finished_at when it is the last stage entered and the run is
+        // terminal. This is uniform across step kinds: an approval node's
+        // row is never marked finished (the engine resumes from the next
+        // node), so a "every node finished" rule would systematically miss
+        // every stage that ends in an approval.
+        let mut entered: std::collections::BTreeMap<String, String> =
+            std::collections::BTreeMap::new();
+        let stages = node_stages(conn, run)?;
+        for node in &nodes {
+            if node.attempt > 1 {
+                rework_steps += 1;
+            }
+            let Some(stage) = row_stage(&stages, node) else {
+                continue;
+            };
+            entered
+                .entry(stage)
+                .and_modify(|e| {
+                    if node.started_at < *e {
+                        *e = node.started_at.clone();
+                    }
+                })
+                .or_insert_with(|| node.started_at.clone());
+        }
+        for stage in entered.keys() {
+            *stage_entered.entry(stage.clone()).or_insert(0) += 1;
+        }
+        let mut ordered: Vec<(&String, &String)> = entered.iter().collect();
+        ordered.sort_by(|a, b| a.1.cmp(b.1));
+        let run_finished = if is_terminal_status(&run.status) {
+            run.finished_at.clone()
+        } else {
+            None
+        };
+        for (i, (stage, entered_at)) in ordered.iter().enumerate() {
+            let completed = ordered
+                .get(i + 1)
+                .map(|(_, next)| (*next).clone())
+                .or_else(|| run_finished.clone());
+            let Some(completed_at) = completed else {
+                continue;
+            };
+            if let Some(seconds) = seconds_between(entered_at, &completed_at) {
+                stage_durations
+                    .entry((*stage).clone())
+                    .or_default()
+                    .push(seconds);
+            }
+        }
+        // Stage names come from each run's own definition, so runs on older
+        // versions keep their names.
+        if let Some(definition) = lane_definition_for_run(conn, run)? {
+            for stage in definition.stages {
+                stage_names
+                    .entry(stage.id)
+                    .or_insert_with(|| stage.name.clone());
+            }
+        }
+    }
+    let mut stages: Vec<LaneStageTiming> = Vec::new();
+    for (stage_id, durations) in &stage_durations {
+        let mut sorted = durations.clone();
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        let avg = if sorted.is_empty() {
+            None
+        } else {
+            Some(sorted.iter().sum::<f64>() / sorted.len() as f64)
+        };
+        let median = if sorted.is_empty() {
+            None
+        } else if sorted.len() % 2 == 1 {
+            Some(sorted[sorted.len() / 2])
+        } else {
+            let mid = sorted.len() / 2;
+            Some((sorted[mid - 1] + sorted[mid]) / 2.0)
+        };
+        stages.push(LaneStageTiming {
+            stage_id: stage_id.clone(),
+            stage_name: stage_names
+                .get(stage_id)
+                .cloned()
+                .unwrap_or_else(|| stage_id.clone()),
+            runs_entered: *stage_entered.get(stage_id).unwrap_or(&0),
+            runs_completed: durations.len() as i64,
+            avg_seconds: avg,
+            median_seconds: median,
+        });
+    }
+    // Stages entered but never completed (all runs still in them) still
+    // report, with no durations.
+    for (stage_id, entered) in &stage_entered {
+        if !stage_durations.contains_key(stage_id) {
+            stages.push(LaneStageTiming {
+                stage_id: stage_id.clone(),
+                stage_name: stage_names
+                    .get(stage_id)
+                    .cloned()
+                    .unwrap_or_else(|| stage_id.clone()),
+                runs_entered: *entered,
+                runs_completed: 0,
+                avg_seconds: None,
+                median_seconds: None,
+            });
+        }
+    }
+    Ok(LaneTiming {
+        lane_id: lane_key.to_string(),
+        lane_name,
+        total_runs,
+        completed_runs,
+        completion_rate: if total_runs == 0 {
+            0.0
+        } else {
+            completed_runs as f64 / total_runs as f64
+        },
+        rework_steps,
+        stages,
+    })
+}
+
+/// The ageing view (WP-0713 AC-4): active runs of the lane, longest in
+/// their current stage first, only records the viewer may read.
+pub fn list_lane_ageing(
+    conn: &Connection,
+    workspace_id: &str,
+    lane_key: &str,
+    viewer_user_id: Option<&str>,
+) -> AppResult<Vec<LaneBoardItem>> {
+    let lane_name = lane_name_for(conn, workspace_id, lane_key)?;
+    let runs = visible_lane_runs(conn, workspace_id, lane_key, viewer_user_id)?;
+    let mut items: Vec<LaneBoardItem> = Vec::new();
+    for run in &runs {
+        if is_terminal_status(&run.status) {
+            continue;
+        }
+        items.push(board_item(conn, run, lane_key, &lane_name)?);
+    }
+    items.sort_by(|a, b| {
+        b.seconds_in_stage
+            .partial_cmp(&a.seconds_in_stage)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Ok(items)
 }
 
 fn field_view(

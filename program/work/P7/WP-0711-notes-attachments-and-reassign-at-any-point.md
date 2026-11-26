@@ -3,7 +3,7 @@ id: WP-0711
 title: Notes, attachments and reassign at any point
 phase: 7
 epic: E7.3 Runner and visibility
-status: in_review
+status: done
 owner: muse
 planned_for: muse
 depends_on: [WP-0707]
