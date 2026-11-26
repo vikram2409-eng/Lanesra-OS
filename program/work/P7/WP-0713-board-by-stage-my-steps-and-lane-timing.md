@@ -3,7 +3,7 @@ id: WP-0713
 title: Board by stage, "my steps" and lane timing
 phase: 7
 epic: E7.3 Runner and visibility
-status: in_review
+status: done
 owner: muse
 planned_for: muse
 depends_on: [WP-0707]
@@ -14,7 +14,7 @@ delivered: [desktop, workspace, demo]
 docs: [process-lanes]
 branch: wp/WP-0713-board-my-steps-timing-r5
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/815
-updated: 2026-11-20
+updated: 2026-11-26
 ---
 
 # WP-0713 — Board by stage, "my steps" and lane timing
