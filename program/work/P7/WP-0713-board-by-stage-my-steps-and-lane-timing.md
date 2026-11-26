@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: [desktop, workspace, demo]
 docs: [process-lanes]
 branch: wp/WP-0713-board-my-steps-timing-r5
-pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/811
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/815
 updated: 2026-11-20
 ---
 
@@ -263,3 +263,8 @@ Answer "where is every order" and "what is waiting on me".
   insertions / 5 deletions — the 5 deletions are exactly the 5
   rewritten WP-0713 lines. STATUS.md is regenerated here, not copied.
   pr: still points at #811 until the new PR opens.
+
+### 2026-11-26 muse (close-out rebuild -r5, continued)
+- The r5 build is PR #815 (branch
+  wp/WP-0713-board-my-steps-timing-r5, head 93c8641). #811 is closed
+  with a pointer here. pr: now points at #815.
