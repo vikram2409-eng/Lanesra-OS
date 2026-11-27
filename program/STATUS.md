@@ -35,7 +35,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0708](work/P7/WP-0708-agent-steps-assistance-and-autonomy-level-per-step.md) | Agent steps, assistance and autonomy level per step | in_review | claude | `wp/WP-0708-agent-steps-assistance-autonomy` | https://github.com/vikram2409-eng/Lanesra-OS/pull/799 |
 | [WP-0709](work/P7/WP-0709-lanes-and-workflows-declared-replacement-and-starting-a-lane.md) | Lanes and workflows: declared replacement, and starting a lane from a workflow | in_review | claude | `wp/WP-0709-lanes-workflows-interplay` | 792 |
 | [WP-0720](work/P7/WP-0720-lane-runner-second-cut-approvals-branches-pause-and-handoff.md) | Lane runner, second cut: approvals, branches, pause and handoff | in_progress | claude | `wp/WP-0720-runner-second-cut-engine` | https://github.com/vikram2409-eng/Lanesra-OS/pull/807 |
-| [WP-0722](work/P7/WP-0722-easy-lane-creation.md) | Easy lane creation: object-first entry and guided start | in_review | muse | `wp/WP-0722-easy-lane-creation-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/821 |
+| [WP-0722](work/P7/WP-0722-easy-lane-creation.md) | Easy lane creation: object-first entry and guided start | in_review | muse | `wp/WP-0722-easy-lane-creation-r2` | https://github.com/vikram2409-eng/Lanesra-OS/pull/823 |
 
 ## Ready to start (all dependencies done)
 

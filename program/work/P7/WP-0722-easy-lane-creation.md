@@ -13,7 +13,7 @@ editions: [desktop, workspace, demo]
 delivered: [desktop, workspace, demo]
 docs: [process-lanes]
 branch: wp/WP-0722-easy-lane-creation-r2
-pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/821
+pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/823
 updated: 2026-11-27
 ---
 
