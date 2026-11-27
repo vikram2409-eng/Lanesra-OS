@@ -1,11 +1,16 @@
 /**
- * WP-0160 Stage 1a - an agent's whole configuration is grouped under one
- * "Set up" panel instead of ten separate per-row modal buttons, with Persona
- * folded into the agent's job (the Persona -> Job merge).
+ * WP-0160 - an agent's whole configuration is grouped under one "Set up"
+ * panel instead of ten separate per-row modal buttons.
+ *
+ * Stage 1a grouped the ten per-row modals into the panel. Stage 1b splits the
+ * single "Agent" tab into the plain-language groups (Identity / Job / Tools &
+ * actions / Data access) and unifies the Job save, so instructions, tone and
+ * the persona (role/goal/background/reasoning mode) save in one action - the
+ * Persona -> Job merge (Gate-0 Q1).
  *
  * Covers: REQ-SETUP-001 (WP-0160)
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,7 +21,16 @@ import type { AiAgentDefinition } from "../lib/types";
 
 vi.mock("../lib/api", async (orig) => {
   const actual = await orig<typeof import("../lib/api")>();
-  return { ...actual, api: { ...actual.api, getAiAgentPolicy: vi.fn() } };
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      getAiAgentPolicy: vi.fn(),
+      listUsers: vi.fn(),
+      updateAiAgent: vi.fn(),
+      setAiAgentPersona: vi.fn(),
+    },
+  };
 });
 
 const agent = {
@@ -69,19 +83,23 @@ function renderPanel() {
 
 beforeEach(() => {
   vi.mocked(api.getAiAgentPolicy).mockResolvedValue(null);
+  vi.mocked(api.listUsers).mockResolvedValue([]);
+  vi.mocked(api.updateAiAgent).mockResolvedValue(agent);
+  vi.mocked(api.setAiAgentPersona).mockResolvedValue(agent);
 });
 
-describe("AgentSetupPanel (WP-0160 Stage 1a)", () => {
-  it("groups the whole agent setup under one panel with the eight group tabs", () => {
+describe("AgentSetupPanel (WP-0160)", () => {
+  it("groups the whole agent setup under one panel with the nine plain-language group tabs", () => {
     renderPanel();
     expect(screen.getByRole("heading", { name: /set up/i })).toBeInTheDocument();
     for (const label of [
-      "Agent",
-      "Persona",
+      "Identity",
+      "Job",
       "Knowledge & memory",
+      "Tools & actions",
+      "Data access",
       "Safety",
       "Model & cost",
-      "Identity",
       "Test & publish",
       "Run & triggers",
     ]) {
@@ -89,10 +107,28 @@ describe("AgentSetupPanel (WP-0160 Stage 1a)", () => {
     }
   });
 
-  it("keeps Persona inside the agent's setup (the Persona -> Job merge)", () => {
+  it("puts instructions, tone and the persona together under one Job group (the Persona -> Job merge)", () => {
     renderPanel();
-    fireEvent.click(screen.getByRole("button", { name: "Persona" }));
-    expect(screen.getByRole("button", { name: "Save persona" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Job" }));
+    expect(screen.getByRole("button", { name: "Save job" })).toBeInTheDocument();
+    expect(screen.getByText("Purpose / instructions")).toBeInTheDocument();
     expect(screen.getByText("Role")).toBeInTheDocument();
+    expect(screen.getByText("Goal")).toBeInTheDocument();
+    expect(screen.getByText("Background")).toBeInTheDocument();
+  });
+
+  it("saves the Job group through update_ai_agent and set_ai_agent_persona in one action", async () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Job" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save job" }));
+    await waitFor(() => expect(api.updateAiAgent).toHaveBeenCalledWith("a1", expect.objectContaining({ system_prompt: "You chase invoices." })));
+    await waitFor(() => expect(api.setAiAgentPersona).toHaveBeenCalledWith("a1", expect.objectContaining({ role: "", goal: "", background: "", reasoning_mode: "direct" })));
+  });
+
+  it("gives Tools & actions its own group with a tool checklist and save", () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "Tools & actions" }));
+    expect(screen.getByRole("button", { name: "Save tools & actions" })).toBeInTheDocument();
+    expect(screen.getByText("What this agent can do")).toBeInTheDocument();
   });
 });
