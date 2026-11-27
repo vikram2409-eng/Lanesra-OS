@@ -53,6 +53,17 @@ async function openBuilder(page, laneId: string) {
   await expect(page.locator('#laneBuilder')).toBeVisible();
 }
 
+// WP-0722: "New lane" now opens the guided start (name, object, blank /
+// describe / template); blank is the default, so one Create lands in the
+// builder with a blank lane on the chosen object.
+async function openNewLaneBlank(page) {
+  await page.goto(`${BASE}/demo/warehouse`);
+  await page.click('[data-lane-builder-new]');
+  await expect(page.locator('#laneNewName')).toBeVisible();
+  await page.click('#laneNewCreate');
+  await expect(page.locator('#laneBuilder')).toBeVisible();
+}
+
 // Canonical JSON: sorted keys, so the round-trip compares modulo key order.
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -266,10 +277,10 @@ test('AC-5: Replenish previews the draft PO and states the reject behaviour', as
 });
 
 test('AC-5: New lane starts blank and its publish button is disabled until it has content', async ({ page }) => {
-  await page.goto(`${BASE}/demo/warehouse`);
-  await page.click('[data-lane-builder-new]');
-  await expect(page.locator('#laneBuilder')).toBeVisible();
-  await expect(page.locator('#view h2')).toHaveText('New lane');
+  await openNewLaneBlank(page);
+  // No name typed in the guided start: the blank lane is "Untitled lane",
+  // the same name the desktop builder uses.
+  await expect(page.locator('#view h2')).toHaveText('Untitled lane');
   await expect(page.locator('.lb-step-card')).toHaveCount(1);
   // A blank lane passes every REFUSE check, but Publish is disabled —
   // enabled-then-no-op was the old behaviour (gap 13 cosmetic fix).
@@ -295,8 +306,7 @@ test('AC-5: the blueprint page opens the same lane in the builder', async ({ pag
 });
 
 test('Covers: REQ-LANE-024 (WP-0718 AC-5): Add step / Add stage grow a new lane', async ({ page }) => {
-  await page.goto(`${BASE}/demo/warehouse`);
-  await page.click('[data-lane-builder-new]');
+  await openNewLaneBlank(page);
   await expect(page.locator('.lb-step-card')).toHaveCount(1);
   await page.click('[data-lb-step-add="work"]');
   await expect(page.locator('.lb-step-card')).toHaveCount(2);
@@ -336,8 +346,7 @@ test('Covers: REQ-LANE-024 (WP-0718 AC-5): deleting a stage removes it and its s
 });
 
 test('Covers: REQ-LANE-024 (WP-0718 AC-5): the run-data editor declares a field and refuses a duplicate key', async ({ page }) => {
-  await page.goto(`${BASE}/demo/warehouse`);
-  await page.click('[data-lane-builder-new]');
+  await openNewLaneBlank(page);
   await expect(page.locator('#laneBuilder')).toContainText('No run-data fields declared yet');
   await page.fill('#lbRunDataKey', 'carrier');
   await page.selectOption('#lbRunDataType', 'string');
@@ -376,8 +385,7 @@ test('Covers: REQ-LANE-024 (WP-0718 AC-5): a branch target list excludes its own
 });
 
 test('Covers: REQ-LANE-024 (WP-0718 AC-5): Add missing branch defaults to the next step, else ends held', async ({ page }) => {
-  await page.goto(`${BASE}/demo/warehouse`);
-  await page.click('[data-lane-builder-new]');
+  await openNewLaneBlank(page);
   await page.click('[data-lb-step-add="work"]');
   // The first step becomes a check; its pass branch targets the next step.
   await page.click('.lb-step-card[data-lb-step="work/first-step"]');
@@ -506,4 +514,79 @@ test('Covers: REQ-LANE-024 (WP-0718 AC-5): the step role is a picker over the si
   // The export agrees with the stored draft.
   const exported = await exportDef(page);
   expect(exported.lane.stages[0].steps[0].role).toBe('role_wh_warehouse_manager');
+});
+
+// ---- WP-0722: easy lane creation (REQ-LANE-024) ---------------------------
+
+test('Covers: REQ-LANE-024 (WP-0722 AC-2): the guided start offers blank / describe / template', async ({ page }) => {
+  await page.goto(`${BASE}/demo/warehouse`);
+  await page.click('[data-lane-builder-new]');
+  await expect(page.locator('#view h2')).toHaveText('New lane');
+  await expect(page.locator('#laneNewName')).toBeVisible();
+  await expect(page.locator('#laneNewObject')).toBeVisible();
+  // Blank is the default; describe reveals the description field.
+  await expect(page.locator('input[name="laneNewStart"][value="blank"]')).toBeChecked();
+  await expect(page.locator('#laneNewDescribeWrap')).toBeHidden();
+  await page.check('input[name="laneNewStart"][value="describe"]');
+  await expect(page.locator('#laneNewDescribeWrap')).toBeVisible();
+  await expect(page.locator('#laneNewDescription')).toBeVisible();
+  // Template is offered disabled — no templates yet (WP-0717).
+  await expect(page.locator('input[name="laneNewStart"][value="template"]')).toBeDisabled();
+  await expect(page.locator('#view')).toContainText('no templates yet');
+});
+
+test('Covers: REQ-LANE-024 (WP-0722 AC-2): blank with a name and an object lands in the builder with both applied', async ({ page }) => {
+  await page.goto(`${BASE}/demo/warehouse`);
+  await page.click('[data-lane-builder-new]');
+  await page.fill('#laneNewName', 'Count the bins');
+  await page.selectOption('#laneNewObject', 'cycle_count');
+  await page.click('#laneNewCreate');
+  await expect(page.locator('#laneBuilder')).toBeVisible();
+  await expect(page.locator('#view h2')).toHaveText('Count the bins');
+  await expect(page.locator('#laneBuilder')).toContainText('Runs on cycle_count');
+  const exported = await exportDef(page);
+  expect(exported.lane.name).toBe('Count the bins');
+  expect(exported.lane.object_key).toBe('cycle_count');
+});
+
+test('Covers: REQ-LANE-024 (WP-0722 AC-2): describe drafts deterministically and opens the draft in the builder', async ({ page }) => {
+  await page.goto(`${BASE}/demo/warehouse`);
+  await page.click('[data-lane-builder-new]');
+  await page.check('input[name="laneNewStart"][value="describe"]');
+  await page.fill(
+    '#laneNewDescription',
+    'Receive a purchase order at the Toronto warehouse. Verify the delivery against the order. Record what arrived. Stage the goods in a receiving bin. Confirm the order is received.',
+  );
+  await page.click('#laneNewCreate');
+  await expect(page.locator('#laneBuilder')).toBeVisible();
+  await expect(page.locator('#view h2')).toHaveText('Receive a purchase order at the Toronto warehouse');
+  const exported = await exportDef(page);
+  expect(exported.lane.object_key).toBe('purchase_order');
+  expect(exported.lane.status).toBe('draft');
+  expect(exported.lane.stages.length).toBeGreaterThanOrEqual(3);
+  const stepCount = exported.lane.stages.reduce((n: number, s: any) => n + s.steps.length, 0);
+  expect(stepCount).toBeGreaterThanOrEqual(4);
+});
+
+test('Covers: REQ-LANE-024 (WP-0722 AC-2): describe with an empty description is refused in the dialog', async ({ page }) => {
+  await page.goto(`${BASE}/demo/warehouse`);
+  await page.click('[data-lane-builder-new]');
+  await page.check('input[name="laneNewStart"][value="describe"]');
+  await page.click('#laneNewCreate');
+  await expect(page.locator('#laneNewError')).toContainText('empty description drafts nothing');
+  await expect(page.locator('#laneBuilder')).toHaveCount(0);
+});
+
+test('Covers: REQ-LANE-024 (WP-0722 AC-1): New lane on the Purchase Orders list opens the builder with that object set', async ({ page }) => {
+  await page.goto(`${BASE}/demo/warehouse`);
+  await page.click('[data-wh-nav="purchase_order"]');
+  await expect(page.locator('#newLaneBtn')).toBeVisible();
+  await page.click('#newLaneBtn');
+  await expect(page.locator('#laneNewObject')).toHaveValue('purchase_order');
+  await page.click('#laneNewCreate');
+  await expect(page.locator('#laneBuilder')).toBeVisible();
+  await expect(page.locator('#view h2')).toHaveText('Untitled lane');
+  await expect(page.locator('#laneBuilder')).toContainText('Runs on purchase_order');
+  const exported = await exportDef(page);
+  expect(exported.lane.object_key).toBe('purchase_order');
 });

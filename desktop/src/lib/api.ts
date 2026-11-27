@@ -64,6 +64,7 @@ import type {
   BuilderActionType,
   BuilderReadsWrites,
   BuilderSaveResult,
+  DraftedProcessLane,
   SystemNodeType,
   SystemNode,
   SystemGraphHit,
@@ -594,6 +595,23 @@ export const api = {
     }),
   adoptBuilderActionType: (name: string, targetObjectType: string) =>
     call<ActionTypeDefinition>("adopt_builder_action_type", { name, targetObjectType }),
+
+  // WP-0722: the guided start's "describe it" path (REQ-LANE-024). The
+  // WP-0715 draft is genuinely async, so — like the other async admin
+  // actions — it goes through `callAdminAction`: the Tauri command
+  // `draft_lane_from_description` on desktop, POST
+  // /api/admin/process-lanes/drafts on Team Workspace. The Tauri args
+  // are camelCase (`objectKey`, Tauri v2 command convention) while the
+  // HTTP body is the route's snake_case struct (`object_key`). The
+  // result is always a draft; this wrapper has no publish path.
+  draftLaneFromDescription: (description: string, objectKey: string) =>
+    callAdminAction<DraftedProcessLane>(
+      "draft_lane_from_description",
+      { description, objectKey },
+      "POST",
+      "/api/admin/process-lanes/drafts",
+      { description, object_key: objectKey },
+    ),
 
   // WP-0707: the lane runner (REQ-LANE-014, REQ-LANE-015). `getLaneRunView`
   // and `listLaneRunsForRecord` are sync `call`s; starting, submitting and

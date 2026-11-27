@@ -22,12 +22,14 @@ import { AssistantPage } from "./features/assistant/AssistantPage";
 import { LaneBlueprintPage } from "./features/lanes/LaneBlueprint";
 import { LaneRunnerPage } from "./features/lanes/LaneRunner";
 import { LaneBuilderPage } from "./features/builder/LaneBuilderPage";
+import { NewLaneStart, type NewLaneStartChoice } from "./features/builder/NewLaneStart";
+import { blankLaneDefinition, draftedLaneDefinition } from "./features/builder/builderUtils";
 import { CustomObjectRecords } from "./features/customObjects/CustomObjectRecords";
 import { Account } from "./features/account/Account";
 import { VoiceContextProvider } from "./features/voice/VoiceContext";
 import { api } from "./lib/api";
 import { applyThemeTokens } from "./lib/applyTheme";
-import type { User, Workspace } from "./lib/types";
+import type { LaneDefinition, User, Workspace } from "./lib/types";
 
 type BootState =
   | { phase: "loading" }
@@ -130,7 +132,58 @@ function Ready({
   // lane" with null). It is not a `Section` — the Section union lives
   // in AppShell.tsx, outside this WP's ownership — so it rides on this
   // overlay state exactly like the runner does.
-  const [builderLane, setBuilderLane] = useState<{ laneKey: string | null } | null>(null);
+  // WP-0722: a new lane can also carry a starting definition — a blank
+  // one with the object already picked (object-first entry), or the
+  // Assistant's draft (guided start, "describe it"). LaneBuilderPage
+  // already renders an `initialDefinition` when handed one.
+  const [builderLane, setBuilderLane] = useState<{
+    laneKey: string | null;
+    initialDefinition?: LaneDefinition;
+  } | null>(null);
+  // WP-0722: the guided start dialog. `objectKey` is pre-filled when the
+  // start comes from an object's page; null when it comes from the Lanes
+  // section. The dialog is the same overlay kind as the builder above.
+  const [newLaneStart, setNewLaneStart] = useState<{ objectKey?: string | null } | null>(null);
+  const [newLaneBusy, setNewLaneBusy] = useState(false);
+  const [newLaneError, setNewLaneError] = useState<string | null>(null);
+
+  /// WP-0722: land the guided start's choice in the builder. Blank opens
+  /// a blank definition on the chosen object — so the Object card never
+  /// appears and publish/dry-run are available without touching it.
+  /// Describe asks the Assistant to draft (WP-0715, always a draft) and
+  /// opens the builder on the drafted lane; a draft the builder cannot
+  /// read, or a failed draft call, keeps the dialog open with the reason.
+  async function handleNewLaneCreate(choice: NewLaneStartChoice) {
+    if (choice.start === "describe") {
+      setNewLaneBusy(true);
+      setNewLaneError(null);
+      try {
+        const drafted = await api.draftLaneFromDescription(choice.description, choice.objectKey);
+        const parsed = draftedLaneDefinition(drafted);
+        if (!parsed) throw new Error("The Assistant's draft could not be read — try again.");
+        const definition =
+          choice.name === "Untitled lane"
+            ? parsed.definition
+            : { ...parsed.definition, name: choice.name };
+        setNewLaneStart(null);
+        setBuilderLane({ laneKey: parsed.laneKey, initialDefinition: definition });
+      } catch (err) {
+        setNewLaneError(err instanceof Error ? err.message : "Drafting the lane failed — try again.");
+      } finally {
+        setNewLaneBusy(false);
+      }
+      return;
+    }
+    setNewLaneStart(null);
+    setBuilderLane({
+      laneKey: null,
+      initialDefinition: {
+        ...blankLaneDefinition(),
+        name: choice.name,
+        object_key: choice.objectKey,
+      },
+    });
+  }
   function navigateTo(target: Section, pre: Prefill) {
     setPrefill(pre);
     setSection(target);
@@ -188,10 +241,26 @@ function Ready({
         activeAppId={activeAppId}
         onSwitchApp={switchApp}
       >
-        {laneRun ? (
+        {newLaneStart ? (
+          <NewLaneStart
+            initialObjectKey={newLaneStart.objectKey}
+            objects={customObjects.data ?? []}
+            busy={newLaneBusy}
+            error={newLaneError}
+            onCancel={() => {
+              setNewLaneStart(null);
+              setNewLaneError(null);
+            }}
+            onCreate={handleNewLaneCreate}
+          />
+        ) : laneRun ? (
           <LaneRunnerPage runId={laneRun.runId} recordLabel={laneRun.recordLabel} onClose={() => setLaneRun(null)} />
         ) : builderLane ? (
-          <LaneBuilderPage laneKey={builderLane.laneKey} onClose={() => setBuilderLane(null)} />
+          <LaneBuilderPage
+            laneKey={builderLane.laneKey}
+            initialDefinition={builderLane.initialDefinition}
+            onClose={() => setBuilderLane(null)}
+          />
         ) : (
           <>
         {section === "dashboard" && (
@@ -248,6 +317,10 @@ function Ready({
         {section === "lanes" && (
           <LaneBlueprintPage
             onOpenInBuilder={(laneKey) => setBuilderLane({ laneKey })}
+            onNewLane={() => {
+              setNewLaneError(null);
+              setNewLaneStart({});
+            }}
             onOpenRun={(runId, recordLabel) => setLaneRun({ runId, recordLabel })}
           />
         )}
@@ -259,6 +332,10 @@ function Ready({
             prefill={prefill}
             onPrefillConsumed={clearPrefill}
             onOpenLaneRun={(runId, recordLabel) => setLaneRun({ runId, recordLabel })}
+            onNewLane={(objectKey) => {
+              setNewLaneError(null);
+              setNewLaneStart({ objectKey });
+            }}
           />
         )}
           </>
