@@ -5,10 +5,12 @@
  * AC-4: desktop and Team Workspace behave the same from the same code.
  * Every builder wrapper goes through the shared dual-transport `call<T>`
  * in lib/api.ts — no transport-specific branches anywhere in the builder
- * surface — except `draftLaneFromDescription` (WP-0722): the WP-0715
- * draft is genuinely async, so like the other async admin actions it
- * goes through `callAdminAction` with its own HTTP route
- * (`/api/admin/process-lanes/drafts`) instead of the uniform
+ * surface — except `draftLaneFromDescription` (WP-0722) and
+ * `editLaneFromDescription` (WP-0723): the WP-0715 draft and the WP-0723
+ * edit are genuinely async, so like the other async admin actions they
+ * go through `callAdminAction` with their own HTTP routes
+ * (`/api/admin/process-lanes/drafts`,
+ * `/api/admin/process-lanes/:lane_key/edits`) instead of the uniform
  * `/api/invoke/<command>` dispatcher. In jsdom there is no Tauri bridge, so `call` takes the HTTP
  * path; these tests assert the exact command name and arguments that
  * path sends to `/api/invoke/<command>`, which is the same command the
@@ -143,6 +145,29 @@ describe("builder api wrappers", () => {
     expect(lastBody(fetchMock)).toEqual({
       description: "Receive a purchase order.",
       object_key: "purchase_order",
+    });
+  });
+
+  // WP-0723 (REQ-LANE-022, AC-2, AC-4): the guided edit's "describe the
+  // change" path. Same shape as the draft wrapper - its own HTTP route
+  // instead of the /api/invoke dispatcher: POST
+  // /api/admin/process-lanes/:lane_key/edits
+  // (server/src/admin_actions.rs), with the route's snake_case body,
+  // while the Tauri command takes the camelCase args (Tauri v2 command
+  // convention). The result is the stored draft version of the same
+  // lane; the wrapper has no publish path.
+  it("editLaneFromDescription posts the change to the lane's edits route", async () => {
+    const fetchMock = mockFetchOnce({ version: 2, status: "draft", definition_json: "{}" });
+    await api.editLaneFromDescription(
+      "lane-draft-receive-purchase-order",
+      "Add a step where the receiver records the carrier name.",
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/admin/process-lanes/lane-draft-receive-purchase-order/edits",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(lastBody(fetchMock)).toEqual({
+      description: "Add a step where the receiver records the carrier name.",
     });
   });
 });

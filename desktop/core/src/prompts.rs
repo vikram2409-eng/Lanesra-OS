@@ -32,6 +32,14 @@ pub const FILES: &[(&str, &str)] = &[
         include_str!("../prompts/assistant/draft-lane.v1.md"),
     ),
     (
+        "assistant/draft-lane.v2.md",
+        include_str!("../prompts/assistant/draft-lane.v2.md"),
+    ),
+    (
+        "assistant/edit-lane.v1.md",
+        include_str!("../prompts/assistant/edit-lane.v1.md"),
+    ),
+    (
         "assistant/records.v1.md",
         include_str!("../prompts/assistant/records.v1.md"),
     ),

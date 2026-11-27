@@ -1,5 +1,5 @@
 //! AI Agent Platform v2, Phase 7: describe a process - the Admin Assistant
-//! drafts a lane (WP-0715, REQ-LANE-022).
+//! drafts a lane (WP-0715, extended to a full lane by WP-0723, REQ-LANE-022).
 //!
 //! Every test goes through the scripted provider (WP-0005), so each model
 //! reply is scripted and the request the service made is captured and
@@ -10,12 +10,15 @@
 //! Untested locally - see CI (no Rust toolchain in this VM).
 
 use lanesra_core::models::ai::AiSettingsInput;
+use lanesra_core::models::custom_field::CustomFieldDefinitionInput;
+use lanesra_core::models::custom_object::CustomObjectDefinitionInput;
 use lanesra_core::models::process_lane::parse_definition;
 use lanesra_core::models::workspace::WorkspaceSetup;
 use lanesra_core::services::ai_service::TokenUsage;
 use lanesra_core::services::scripted_provider::{self, ScriptedResponse};
 use lanesra_core::services::{
-    ai_service, assistant_draft_lane_service, process_lane_service, workspace_service,
+    ai_service, assistant_draft_lane_service, custom_field_service, custom_object_service,
+    process_lane_builder, process_lane_service, workspace_service,
 };
 use serde_json::json;
 
@@ -76,9 +79,10 @@ fn text_reply(text: &str) -> ScriptedResponse {
 }
 
 /// The lane a model would draft for "Receive a purchase order at the
-/// Toronto warehouse": form steps for the person's work, one check step
-/// where the description states something to verify. No record, approval
-/// or agent steps - a draft never declares those (WP-0715).
+/// Toronto warehouse" under the WP-0715 narrow contract: form steps for
+/// the person's work, one check step where the description states
+/// something to verify. The WP-0723 full-lane draft is
+/// `drafted_full_lane_json` below.
 fn drafted_lane_json() -> String {
     json!({
         "format_version": "1.0.0",
@@ -299,7 +303,7 @@ async fn ac4_empty_description_is_refused_before_any_model_call() {
     assert!(scripted_provider::take_captured().is_empty());
 }
 
-/// Covers: REQ-LANE-022 (WP-0715 AC-3)
+/// Covers: REQ-LANE-022 (WP-0715 AC-3, WP-0723 AC-1)
 #[test]
 fn ac3_prompt_comes_from_the_catalog() {
     let (text, used) = lanesra_core::prompts::render_active(
@@ -310,10 +314,242 @@ fn ac3_prompt_comes_from_the_catalog() {
         ],
     )
     .unwrap();
-    assert_eq!(used.version, 1);
+    assert_eq!(used.version, 2);
     assert!(text.contains(DESCRIPTION));
     assert!(text.contains("purchase_order"));
     assert!(text.contains("Reply with one JSON object and nothing else"));
     assert!(text.contains("status is draft, always"));
-    assert!(text.contains("Do not use record, approval or agent steps in a draft"));
+    assert!(text.contains("purchase_order.set_status"));
+    assert!(text.contains("Never pick an agent the description does not name"));
+}
+
+/// The lane a model would draft for the WP-0723 full-lane description:
+/// a form step, a check step, a record step with the adopted set_status
+/// write, an approval step with the decision write and both branches,
+/// and an agent step for the agent the description names. Every write
+/// uses the adopted `purchase_order.set_status` Action Type, and every
+/// agent is named - the AC-1 happy path.
+fn drafted_full_lane_json() -> String {
+    json!({
+        "format_version": "1.0.0",
+        "lane": {
+            "id": "lane-draft-receive-purchase-order",
+            "name": "Receive a purchase order",
+            "description": "Receive a purchase order at the Toronto warehouse: verify the delivery, record what arrived, get the Warehouse Manager's approval for a short receipt, have the Receiving Agent propose the put-away bin, and close the order as RECEIVED.",
+            "object_key": "purchase_order",
+            "version": 1,
+            "status": "draft",
+            "run_data": {"fields": [
+                {"key": "carrier", "type": "string", "required": true, "description": "Carrier who delivered the shipment."}
+            ]},
+            "stages": [
+                {"id": "verify", "name": "Verify", "steps": [
+                    {"id": "confirm-arrival", "name": "Confirm shipment arrived", "kind": "form", "role": "role_wh_receiver", "required": true,
+                     "description": "Confirm the truck and delivery: carrier.",
+                     "fields": [
+                        {"key": "carrier", "label": "Carrier", "type": "string", "required": true, "binds_to": "run_data.carrier"}
+                     ]}
+                ]},
+                {"id": "record-receipt", "name": "Record receipt", "steps": [
+                    {"id": "quantities-match", "name": "Quantities match", "kind": "check", "required": true,
+                     "description": "Every line fully received.",
+                     "check": {"scope": "anchor", "message": "A line is short.", "condition": {"field": "$record.status", "operator": "equals", "value": "OPEN"}},
+                     "branches": [
+                        {"on": "pass", "target": {"stage": "confirm", "step": "close-po"}},
+                        {"on": "fail", "target": {"stage": "hold-review", "step": "review-discrepancy"}}
+                     ]}
+                ]},
+                {"id": "hold-review", "name": "Hold & review", "steps": [
+                    {"id": "review-discrepancy", "name": "Review discrepancy", "kind": "approval", "role": "role_wh_warehouse_manager", "required": true,
+                     "description": "The Warehouse Manager reviews a short receipt. Approve: the order is marked PARTIALLY_RECEIVED and the run continues to put-away. Reject: the run ends held.",
+                     "writes": [{"action_type": "purchase_order.set_status", "inputs": {"status": "PARTIALLY_RECEIVED"}}],
+                     "branches": [
+                        {"on": "approved", "target": {"stage": "confirm", "step": "suggest-bin"}},
+                        {"on": "rejected", "end": {"outcome": "held"}}
+                     ]}
+                ]},
+                {"id": "confirm", "name": "Confirm", "steps": [
+                    {"id": "suggest-bin", "name": "Suggest a put-away bin", "kind": "agent", "role": "role_wh_receiver", "required": true,
+                     "description": "The Receiving Agent proposes the put-away bin.",
+                     "assistance": {"autonomy": "propose", "agent": "wh-agt-receiving"}},
+                    {"id": "close-po", "name": "Close the PO", "kind": "record", "role": "role_wh_receiver", "required": true,
+                     "description": "Close the PO as RECEIVED.",
+                     "writes": [{"action_type": "purchase_order.set_status", "inputs": {"status": "RECEIVED"}}]}
+                ]}
+            ]
+        }
+    })
+    .to_string()
+}
+
+const FULL_DESCRIPTION: &str = "Receive a purchase order at the Toronto warehouse: verify the delivery, record what arrived, get the Warehouse Manager's approval for a short receipt, have the Receiving Agent propose the put-away bin, and close the order as RECEIVED.";
+
+fn adopt_set_status(conn: &rusqlite::Connection, ws: &str, admin: &str) {
+    // The adopted type can only target an object the workspace has: a
+    // fresh test workspace has no purchase_order until one is created,
+    // and the adoption refuses an unknown object. Its set_fields
+    // template writes the `status` field, so that custom field must
+    // exist on the object too - the same seeding the builder tests do.
+    custom_object_service::create_with_key(
+        conn,
+        ws,
+        "purchase_order",
+        &CustomObjectDefinitionInput {
+            singular_label: "Purchase order".into(),
+            plural_label: "Purchase orders".into(),
+            icon: "▣".into(),
+            prefix: "PO".into(),
+            digits: 6,
+        },
+        Some(admin),
+    )
+    .unwrap();
+    custom_field_service::create_definition_with_key(
+        conn,
+        ws,
+        "status",
+        &CustomFieldDefinitionInput {
+            entity_type: "purchase_order".into(),
+            label: "Status".into(),
+            field_type: "text".into(),
+            options: vec![],
+            required: false,
+            show_in_list: false,
+            sort_order: 0,
+            min_value: None,
+            max_value: None,
+            max_length: None,
+            regex_pattern: None,
+            is_searchable: false,
+            is_filterable: false,
+            is_reportable: false,
+            default_value: None,
+            is_unique: false,
+            help_text: None,
+            placeholder: None,
+            is_hidden_by_default: false,
+        },
+        Some(admin),
+    )
+    .unwrap();
+    process_lane_builder::adopt_builder_action_type(
+        conn,
+        ws,
+        "purchase_order.set_status",
+        "purchase_order",
+        Some(admin),
+    )
+    .unwrap();
+}
+
+/// Covers: REQ-LANE-022 (WP-0723 AC-1)
+#[tokio::test]
+async fn ac1_full_lane_draft_is_valid_when_writes_are_adopted_and_agents_named() {
+    let (conn, ws, admin) = setup_workspace();
+    use_scripted_workspace_default(&conn, &ws, &admin);
+    adopt_set_status(&conn, &ws, &admin);
+    scripted_provider::reset();
+    scripted_provider::script_responses(vec![text_reply(&drafted_full_lane_json())]);
+
+    let lane = assistant_draft_lane_service::draft_lane(
+        &conn,
+        &ws,
+        &master_key(),
+        Some(&admin),
+        FULL_DESCRIPTION,
+        "purchase_order",
+    )
+    .await
+    .unwrap();
+
+    // AC-1: the full lane drafts validly as a first draft - one version,
+    // version 1, status draft, no compiled graph.
+    assert_eq!(lane.lane_key, "lane-draft-receive-purchase-order");
+    assert_eq!(lane.versions.len(), 1);
+    assert_eq!(lane.versions[0].version, 1);
+    assert_eq!(lane.versions[0].status, "draft");
+    assert!(lane.versions[0].graph_id.is_none());
+    let stored = parse_definition(&lane.versions[0].definition_json).unwrap();
+    let kinds: Vec<&str> = stored
+        .lane
+        .stages
+        .iter()
+        .flat_map(|s| s.steps.iter().map(|st| st.kind.as_str()))
+        .collect();
+    assert_eq!(kinds, ["form", "check", "approval", "agent", "record"]);
+    let approval = &stored.lane.stages[2].steps[0];
+    assert_eq!(approval.branches.as_ref().unwrap().len(), 2);
+    let agent = &stored.lane.stages[3].steps[0];
+    assert_eq!(
+        agent.assistance.as_ref().unwrap().agent.as_deref(),
+        Some("wh-agt-receiving")
+    );
+
+    // The model was called exactly once, with the v2 catalog prompt.
+    let captured = scripted_provider::take_captured();
+    assert_eq!(captured.len(), 1);
+    assert!(captured[0].system_prompt.contains(FULL_DESCRIPTION));
+    assert!(captured[0].options.tools_off);
+}
+
+/// Covers: REQ-LANE-022 (WP-0723 AC-1)
+#[tokio::test]
+async fn ac1_full_lane_with_a_provisional_write_is_refused_and_stores_nothing() {
+    let (conn, ws, admin) = setup_workspace();
+    use_scripted_workspace_default(&conn, &ws, &admin);
+    adopt_set_status(&conn, &ws, &admin);
+    scripted_provider::reset();
+    // The model drafts the full lane but its record step names an Action
+    // Type nobody adopted - the P-12 rule refuses the whole draft.
+    let mut reply: serde_json::Value = serde_json::from_str(&drafted_full_lane_json()).unwrap();
+    reply["lane"]["stages"][3]["steps"][1]["writes"][0]["action_type"] =
+        json!("purchase_order.close_receipt");
+    scripted_provider::script_responses(vec![text_reply(&reply.to_string())]);
+
+    let err = assistant_draft_lane_service::draft_lane(
+        &conn,
+        &ws,
+        &master_key(),
+        Some(&admin),
+        FULL_DESCRIPTION,
+        "purchase_order",
+    )
+    .await
+    .unwrap_err();
+    assert!(err.to_string().contains("purchase_order.close_receipt"));
+    assert!(err.to_string().contains("not in the adopted catalog"));
+
+    let lanes = process_lane_service::list_lanes(&conn, &ws, Some(&admin)).unwrap();
+    assert!(lanes.is_empty());
+}
+
+/// Covers: REQ-LANE-022 (WP-0723 AC-1)
+#[tokio::test]
+async fn ac1_full_lane_with_an_unnamed_agent_step_is_refused_and_stores_nothing() {
+    let (conn, ws, admin) = setup_workspace();
+    use_scripted_workspace_default(&conn, &ws, &admin);
+    adopt_set_status(&conn, &ws, &admin);
+    scripted_provider::reset();
+    // The model drafts the full lane but its agent step names no agent.
+    let mut reply: serde_json::Value = serde_json::from_str(&drafted_full_lane_json()).unwrap();
+    reply["lane"]["stages"][3]["steps"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("assistance");
+    scripted_provider::script_responses(vec![text_reply(&reply.to_string())]);
+
+    let err = assistant_draft_lane_service::draft_lane(
+        &conn,
+        &ws,
+        &master_key(),
+        Some(&admin),
+        FULL_DESCRIPTION,
+        "purchase_order",
+    )
+    .await
+    .unwrap_err();
+    assert!(err.to_string().contains("names no agent"));
+
+    let lanes = process_lane_service::list_lanes(&conn, &ws, Some(&admin)).unwrap();
+    assert!(lanes.is_empty());
 }

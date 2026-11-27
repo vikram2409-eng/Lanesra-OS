@@ -118,6 +118,25 @@ export function draftedLaneDefinition(drafted: {
   }
 }
 
+/// WP-0723 (REQ-LANE-022): the definition inside an edited lane version —
+/// the guided edit's "describe the change" path hands the WP-0723 edit
+/// back as the stored draft version, whose definition is the same
+/// `{ format_version, lane }` file shape. Returns null when the reply
+/// has no parseable definition, so the caller shows an error instead of
+/// opening an empty builder.
+export function editedLaneDefinition(version: {
+  definition_json: string;
+}): LaneDefinition | null {
+  try {
+    const file = JSON.parse(version.definition_json) as { lane?: LaneDefinition };
+    const lane = file?.lane;
+    if (!lane || typeof lane !== "object" || !lane.id || !(lane.name || "").trim()) return null;
+    return lane;
+  } catch {
+    return null;
+  }
+}
+
 export function declaredRunDataKeys(definition: LaneDefinition): string[] {
   return (definition.run_data?.fields ?? []).map((f) => f.key);
 }

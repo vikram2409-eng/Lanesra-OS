@@ -613,6 +613,22 @@ export const api = {
       { description, object_key: objectKey },
     ),
 
+  // WP-0723: the guided edit's "describe the change" path (REQ-LANE-022).
+  // Same shape as the draft wrapper: the Tauri command
+  // `edit_lane_from_description` on desktop, POST
+  // /api/admin/process-lanes/:lane_key/edits on Team Workspace. The
+  // result is the stored draft version of the same lane - a new version
+  // when the latest was published, the revised draft otherwise; this
+  // wrapper has no publish path.
+  editLaneFromDescription: (laneKey: string, description: string) =>
+    callAdminAction<ProcessLaneVersion>(
+      "edit_lane_from_description",
+      { laneKey, description },
+      "POST",
+      `/api/admin/process-lanes/${encodeURIComponent(laneKey)}/edits`,
+      { description },
+    ),
+
   // WP-0707: the lane runner (REQ-LANE-014, REQ-LANE-015). `getLaneRunView`
   // and `listLaneRunsForRecord` are sync `call`s; starting, submitting and
   // skipping a step are genuinely async (resuming the run may reach an

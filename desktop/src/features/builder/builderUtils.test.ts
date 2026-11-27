@@ -26,6 +26,7 @@ import {
   deleteStageFromDefinition,
   deleteStepFromDefinition,
   draftedLaneDefinition,
+  editedLaneDefinition,
   findStepSettingField,
   flattenSteps,
   localPublishChecks,
@@ -325,6 +326,36 @@ describe("builderUtils", () => {
             }),
           },
         ],
+      }),
+    ).toBeNull();
+  });
+
+  // WP-0723 (REQ-LANE-022, AC-2, AC-3): the edit service returns one
+  // stored draft version, not a lane with versions - the builder parses
+  // its definition_json the same `{ format_version, lane }` file shape.
+  it("editedLaneDefinition parses the revised draft version into a lane for the builder", () => {
+    const parsed = editedLaneDefinition({
+      definition_json: JSON.stringify({
+        format_version: "1.0.0",
+        lane: { ...blankLaneDefinition(), id: "lane-draft-receive", name: "Receive a purchase order", object_key: "purchase_order", version: 2 },
+      }),
+    });
+    expect(parsed?.id).toBe("lane-draft-receive");
+    expect(parsed?.object_key).toBe("purchase_order");
+    expect(parsed?.version).toBe(2);
+  });
+
+  it("editedLaneDefinition returns null when the version carries no readable definition", () => {
+    expect(editedLaneDefinition({ definition_json: "not json" })).toBeNull();
+    expect(
+      editedLaneDefinition({ definition_json: JSON.stringify({ format_version: "1.0.0" }) }),
+    ).toBeNull();
+    expect(
+      editedLaneDefinition({
+        definition_json: JSON.stringify({
+          format_version: "1.0.0",
+          lane: { ...blankLaneDefinition(), id: "", name: "   " },
+        }),
       }),
     ).toBeNull();
   });

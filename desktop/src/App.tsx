@@ -322,6 +322,9 @@ function Ready({
               setNewLaneStart({});
             }}
             onOpenRun={(runId, recordLabel) => setLaneRun({ runId, recordLabel })}
+            onOpenEditedLane={(laneKey, definition) =>
+              setBuilderLane({ laneKey, initialDefinition: definition })
+            }
           />
         )}
         {section === "admin" && <AdminPanel openAdminTab={pendingAdminTab} />}

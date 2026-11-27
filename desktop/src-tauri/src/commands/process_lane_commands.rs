@@ -286,6 +286,36 @@ pub async fn draft_lane_from_description(
     .await
 }
 
+/// WP-0723: revise an existing lane from a plain-language change
+/// description. The result is always a draft version of the same lane
+/// (see `assistant_edit_lane_service`); publishing stays a separate
+/// admin action, so this command has no publish path.
+#[tauri::command]
+pub async fn edit_lane_from_description(
+    state: State<'_, AppState>,
+    lane_key: String,
+    description: String,
+) -> AppResult<ProcessLaneVersion> {
+    let master_key = crate::commands::resolve_master_key(&state)?;
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    run_with_own_connection(db_path, move |conn| async move {
+        lanesra_core::services::assistant_edit_lane_service::edit_lane(
+            &conn,
+            &workspace_id,
+            &master_key,
+            actor.as_deref(),
+            &lane_key,
+            &description,
+        )
+        .await
+    })
+    .await
+}
+
 /// WP-0704: the current state of a lane run for a viewer - status, run data,
 /// and the current human step with its fields (record-bound values withheld
 /// when the viewer cannot read the anchor record).

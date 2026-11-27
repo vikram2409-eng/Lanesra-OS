@@ -23,6 +23,7 @@ pub mod api_object_service;
 pub mod app_service;
 pub mod approval_service;
 pub mod assistant_draft_lane_service;
+pub mod assistant_edit_lane_service;
 pub mod audit_service;
 pub mod auth_service;
 pub mod backup_service;

@@ -4,8 +4,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /**
- * Describe a process: the Admin Assistant drafts a lane (WP-0715).
- * Covers: REQ-LANE-022 (WP-0715 AC-5).
+ * Describe a process: the Admin Assistant drafts a lane (WP-0715) and
+ * revises a drafted lane by description (WP-0723).
+ * Covers: REQ-LANE-022 (WP-0715 AC-5, WP-0723 AC-5).
  *
  * The warehouse demo is a static Netlify site, not the Team Workspace
  * server the Playwright config serves — so this spec starts its own
@@ -112,4 +113,59 @@ test('AC-5: an empty description is refused and drafts nothing', async ({ page }
   await page.click('#laneDraftForm button[type="submit"]');
   await expect(page.locator('#laneDraftResult')).toContainText('Describe the process first');
   await expect(page.locator('#laneDraftList')).toContainText('No drafts yet');
+});
+
+test('AC-5: describing a change revises the draft as a new draft version', async ({ page }) => {
+  await page.goto(`${BASE}/demo/warehouse`);
+  await page.click('#laneDraftForm button[type="submit"]');
+  await expect(page.locator('#laneDraftResult')).toContainText(
+    'Drafted Receive a purchase order at the Toronto warehouse — 4 stages, 5 steps. Saved as a draft.',
+  );
+
+  // Each drafted lane carries its own "Ask Assistant to edit" form.
+  const editForm = page.locator('#laneDraftList [data-lane-edit-form]');
+  await expect(editForm).toBeVisible();
+  await editForm.locator('[data-lane-edit-input]').fill('Record the carrier name for each delivery.');
+  await editForm.locator('button[type="submit"]').click();
+  await expect(page.locator('#laneDraftResult')).toContainText(
+    'Revised Receive a purchase order at the Toronto warehouse — v2 draft, 6 steps. Saved as a draft.',
+  );
+
+  // The revision is a new draft version of the same lane - v2, still a
+  // draft, with the added step - and no publish control anywhere in
+  // the panel: a draft is never published from here.
+  const list = page.locator('#laneDraftList');
+  await expect(list).toContainText('lane-draft-receive-purchase-order-toronto');
+  await expect(list).toContainText('v2');
+  await expect(list).toContainText('6 steps');
+  await expect(list).toContainText('Record the carrier name for each delivery');
+  await expect(list).toContainText('Draft');
+  await expect(page.locator('#process-lanes')).not.toContainText('Publish');
+
+  // The revised draft opens in the blueprint view as v2 draft.
+  await page.locator('#laneDraftList [data-lane-blueprint]').click();
+  await expect(page.locator('.page-heading h2')).toHaveText(
+    'Receive a purchase order at the Toronto warehouse',
+  );
+  await expect(page.locator('.page-heading')).toContainText('v2 · draft');
+
+  // The revision survives a reload: it is stored in the demo store.
+  await page.goto(`${BASE}/demo/warehouse`);
+  await expect(page.locator('#laneDraftList')).toContainText('v2');
+  await expect(page.locator('#laneDraftList')).toContainText(
+    'Record the carrier name for each delivery',
+  );
+});
+
+test('AC-5: an empty change is refused and revises nothing', async ({ page }) => {
+  await page.goto(`${BASE}/demo/warehouse`);
+  await page.click('#laneDraftForm button[type="submit"]');
+  await expect(page.locator('#laneDraftResult')).toContainText('Saved as a draft.');
+
+  const editForm = page.locator('#laneDraftList [data-lane-edit-form]');
+  await editForm.locator('[data-lane-edit-input]').fill('   ');
+  await editForm.locator('button[type="submit"]').click();
+  await expect(page.locator('#laneDraftResult')).toContainText('Describe the change first');
+  await expect(page.locator('#laneDraftList')).toContainText('v1');
+  await expect(page.locator('#laneDraftList')).toContainText('5 steps');
 });

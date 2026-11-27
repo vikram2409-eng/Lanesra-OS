@@ -39,6 +39,7 @@ import {
   declaredRunDataKeys,
   deleteStageFromDefinition,
   deleteStepFromDefinition,
+  editedLaneDefinition,
   flattenSteps,
   localPublishChecks,
   plumbingFromLocal,
@@ -281,6 +282,35 @@ export function LaneBuilder({
   const [newFieldType, setNewFieldType] = useState("string");
   const [newFieldRequired, setNewFieldRequired] = useState(false);
   const [newFieldError, setNewFieldError] = useState<string | null>(null);
+  // WP-0723: ask the Assistant to edit this lane, from inside the
+  // builder. The revision is stored as a draft version by the service
+  // and shown here for review; saving or publishing it stays the
+  // person's action, through the buttons above.
+  const [editDescription, setEditDescription] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editMessage, setEditMessage] = useState<string | null>(null);
+
+  async function askAssistantToEdit() {
+    if (!currentLaneKey) return;
+    setEditing(true);
+    setEditError(null);
+    setEditMessage(null);
+    try {
+      const version = await api.editLaneFromDescription(currentLaneKey, editDescription);
+      const definition = editedLaneDefinition(version);
+      if (!definition) throw new Error("The Assistant's revision could not be read — try again.");
+      setDef(definition);
+      setEditMessage(
+        `Revised as draft version ${version.version} — review it here, then save or publish.`,
+      );
+      setEditDescription("");
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Editing the lane failed — try again.");
+    } finally {
+      setEditing(false);
+    }
+  }
 
   // Keep the internal key in step when the page hands us a saved lane.
   useEffect(() => {
@@ -791,6 +821,48 @@ export function LaneBuilder({
         {saveMessage && <span>{saveMessage}</span>}
         {publishMessage && <span>{publishMessage}</span>}
       </div>
+
+      {currentLaneKey && (
+        <section className="card" aria-labelledby="builder-assistant-edit-heading" style={{ marginBottom: 12 }}>
+          <h3 id="builder-assistant-edit-heading">Ask Assistant to edit</h3>
+          <p style={{ color: "var(--text-muted)" }}>
+            Describe the change in plain words and the Assistant revises this lane — the revision
+            is stored as a draft version and shown here for review. The published version is
+            untouched until you publish the draft.
+          </p>
+          <div className="field">
+            <label htmlFor="builder-assistant-edit-description">Change to make</label>
+            <textarea
+              id="builder-assistant-edit-description"
+              className="textarea"
+              rows={3}
+              value={editDescription}
+              onChange={(e) => setEditDescription(e.target.value)}
+              placeholder="Add a step where the receiver records the carrier name."
+            />
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={askAssistantToEdit}
+              disabled={editing || !editDescription.trim()}
+            >
+              {editing ? "Asking Assistant…" : "Ask Assistant to edit"}
+            </button>
+          </div>
+          {editMessage && (
+            <p role="status" style={{ color: "var(--success)" }}>
+              {editMessage}
+            </p>
+          )}
+          {editError && (
+            <p role="alert" style={{ color: "var(--danger)" }}>
+              {editError}
+            </p>
+          )}
+        </section>
+      )}
 
       {!def.object_key && (
         <section className="card" aria-labelledby="builder-object-heading" style={{ marginBottom: 12 }}>

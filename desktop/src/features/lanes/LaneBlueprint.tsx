@@ -14,6 +14,7 @@ import type {
 } from "../../lib/types";
 import { PrintOverlay } from "../../components/PrintOverlay";
 import { LaneBoardSection, MyLaneStepsSection } from "./LaneBoard";
+import { editedLaneDefinition } from "../builder/builderUtils";
 
 const STEP_KIND_LABELS: Record<string, string> = {
   form: "Form",
@@ -226,6 +227,75 @@ function StepDetail({ step, definition }: { step: LaneStep; definition: LaneDefi
 /// Viewer reads exactly what an Administrator reads. The same component
 /// renders on screen and inside PrintOverlay, so the export matches the
 /// view (WP-0712 AC-2).
+/// WP-0723 (REQ-LANE-022 AC-2, AC-3): ask the Admin Assistant to revise
+/// this lane from a change description. The Assistant stores the revision
+/// as a draft version of the same lane - a new version when the latest is
+/// published, the revised draft otherwise - and the result opens in the
+/// builder for review. The Assistant never publishes: publishing stays
+/// the person's action, from the publish checks above.
+function AssistantEditSection({
+  blueprint,
+  onOpenEditedLane,
+}: {
+  blueprint: LaneBlueprint;
+  onOpenEditedLane?: (laneKey: string, definition: LaneDefinition) => void;
+}) {
+  const [description, setDescription] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function askAssistant() {
+    setEditing(true);
+    setError(null);
+    try {
+      const version = await api.editLaneFromDescription(blueprint.lane_key, description);
+      const definition = editedLaneDefinition(version);
+      if (!definition) throw new Error("The Assistant's revision could not be read — try again.");
+      onOpenEditedLane?.(blueprint.lane_key, definition);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Editing the lane failed — try again.");
+    } finally {
+      setEditing(false);
+    }
+  }
+
+  return (
+    <section className="card" aria-labelledby="assistant-edit-heading">
+      <h3 id="assistant-edit-heading">Ask Assistant to edit</h3>
+      <p style={{ color: "var(--text-muted)" }}>
+        Describe the change in plain words and the Assistant revises this lane — the revision is
+        stored as a draft version of the same lane, and opens in the builder for review. The
+        published version is untouched until you publish the draft.
+      </p>
+      <div className="field">
+        <label htmlFor="assistant-edit-description">Change to make</label>
+        <textarea
+          id="assistant-edit-description"
+          className="textarea"
+          rows={3}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Add a step where the receiver records the carrier name."
+        />
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+        <button
+          className="btn btn-primary"
+          onClick={askAssistant}
+          disabled={editing || !description.trim()}
+        >
+          {editing ? "Asking Assistant…" : "Ask Assistant to edit"}
+        </button>
+      </div>
+      {error && (
+        <p role="alert" style={{ color: "var(--danger)" }}>
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
 export function LaneBlueprintView({ blueprint }: { blueprint: LaneBlueprint }) {
   const definition = blueprint.definition;
   const mappedFields = definition.stages.flatMap((stage) =>
@@ -885,6 +955,7 @@ export function LaneBlueprintPage({
   onOpenInBuilder,
   onNewLane,
   onOpenRun,
+  onOpenEditedLane,
 }: {
   /// WP-0718: open the selected lane (or a blank lane for "New lane")
   /// in the visual builder. Absent when the page is rendered outside
@@ -896,6 +967,12 @@ export function LaneBlueprintPage({
   onNewLane?: () => void;
   /// WP-0713: open a lane run in the runner, from the board or my steps.
   onOpenRun?: (runId: string, recordLabel: string) => void;
+  /// WP-0723: open the Assistant's revised draft in the builder, from
+  /// the "Ask Assistant to edit" section. Absent when the page is
+  /// rendered outside the app shell (existing tests render it bare) -
+  /// the edit still stores the draft version; only the open-in-builder
+  /// step needs the app.
+  onOpenEditedLane?: (laneKey: string, definition: LaneDefinition) => void;
 } = {}) {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [printing, setPrinting] = useState(false);
@@ -1005,6 +1082,7 @@ export function LaneBlueprintPage({
             <PublishChecksSection blueprint={detail.data} />
             <DryRunSection blueprint={detail.data} />
           </div>
+          <AssistantEditSection blueprint={detail.data} onOpenEditedLane={onOpenEditedLane} />
           <LaneBoardSection laneKey={selected} onOpenRun={onOpenRun} />
           {printing && (
             <PrintOverlay onClose={() => setPrinting(false)}>
