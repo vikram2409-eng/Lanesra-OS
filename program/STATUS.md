@@ -13,7 +13,7 @@
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
 | 5 · Platform and ecosystem | 42 | 0 | 0 | 0 | 0 | 42 | 0 / 140 | `░░░░░░░░░░` 0% |
 | 6 · Admin console and Experience Studio | 33 | 1 | 0 | 0 | 0 | 32 | 2 / 102 | `░░░░░░░░░░` 2% |
-| 7 · Process Lanes | 22 | 17 | 3 | 0 | 0 | 2 | 49 / 63 | `███████░░░` 78% |
+| 7 · Process Lanes | 22 | 17 | 3 | 1 | 0 | 1 | 49 / 63 | `███████░░░` 78% |
 | v2 · Open interop | 1 | 0 | 0 | 0 | 0 | 1 | 0 / 4 | `░░░░░░░░░░` 0% |
 
 ## Edition coverage
@@ -22,8 +22,8 @@ Every capability ships in each edition it applies to (REQ-PRE-015). A work packa
 
 | Edition | Work packages targeting it | Delivered | Points delivered / total |
 |---|---|---|---|
-| Desktop | 197 | 45 | 121 / 644 |
-| Team Workspace | 224 | 51 | 131 / 738 |
+| Desktop | 196 | 45 | 121 / 640 |
+| Team Workspace | 223 | 51 | 131 / 734 |
 | Online demo | 153 | 29 | 74 / 508 |
 
 Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is driven by how many AI sessions and tokens are available, so forecasts use points delivered per session (see ROADMAP.md, Forecasting), not calendar weeks.
@@ -43,6 +43,7 @@ Whichever AI you are using takes the first one that is not claimed (a `wp/WP-XXX
 | WP | Title | Phase | Estimate |
 |---|---|---|---|
 | [WP-0160](work/P1/WP-0160-agent-editor-in-eight-settings-groups.md) | Agent editor in eight settings groups | 1 | L |
+| [WP-0717](work/P7/WP-0717-three-more-warehouse-lanes-and-lane-templates.md) | Three more warehouse lanes and lane templates | 7 | L |
 
 ## Planned workload (ADR-0021)
 
@@ -350,7 +351,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0714](work/P7/WP-0714-dry-run-publish-checks-test-framework-and-solution-export.md) | Dry run, publish checks, test framework and Solution export | E7.5 Authoring | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0705, WP-0706 |
 | [WP-0715](work/P7/WP-0715-describe-a-process-the-admin-assistant-drafts-a-lane.md) | Describe a process: the Admin Assistant drafts a lane | E7.5 Authoring | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0703, WP-0712 |
 | [WP-0716](work/P7/WP-0716-child-lanes.md) | Child lanes | E7.2 Steps and rules | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0706 |
-| [WP-0717](work/P7/WP-0717-three-more-warehouse-lanes-and-lane-templates.md) | Three more warehouse lanes and lane templates | E7.6 Shipped lanes | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0707, WP-0710 |
+| [WP-0717](work/P7/WP-0717-three-more-warehouse-lanes-and-lane-templates.md) | Three more warehouse lanes and lane templates | E7.6 Shipped lanes | 🟢 ready | L | ○Online demo | WP-0707, WP-0710 |
 | [WP-0718](work/P7/WP-0718-visual-lane-builder.md) | Visual lane builder | E7.5 Authoring | ✅ done | L | ✓Desktop ✓Team Workspace ✓Online demo | WP-0712, WP-0714 |
 | [WP-0719](work/P7/WP-0719-count-and-replenish-lanes-as-definitions-with-an-authoring-log.md) | Count and Replenish lanes as definitions, with an authoring log | E7.6 Shipped lanes | ✅ done | S | — | WP-0701 |
 | [WP-0720](work/P7/WP-0720-lane-runner-second-cut-approvals-branches-pause-and-handoff.md) | Lane runner, second cut: approvals, branches, pause and handoff | E7.3 Runner and visibility | 🔨 in progress | M | ○Desktop ○Team Workspace ○Online demo | WP-0707, WP-0706 |
