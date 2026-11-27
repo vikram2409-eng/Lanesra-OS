@@ -13,7 +13,7 @@
 | 4 · Enterprise scale | 22 | 0 | 0 | 0 | 0 | 22 | 0 / 93 | `░░░░░░░░░░` 0% |
 | 5 · Platform and ecosystem | 42 | 0 | 0 | 0 | 0 | 42 | 0 / 140 | `░░░░░░░░░░` 0% |
 | 6 · Admin console and Experience Studio | 33 | 1 | 0 | 0 | 0 | 32 | 2 / 102 | `░░░░░░░░░░` 2% |
-| 7 · Process Lanes | 24 | 18 | 3 | 1 | 0 | 2 | 51 / 69 | `███████░░░` 74% |
+| 7 · Process Lanes | 24 | 18 | 4 | 1 | 0 | 1 | 51 / 69 | `███████░░░` 74% |
 | v2 · Open interop | 1 | 0 | 0 | 0 | 0 | 1 | 0 / 4 | `░░░░░░░░░░` 0% |
 
 ## Edition coverage
@@ -35,6 +35,7 @@ Progress is weighted by estimate points (S=1, M=2, L=4, XL=8). The timeline is d
 | [WP-0708](work/P7/WP-0708-agent-steps-assistance-and-autonomy-level-per-step.md) | Agent steps, assistance and autonomy level per step | in_review | claude | `wp/WP-0708-agent-steps-assistance-autonomy` | https://github.com/vikram2409-eng/Lanesra-OS/pull/799 |
 | [WP-0709](work/P7/WP-0709-lanes-and-workflows-declared-replacement-and-starting-a-lane.md) | Lanes and workflows: declared replacement, and starting a lane from a workflow | in_review | claude | `wp/WP-0709-lanes-workflows-interplay` | 792 |
 | [WP-0720](work/P7/WP-0720-lane-runner-second-cut-approvals-branches-pause-and-handoff.md) | Lane runner, second cut: approvals, branches, pause and handoff | in_progress | claude | `wp/WP-0720-runner-second-cut-engine` | https://github.com/vikram2409-eng/Lanesra-OS/pull/807 |
+| [WP-0723](work/P7/WP-0723-assistant-creates-and-edits-lanes.md) | Admin Assistant creates and edits lanes | in_progress | muse | `wp/WP-0723-assistant-create-edit-lanes` | - |
 
 ## Ready to start (all dependencies done)
 
@@ -357,7 +358,7 @@ A planned lane is the default AI for a work package, not a lock: any agent may t
 | [WP-0720](work/P7/WP-0720-lane-runner-second-cut-approvals-branches-pause-and-handoff.md) | Lane runner, second cut: approvals, branches, pause and handoff | E7.3 Runner and visibility | 🔨 in progress | M | ○Desktop ○Team Workspace ○Online demo | WP-0707, WP-0706 |
 | [WP-0721](work/P7/WP-0721-blueprint-view-redesign-visual-process-map.md) | Blueprint view redesign: a visual, modern process map of states and steps | E7.5 Authoring | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0712 |
 | [WP-0722](work/P7/WP-0722-easy-lane-creation.md) | Easy lane creation: object-first entry and guided start | E7.5 Authoring | ✅ done | M | ✓Desktop ✓Team Workspace ✓Online demo | WP-0718 |
-| [WP-0723](work/P7/WP-0723-assistant-creates-and-edits-lanes.md) | Admin Assistant creates and edits lanes | E7.5 Authoring | ⚪ proposed | L | ○Desktop ○Team Workspace ○Online demo | WP-0715, WP-0718 |
+| [WP-0723](work/P7/WP-0723-assistant-creates-and-edits-lanes.md) | Admin Assistant creates and edits lanes | E7.5 Authoring | 🔨 in progress | L | ○Desktop ○Team Workspace ○Online demo | WP-0715, WP-0718 |
 | [WP-0799](work/P7/WP-0799-phase-7-gate-process-lanes-ready.md) | Phase 7 gate: Process Lanes ready | E7.7 Track gate | ⚪ proposed | M | — | WP-0708, WP-0709, WP-0713, WP-0714, WP-0717, WP-0720 |
 
 ## Phase v2 · Open interop

@@ -3,9 +3,10 @@ id: WP-0723
 title: Admin Assistant creates and edits lanes
 phase: 7
 epic: E7.5 Authoring
-status: proposed
+status: in_progress
 owner: muse
 planned_for: muse
+branch: wp/WP-0723-assistant-create-edit-lanes
 depends_on: [WP-0715, WP-0718]
 requirements: [REQ-LANE-022]
 estimate: L
@@ -82,3 +83,4 @@ the work gets faster."
 
 <!-- Append dated entries: YYYY-MM-DD agent: what changed, what is next. Newest last. This is the handoff point for the next agent. -->
 - 2026-11-27 muse: Tracker file added on the WP-0722 branch (proposed, not built). Next: build after WP-0722 merges.
+- 2026-11-27 muse: Claimed on wp/WP-0723-assistant-create-edit-lanes (main a854eec, WP-0722 merged). Baseline validate clean (260 WPs, 352 reqs). Plan: draft-lane v2 (full lane: record/approval/agent steps, adopted Action Types only) + new assistant/edit-lane v1 + assistant_edit_lane_service (new draft version, never publish) + Tauri/server/API wiring + Blueprint + builder UI + demo parity + docs. Next: core services + prompts, then tests.
