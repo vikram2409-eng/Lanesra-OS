@@ -29,6 +29,7 @@ Show the feature is general, and give admins lanes to start from.
 - Build the remaining warehouse lanes as a **showcase on the online demo** (`app.js` / the warehouse demo): Pick and Pack (sales order), Count (cycle count) and Replenish (reorder rule), alongside Receive Shipment (already shipped in the demo, WP-0702). Each is presented as an installable/editable lane in the demo so a viewer sees the platform's own template + authoring blocks being used to assemble a real vertical app.
 - The warehouse is a **demo only** (see `editions_reason`). The reusable building blocks (Process Lanes, Blueprint, runner, authoring/visual builder, template mechanism) are the product and already ship in desktop + Team Workspace; do **not** add warehouse-specific lanes or objects to the product editions.
 - Reuse existing definitions: Count/Replenish from WP-0719 (`program/spec/schemas/examples/lane-wh-count.json`, `lane-wh-replenish.json`); Receive Shipment from the demo definition. Only Pick and Pack is genuinely new.
+- **Position the warehouse as the reference _industry accelerator_**: package the assembled warehouse (its lanes, templates, objects and sample data) as an installable **solution pack** on top of the Solution export building block (WP-0714), so the story is "this whole vertical app was built on the platform and can be installed in one step." The warehouse is the first of a family of accelerators — property management, recruitment, etc. are siblings built the same way — so keep the packaging generic (nothing warehouse-specific in the mechanism; the mechanism is the product, the accelerator is content).
 
 ## Acceptance criteria
 
@@ -49,6 +50,7 @@ Show the feature is general, and give admins lanes to start from.
 
 - ADR-0023; design in SOLUTION-DESIGN.md section 17 (Process Lanes). ADR-0025 (demo lane / freeze lineage).
 - REQ-LANE-025 is already demo-framed ("Receive Shipment on the warehouse demo ... Pick and Pack, Count and Replenish, each also offered as a lane template"), so this scope matches the requirement as written; no requirement change needed.
+- Industry accelerators (owner direction 2026-11-27): the warehouse accelerator here is the reference exemplar of a product pattern — installable vertical solution packs (property, recruitment, …) assembled from the platform's own building blocks and shipped via Solution export (WP-0714). Building out further accelerators as a tracked line of work is a separate backlog item (to be filed); this WP only has to prove the pattern with the warehouse.
 
 ## Progress log
 
