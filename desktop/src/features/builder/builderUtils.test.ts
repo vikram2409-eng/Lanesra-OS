@@ -25,6 +25,7 @@ import {
   defaultBranchFor,
   deleteStageFromDefinition,
   deleteStepFromDefinition,
+  draftedLaneDefinition,
   findStepSettingField,
   flattenSteps,
   localPublishChecks,
@@ -281,5 +282,50 @@ describe("builderUtils", () => {
     expect(CONDITION_OPERATORS).toContain("is_not_empty");
     expect(CONDITION_OPERATORS).toContain("on_or_after");
     expect(CONDITION_OPERATORS).toHaveLength(9);
+  });
+
+  // WP-0722 (REQ-LANE-024, AC-2): the guided start's "describe it" path
+  // hands the WP-0715 draft to the builder. The draft arrives as a stored
+  // lane whose first version carries the definition as the
+  // `{ format_version, lane }` file shape.
+  it("draftedLaneDefinition parses the draft's first version into a lane for the builder", () => {
+    const parsed = draftedLaneDefinition({
+      lane_key: "lane-draft-receive",
+      versions: [
+        {
+          definition_json: JSON.stringify({
+            format_version: "1.0.0",
+            lane: { ...blankLaneDefinition(), id: "lane-draft-receive", name: "Receive a purchase order", object_key: "purchase_order" },
+          }),
+        },
+      ],
+    });
+    expect(parsed?.laneKey).toBe("lane-draft-receive");
+    expect(parsed?.definition.id).toBe("lane-draft-receive");
+    expect(parsed?.definition.object_key).toBe("purchase_order");
+  });
+
+  it("draftedLaneDefinition returns null when the draft carries no readable definition", () => {
+    expect(draftedLaneDefinition({ lane_key: "lane-x", versions: [] })).toBeNull();
+    expect(draftedLaneDefinition({ lane_key: "lane-x", versions: [{ definition_json: "not json" }] })).toBeNull();
+    expect(
+      draftedLaneDefinition({
+        lane_key: "lane-x",
+        versions: [{ definition_json: JSON.stringify({ format_version: "1.0.0" }) }],
+      }),
+    ).toBeNull();
+    expect(
+      draftedLaneDefinition({
+        lane_key: "lane-x",
+        versions: [
+          {
+            definition_json: JSON.stringify({
+              format_version: "1.0.0",
+              lane: { ...blankLaneDefinition(), id: "", name: "   " },
+            }),
+          },
+        ],
+      }),
+    ).toBeNull();
   });
 });

@@ -5,7 +5,11 @@
  * AC-4: desktop and Team Workspace behave the same from the same code.
  * Every builder wrapper goes through the shared dual-transport `call<T>`
  * in lib/api.ts — no transport-specific branches anywhere in the builder
- * surface. In jsdom there is no Tauri bridge, so `call` takes the HTTP
+ * surface — except `draftLaneFromDescription` (WP-0722): the WP-0715
+ * draft is genuinely async, so like the other async admin actions it
+ * goes through `callAdminAction` with its own HTTP route
+ * (`/api/admin/process-lanes/drafts`) instead of the uniform
+ * `/api/invoke/<command>` dispatcher. In jsdom there is no Tauri bridge, so `call` takes the HTTP
  * path; these tests assert the exact command name and arguments that
  * path sends to `/api/invoke/<command>`, which is the same command the
  * Tauri path invokes. The Tauri commands / server arms
@@ -119,5 +123,26 @@ describe("builder api wrappers", () => {
     await api.builderActionTypes();
     const url = String(fetchMock.mock.calls[0][0]);
     expect(url).toBe("/api/invoke/builder_action_types");
+  });
+
+  // WP-0722 (REQ-LANE-024, AC-2): the guided start's "describe it" path.
+  // The draft is genuinely async, so — like the other async admin
+  // actions (test_ai_key and friends) — it has its own HTTP route
+  // instead of the /api/invoke dispatcher: POST
+  // /api/admin/process-lanes/drafts (server/src/admin_actions.rs), with
+  // the route's snake_case body, while the Tauri command takes the
+  // camelCase args (Tauri v2 command convention). The result is always
+  // a draft; the wrapper has no publish path.
+  it("draftLaneFromDescription posts the description and object to the drafts route", async () => {
+    const fetchMock = mockFetchOnce({ lane_key: "lane-draft-receive", versions: [] });
+    await api.draftLaneFromDescription("Receive a purchase order.", "purchase_order");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/admin/process-lanes/drafts",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(lastBody(fetchMock)).toEqual({
+      description: "Receive a purchase order.",
+      object_key: "purchase_order",
+    });
   });
 });
