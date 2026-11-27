@@ -1,7 +1,7 @@
 ---
 id: assistant/draft-lane
 version: 1
-status: active
+status: retired
 work_package: WP-0715
 variables:
   description: { type: text, required: true }

@@ -103,6 +103,10 @@ pub fn router() -> Router<SharedState> {
             post(draft_process_lane_admin),
         )
         .route(
+            "/api/admin/process-lanes/:lane_key/edits",
+            post(edit_process_lane_admin),
+        )
+        .route(
             "/api/admin/process-lane-runs/:id/submit-step",
             post(submit_process_lane_step_admin),
         )
@@ -525,6 +529,41 @@ async fn draft_process_lane_admin(
     Ok(Json(
         json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
     ))
+}
+
+/// WP-0723: revises an existing lane from a plain-language change
+/// description (the async half of the edit operation; the desktop Tauri
+/// command `edit_lane_from_description` calls the same service). The
+/// result is always a draft version of the same lane - this route has no
+/// publish path, same as the command.
+async fn edit_process_lane_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(lane_key): Path<String>,
+    Json(body): Json<EditProcessLaneBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        lanesra_core::services::assistant_edit_lane_service::edit_lane(
+            &conn,
+            &workspace_id,
+            &master_key,
+            Some(&actor),
+            &lane_key,
+            &body.description,
+        )
+        .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+#[derive(Debug, Deserialize)]
+struct EditProcessLaneBody {
+    description: String,
 }
 
 /// WP-0703: starts a lane run on an anchor record (the async half of the
