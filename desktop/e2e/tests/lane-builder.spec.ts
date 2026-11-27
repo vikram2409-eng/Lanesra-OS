@@ -277,6 +277,26 @@ async function openBuilder(page: Page) {
   await expect(page.getByRole('heading', { name: 'Canvas' })).toBeVisible();
 }
 
+// WP-0722: "New lane" now opens the guided start (name, object, blank /
+// describe / template) instead of landing straight in the builder. Blank
+// is the default start point; name and object are set in the dialog when
+// given, then "Create lane" opens the builder with those choices applied.
+async function openNewLaneBlank(page: Page, opts: { name?: string; objectKey?: string } = {}) {
+  await page.getByRole('button', { name: 'Process Lanes' }).click();
+  await expect(page.getByRole('heading', { name: 'Process Lanes' })).toBeVisible();
+  await page.getByRole('button', { name: 'New lane', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Create lane' })).toBeVisible();
+  if (opts.objectKey) await page.getByLabel('Lane object').selectOption(opts.objectKey);
+  if (opts.name) await page.getByLabel('Lane name').fill(opts.name);
+  await page.getByRole('button', { name: 'Create lane' }).click();
+  // The guided start hands the builder a definition, so LaneBuilderPage's
+  // "New lane" h2 (which only renders for the no-definition path) does not
+  // appear — the builder's heading is the lane's name instead ("Untitled
+  // lane" when no name was typed).
+  await expect(page.getByRole('heading', { name: opts.name ?? 'Untitled lane' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Canvas' })).toBeVisible();
+}
+
 test('AC-1/AC-2: the builder loads the lane, shows live publish checks, and Publish is disabled naming P-09', async ({ page }) => {
   await loginAsAdmin(page);
   await openBuilder(page);
@@ -358,27 +378,17 @@ test('AC-2: adding the missing fail branch turns the checks green and enables Pu
 
 test('New lane starts from a blank definition', async ({ page }) => {
   await loginAsAdmin(page);
-  await page.getByRole('button', { name: 'Process Lanes' }).click();
-  await expect(page.getByRole('heading', { name: 'Process Lanes' })).toBeVisible();
-  await page.getByRole('button', { name: 'New lane', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'New lane' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Canvas' })).toBeVisible();
+  await openNewLaneBlank(page);
   await expect(page.getByRole('button', { name: /Stage 1: Stage 1/ })).toBeVisible();
 });
 
 test('gaps batch: from-scratch lane end to end — object, five kinds, nested condition, branch, run-data write, fixtures, save, reload, publish', { timeout: 120_000 }, async ({ page }) => {
   await loginAsAdmin(page);
-  await page.getByRole('button', { name: 'Process Lanes' }).click();
-  await expect(page.getByRole('heading', { name: 'Process Lanes' })).toBeVisible();
-  await page.getByRole('button', { name: 'New lane', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'New lane' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Canvas' })).toBeVisible();
 
   const laneName = `Builder From Scratch ${Date.now().toString(36)}`;
 
-  // Gap 6: the blank lane gets its object from the picker.
-  await page.getByLabel('Lane object').selectOption(objectKey);
-  await page.getByLabel('Lane name').fill(laneName);
+  // Gap 6: the blank lane gets its object (and name) from the guided start.
+  await openNewLaneBlank(page, { name: laneName, objectKey });
 
   // Gap 1: declare the run-data field the write will use.
   await page.getByLabel('New run-data field key').fill('carrier');
