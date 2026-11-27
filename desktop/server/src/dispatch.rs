@@ -3407,6 +3407,30 @@ pub fn dispatch(
                 &record_id,
             )?)
         }
+        // WP-0720 (REQ-LANE-009, AC-2): pause and resume are sync status
+        // transitions, so they ride the generic dispatcher like the other
+        // sync lane commands; reopen is async and has its own admin route
+        // (admin_actions.rs), like submit/skip.
+        "pause_process_lane_run" => {
+            let run_id: String = arg(args, "runId")?;
+            let reason: Option<String> = arg(args, "reason")?;
+            to_value(process_lane_service::pause_run(
+                conn,
+                &require_workspace_id(conn)?,
+                &run_id,
+                reason.as_deref(),
+                actor,
+            )?)
+        }
+        "resume_process_lane_run" => {
+            let run_id: String = arg(args, "runId")?;
+            to_value(process_lane_service::resume_paused_run(
+                conn,
+                &require_workspace_id(conn)?,
+                &run_id,
+                actor,
+            )?)
+        }
         "get_graph_run" => {
             let id: String = arg(args, "id")?;
             to_value(graph_runtime_service::get_run(

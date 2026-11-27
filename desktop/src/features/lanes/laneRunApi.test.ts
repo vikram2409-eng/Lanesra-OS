@@ -167,4 +167,70 @@ describe("lane-run api wrappers (HTTP transport)", () => {
     expect(calls[0].init?.method).toBe("POST");
     expect(bodyOf(calls[0])).toEqual({ to_user_id: "user-casey", reason: "Casey is on shift" });
   });
+
+  it("pauseLaneRun reads through the sync pause_process_lane_run command", async () => {
+    // Covers: REQ-LANE-009 (WP-0720 AC-2)
+    const { calls, fetchMock } = mockFetch();
+    fetchMock.nextData = { id: "run-1", status: "paused" };
+    const run = await api.pauseLaneRun("run-1", "Waiting for the manager");
+    expect(run).toEqual({ id: "run-1", status: "paused" });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/invoke/pause_process_lane_run");
+    expect(bodyOf(calls[0])).toEqual({ runId: "run-1", reason: "Waiting for the manager" });
+  });
+
+  it("resumeLaneRun reads through the sync resume_process_lane_run command", async () => {
+    // Covers: REQ-LANE-009 (WP-0720 AC-2)
+    const { calls, fetchMock } = mockFetch();
+    fetchMock.nextData = { id: "run-1", status: "waiting_person" };
+    const run = await api.resumeLaneRun("run-1");
+    expect(run).toEqual({ id: "run-1", status: "waiting_person" });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/invoke/resume_process_lane_run");
+    expect(bodyOf(calls[0])).toEqual({ runId: "run-1" });
+  });
+
+  it("reopenLaneStep posts the step and reason to the async admin route", async () => {
+    // Covers: REQ-LANE-009 (WP-0720 AC-2)
+    const { calls, fetchMock } = mockFetch();
+    fetchMock.nextData = { id: "run-1", status: "waiting_person" };
+    await api.reopenLaneStep("run-1", "confirm-arrival", "Wrong carrier entered");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/admin/process-lane-runs/run-1/reopen-step");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(bodyOf(calls[0])).toEqual({ step_id: "confirm-arrival", reason: "Wrong carrier entered" });
+  });
+
+  it("resolveLaneApproval posts the decision to the async admin route", async () => {
+    // Covers: REQ-LANE-012 (WP-0720 AC-1)
+    const { calls, fetchMock } = mockFetch();
+    fetchMock.nextData = { id: "run-1", status: "waiting_person" };
+    await api.resolveLaneApproval("run-1", true, "Quantities check out");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/admin/process-lane-runs/run-1/resolve-approval");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(bodyOf(calls[0])).toEqual({ approve: true, notes: "Quantities check out" });
+  });
+
+  it("cancelLaneRun posts the reason to the async admin route", async () => {
+    // Covers: REQ-LANE-009 (WP-0720 AC-2)
+    const { calls, fetchMock } = mockFetch();
+    fetchMock.nextData = { id: "run-1", status: "cancelled" };
+    await api.cancelLaneRun("run-1", "Supplier never delivered");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/admin/process-lane-runs/run-1/cancel");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(bodyOf(calls[0])).toEqual({ reason: "Supplier never delivered", cancel_child: false });
+  });
+
+  it("handoffLaneStep posts the role and reason to the async admin route", async () => {
+    // Covers: REQ-LANE-009 (WP-0720 AC-2)
+    const { calls, fetchMock } = mockFetch();
+    fetchMock.nextData = { id: "run-1", status: "waiting_person" };
+    await api.handoffLaneStep("run-1", "role_wh_warehouse_manager", "Manager needs to take it");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/admin/process-lane-runs/run-1/handoff");
+    expect(calls[0].init?.method).toBe("POST");
+    expect(bodyOf(calls[0])).toEqual({ to_role: "role_wh_warehouse_manager", reason: "Manager needs to take it" });
+  });
 });

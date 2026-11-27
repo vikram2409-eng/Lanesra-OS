@@ -4984,6 +4984,15 @@ export interface LaneRunWaiting {
   kind: string;
 }
 
+/// The child lane a parent run waits on (WP-0716, REQ-LANE-023): mirrors
+/// core::services::process_lane_service::LaneChildView.
+export interface LaneChildView {
+  child_run_id: string;
+  lane_id?: string | null;
+  stage?: string | null;
+  status: string;
+}
+
 /// One field of the current human step as a viewer sees it (WP-0704,
 /// REQ-LANE-011). `type` is the field type ("text" | "number" | "date" |
 /// "boolean" | "textarea" | ...). A record-bound field the viewer cannot
@@ -5076,6 +5085,8 @@ export interface LaneRunView {
   /** Plain words for what this run has written so far, in order. */
   writes?: string[] | null;
   waiting?: LaneRunWaiting | null;
+  /** The child lane a parent run waits on (WP-0716), mirrored from core. */
+  child?: LaneChildView | null;
   /** Notes added to the run at any point (WP-0711 AC-1). */
   notes?: LaneRunNoteView[] | null;
   /** Files attached to the run at any point (WP-0711 AC-1, AC-3). */

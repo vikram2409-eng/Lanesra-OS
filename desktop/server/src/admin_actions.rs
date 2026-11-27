@@ -119,6 +119,10 @@ pub fn router() -> Router<SharedState> {
             post(skip_process_lane_step_admin),
         )
         .route(
+            "/api/admin/process-lane-runs/:id/reopen-step",
+            post(reopen_process_lane_step_admin),
+        )
+        .route(
             "/api/admin/process-lane-runs/:id/resolve-approval",
             post(resolve_process_lane_approval_admin),
         )
@@ -717,6 +721,43 @@ async fn skip_process_lane_step_admin(
             &master_key,
             &id,
             &body.reason,
+            Some(&actor),
+        )
+        .await
+    })
+    .await?;
+    Ok(Json(
+        json!({"ok": true, "data": to_value(data).map_err(app_err)?}),
+    ))
+}
+
+/// WP-0720 (REQ-LANE-009, AC-2): reopens an earlier completed step in the
+/// run's current stage. Async like skip, because resuming the run at the
+/// step may reach an Agent node.
+#[derive(Debug, Deserialize)]
+struct ReopenProcessLaneStepBody {
+    #[serde(default)]
+    step_id: String,
+    #[serde(default)]
+    reason: Option<String>,
+}
+
+async fn reopen_process_lane_step_admin(
+    State(state): State<SharedState>,
+    jar: CookieJar,
+    Path(id): Path<String>,
+    Json(body): Json<ReopenProcessLaneStepBody>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let (workspace_id, actor, master_key) = authorize(&state, &jar)?;
+    let db_path = state.db_path.clone();
+    let data = run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::reopen_step(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &id,
+            &body.step_id,
+            body.reason.as_deref(),
             Some(&actor),
         )
         .await

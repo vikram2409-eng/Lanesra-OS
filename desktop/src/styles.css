@@ -2489,39 +2489,139 @@ tr:hover td {
    for the current stage, the current step's work, and the anchor-record /
    written / audit rail. The same parts stack to one column at phone width
    (the 900px pattern used elsewhere in this file). */
+/* WP-0720 AC-3/AC-4: the runner's stage map as swim lanes, matching the
+   online demo runner - every stage is a column that carries its own
+   steps. The layout below the lanes is two columns (main + side), like
+   the demo's .lane-layout; on a phone the lanes stack and the columns
+   collapse to one. A branch stage (reached only by a branch, never by
+   the straight path) gets a dashed border and a Branch badge. */
 .lane-runner-layout {
   display: grid;
-  grid-template-columns: 260px 1fr 320px;
+  grid-template-columns: 1fr 320px;
   gap: 16px;
   align-items: start;
 }
-.lane-stage-bar {
+.lane-swimlanes {
   display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-items: center;
-  list-style: none;
-  margin: 12px 0 16px;
-  padding: 0;
+  gap: 16px;
+  align-items: stretch;
+  overflow-x: auto;
+  margin: 12px 0 10px;
+  padding: 2px 2px 12px;
 }
-.lane-stage {
+.lane-swim {
+  flex: 0 0 clamp(230px, 22vw, 290px);
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 10px;
-  font-size: 13px;
+  border-radius: 12px;
   background: var(--bg-elevated);
+  min-width: 0;
 }
-.lane-stage.done {
-  color: var(--text-muted);
+.lane-swim-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px 10px;
+  border-bottom: 1px solid var(--border);
 }
-.lane-stage.current {
-  border-color: var(--accent);
-  font-weight: 600;
+.lane-swim-name {
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
 }
-.lane-runner-steps {
+.lane-stage-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.lane-swim-steps {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding: 9px;
+}
+.lane-swim-empty {
+  margin: 4px 2px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.lane-swim.current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.lane-swim.current .lane-stage-num {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+.lane-swim.done .lane-swim-name {
+  color: var(--success);
+}
+.lane-swim.done .lane-stage-num {
+  border-color: var(--success);
+  color: var(--success);
+}
+.lane-swim.skipped {
+  border-style: dashed;
+}
+.lane-swim.skipped .lane-swim-head {
+  opacity: 0.75;
+}
+.lane-swim.branch {
+  border-style: dashed;
+  border-color: var(--warning);
+}
+.lane-swim.branch .lane-swim-head .badge {
+  border-color: var(--warning);
+  color: var(--warning);
+}
+.lane-swim .lane-step {
+  padding: 8px 10px;
+}
+.lane-swim .lane-step.locked {
+  opacity: 0.85;
+}
+.lane-step.viewing {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.lane-step-kind {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.lane-swim-note {
+  margin: 0 0 18px;
+  font-size: 12.5px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+.lane-swim-key {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .lane-swimlanes {
+    flex-direction: column;
+    overflow-x: visible;
+  }
+  .lane-swim {
+    flex: 1 1 auto;
+    width: 100%;
+  }
 }
 .lane-step {
   display: flex;

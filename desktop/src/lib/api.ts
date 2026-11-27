@@ -674,6 +674,47 @@ export const api = {
       `/api/admin/process-lane-runs/${encodeURIComponent(runId)}/skip-step`,
       { reason },
     ),
+  // WP-0720: the runner's second-cut actions (REQ-LANE-009, REQ-LANE-012).
+  // Pause and resume are sync status transitions, so they ride the generic
+  // `call` dispatcher like the run view; reopen is async like submit/skip,
+  // so it goes through `callAdminAction`. Resolve, cancel and handoff
+  // already had Tauri commands and admin routes (WP-0706); only the
+  // wrappers were missing, because no screen called them yet.
+  pauseLaneRun: (runId: string, reason?: string | null) =>
+    call<GraphRun>("pause_process_lane_run", { runId, reason: reason ?? null }),
+  resumeLaneRun: (runId: string) => call<GraphRun>("resume_process_lane_run", { runId }),
+  reopenLaneStep: (runId: string, stepId: string, reason?: string | null) =>
+    callAdminAction<GraphRun>(
+      "reopen_process_lane_step",
+      { runId, stepId, reason: reason ?? null },
+      "POST",
+      `/api/admin/process-lane-runs/${encodeURIComponent(runId)}/reopen-step`,
+      { step_id: stepId, reason: reason ?? null },
+    ),
+  resolveLaneApproval: (runId: string, approve: boolean, notes?: string | null) =>
+    callAdminAction<GraphRun>(
+      "resolve_process_lane_approval",
+      { runId, approve, notes: notes ?? null },
+      "POST",
+      `/api/admin/process-lane-runs/${encodeURIComponent(runId)}/resolve-approval`,
+      { approve, notes: notes ?? null },
+    ),
+  cancelLaneRun: (runId: string, reason: string, cancelChild = false) =>
+    callAdminAction<GraphRun>(
+      "cancel_process_lane_run",
+      { runId, reason, cancelChild },
+      "POST",
+      `/api/admin/process-lane-runs/${encodeURIComponent(runId)}/cancel`,
+      { reason, cancel_child: cancelChild },
+    ),
+  handoffLaneStep: (runId: string, toRole: string, reason: string) =>
+    callAdminAction<GraphRun>(
+      "handoff_process_lane_step",
+      { runId, toRole, reason },
+      "POST",
+      `/api/admin/process-lane-runs/${encodeURIComponent(runId)}/handoff`,
+      { to_role: toRole, reason },
+    ),
   // WP-0711: notes, attachments and reassign at any point of a run.
   // Notes and reassign are JSON admin actions, like submit/skip above.
   // Attachments carry base64 content through the same JSON route - the
