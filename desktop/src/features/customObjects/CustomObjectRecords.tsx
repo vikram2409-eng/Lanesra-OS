@@ -72,12 +72,15 @@ export function CustomObjectRecords({
   prefill,
   onPrefillConsumed,
   onOpenLaneRun,
+  onNewLane,
 }: {
   definition: CustomObjectDefinition;
   prefill?: Prefill | null;
   onPrefillConsumed?: () => void;
   /** Opens the lane runner for a run (WP-0707 entry point). */
   onOpenLaneRun?: (runId: string, recordLabel: string) => void;
+  /** WP-0722: opens the guided start for a new lane on this object. */
+  onNewLane?: (objectKey: string) => void;
 }) {
   const [view, setView] = useState<View>(() => (prefill?.openId ? { mode: "edit", id: prefill.openId } : { mode: "list" }));
   const [previewId, setPreviewId] = useState<string | null>(null);
@@ -164,13 +167,20 @@ export function CustomObjectRecords({
             {definition.icon} {definition.plural_label}
           </h1>
         </div>
-        <Button
-          onClick={() => setView({ mode: "create" })}
-          disabled={!canWrite}
-          title={canWrite ? undefined : `You have view-only access to ${definition.plural_label} through an app`}
-        >
-          + New {definition.singular_label.toLowerCase()}
-        </Button>
+        <div style={{ display: "flex", gap: 8 }}>
+          {onNewLane && (
+            <Button variant="secondary" onClick={() => onNewLane(definition.key)}>
+              New lane
+            </Button>
+          )}
+          <Button
+            onClick={() => setView({ mode: "create" })}
+            disabled={!canWrite}
+            title={canWrite ? undefined : `You have view-only access to ${definition.plural_label} through an app`}
+          >
+            + New {definition.singular_label.toLowerCase()}
+          </Button>
+        </div>
       </div>
       <SavedViewBar
         views={views}

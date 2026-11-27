@@ -96,6 +96,28 @@ export function blankLaneDefinition(): LaneDefinition {
   };
 }
 
+/// WP-0722 (REQ-LANE-024): the definition inside a drafted lane — the
+/// guided start's "describe it" path hands the WP-0715 draft to the
+/// builder, and the draft arrives as a stored lane whose first version
+/// carries the definition as the `{ format_version, lane }` file shape.
+/// Returns null when the reply has no parseable definition, so the
+/// caller shows an error instead of opening an empty builder.
+export function draftedLaneDefinition(drafted: {
+  lane_key: string;
+  versions?: { definition_json: string }[] | null;
+}): { laneKey: string; definition: LaneDefinition } | null {
+  const raw = drafted.versions?.[0]?.definition_json;
+  if (!raw) return null;
+  try {
+    const file = JSON.parse(raw) as { lane?: LaneDefinition };
+    const lane = file?.lane;
+    if (!lane || typeof lane !== "object" || !lane.id || !(lane.name || "").trim()) return null;
+    return { laneKey: drafted.lane_key, definition: lane };
+  } catch {
+    return null;
+  }
+}
+
 export function declaredRunDataKeys(definition: LaneDefinition): string[] {
   return (definition.run_data?.fields ?? []).map((f) => f.key);
 }

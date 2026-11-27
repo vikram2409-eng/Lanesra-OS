@@ -5217,6 +5217,21 @@ export interface ProcessLaneVersion {
 }
 
 /**
+ * What `draft_lane_from_description` returns (WP-0715, WP-0722): the stored
+ * lane the Assistant drafted, always a draft, with its first version's
+ * definition in `versions[0].definition_json` (the `{ format_version,
+ * lane }` file shape). See `draftedLaneDefinition` in
+ * features/builder/builderUtils.ts for the parse.
+ */
+export interface DraftedProcessLane {
+  id: string;
+  lane_key: string;
+  name: string;
+  object_key: string;
+  versions: ProcessLaneVersion[];
+}
+
+/**
  * What the author supplies for a dry run: the values a person would
  * type (run-data fields), per-child values keyed by child record id
  * then field name (`per_child[child_id][field]`), and the approval

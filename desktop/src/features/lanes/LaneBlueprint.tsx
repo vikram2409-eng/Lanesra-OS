@@ -883,12 +883,17 @@ function DryRunSection({ blueprint }: { blueprint: LaneBlueprint }) {
 /// - the print export stays the definition only (WP-0712 AC-2).
 export function LaneBlueprintPage({
   onOpenInBuilder,
+  onNewLane,
   onOpenRun,
 }: {
   /// WP-0718: open the selected lane (or a blank lane for "New lane")
   /// in the visual builder. Absent when the page is rendered outside
   /// the app shell (existing tests render it bare).
   onOpenInBuilder?: (laneKey: string | null) => void;
+  /// WP-0722: open the guided start for a new lane (name, object,
+  /// blank / describe / template). When absent, "New lane" falls back
+  /// to opening a blank lane in the builder directly.
+  onNewLane?: () => void;
   /// WP-0713: open a lane run in the runner, from the board or my steps.
   onOpenRun?: (runId: string, recordLabel: string) => void;
 } = {}) {
@@ -921,7 +926,20 @@ export function LaneBlueprintPage({
       {list.isLoading && <p>Loading lanes…</p>}
       {list.error && <p>Could not load lanes: {(list.error as Error).message}</p>}
       {list.data && list.data.length === 0 && (
-        <p>No lanes yet. Import a lane definition to see its blueprint here.</p>
+        <>
+          <p>No lanes yet. Import a lane definition to see its blueprint here.</p>
+          {(onNewLane || onOpenInBuilder) && (
+            <button
+              className="btn"
+              onClick={() => {
+                if (onNewLane) onNewLane();
+                else onOpenInBuilder?.(null);
+              }}
+            >
+              New lane
+            </button>
+          )}
+        </>
       )}
       {list.data && list.data.length > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>
@@ -963,14 +981,20 @@ export function LaneBlueprintPage({
         <>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginBottom: 12 }}>
             {onOpenInBuilder && (
-              <>
-                <button className="btn" onClick={() => onOpenInBuilder(selected)}>
-                  Open in builder
-                </button>
-                <button className="btn" onClick={() => onOpenInBuilder(null)}>
-                  New lane
-                </button>
-              </>
+              <button className="btn" onClick={() => onOpenInBuilder(selected)}>
+                Open in builder
+              </button>
+            )}
+            {(onNewLane || onOpenInBuilder) && (
+              <button
+                className="btn"
+                onClick={() => {
+                  if (onNewLane) onNewLane();
+                  else onOpenInBuilder?.(null);
+                }}
+              >
+                New lane
+              </button>
             )}
             <button className="btn" onClick={() => setPrinting(true)}>
               Print / Save as PDF
