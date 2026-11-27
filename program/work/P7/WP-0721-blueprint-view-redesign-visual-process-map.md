@@ -3,18 +3,18 @@ id: WP-0721
 title: "Blueprint view redesign: a visual, modern process map of states and steps"
 phase: 7
 epic: E7.5 Authoring
-status: in_review
+status: done
 owner: claude
 planned_for: claude
 depends_on: [WP-0712]
 requirements: [REQ-LANE-020]
 estimate: M
 editions: [desktop, workspace, demo]
-delivered: []
+delivered: [desktop, workspace, demo]
 docs: [process-lanes]
 branch: wp/WP-0721-blueprint-redesign
 pr: https://github.com/vikram2409-eng/Lanesra-OS/pull/805
-updated: 2026-11-20
+updated: 2026-11-27
 ---
 
 # WP-0721 — Blueprint view redesign: a visual, modern process map of states and steps
@@ -116,3 +116,4 @@ picture of it.
   blueprint renders 5 stages / 13 steps / 4 connectors via the environment's
   Chromium (the pinned e2e browser is CI-only). Opening the PR; status to
   in_review once it is linked.
+- 2026-11-27 claude: Finalized. PR #805 merged to main (2026-11-20); the merged code carries every edition, so status in_review → done and delivered [desktop, workspace, demo] (all six ACs were already ticked from the build). Verified on main a0e6f6c: desktop + Team Workspace share `desktop/src/features/lanes/LaneBlueprint.tsx` (with its snapshot + axe test) and `.bp-*` tokens in `desktop/src/styles.css` (AC-1/2/3/4); the online demo renders the same process map via `renderLaneBlueprint`/`laneBlueprintStepHtml`/`laneKindIcon` + `.bp-*` in `app.js`, covered by `desktop/e2e/tests/warehouse-lane-blueprint.spec.ts` (AC-5); docs updated in `llms.txt`/`llms-full.txt` + help/process-lanes + Releases v0.99.14 + Roadmap (AC-6). This was a merged-but-left-in_review record, not new work; no product code changed. STATUS.md regenerated; programctl validate 0 errors.

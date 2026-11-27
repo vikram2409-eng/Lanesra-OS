@@ -403,7 +403,7 @@ export function AiAgentsAdmin({ onOpenHelp }: { onOpenHelp: (slug: string) => vo
 // merge). Stage 1b splits Basics into the Identity/Job/Tools/Data groups and
 // unifies the Job save; Stage 2 adds risk/cost badges, effect notes and
 // "Using defaults" states.
-type SetupGroup = "basics" | "persona" | "knowledge" | "safety" | "model" | "identity" | "publish" | "run";
+type SetupGroup = "identity" | "job" | "knowledge" | "tools" | "data" | "safety" | "model" | "publish" | "run";
 
 export function AgentSetupPanel({
   agent,
@@ -426,7 +426,7 @@ export function AgentSetupPanel({
 }) {
   const queryClient = useQueryClient();
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["aiAgents"] });
-  const [tab, setTab] = useState<SetupGroup>("basics");
+  const [tab, setTab] = useState<SetupGroup>("identity");
   const [error, setError] = useState<string | null>(null);
   const onErr = (fallback: string) => (err: unknown) => setError(err instanceof ApiError ? err.message : fallback);
 
@@ -440,18 +440,32 @@ export function AgentSetupPanel({
   });
   const saveMemory = useMutation({ mutationFn: (memory_md: string) => api.setAiAgentMemory(agent.id, { memory_md }), onSuccess: invalidate, onError: onErr("Could not save memory") });
   const saveGuardrails = useMutation({ mutationFn: (guardrails_md: string) => api.setAiAgentGuardrails(agent.id, { guardrails_md }), onSuccess: invalidate, onError: onErr("Could not save guardrails") });
-  const savePersona = useMutation({ mutationFn: (input: PersonaInput) => api.setAiAgentPersona(agent.id, input), onSuccess: invalidate, onError: onErr("Could not save this persona") });
+  // WP-0160 Gate-0 (Q1): one Job save that persists instructions/tone and the
+  // persona together - `update_ai_agent` then `set_ai_agent_persona`, the two
+  // existing endpoints, so no `AiAgentInput` shape change was needed.
+  const saveJob = useMutation({
+    mutationFn: async ({ system_prompt, persona }: { system_prompt: string; persona: PersonaInput }) => {
+      await api.updateAiAgent(agent.id, { ...agentToInput(agent), system_prompt });
+      await api.setAiAgentPersona(agent.id, persona);
+    },
+    onSuccess: () => {
+      setError(null);
+      invalidate();
+    },
+    onError: onErr("Could not save this agent's job"),
+  });
   const saveRouting = useMutation({ mutationFn: (routing: AiAgentModelRouting | null) => api.setAiAgentModelRouting(agent.id, routing), onSuccess: invalidate, onError: onErr("Could not save this agent's routing") });
   const saveActsAs = useMutation({ mutationFn: (actsAsUserId: string | null) => api.setAiAgentActsAs(agent.id, actsAsUserId), onSuccess: invalidate, onError: onErr("Could not save this agent's Acts As identity") });
 
   const GROUPS: [SetupGroup, string, string][] = [
-    ["basics", "Agent", "Identity, job, tools and data access"],
-    ["persona", "Persona", "Role, goal, background and reasoning mode — part of the agent's job"],
-    ["knowledge", "Knowledge & memory", "What the agent remembers between runs"],
+    ["identity", "Identity", "Name, icon, description and the identity it acts as when unattended"],
+    ["job", "Job", "Instructions, tone and the role, goal and background that define its work"],
+    ["knowledge", "Knowledge & memory", "Skills it can use and what it remembers between runs"],
+    ["tools", "Tools & actions", "The actions and connectors it may call, and who it can delegate to"],
+    ["data", "Data access", "Which record types it may read and write"],
     ["safety", "Safety", "Guardrails, approval thresholds and per-tool caps"],
     ["model", "Model & cost", "Model routing, budgets and air-gapped data boundaries"],
-    ["identity", "Identity", "Which identity the agent acts as when it runs unattended"],
-    ["publish", "Test & publish", "Versions and the draft → published lifecycle"],
+    ["publish", "Test & publish", "Playground, versions and the draft → published lifecycle"],
     ["run", "Run & triggers", "Schedules and webhooks that invoke the agent"],
   ];
   const note = GROUPS.find(([k]) => k === tab)?.[2];
@@ -482,42 +496,40 @@ export function AgentSetupPanel({
       {note && <p style={{ fontSize: 12.5, color: "var(--text-muted)", margin: "8px 2px 0" }}>{note}</p>}
 
       <div style={{ marginTop: 12 }}>
-        {tab === "basics" && (
-          <AiAgentForm
-            initial={agent}
-            agents={agents}
-            skills={skills}
-            connectorTools={connectorTools}
-            mcpTools={mcpTools}
-            onOpenRouting={() => setTab("model")}
-            onOpenMemory={() => setTab("knowledge")}
-            onOpenGuardrails={() => setTab("safety")}
-            onOpenVersions={() => setTab("publish")}
-            onOpenTriggers={() => setTab("run")}
-            onCancel={onClose}
-            onSubmit={(input) => update.mutate(input)}
-            pending={update.isPending}
-          />
+        {tab === "identity" && (
+          <>
+            <IdentityGroup agent={agent} onSave={(input) => update.mutate(input)} pending={update.isPending} />
+            <ActsAsEditor agent={agent} onCancel={() => setTab("identity")} onSave={(actsAsUserId) => saveActsAs.mutate(actsAsUserId)} pending={saveActsAs.isPending} />
+          </>
         )}
-        {tab === "persona" && (
-          <PersonaEditor agent={agent} onCancel={() => setTab("basics")} onSave={(input) => savePersona.mutate(input)} pending={savePersona.isPending} />
-        )}
+        {tab === "job" && <JobGroup agent={agent} onSave={(payload) => saveJob.mutate(payload)} pending={saveJob.isPending} />}
         {tab === "knowledge" && (
-          <MemoryEditor agent={agent} onCancel={() => setTab("basics")} onSave={(memory_md) => saveMemory.mutate(memory_md)} pending={saveMemory.isPending} />
+          <>
+            <SkillsGroup agent={agent} skills={skills} onSave={(input) => update.mutate(input)} pending={update.isPending} />
+            <MemoryEditor agent={agent} onCancel={() => setTab("identity")} onSave={(memory_md) => saveMemory.mutate(memory_md)} pending={saveMemory.isPending} />
+          </>
         )}
+        {tab === "tools" && (
+          <ToolsGroup agent={agent} agents={agents} connectorTools={connectorTools} mcpTools={mcpTools} onSave={(input) => update.mutate(input)} pending={update.isPending} />
+        )}
+        {tab === "data" && <DataGroup agent={agent} onSave={(input) => update.mutate(input)} pending={update.isPending} />}
         {tab === "safety" && (
           <>
-            <GuardrailsEditor agent={agent} onCancel={() => setTab("basics")} onSave={(guardrails_md) => saveGuardrails.mutate(guardrails_md)} pending={saveGuardrails.isPending} />
-            <ToolLimitsEditor key={agent.id} agent={agent} onClose={() => setTab("basics")} />
+            <GuardrailsEditor agent={agent} onCancel={() => setTab("identity")} onSave={(guardrails_md) => saveGuardrails.mutate(guardrails_md)} pending={saveGuardrails.isPending} />
+            <ToolLimitsEditor key={agent.id} agent={agent} onClose={() => setTab("identity")} />
           </>
         )}
         {tab === "model" && (
-          <ModelRoutingEditor agent={agent} providers={providers} onCancel={() => setTab("basics")} onSave={(routing) => saveRouting.mutate(routing)} pending={saveRouting.isPending} />
+          <ModelRoutingEditor agent={agent} providers={providers} onCancel={() => setTab("identity")} onSave={(routing) => saveRouting.mutate(routing)} pending={saveRouting.isPending} />
         )}
-        {tab === "identity" && (
-          <ActsAsEditor agent={agent} onCancel={() => setTab("basics")} onSave={(actsAsUserId) => saveActsAs.mutate(actsAsUserId)} pending={saveActsAs.isPending} />
+        {tab === "publish" && (
+          <>
+            <VersionsPanel agent={agent} agents={agents} skills={skills} connectorTools={connectorTools} mcpTools={mcpTools} />
+            <div style={{ marginTop: 16 }}>
+              <AgentPlaygroundAndEval agent={agent} />
+            </div>
+          </>
         )}
-        {tab === "publish" && <VersionsPanel agent={agent} agents={agents} skills={skills} connectorTools={connectorTools} mcpTools={mcpTools} />}
         {tab === "run" && (
           <div>
             <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0 }}>
@@ -627,77 +639,6 @@ const REASONING_MODES: { value: string; label: string }[] = [
   { value: "plan_first", label: "Plan-first (write a plan, shown in the trace, before acting)" },
   { value: "reflect", label: "Reflect (one self-critique pass before the final answer)" },
 ];
-
-function PersonaEditor({
-  agent,
-  onCancel,
-  onSave,
-  pending,
-}: {
-  agent: AiAgentDefinition;
-  onCancel: () => void;
-  onSave: (input: PersonaInput) => void;
-  pending: boolean;
-}) {
-  const [role, setRole] = useState(agent.role);
-  const [goal, setGoal] = useState(agent.goal);
-  const [background, setBackground] = useState(agent.background);
-  const [reasoningMode, setReasoningMode] = useState(agent.reasoning_mode || "direct");
-  const [compiled, setCompiled] = useState<string | null>(null);
-  const compiledQuery = useMutation({
-    mutationFn: () => api.compiledAiAgentPrompt(agent.id),
-    onSuccess: (text) => setCompiled(text),
-  });
-  return (
-    <div className="card" style={{ marginTop: 16 }}>
-      <h3 style={{ marginTop: 0 }}>
-        {agent.icon} {agent.name}'s persona &amp; reasoning
-      </h3>
-      <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
-        A short role, goal and background are compiled into this agent's system prompt alongside its instructions, memory, guardrails
-        and the object types it is scoped to. The reasoning mode changes how it works through a task.
-      </p>
-      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
-        Role
-        <input style={{ width: "100%", marginTop: 4 }} value={role} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Billing specialist" />
-      </label>
-      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
-        Goal
-        <input style={{ width: "100%", marginTop: 4 }} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="e.g. resolve invoice disputes quickly and accurately" />
-      </label>
-      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
-        Background
-        <textarea style={{ width: "100%", marginTop: 4, minHeight: 70 }} value={background} onChange={(e) => setBackground(e.target.value)} placeholder="e.g. follows the finance team's playbook and escalates anything over $10,000" />
-      </label>
-      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
-        Reasoning mode
-        <select style={{ display: "block", marginTop: 4 }} value={reasoningMode} onChange={(e) => setReasoningMode(e.target.value)}>
-          {REASONING_MODES.map((m) => (
-            <option key={m.value} value={m.value}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <button className="btn btn-primary" onClick={() => onSave({ role, goal, background, reasoning_mode: reasoningMode })} disabled={pending}>
-          {pending ? "Saving..." : "Save persona"}
-        </button>
-        <button className="btn btn-secondary" onClick={() => compiledQuery.mutate()} disabled={compiledQuery.isPending}>
-          {compiledQuery.isPending ? "Loading..." : "View compiled prompt"}
-        </button>
-        <button className="btn btn-secondary" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>
-      {compiled !== null && (
-        <pre style={{ marginTop: 10, padding: 10, background: "var(--bg-subtle, #f6f6f6)", borderRadius: 6, whiteSpace: "pre-wrap", fontSize: 12, maxHeight: 320, overflow: "auto" }}>
-          {compiled || "(empty)"}
-        </pre>
-      )}
-    </div>
-  );
-}
 
 function GuardrailsEditor({
   agent,
@@ -1115,6 +1056,392 @@ function EvalSuiteRow({ suite }: { suite: AiEvalSuite }) {
   );
 }
 
+// --- WP-0160 Stage 1b: shared pickers so the create form (AiAgentForm) and
+// the grouped Set up panel edit tools/skills/delegates through one
+// implementation and can never drift on what a toggle actually does. ---
+
+function ToolsPicker({
+  actionNames,
+  onToggleAction,
+  connectorTools,
+  mcpTools,
+  summary,
+  requiresAdmin,
+}: {
+  actionNames: string[];
+  onToggleAction: (name: string) => void;
+  connectorTools: AgentConnectorToolOption[];
+  mcpTools: AgentMcpToolOption[];
+  summary: string;
+  requiresAdmin: boolean;
+}) {
+  return (
+    <>
+      <div className="field full">
+        <div className="card" style={{ background: "var(--bg-elevated)", padding: 10 }}>
+          <b style={{ fontSize: 12 }}>What this agent can do</b>
+          <p style={{ fontSize: 13, margin: "4px 0 0" }}>{summary}</p>
+        </div>
+      </div>
+      <div className="field full">
+        <label>
+          Tools{" "}
+          {requiresAdmin && (
+            <span className="badge badge-danger" style={{ marginLeft: 6 }}>
+              Administrator-only
+            </span>
+          )}
+        </label>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 6px" }}>
+          Granting any admin action makes this agent usable by administrators only - checked every time it runs, not just here.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div>
+            <b style={{ fontSize: 12 }}>Records</b>
+            <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+              {RECORD_ACTIONS.map(([name, label]) => (
+                <label key={name} style={{ display: "block", fontSize: 13 }}>
+                  <input type="checkbox" checked={actionNames.includes(name)} onChange={() => onToggleAction(name)} /> {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <b style={{ fontSize: 12 }}>Admin</b>
+            <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+              {ADMIN_ACTIONS.map(([name, label]) => (
+                <label key={name} style={{ display: "block", fontSize: 13 }}>
+                  <input type="checkbox" checked={actionNames.includes(name)} onChange={() => onToggleAction(name)} /> {label}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+        {connectorTools.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <b style={{ fontSize: 12 }}>Connector Actions</b>
+            <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+              {connectorTools.map((t) => (
+                <label key={t.tool_name} style={{ display: "block", fontSize: 13 }}>
+                  <input type="checkbox" checked={actionNames.includes(t.tool_name)} onChange={() => onToggleAction(t.tool_name)} />{" "}
+                  {t.connector_name}: {t.action_display_name} ({t.http_method.toUpperCase()})
+                  {t.requires_admin && (
+                    <span className="badge badge-danger" style={{ marginLeft: 6, fontSize: 10 }}>
+                      Administrator
+                    </span>
+                  )}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        {mcpTools.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <b style={{ fontSize: 12 }}>MCP Tools</b>
+            <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
+              {mcpTools.map((t) => (
+                <label key={t.tool_name} style={{ display: "block", fontSize: 13 }}>
+                  <input type="checkbox" checked={actionNames.includes(t.tool_name)} onChange={() => onToggleAction(t.tool_name)} />{" "}
+                  {t.mcp_server_name}: {t.tool_description || t.tool_name.split(":").pop()}
+                  {t.requires_admin && (
+                    <span className="badge badge-danger" style={{ marginLeft: 6, fontSize: 10 }}>
+                      Administrator
+                    </span>
+                  )}
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+function SkillsPicker({ skills, selected, onToggle }: { skills: AiSkill[]; selected: string[]; onToggle: (id: string) => void }) {
+  if (skills.length === 0) return null;
+  return (
+    <div className="field full">
+      <label>Knowledge: Skills</label>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        {skills.map((s) => (
+          <label key={s.id} style={{ fontSize: 13 }}>
+            <input type="checkbox" checked={selected.includes(s.id)} onChange={() => onToggle(s.id)} /> {s.name}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DelegatePicker({ choices, selected, onToggle }: { choices: AiAgentDefinition[]; selected: string[]; onToggle: (id: string) => void }) {
+  if (choices.length === 0) return null;
+  return (
+    <div className="field full">
+      <label>Can delegate to</label>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+        {choices.map((a) => (
+          <label key={a.id} style={{ fontSize: 13 }}>
+            <input type="checkbox" checked={selected.includes(a.id)} onChange={() => onToggle(a.id)} /> {a.icon} {a.name}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// WP-0160 Stage 1b: the per-group Set up editors each save the whole agent
+// through `update_ai_agent`, which takes a full `AiAgentInput`. Each group
+// owns only its slice of that input and merges it onto the agent's current
+// values here, so saving one group never clears another group's fields.
+function agentToInput(agent: AiAgentDefinition): AiAgentInput {
+  return {
+    name: agent.name,
+    description: agent.description,
+    icon: agent.icon,
+    system_prompt: agent.system_prompt,
+    action_names: agent.action_names,
+    delegate_agent_ids: agent.delegate_agent_ids,
+    skill_ids: agent.skill_ids,
+    object_type_scopes: agent.object_type_scopes,
+    action_type_ids: agent.action_type_ids,
+  };
+}
+
+function IdentityGroup({ agent, onSave, pending }: { agent: AiAgentDefinition; onSave: (input: AiAgentInput) => void; pending: boolean }) {
+  const [name, setName] = useState(agent.name);
+  const [icon, setIcon] = useState(agent.icon);
+  const [description, setDescription] = useState(agent.description ?? "");
+  return (
+    <form
+      className="form-grid"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave({ ...agentToInput(agent), name, icon, description: description || null });
+      }}
+    >
+      <div className="field">
+        <label>Name</label>
+        <input value={name} onChange={(e) => setName(e.target.value)} required />
+      </div>
+      <div className="field">
+        <label>Icon</label>
+        <select value={icon} onChange={(e) => setIcon(e.target.value)}>
+          {ICON_CHOICES.map((i) => (
+            <option key={i} value={i}>
+              {i}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field full">
+        <label>Description (optional)</label>
+        <input value={description} onChange={(e) => setDescription(e.target.value)} />
+      </div>
+      <div className="field full">
+        <button className="btn btn-primary" type="submit" disabled={pending}>
+          {pending ? "Saving..." : "Save identity"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// WP-0160 Gate-0 (Q1): the Job group is the single home for the system
+// prompt - instructions and tone, plus the role/goal/background/reasoning
+// mode from WP-0120 - and its one Save calls `update_ai_agent` +
+// `set_ai_agent_persona` together (the Persona -> Job merge).
+function JobGroup({ agent, onSave, pending }: { agent: AiAgentDefinition; onSave: (payload: { system_prompt: string; persona: PersonaInput }) => void; pending: boolean }) {
+  const split = splitTone(agent.system_prompt);
+  const [tone, setTone] = useState(split.tone);
+  const [instructions, setInstructions] = useState(split.persona);
+  const [role, setRole] = useState(agent.role);
+  const [goal, setGoal] = useState(agent.goal);
+  const [background, setBackground] = useState(agent.background);
+  const [reasoningMode, setReasoningMode] = useState(agent.reasoning_mode || "direct");
+  const [compiled, setCompiled] = useState<string | null>(null);
+  const compiledQuery = useMutation({ mutationFn: () => api.compiledAiAgentPrompt(agent.id), onSuccess: (text) => setCompiled(text) });
+  return (
+    <form
+      className="form-grid"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave({ system_prompt: joinTone(tone, instructions), persona: { role, goal, background, reasoning_mode: reasoningMode } });
+      }}
+    >
+      <div className="field full">
+        <p style={{ fontSize: 12.5, color: "var(--text-muted)", margin: 0 }}>
+          The job is this agent's instructions plus a short role, goal and background. They are compiled into one system prompt and saved
+          together, alongside its memory, guardrails and the object types it is scoped to.
+        </p>
+      </div>
+      <div className="field">
+        <label>Tone (optional)</label>
+        <select value={tone} onChange={(e) => setTone(e.target.value)}>
+          {TONE_CHOICES.map((t) => (
+            <option key={t} value={t}>
+              {t || "Unspecified"}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field">
+        <label>Reasoning mode</label>
+        <select value={reasoningMode} onChange={(e) => setReasoningMode(e.target.value)}>
+          {REASONING_MODES.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="field full">
+        <label>Purpose / instructions</label>
+        <textarea style={{ width: "100%", minHeight: 100 }} value={instructions} onChange={(e) => setInstructions(e.target.value)} required />
+      </div>
+      <div className="field">
+        <label>Role</label>
+        <input value={role} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Billing specialist" />
+      </div>
+      <div className="field">
+        <label>Goal</label>
+        <input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="e.g. resolve invoice disputes quickly and accurately" />
+      </div>
+      <div className="field full">
+        <label>Background</label>
+        <textarea style={{ width: "100%", minHeight: 70 }} value={background} onChange={(e) => setBackground(e.target.value)} placeholder="e.g. follows the finance team's playbook and escalates anything over $10,000" />
+      </div>
+      <div className="field full" style={{ display: "flex", gap: 8 }}>
+        <button className="btn btn-primary" type="submit" disabled={pending}>
+          {pending ? "Saving..." : "Save job"}
+        </button>
+        <button type="button" className="btn btn-secondary" onClick={() => compiledQuery.mutate()} disabled={compiledQuery.isPending}>
+          {compiledQuery.isPending ? "Loading..." : "View compiled prompt"}
+        </button>
+      </div>
+      {compiled !== null && (
+        <div className="field full">
+          <pre style={{ margin: 0, padding: 10, background: "var(--bg-subtle, #f6f6f6)", borderRadius: 6, whiteSpace: "pre-wrap", fontSize: 12, maxHeight: 320, overflow: "auto" }}>
+            {compiled || "(empty)"}
+          </pre>
+        </div>
+      )}
+    </form>
+  );
+}
+
+function SkillsGroup({ agent, skills, onSave, pending }: { agent: AiAgentDefinition; skills: AiSkill[]; onSave: (input: AiAgentInput) => void; pending: boolean }) {
+  const [skillIds, setSkillIds] = useState(agent.skill_ids);
+  const toggle = (id: string) => setSkillIds((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
+  if (skills.length === 0) {
+    return (
+      <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0 }}>
+        No skills exist yet. Create skills in the Knowledge &amp; Memory section below, then attach them here.
+      </p>
+    );
+  }
+  return (
+    <form
+      className="form-grid"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave({ ...agentToInput(agent), skill_ids: skillIds });
+      }}
+    >
+      <SkillsPicker skills={skills} selected={skillIds} onToggle={toggle} />
+      <div className="field full">
+        <button className="btn btn-primary" type="submit" disabled={pending}>
+          {pending ? "Saving..." : "Save skills"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function ToolsGroup({
+  agent,
+  agents,
+  connectorTools,
+  mcpTools,
+  onSave,
+  pending,
+}: {
+  agent: AiAgentDefinition;
+  agents: AiAgentDefinition[];
+  connectorTools: AgentConnectorToolOption[];
+  mcpTools: AgentMcpToolOption[];
+  onSave: (input: AiAgentInput) => void;
+  pending: boolean;
+}) {
+  const [actionNames, setActionNames] = useState(agent.action_names);
+  const [delegates, setDelegates] = useState(agent.delegate_agent_ids);
+  const policyQuery = useQuery({ queryKey: ["aiAgentPolicy", agent.id], queryFn: () => api.getAiAgentPolicy(agent.id) });
+  const toggleAction = (name: string) => setActionNames((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
+  const toggleDelegate = (id: string) => setDelegates((prev) => (prev.includes(id) ? prev.filter((d) => d !== id) : [...prev, id]));
+  const requiresAdmin = agentRequiresAdmin(actionNames);
+  const summary = capabilitySummary(actionNames, connectorTools, mcpTools, policyQuery.data ?? null);
+  const delegateChoices = agents.filter((a) => a.is_active && a.id !== agent.id);
+  return (
+    <form
+      className="form-grid"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave({ ...agentToInput(agent), action_names: actionNames, delegate_agent_ids: delegates });
+      }}
+    >
+      <ToolsPicker actionNames={actionNames} onToggleAction={toggleAction} connectorTools={connectorTools} mcpTools={mcpTools} summary={summary} requiresAdmin={requiresAdmin} />
+      <DelegatePicker choices={delegateChoices} selected={delegates} onToggle={toggleDelegate} />
+      <div className="field full">
+        <button className="btn btn-primary" type="submit" disabled={pending}>
+          {pending ? "Saving..." : "Save tools & actions"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function DataGroup({ agent, onSave, pending }: { agent: AiAgentDefinition; onSave: (input: AiAgentInput) => void; pending: boolean }) {
+  const [scopes, setScopes] = useState(agent.object_type_scopes);
+  const [actionTypeIds, setActionTypeIds] = useState(agent.action_type_ids);
+  const toggleObjectTypeScope = (objectType: string) =>
+    setScopes((prev) =>
+      prev.some((s) => s.object_type === objectType)
+        ? prev.filter((s) => s.object_type !== objectType)
+        : [...prev, { object_type: objectType, capabilities: ["read"] as ActionCapability[] }],
+    );
+  const toggleScopeCapability = (objectType: string, capability: ActionCapability) =>
+    setScopes((prev) =>
+      prev.map((s) =>
+        s.object_type === objectType
+          ? { ...s, capabilities: s.capabilities.includes(capability) ? s.capabilities.filter((c) => c !== capability) : [...s.capabilities, capability] }
+          : s,
+      ),
+    );
+  const toggleActionType = (id: string) => setActionTypeIds((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
+  return (
+    <form
+      className="form-grid"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave({ ...agentToInput(agent), object_type_scopes: scopes, action_type_ids: actionTypeIds });
+      }}
+    >
+      <AgentOntologyScopeEditor
+        objectTypeScopes={scopes}
+        actionTypeIds={actionTypeIds}
+        onToggleObjectTypeScope={toggleObjectTypeScope}
+        onToggleScopeCapability={toggleScopeCapability}
+        onToggleActionType={toggleActionType}
+      />
+      <div className="field full">
+        <button className="btn btn-primary" type="submit" disabled={pending}>
+          {pending ? "Saving..." : "Save data access"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 function AiAgentForm({
   initial,
   agents,
@@ -1272,108 +1599,9 @@ function AiAgentForm({
                 required
               />
             </div>
-            <div className="field full">
-              <div className="card" style={{ background: "var(--bg-elevated)", padding: 10 }}>
-                <b style={{ fontSize: 12 }}>What this agent can do</b>
-                <p style={{ fontSize: 13, margin: "4px 0 0" }}>{summary}</p>
-              </div>
-            </div>
-            <div className="field full">
-              <label>
-                Tools{" "}
-                {requiresAdmin && (
-                  <span className="badge badge-danger" style={{ marginLeft: 6 }}>
-                    Administrator-only
-                  </span>
-                )}
-              </label>
-              <p style={{ fontSize: 12, color: "var(--text-muted)", margin: "2px 0 6px" }}>
-                Granting any admin action makes this agent usable by administrators only - checked every time it runs, not just here.
-              </p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
-                  <b style={{ fontSize: 12 }}>Records</b>
-                  <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
-                    {RECORD_ACTIONS.map(([name, label]) => (
-                      <label key={name} style={{ display: "block", fontSize: 13 }}>
-                        <input type="checkbox" checked={input.action_names.includes(name)} onChange={() => toggleAction(name)} /> {label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <b style={{ fontSize: 12 }}>Admin</b>
-                  <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
-                    {ADMIN_ACTIONS.map(([name, label]) => (
-                      <label key={name} style={{ display: "block", fontSize: 13 }}>
-                        <input type="checkbox" checked={input.action_names.includes(name)} onChange={() => toggleAction(name)} /> {label}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              {connectorTools.length > 0 && (
-                <div style={{ marginTop: 12 }}>
-                  <b style={{ fontSize: 12 }}>Connector Actions</b>
-                  <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
-                    {connectorTools.map((t) => (
-                      <label key={t.tool_name} style={{ display: "block", fontSize: 13 }}>
-                        <input type="checkbox" checked={input.action_names.includes(t.tool_name)} onChange={() => toggleAction(t.tool_name)} />{" "}
-                        {t.connector_name}: {t.action_display_name} ({t.http_method.toUpperCase()})
-                        {t.requires_admin && (
-                          <span className="badge badge-danger" style={{ marginLeft: 6, fontSize: 10 }}>
-                            Administrator
-                          </span>
-                        )}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {mcpTools.length > 0 && (
-                <div style={{ marginTop: 12 }}>
-                  <b style={{ fontSize: 12 }}>MCP Tools</b>
-                  <div style={{ maxHeight: 160, overflowY: "auto", border: "1px solid var(--border, #ddd)", borderRadius: 6, padding: 6, marginTop: 4 }}>
-                    {mcpTools.map((t) => (
-                      <label key={t.tool_name} style={{ display: "block", fontSize: 13 }}>
-                        <input type="checkbox" checked={input.action_names.includes(t.tool_name)} onChange={() => toggleAction(t.tool_name)} />{" "}
-                        {t.mcp_server_name}: {t.tool_description || t.tool_name.split(":").pop()}
-                        {t.requires_admin && (
-                          <span className="badge badge-danger" style={{ marginLeft: 6, fontSize: 10 }}>
-                            Administrator
-                          </span>
-                        )}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            {skills.length > 0 && (
-              <div className="field full">
-                <label>Knowledge: Skills</label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-                  {skills.map((s) => (
-                    <label key={s.id} style={{ fontSize: 13 }}>
-                      <input type="checkbox" checked={input.skill_ids.includes(s.id)} onChange={() => toggleSkill(s.id)} /> {s.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-            {delegateChoices.length > 0 && (
-              <div className="field full">
-                <label>Can delegate to</label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-                  {delegateChoices.map((a) => (
-                    <label key={a.id} style={{ fontSize: 13 }}>
-                      <input type="checkbox" checked={input.delegate_agent_ids.includes(a.id)} onChange={() => toggleDelegate(a.id)} /> {a.icon}{" "}
-                      {a.name}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
+            <ToolsPicker actionNames={input.action_names} onToggleAction={toggleAction} connectorTools={connectorTools} mcpTools={mcpTools} summary={summary} requiresAdmin={requiresAdmin} />
+            <SkillsPicker skills={skills} selected={input.skill_ids} onToggle={toggleSkill} />
+            <DelegatePicker choices={delegateChoices} selected={input.delegate_agent_ids} onToggle={toggleDelegate} />
             <AgentOntologyScopeEditor
               objectTypeScopes={input.object_type_scopes}
               actionTypeIds={input.action_type_ids}
