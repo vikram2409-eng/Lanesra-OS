@@ -739,6 +739,231 @@ async fn anytime_actions_work_over_http_the_same_as_on_desktop() {
 }
 
 // --------------------------------------------------------------------------
+// WP-0720 AC-2/AC-5: pause, resume and reopen run over the Team Workspace
+// transport exactly as the desktop Tauri commands do - pause and resume
+// through the sync `/api/invoke` dispatcher, reopen through its async
+// admin route. The run parks on the same step while paused, and reopening
+// walks it back to the earlier completed step in the same stage; every
+// action is audited in the run view.
+// --------------------------------------------------------------------------
+
+/// Covers: REQ-LANE-009 (WP-0720 AC-2, AC-5)
+#[tokio::test]
+async fn pause_resume_reopen_work_over_http_the_same_as_on_desktop() {
+    let (addr, state, _dir) = spawn_file_backed_server().await;
+    let client = client_with_cookies();
+    let setup = first_run(&client, addr).await;
+    let workspace_id = setup["data"][0]["id"].as_str().unwrap().to_string();
+    let admin_id = setup["data"][1]["id"].as_str().unwrap().to_string();
+
+    let (batch_id, role_id) = {
+        let conn = state.conn.lock().unwrap();
+        custom_object_service::create_with_key(
+            &conn,
+            &workspace_id,
+            "batch",
+            &CustomObjectDefinitionInput {
+                singular_label: "Batch".into(),
+                plural_label: "Batches".into(),
+                icon: "▣".into(),
+                prefix: "BAT".into(),
+                digits: 6,
+            },
+            Some(&admin_id),
+        )
+        .unwrap();
+        let batch = custom_record_service::create(
+            &conn,
+            &workspace_id,
+            &CustomRecordInput {
+                object_key: "batch".into(),
+                primary_name: "BAT-1".into(),
+                status: "Active".into(),
+                owner_user_id: None,
+                notes: None,
+            },
+            Some(&admin_id),
+        )
+        .unwrap();
+        let role = access_role_service::create(
+            &conn,
+            &workspace_id,
+            &AccessRoleInput {
+                name: "Counter".into(),
+                description: "Counter role".into(),
+            },
+            Some(&admin_id),
+        )
+        .unwrap();
+        (batch.id, role.id)
+    };
+
+    // Two form steps in one stage, so the second can be reopened back to
+    // the first without leaving the stage.
+    let lane = json!({
+        "format_version": "1.0.0",
+        "lane": {
+            "id": "lane-pause-reopen", "name": "Pause Reopen", "object_key": "batch",
+            "version": 1, "status": "published",
+            "run_data": {"fields": [{"key": "note_text", "type": "string", "required": false}]},
+            "stages": [{
+                "id": "s1", "name": "Step one", "steps": [
+                    {
+                        "id": "fill-first", "name": "Fill first", "kind": "form",
+                        "role": role_id, "required": true,
+                        "fields": [{
+                            "key": "note_text", "label": "Note text", "type": "string",
+                            "binds_to": "run_data.note_text", "required": true
+                        }]
+                    },
+                    {
+                        "id": "fill-second", "name": "Fill second", "kind": "form",
+                        "role": role_id, "required": true,
+                        "fields": [{
+                            "key": "note_text", "label": "Note text", "type": "string",
+                            "binds_to": "run_data.note_text", "required": true
+                        }]
+                    }
+                ]
+            }]
+        }
+    });
+    let imported = invoke(
+        &client,
+        addr,
+        "import_process_lane",
+        json!({"definitionJson": lane.to_string()}),
+    )
+    .await;
+    assert_eq!(imported["data"]["lane_key"], "lane-pause-reopen");
+    let published = invoke(
+        &client,
+        addr,
+        "publish_process_lane",
+        json!({"laneKey": "lane-pause-reopen"}),
+    )
+    .await;
+    assert_eq!(
+        published["ok"], true,
+        "the two-step lane publishes: {}",
+        published
+    );
+
+    let run = client
+        .post(format!(
+            "http://{addr}/api/admin/process-lanes/lane-pause-reopen/runs"
+        ))
+        .json(&json!({"anchor_record_id": batch_id}))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert_eq!(run["ok"], true, "the run starts over HTTP: {}", run);
+    let run_id = run["data"]["id"].as_str().unwrap().to_string();
+    assert_eq!(run["data"]["status"], "waiting_person");
+
+    // Complete the first step, so the run waits on the second.
+    let submitted = client
+        .post(format!(
+            "http://{addr}/api/admin/process-lane-runs/{run_id}/submit-step"
+        ))
+        .json(&json!({"values": {"note_text": "first"}}))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert_eq!(
+        submitted["ok"], true,
+        "the first step submits: {}",
+        submitted
+    );
+    assert_eq!(submitted["data"]["status"], "waiting_person");
+
+    // Pause through the sync dispatcher: the run parks on the same step.
+    let paused = invoke(
+        &client,
+        addr,
+        "pause_process_lane_run",
+        json!({"runId": run_id, "reason": "Waiting for the manager"}),
+    )
+    .await;
+    assert_eq!(paused["ok"], true, "the run pauses: {}", paused);
+    assert_eq!(paused["data"]["status"], "paused");
+
+    // A second pause is refused: the run is not waiting on a person.
+    let paused_again = invoke(
+        &client,
+        addr,
+        "pause_process_lane_run",
+        json!({"runId": run_id, "reason": null}),
+    )
+    .await;
+    assert_eq!(paused_again["ok"], false, "pausing a paused run is refused");
+
+    // Resume through the sync dispatcher: back to the step it paused on.
+    let resumed = invoke(
+        &client,
+        addr,
+        "resume_process_lane_run",
+        json!({"runId": run_id}),
+    )
+    .await;
+    assert_eq!(resumed["ok"], true, "the run resumes: {}", resumed);
+    assert_eq!(resumed["data"]["status"], "waiting_person");
+
+    // Reopen the first step through its async admin route: the run walks
+    // back to it, in the same stage.
+    let reopened = client
+        .post(format!(
+            "http://{addr}/api/admin/process-lane-runs/{run_id}/reopen-step"
+        ))
+        .json(&json!({"step_id": "fill-first", "reason": "Wrong note entered"}))
+        .send()
+        .await
+        .unwrap()
+        .json::<Value>()
+        .await
+        .unwrap();
+    assert_eq!(reopened["ok"], true, "the first step reopens: {}", reopened);
+    assert_eq!(reopened["data"]["status"], "waiting_person");
+
+    // The run view shows the run back on the first step, and the audit
+    // trail carries all three actions.
+    let view = invoke(
+        &client,
+        addr,
+        "get_process_lane_run_view",
+        json!({"runId": run_id}),
+    )
+    .await;
+    assert_eq!(
+        view["data"]["current"]["step_id"], "fill-first",
+        "the run is back on the first step: {}",
+        view["data"]["current"]
+    );
+    let event_types: Vec<&str> = view["data"]["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|e| e["event_type"].as_str())
+        .collect();
+    for expected in [
+        "lane_run_paused",
+        "lane_run_resumed",
+        "lane_run_step_reopened",
+    ] {
+        assert!(
+            event_types.contains(&expected),
+            "the audit trail carries {expected}: {event_types:?}"
+        );
+    }
+}
+
+// --------------------------------------------------------------------------
 // WP-0713 AC-5: the board, my-steps, timing and ageing reads run over the
 // Team Workspace admin routes exactly as the desktop Tauri commands do -
 // the same service code, the same figures. The check-only lane's run

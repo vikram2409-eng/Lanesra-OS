@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /**
- * The lane runner, first cut (WP-0707).
- * Covers: REQ-LANE-014 (WP-0707 AC-1, AC-2), REQ-LANE-003 (WP-0707 AC-1).
+ * The lane runner, first cut (WP-0707) and second cut (WP-0720).
+ * Covers: REQ-LANE-014 (WP-0707 AC-1, AC-2; WP-0720 AC-4), REQ-LANE-003 (WP-0707 AC-1), REQ-LANE-012 (WP-0720 AC-1), REQ-LANE-009 (WP-0720 AC-2).
  *
  * Drives the Team Workspace server (the Playwright config's webServer) and
  * the real desktop UI from the same code - server mode. The fixture mirrors
@@ -40,6 +40,10 @@ import path from 'node:path';
  * needs a fresh dir (rm -rf /tmp/e2e-data): import refuses a lane
  * that already exists and publish can only publish the stored draft,
  * so a changed definition cannot replace the draft in place.
+ *
+ * WP-0720: the runner's swim lanes replaced the stage bar + step list,
+ * approvals are decided on the runner (AC-1), and pause, resume and
+ * cancel with the posted writes listed run from the runner (AC-2).
  */
 
 const ADMIN_USERNAME = 'admin';
@@ -437,16 +441,17 @@ test('AC-1: a user completes the straight path from the list without leaving the
   await startCard.locator('#lane-run-picker').selectOption({ label: 'Runner Lane' });
   await startCard.getByRole('button', { name: 'Start Runner Lane' }).click();
 
-  // The runner: run label, every stage in the bar, the current stage's steps.
+  // The runner: run label, every stage in the swim lanes, the current
+  // stage's steps in its own column.
   await expect(page.getByRole('heading', { name: 'Widget one · Runner Lane · stage 1 of 3' })).toBeVisible();
-  const stageBar = page.getByRole('list', { name: 'Stage progress' });
-  await expect(stageBar).toContainText('Capture');
-  await expect(stageBar).toContainText('Post');
-  await expect(stageBar).toContainText('Confirm');
-  await expect(stageBar.locator('li[aria-current="step"]')).toContainText('Capture');
-  const stepList = page.getByRole('group', { name: 'Steps — Capture' });
-  await expect(stepList).toContainText('Enter details');
-  await expect(stepList).toContainText('Add note');
+  const swimlanes = page.locator('.lane-swimlanes');
+  await expect(swimlanes).toContainText('Capture');
+  await expect(swimlanes).toContainText('Post');
+  await expect(swimlanes).toContainText('Confirm');
+  await expect(page.locator('[aria-label="Stage 1 of 3: Capture, current"]')).toBeVisible();
+  const captureLane = page.locator('[aria-label="Stage 1 of 3: Capture, current"]');
+  await expect(captureLane).toContainText('Enter details');
+  await expect(captureLane).toContainText('Add note');
 
   // Back previews the previous step only once a step is done; on the first
   // step there is nothing to go back to.
@@ -479,7 +484,7 @@ test('AC-1: a user completes the straight path from the list without leaving the
   // button only while a run is waiting at a record step.
   await expect(page.getByRole('heading', { name: 'Widget one · Runner Lane · stage 3 of 3' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Review summary' })).toBeVisible();
-  await expect(page.getByRole('group', { name: 'Steps — Confirm' })).toContainText('Review summary');
+  await expect(page.locator('[aria-label="Stage 3 of 3: Confirm, current"]')).toContainText('Review summary');
   await expect(page.getByRole('group', { name: 'Audit trail' })).toContainText('Post tracking — completed');
   await expect(page.getByRole('group', { name: 'Audit trail' })).toContainText('Tracking check — completed');
 
@@ -489,9 +494,9 @@ test('AC-1: a user completes the straight path from the list without leaving the
   // 4. Review summary ends the run.
   await page.getByRole('button', { name: 'Complete step' }).click();
   await expect(page.getByText('Lane Runner Lane · status completed')).toBeVisible();
-  const doneBar = page.getByRole('list', { name: 'Stage progress' });
-  await expect(doneBar.locator('li')).toHaveCount(3);
-  await expect(doneBar).toContainText('✓');
+  const doneLanes = page.locator('.lane-swimlanes');
+  await expect(doneLanes.locator('.lane-swim')).toHaveCount(3);
+  await expect(doneLanes).toContainText('✓');
 
   // The write landed on the record itself: Tracking is the carrier value,
   // not the TRK-1 entered on the form (the record step overwrote it).
@@ -499,7 +504,8 @@ test('AC-1: a user completes the straight path from the list without leaving the
   expect((values as Record<string, unknown>).tracking).toBe('ACME');
 });
 
-test('AC-2: a run reaching an approval shows the inbox state, not approval buttons', async ({ page }) => {
+test('AC-2: approving on the runner routes the run down the approved branch', async ({ page }) => {
+  // Covers: REQ-LANE-012 (WP-0720 AC-1)
   await loginAsAdmin(page);
   await openWidgetsList(page);
 
@@ -513,18 +519,93 @@ test('AC-2: a run reaching an approval shows the inbox state, not approval butto
   await page.locator('#lane-run-picker').selectOption({ label: 'Approval Lane' });
   await page.getByRole('button', { name: 'Start Approval Lane' }).click();
 
-  // The runner names the run and its stage, shows both stages, and says
-  // plainly to continue in the approvals inbox.
+  // The runner names the run and its stage, shows both stages in the swim
+  // lanes, and decides the approval here: who it waits on, and where each
+  // decision routes the run.
   await expect(page.getByRole('heading', { name: 'Widget two · Approval Lane · stage 1 of 2' })).toBeVisible();
-  const stageBar = page.getByRole('list', { name: 'Stage progress' });
-  await expect(stageBar).toContainText('Decide');
-  await expect(stageBar).toContainText('Post');
-  await expect(page.getByText('This run is waiting on an approval. Continue in the approvals inbox.')).toBeVisible();
-  await expect(page.getByText('Approvals are decided in the inbox; this screen does not decide them in this cut.')).toBeVisible();
+  const swimlanes = page.locator('.lane-swimlanes');
+  await expect(swimlanes).toContainText('Decide');
+  await expect(swimlanes).toContainText('Post');
+  await expect(page.getByRole('heading', { name: 'Decide' })).toBeVisible();
+  await expect(page.getByText('The decision routes the run')).toBeVisible();
+  const main = page.locator('.lane-runner-main');
+  await expect(main).toContainText('Approved → Post · Approved path');
+  await expect(main).toContainText('Rejected → Post · Rejected path');
 
-  // No approval UI on this screen: no Approve/Reject, no Complete step.
-  await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Reject', exact: true })).toHaveCount(0);
+  // Approve: the run follows the approved branch to the Approved path
+  // step, and completing it ends the run.
+  await page.getByRole('button', { name: 'Approve' }).click();
+  await expect(page.getByRole('heading', { name: 'Approved path' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Widget two · Approval Lane · stage 2 of 2' })).toBeVisible();
+  await page.getByRole('button', { name: 'Complete step' }).click();
+  await expect(page.getByText('Lane Approval Lane · status completed')).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Audit trail' })).toContainText('Decide — completed');
+});
+
+test('AC-2b: rejecting on the runner routes the run down the rejected branch', async ({ page }) => {
+  // Covers: REQ-LANE-012 (WP-0720 AC-1)
+  // A fresh run on Widget two: the approve test's run already finished,
+  // so starting again opens a new run, not the old one.
+  await loginAsAdmin(page);
+  await openWidgetsList(page);
+
+  const row = page.locator('tr', { hasText: 'Widget two' });
+  await row.getByRole('button', { name: 'Edit' }).click();
+  await expect(page.getByRole('button', { name: 'View in Object 360' })).toBeVisible();
+  await page.getByRole('button', { name: 'Start lane run' }).click();
+  await page.locator('#lane-run-picker').selectOption({ label: 'Approval Lane' });
+  await page.getByRole('button', { name: 'Start Approval Lane' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Decide' })).toBeVisible();
+  await page.getByRole('button', { name: 'Reject — hold the order' }).click();
+  await expect(page.getByRole('heading', { name: 'Rejected path' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Widget two · Approval Lane · stage 2 of 2' })).toBeVisible();
+  await page.getByRole('button', { name: 'Complete step' }).click();
+  await expect(page.getByText('Lane Approval Lane · status completed')).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Audit trail' })).toContainText('Decide — completed');
+});
+
+test('AC-2c: pause and resume park the run on its step; cancel lists the writes posted', async ({ page }) => {
+  // Covers: REQ-LANE-009 (WP-0720 AC-2)
+  await loginAsAdmin(page);
+  await openWidgetsList(page);
+
+  // A fresh straight-path run on Widget one (the AC-1 run finished).
+  const row = page.locator('tr', { hasText: 'Widget one' });
+  await row.getByRole('button', { name: 'Start lane run' }).click();
+  const startCard = page.locator('div.card', { hasText: 'Start a lane run on' });
+  await startCard.getByRole('button', { name: 'Start lane run', exact: true }).click();
+  await startCard.locator('#lane-run-picker').selectOption({ label: 'Runner Lane' });
+  await startCard.getByRole('button', { name: 'Start Runner Lane' }).click();
+  await page.getByLabel('Carrier *').fill('ACME');
+  await page.getByRole('button', { name: 'Complete step' }).click();
+  await expect(page.getByRole('heading', { name: 'Add note' })).toBeVisible();
+  await page.getByRole('button', { name: 'Skip step' }).click();
+  await page.getByLabel('Reason for skipping').fill('nothing to add');
+  await page.getByRole('button', { name: 'Confirm skip' }).click();
+
+  // The run posted the record step's write on the way to Review summary.
+  await expect(page.getByRole('heading', { name: 'Review summary' })).toBeVisible();
+  await expect(page.locator('.lane-runner-side')).toContainText('Set Tracking');
+
+  // Pause parks the run on Review summary; resume picks up there.
+  await page.getByRole('button', { name: 'Pause run' }).click();
+  await expect(page.getByText('This run is paused')).toBeVisible();
+  await expect(page.getByText(/Paused at Review summary/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Resume run' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Complete step' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Post and complete step' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Resume run' }).click();
+  await expect(page.getByRole('heading', { name: 'Review summary' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Complete step' })).toBeVisible();
+
+  // Cancel asks once and lists the write already posted; confirming
+  // cancels the run and leaves the write in place.
+  await page.getByRole('button', { name: 'Cancel run' }).click();
+  const prompt = page.getByRole('group', { name: 'Cancel this run?' });
+  await expect(prompt).toContainText('Set Tracking');
+  await expect(prompt).toContainText('stays in place');
+  await page.getByLabel('Reason for cancelling').fill('Order cancelled by the customer');
+  await prompt.getByRole('button', { name: 'Cancel run' }).click();
+  await expect(page.getByText('Lane Runner Lane · status cancelled')).toBeVisible();
+  await expect(page.locator('.lane-runner-side')).toContainText('Set Tracking');
 });

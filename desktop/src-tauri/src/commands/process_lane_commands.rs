@@ -654,10 +654,7 @@ pub fn pause_process_lane_run(
 /// WP-0720 (REQ-LANE-009, AC-2): resumes a paused run back to the step it
 /// was paused on. Sync - a pure status transition, no master key.
 #[tauri::command]
-pub fn resume_process_lane_run(
-    state: State<'_, AppState>,
-    run_id: String,
-) -> AppResult<GraphRun> {
+pub fn resume_process_lane_run(state: State<'_, AppState>, run_id: String) -> AppResult<GraphRun> {
     let conn = state.conn.lock().unwrap();
     let workspace_id = require_workspace_id(&conn)?;
     let actor = current_actor(&state);

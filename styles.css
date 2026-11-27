@@ -2513,6 +2513,8 @@ body.has-demo-banner{padding-top:36px}
 .lane-swim.skipped{border-style:dashed}
 .lane-swim.skipped .lane-swim-head{opacity:.75}
 .lane-swim.skipped .lane-stage-num{border-color:var(--muted);color:var(--muted)}
+.lane-swim.branch{border-style:dashed;border-color:var(--warning)}
+.lane-branch-badge{display:inline-flex;align-items:center;border:1px solid var(--warning);color:var(--warning);border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;letter-spacing:.02em;margin-left:auto}
 .lane-swim .lane-step{padding:8px 10px}
 .lane-swim .lane-step.locked{color:var(--muted);opacity:.85}
 .lane-swim .lane-step.skipped{color:var(--muted)}

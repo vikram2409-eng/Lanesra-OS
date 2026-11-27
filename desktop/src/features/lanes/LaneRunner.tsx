@@ -1162,6 +1162,7 @@ export function LaneRunnerView({
             <div
               key={stage.id}
               className={`lane-swim${done ? " done" : ""}${isCurrent ? " current" : ""}${stageSkipped ? " skipped" : ""}${branch ? " branch" : ""}`}
+              role="group"
               aria-label={`Stage ${i + 1} of ${Math.max(stages.length, 1)}: ${stage.name}, ${statusText}${branch ? ", branch stage" : ""}`}
             >
               <div className="lane-swim-head">
