@@ -631,6 +631,67 @@ pub fn handoff_process_lane_step(
     )
 }
 
+/// WP-0720 (REQ-LANE-009, AC-2): pauses a run waiting on a person, parking
+/// it on the same step. Sync - a pure status transition, no master key.
+#[tauri::command]
+pub fn pause_process_lane_run(
+    state: State<'_, AppState>,
+    run_id: String,
+    reason: Option<String>,
+) -> AppResult<GraphRun> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    let actor = current_actor(&state);
+    process_lane_service::pause_run(
+        &conn,
+        &workspace_id,
+        &run_id,
+        reason.as_deref(),
+        actor.as_deref(),
+    )
+}
+
+/// WP-0720 (REQ-LANE-009, AC-2): resumes a paused run back to the step it
+/// was paused on. Sync - a pure status transition, no master key.
+#[tauri::command]
+pub fn resume_process_lane_run(state: State<'_, AppState>, run_id: String) -> AppResult<GraphRun> {
+    let conn = state.conn.lock().unwrap();
+    let workspace_id = require_workspace_id(&conn)?;
+    let actor = current_actor(&state);
+    process_lane_service::resume_paused_run(&conn, &workspace_id, &run_id, actor.as_deref())
+}
+
+/// WP-0720 (REQ-LANE-009, AC-2): reopens an earlier completed step in the
+/// run's current stage, so the person can redo it and re-walk forward.
+/// Async because resuming the run at the step may reach an Agent node.
+#[tauri::command]
+pub async fn reopen_process_lane_step(
+    state: State<'_, AppState>,
+    run_id: String,
+    step_id: String,
+    reason: Option<String>,
+) -> AppResult<GraphRun> {
+    let master_key = crate::commands::resolve_master_key(&state)?;
+    let db_path = state.db_path.clone();
+    let (workspace_id, actor) = {
+        let conn = state.conn.lock().unwrap();
+        (require_workspace_id(&conn)?, current_actor(&state))
+    };
+    run_with_own_connection(db_path, move |conn| async move {
+        process_lane_service::reopen_step(
+            &conn,
+            &workspace_id,
+            &master_key,
+            &run_id,
+            &step_id,
+            reason.as_deref(),
+            actor.as_deref(),
+        )
+        .await
+    })
+    .await
+}
+
 /// WP-0711 (REQ-LANE-018, AC-1): adds a note to a lane run at any point.
 #[tauri::command]
 pub fn add_lane_run_note(

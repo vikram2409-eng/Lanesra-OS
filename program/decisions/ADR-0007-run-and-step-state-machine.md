@@ -52,6 +52,8 @@ If every work package adds statuses as it goes, the Playground, the approvals in
 | `running` | `waiting_model` | A long model call was handed to the background (Phase 4) |
 | `running` | `waiting_scheduled` | A delay node |
 | `running` | `paused` | Pause, or the interrupted-run sweep |
+| `waiting_person` | `paused` | Pause on the lane runner (WP-0720) |
+| `paused` | `waiting_person` | Resume on the lane runner (WP-0720) |
 | `running` | `completed` / `completed_partial` / `failed` / `cancelled` | End of run, error, or cancel |
 | any waiting status, or `paused` | `queued` | Resume, approve, top-up, `resume_at` reached, or background model result arrived |
 | any waiting status, or `paused` | `cancelled` | Cancel, or reject when the approval has no `rejected` edge |

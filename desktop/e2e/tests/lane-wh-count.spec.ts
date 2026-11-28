@@ -174,3 +174,17 @@ test('AC-3: a count that is not COUNTING cannot start, and the record says why',
   await expect(card).toContainText('this record is APPROVED');
   await expect(page.locator('[data-lane-start="lane-wh-count:cc-2026-002"]')).toHaveCount(0);
 });
+
+test('WP-0720 AC-3: a branch stage is marked Branch in the swim lanes', async ({ page }) => {
+  // Covers: REQ-LANE-014 (WP-0720 AC-3, AC-4)
+  // Hold & review is reached only by the variance check's fail branch
+  // and the review's rejected branch, never by the straight path.
+  await startCountLane(page, 'cc-2026-001');
+  const hold = page.locator('.lane-swim.branch');
+  await expect(hold).toHaveCount(1);
+  await expect(hold).toContainText('Hold & review');
+  await expect(hold).toContainText('Branch');
+  await expect(hold).toHaveAttribute('aria-label', 'Stage 3 of 5: Hold & review, not reached, branch stage');
+  const count = page.locator('.lane-swim', { hasText: 'Count' }).first();
+  await expect(count).not.toHaveClass(/branch/);
+});

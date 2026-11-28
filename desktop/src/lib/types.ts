@@ -4982,6 +4982,20 @@ export interface LaneRunWaiting {
   step_name: string;
   /** What the run waits on: "person" | "approval" | "agent" | "branch". */
   kind: string;
+  /** Who the approval waits on - its role, or the person a handoff/reassign
+   * narrowed it to (WP-0720 AC-1). */
+  waiting_on?: string | null;
+  /** Whether the viewer may decide this approval on the runner (WP-0720 AC-1). */
+  can_complete?: boolean;
+}
+
+/// The child lane a parent run waits on (WP-0716, REQ-LANE-023): mirrors
+/// core::services::process_lane_service::LaneChildView.
+export interface LaneChildView {
+  child_run_id: string;
+  lane_id?: string | null;
+  stage?: string | null;
+  status: string;
 }
 
 /// One field of the current human step as a viewer sees it (WP-0704,
@@ -5076,6 +5090,8 @@ export interface LaneRunView {
   /** Plain words for what this run has written so far, in order. */
   writes?: string[] | null;
   waiting?: LaneRunWaiting | null;
+  /** The child lane a parent run waits on (WP-0716), mirrored from core. */
+  child?: LaneChildView | null;
   /** Notes added to the run at any point (WP-0711 AC-1). */
   notes?: LaneRunNoteView[] | null;
   /** Files attached to the run at any point (WP-0711 AC-1, AC-3). */
