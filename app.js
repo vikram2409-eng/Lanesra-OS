@@ -27805,10 +27805,30 @@ function renderLaneRunner(){
  // live run state. The current step and any completed step open in place.
  // A branch stage - one the straight path never reaches, only a fail or
  // rejected branch - carries a Branch badge and is named as one in its
- // accessible label (AC-3).
+ // accessible label (AC-3). A fail/rejected branch that loops back to a
+ // stage the straight path also reaches (e.g. a check that retries its own
+ // stage) does not make that stage a branch stage.
+ const straightReachable=new Set();
+ if(stages.length){
+  const idxById=new Map(stages.map((s,i)=>[s.id,i]));
+  const stack=[stages[0].id];
+  while(stack.length){
+   const id=stack.pop();
+   if(straightReachable.has(id))continue;
+   straightReachable.add(id);
+   const idx=idxById.get(id);
+   if(idx===undefined)continue;
+   const sr=stages[idx];
+   for(const step of sr.steps||[])for(const b of step.branches||[]){
+    if(b.on!=='fail'&&b.on!=='rejected'&&b.target&&b.target.stage)stack.push(b.target.stage);
+   }
+   const last=(sr.steps||[])[(sr.steps||[]).length-1];
+   if(!last||!(last.branches&&last.branches.length)){const next=stages[idx+1];if(next)stack.push(next.id);}
+  }
+ }
  const branchStageIds=new Set();
  for(const st of stages)for(const step of st.steps||[])for(const b of step.branches||[]){
-  if(b.target&&b.target.stage&&(b.on==='fail'||b.on==='rejected'))branchStageIds.add(b.target.stage);
+  if(b.target&&b.target.stage&&(b.on==='fail'||b.on==='rejected')&&!straightReachable.has(b.target.stage))branchStageIds.add(b.target.stage);
  }
  const swimlanes=stages.map((s,i)=>{
   const stageRows=steps.filter(r=>r.stageId===s.id);

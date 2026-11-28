@@ -91,18 +91,58 @@ function branchTargetLabel(
 }
 
 /**
+ * The stages the straight (happy) path reaches: start at the entry stage
+ * and follow every non-fail/rejected move - a pass/approved branch's
+ * target, or the next ordered stage when a stage's last step does not
+ * branch. Used to tell a real branch stage from a straight-path stage a
+ * fail/rejected branch merely loops back to (e.g. a check that retries its
+ * own stage).
+ */
+function straightReachableStages(blueprint: LaneDefinition | null | undefined): Set<string> {
+  const reachable = new Set<string>();
+  const stages = blueprint?.stages ?? [];
+  if (stages.length === 0) return reachable;
+  const indexById = new Map(stages.map((s, i) => [s.id, i]));
+  const stack = [stages[0].id];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (reachable.has(id)) continue;
+    reachable.add(id);
+    const idx = indexById.get(id);
+    if (idx === undefined) continue;
+    const stage = stages[idx];
+    for (const step of stage.steps) {
+      for (const branch of step.branches ?? []) {
+        if (branch.on !== "fail" && branch.on !== "rejected" && branch.target?.stage) {
+          stack.push(branch.target.stage);
+        }
+      }
+    }
+    const last = stage.steps[stage.steps.length - 1];
+    if (!last || !(last.branches && last.branches.length)) {
+      const next = stages[idx + 1];
+      if (next) stack.push(next.id);
+    }
+  }
+  return reachable;
+}
+
+/**
  * WP-0720 AC-3: a branch stage is one the straight path never reaches -
  * it is targeted only by a branch off the straight path (a check's fail
  * or an approval's rejected). In Receive Shipment that is Hold & review:
  * the discrepancy check fails into it and the review rejects into it,
  * while the pass and approved branches skip straight past it to Stage &
- * put away. A stage every outcome reaches is not a branch stage.
+ * put away. A stage every outcome reaches is not a branch stage - nor is
+ * one the straight path reaches that a fail/rejected branch only loops
+ * back to (e.g. a check that retries its own entry stage).
  */
 function isBranchStage(
   blueprint: LaneDefinition | null | undefined,
   stageId: string,
 ): boolean {
   if (!blueprint) return false;
+  let targeted = false;
   for (const stage of blueprint.stages) {
     for (const step of stage.steps) {
       for (const branch of step.branches ?? []) {
@@ -110,12 +150,13 @@ function isBranchStage(
           branch.target?.stage === stageId &&
           (branch.on === "fail" || branch.on === "rejected")
         ) {
-          return true;
+          targeted = true;
         }
       }
     }
   }
-  return false;
+  if (!targeted) return false;
+  return !straightReachableStages(blueprint).has(stageId);
 }
 
 /** Every role a lane's steps name, in first-seen order - the handoff
@@ -898,8 +939,12 @@ export function LaneRunnerView({
       // Blueprint's words - plus what approving posts.
       const approvalStepId = currentStep?.step_id ?? run.waiting?.step_id ?? null;
       const approvalStep = approvalStepId ? definitionStep(blueprint, approvalStepId) : undefined;
-      const waitingOn = currentStep?.waiting_on ?? approvalStep?.role ?? null;
-      const canDecide = currentStep?.can_complete ?? false;
+      // The approval decision is gated server-side. When the run waits on an
+      // approval its status is `waiting_approval`, so there is no `current`
+      // step view - the gate (who it waits on, whether this viewer may
+      // decide) rides on `run.waiting` instead. WP-0720 AC-1 (REQ-LANE-012).
+      const waitingOn = currentStep?.waiting_on ?? run.waiting?.waiting_on ?? approvalStep?.role ?? null;
+      const canDecide = currentStep?.can_complete ?? run.waiting?.can_complete ?? false;
       const branches = approvalStep?.branches ?? [];
       const writes = approvalStep?.writes ?? [];
       return (

@@ -533,8 +533,9 @@ test('AC-2: approving on the runner routes the run down the approved branch', as
   await expect(main).toContainText('Rejected → Post · Rejected path');
 
   // Approve: the run follows the approved branch to the Approved path
-  // step, and completing it ends the run.
-  await page.getByRole('button', { name: 'Approve' }).click();
+  // step, and completing it ends the run. `exact` so the decision button
+  // is not confused with the "Approved path" swim-lane step button.
+  await page.getByRole('button', { name: 'Approve', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Approved path' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Widget two · Approval Lane · stage 2 of 2' })).toBeVisible();
   await page.getByRole('button', { name: 'Complete step' }).click();

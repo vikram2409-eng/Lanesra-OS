@@ -2150,6 +2150,15 @@ pub struct LaneWaiting {
     pub step_id: String,
     pub step_name: String,
     pub kind: String,
+    /// Who the approval waits on - the role it is assigned to (or the person
+    /// a handoff/reassign narrowed it to). WP-0720 AC-1.
+    #[serde(default)]
+    pub waiting_on: Option<String>,
+    /// Whether the viewer may decide this approval here on the runner
+    /// (holds the role, or is an administrator). False locks the decision
+    /// buttons. WP-0720 AC-1 (REQ-LANE-012).
+    #[serde(default)]
+    pub can_complete: bool,
 }
 
 /// One row of a record's lane runs (WP-0707, REQ-LANE-015): the run, its
@@ -2402,7 +2411,10 @@ pub fn get_run_view(
         .and_then(|s| serde_json::from_str(s).ok())
         .unwrap_or_else(|| json!({}));
 
-    let current = if run.status == "waiting_person" {
+    // WP-0720 AC-2: a paused run is parked on the same human step it waited
+    // on (pause only transitions waiting_person -> paused), so the view still
+    // names that step - the runner's pause banner shows "Paused at <step>".
+    let current = if run.status == "waiting_person" || run.status == "paused" {
         let (node, step) = current_human_step(conn, &run)?;
         let stage_id = serde_json::from_str::<Value>(&node.config_json)
             .ok()
@@ -2501,7 +2513,7 @@ pub fn get_run_view(
             None => Vec::new(),
         },
         writes: write_summaries_for_run(conn, &run, definition.as_ref())?,
-        waiting: waiting_for_run(conn, &run, definition.as_ref())?,
+        waiting: waiting_for_run(conn, &run, definition.as_ref(), viewer_user_id)?,
         child: child_view_for(conn, &run)?,
         // WP-0711 (REQ-LANE-018): the run's notes, attachments and
         // audit-trail events (oldest first, matching the step rows), and
@@ -3440,7 +3452,19 @@ fn step_progress_for_run(
                     match row.status.as_str() {
                         "completed" | "completed_partial" => "completed",
                         "skipped" => "skipped",
-                        "waiting_approval" => "waiting",
+                        // An approval node reads "waiting" only while it is the
+                        // run's current step and the run still waits on the
+                        // decision; once decided the run routes past it and it
+                        // reads "completed" (WP-0720 AC-1: the decision is on
+                        // the trail). Its finished_at is set while it waits, so
+                        // that alone cannot tell the two apart.
+                        "waiting_approval"
+                            if run.status == "waiting_approval"
+                                && run.current_node_id.as_deref() == Some(row.node_id.as_str()) =>
+                        {
+                            "waiting"
+                        }
+                        "waiting_approval" => "completed",
                         _ => "current",
                     }
                     .to_string(),
@@ -3525,6 +3549,7 @@ fn waiting_for_run(
     conn: &Connection,
     run: &GraphRun,
     definition: Option<&LaneDefinition>,
+    viewer_user_id: Option<&str>,
 ) -> AppResult<Option<LaneWaiting>> {
     if run.status != "waiting_approval" {
         return Ok(None);
@@ -3546,10 +3571,16 @@ fn waiting_for_run(
     let Some(step) = definition_step_for_node(definition, &node.config_json) else {
         return Ok(None);
     };
+    // WP-0720 AC-1 (REQ-LANE-012): the approval is decided on the runner, so
+    // the view carries who it waits on and whether this viewer may decide it.
+    let waiting_on = effective_step_assignee(run, step).or_else(|| effective_step_role(run, step));
+    let can_complete = actor_may_act_on_step(conn, run, step, viewer_user_id)?;
     Ok(Some(LaneWaiting {
         step_id: step.id.clone(),
         step_name: step.name.clone(),
         kind: "approval".to_string(),
+        waiting_on,
+        can_complete,
     }))
 }
 

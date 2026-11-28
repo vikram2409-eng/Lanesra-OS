@@ -4982,6 +4982,11 @@ export interface LaneRunWaiting {
   step_name: string;
   /** What the run waits on: "person" | "approval" | "agent" | "branch". */
   kind: string;
+  /** Who the approval waits on - its role, or the person a handoff/reassign
+   * narrowed it to (WP-0720 AC-1). */
+  waiting_on?: string | null;
+  /** Whether the viewer may decide this approval on the runner (WP-0720 AC-1). */
+  can_complete?: boolean;
 }
 
 /// The child lane a parent run waits on (WP-0716, REQ-LANE-023): mirrors
